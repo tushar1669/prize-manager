@@ -19,21 +19,37 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Helper to detect ownership column (owner_id vs created_by)
+  async function detectOwnerColumn(): Promise<'owner_id' | 'created_by'> {
+    try {
+      // probe with a harmless limited select
+      const { error } = await supabase.from('tournaments')
+        .select('owner_id')
+        .limit(1);
+      if (!error) return 'owner_id';
+      if (String(error.message).toLowerCase().includes('owner_id')) return 'created_by';
+    } catch {}
+    return 'owner_id';
+  }
+
   // Fetch tournaments
   const { data: tournaments, isLoading, error } = useQuery({
     queryKey: ['tournaments', user?.id, role],
     queryFn: async () => {
-      let query = supabase
-        .from('tournaments')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const ownerCol = await detectOwnerColumn();
+      
       // Organizers see only their own; Masters see all
-      if (role !== 'master') {
-        query = query.eq('owner_id', user?.id);
-      }
+      const { data, error } = role !== 'master'
+        ? await supabase
+            .from('tournaments')
+            .select('*')
+            .eq(ownerCol as 'owner_id', user!.id)
+            .order('created_at', { ascending: false })
+        : await supabase
+            .from('tournaments')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -43,16 +59,19 @@ export default function Dashboard() {
   // Create tournament mutation
   const createMutation = useMutation({
     mutationFn: async () => {
+      const ownerCol = await detectOwnerColumn();
       const today = new Date().toISOString().split('T')[0];
+      const payload: any = {
+        title: 'Untitled Tournament',
+        start_date: today,
+        end_date: today,
+        status: 'draft'
+      };
+      payload[ownerCol] = user!.id;
+
       const { data, error } = await supabase
         .from('tournaments')
-        .insert({
-          owner_id: user!.id,
-          title: 'Untitled Tournament',
-          start_date: today,
-          end_date: today,
-          status: 'draft'
-        })
+        .insert(payload)
         .select()
         .single();
 
