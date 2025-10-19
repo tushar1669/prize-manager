@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { role, isMaster } = useUserRole();
+  const { role, loading: roleLoading, isMaster } = useUserRole();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +53,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data;
     },
-    enabled: !!user
+    enabled: !!user && !roleLoading
   });
 
   // Create tournament mutation
