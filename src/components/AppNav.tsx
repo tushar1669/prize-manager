@@ -12,15 +12,12 @@ import { Trophy, User, LogOut, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
-interface AppNavProps {
-  userRole?: "master" | "organizer";
-  userName?: string;
-}
-
-export function AppNav({ userRole = "organizer", userName = "User" }: AppNavProps) {
+export function AppNav() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { role } = useUserRole();
 
   const handleLogout = async () => {
     await signOut();
@@ -42,8 +39,8 @@ export function AppNav({ userRole = "organizer", userName = "User" }: AppNavProp
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  <span>{user?.email || userName}</span>
-                  {userRole === "master" && (
+                  <span>{user?.email || 'User'}</span>
+                  {role === "master" && (
                     <Badge variant="outline" className="ml-2 bg-accent/10 text-accent border-accent/30">
                       Master
                     </Badge>

@@ -1,20 +1,32 @@
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { supabase } from "@/integrations/supabase/client";
+import { ruleConfigSchema, RuleConfigForm } from "@/lib/validations";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { GripVertical, Save } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
 
 export default function Settings() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [strictAge, setStrictAge] = useState(true);
-  const [allowUnrated, setAllowUnrated] = useState(false);
-  const [preferMain, setPreferMain] = useState(true);
+  const queryClient = useQueryClient();
+
+  const form = useForm<RuleConfigForm>({
+    resolver: zodResolver(ruleConfigSchema),
+    defaultValues: {
+      strict_age: true,
+      allow_unrated_in_rating: false,
+      prefer_main_on_equal_value: true,
+      prefer_category_rank_on_tie: false,
+      category_priority_order: []
+    }
+  });
 
   const categories = [
     { id: "1", name: "Main (Open)", locked: true },
@@ -23,10 +35,82 @@ export default function Settings() {
     { id: "4", name: "Female" },
   ];
 
-  const handleSave = () => {
-    toast.success("Settings saved successfully");
-    navigate("/dashboard");
+  // Fetch rule_config
+  const { isLoading } = useQuery({
+    queryKey: ['rule_config', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rule_config')
+        .select('*')
+        .eq('tournament_id', id)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        if (error.message?.includes('row-level security')) {
+          toast.error("You don't have access to this tournament");
+          navigate('/dashboard');
+        }
+        throw error;
+      }
+      
+      if (data) {
+        form.reset({
+          strict_age: data.strict_age,
+          allow_unrated_in_rating: data.allow_unrated_in_rating,
+          prefer_main_on_equal_value: data.prefer_main_on_equal_value,
+          prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
+          category_priority_order: data.category_priority_order as string[] || []
+        });
+      }
+      return data;
+    },
+    enabled: !!id
+  });
+
+  // Upsert mutation
+  const saveMutation = useMutation({
+    mutationFn: async (values: RuleConfigForm) => {
+      const { error } = await supabase
+        .from('rule_config')
+        .upsert({
+          tournament_id: id,
+          ...values,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'tournament_id'
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rule_config', id] });
+      toast.success('Settings saved successfully');
+      navigate('/dashboard');
+    },
+    onError: (error: any) => {
+      if (error.message?.includes('row-level security')) {
+        toast.error("You don't have permission to update settings");
+      } else {
+        toast.error('Failed to save settings: ' + error.message);
+      }
+    }
+  });
+
+  const onSubmit = (values: RuleConfigForm) => {
+    saveMutation.mutate(values);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,137 +122,148 @@ export default function Settings() {
           <p className="text-muted-foreground">Configure allocation rules and preferences</p>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Default Allocation Rules</CardTitle>
-              <CardDescription>
-                These rules govern how prizes are automatically allocated
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <Label htmlFor="strict-age" className="text-foreground font-medium">
-                    Strict Age Eligibility
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Players can only win prizes in their exact age category
-                  </p>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Default Allocation Rules</CardTitle>
+                <CardDescription>
+                  These rules govern how prizes are automatically allocated
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="strict_age"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Strict Age Eligibility
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          Players can only win prizes in their exact age category
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="allow_unrated_in_rating"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Allow Unrated in Rating Categories
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          Include unrated players when allocating rating bracket prizes
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="prefer_main_on_equal_value"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Prefer Main on Equal Value
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          When prizes have equal cash value, prefer main category over others
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="prefer_category_rank_on_tie"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Prefer Category Rank on Tie
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          When values are equal, prefer higher category priority
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Category Priority Order</CardTitle>
+                <CardDescription>
+                  Drag to reorder categories by priority (higher = better when values are equal)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {categories.map((category) => (
+                    <div
+                      key={category.id}
+                      className="flex items-center gap-3 p-3 bg-muted rounded-lg border border-border"
+                    >
+                      {!category.locked && (
+                        <GripVertical className="h-5 w-5 text-muted-foreground cursor-move" />
+                      )}
+                      <span className="flex-1 font-medium text-foreground">{category.name}</span>
+                      {category.locked && (
+                        <span className="text-xs text-muted-foreground">(Fixed)</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <Switch
-                  id="strict-age"
-                  checked={strictAge}
-                  onCheckedChange={setStrictAge}
-                />
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <Label htmlFor="allow-unrated" className="text-foreground font-medium">
-                    Allow Unrated in Rating Categories
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Include unrated players when allocating rating bracket prizes
-                  </p>
-                </div>
-                <Switch
-                  id="allow-unrated"
-                  checked={allowUnrated}
-                  onCheckedChange={setAllowUnrated}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <Label htmlFor="prefer-main" className="text-foreground font-medium">
-                    Prefer Main on Equal Value
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    When prizes have equal cash value, prefer main category over others
-                  </p>
-                </div>
-                <Switch
-                  id="prefer-main"
-                  checked={preferMain}
-                  onCheckedChange={setPreferMain}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Category Priority Order</CardTitle>
-              <CardDescription>
-                Drag to reorder categories by priority (higher = better when values are equal)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {categories.map((category) => (
-                  <div
-                    key={category.id}
-                    className="flex items-center gap-3 p-3 bg-muted rounded-lg border border-border"
-                  >
-                    {!category.locked && (
-                      <GripVertical className="h-5 w-5 text-muted-foreground cursor-move" />
-                    )}
-                    <span className="flex-1 font-medium text-foreground">{category.name}</span>
-                    {category.locked && (
-                      <span className="text-xs text-muted-foreground">(Fixed)</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>PDF Export Branding</CardTitle>
-              <CardDescription>
-                Customize how your exported documents appear
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="org-name">Organization Name</Label>
-                <Input
-                  id="org-name"
-                  placeholder="e.g., State Chess Association"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="contact">Contact Line</Label>
-                <Input
-                  id="contact"
-                  placeholder="e.g., info@chess.org | +91 123 456 7890"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Organization Logo</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Upload logo for PDF header (optional)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} className="gap-2">
-              <Save className="h-4 w-4" />
-              Save Settings
-            </Button>
-          </div>
-        </div>
+            <div className="flex justify-between pt-4">
+              <Button type="button" variant="outline" onClick={() => navigate("/dashboard")}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saveMutation.isPending} className="gap-2">
+                <Save className="h-4 w-4" />
+                {saveMutation.isPending ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </div>
     </div>
   );

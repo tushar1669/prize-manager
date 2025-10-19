@@ -1,181 +1,254 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StatusChip } from "@/components/ui/status-chip";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Eye, Trash2, Edit, Search } from "lucide-react";
-
-interface Tournament {
-  id: string;
-  title: string;
-  startDate: string;
-  endDate: string;
-  status: "draft" | "finalized" | "published";
-}
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Search, Plus, Trash2, Eye } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const { role, isMaster } = useUserRole();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const tournaments: Tournament[] = [
-    {
-      id: "1",
-      title: "National Chess Championship 2024",
-      startDate: "2024-11-01",
-      endDate: "2024-11-05",
-      status: "published",
-    },
-    {
-      id: "2",
-      title: "Junior State Tournament",
-      startDate: "2024-12-10",
-      endDate: "2024-12-12",
-      status: "finalized",
-    },
-    {
-      id: "3",
-      title: "Regional Open",
-      startDate: "2025-01-15",
-      endDate: "2025-01-17",
-      status: "draft",
-    },
-  ];
+  // Fetch tournaments
+  const { data: tournaments, isLoading, error } = useQuery({
+    queryKey: ['tournaments', user?.id, role],
+    queryFn: async () => {
+      let query = supabase
+        .from('tournaments')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const handleCreateTournament = () => {
-    const newId = Date.now().toString();
-    navigate(`/t/${newId}/setup?tab=details`);
-  };
+      // Organizers see only their own; Masters see all
+      if (role !== 'master') {
+        query = query.eq('owner_id', user?.id);
+      }
 
-  const handleResume = (tournament: Tournament) => {
-    if (tournament.status === "draft") {
-      navigate(`/t/${tournament.id}/setup?tab=details`);
-    } else if (tournament.status === "finalized") {
-      navigate(`/t/${tournament.id}/finalize`);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user
+  });
+
+  // Create tournament mutation
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('tournaments')
+        .insert({
+          owner_id: user!.id,
+          title: 'Untitled Tournament',
+          start_date: today,
+          end_date: today,
+          status: 'draft'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      navigate(`/t/${data.id}/setup?tab=details`);
+    },
+    onError: (error: any) => {
+      if (error.message?.includes('row-level security')) {
+        toast.error('You do not have permission to create tournaments');
+      } else {
+        toast.error('Failed to create tournament: ' + error.message);
+      }
+    }
+  });
+
+  // Delete mutation (master only)
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('tournaments')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      toast.success('Tournament deleted');
+    },
+    onError: (error: any) => {
+      if (error.message?.includes('row-level security')) {
+        toast.error('You do not have permission to delete this tournament');
+      } else {
+        toast.error('Failed to delete tournament: ' + error.message);
+      }
+    }
+  });
+
+  const filteredTournaments = tournaments?.filter(t => 
+    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.city?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleResume = (id: string, status: string) => {
+    if (status === 'draft') {
+      navigate(`/t/${id}/setup?tab=details`);
+    } else if (status === 'finalized') {
+      navigate(`/t/${id}/finalize`);
     } else {
-      navigate(`/t/${tournament.id}/publish`);
+      navigate(`/t/${id}/publish`);
     }
   };
 
-  const handleView = (id: string) => {
-    navigate(`/t/${id}/public`);
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      draft: "secondary",
+      finalized: "default",
+      published: "default"
+    } as const;
+    
+    return (
+      <Badge variant={variants[status as keyof typeof variants] || "secondary"}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Badge>
+    );
   };
 
-  const handleDelete = (id: string) => {
-    // Mock delete
-    console.log("Delete tournament:", id);
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center py-12">
+            <p className="text-destructive">Error loading tournaments. Please try again.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <AppNav userRole="organizer" userName="John Arbiter" />
+      <AppNav />
       
       <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">My Tournaments</h1>
-          <p className="text-muted-foreground">Manage prize allocations for your chess events</p>
-        </div>
-
-        <div className="flex items-center justify-between mb-6">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tournaments..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Tournament Dashboard</h1>
+            <p className="text-muted-foreground">Manage your chess tournament prize allocations</p>
           </div>
-          <Button onClick={handleCreateTournament} className="gap-2">
+          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
             <Plus className="h-4 w-4" />
-            Create Tournament
+            {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
           </Button>
         </div>
 
-        <div className="bg-card rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-border">
-                <TableHead className="text-foreground font-semibold">Tournament Name</TableHead>
-                <TableHead className="text-foreground font-semibold">Dates</TableHead>
-                <TableHead className="text-foreground font-semibold">Status</TableHead>
-                <TableHead className="text-right text-foreground font-semibold">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tournaments.map((tournament) => (
-                <TableRow key={tournament.id} className="border-border">
-                  <TableCell className="font-medium text-foreground">{tournament.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(tournament.startDate).toLocaleDateString()} -{" "}
-                    {new Date(tournament.endDate).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <StatusChip status={tournament.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResume(tournament)}
-                      >
-                        {tournament.status === "published" ? "Manage" : "Resume"}
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {tournament.status === "published" && (
-                            <DropdownMenuItem onClick={() => handleView(tournament.id)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Public Page
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => navigate(`/t/${tournament.id}/settings`)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Settings
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(tournament.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="mb-6">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tournaments..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
 
-        {tournaments.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No tournaments yet</p>
-            <Button onClick={handleCreateTournament} variant="outline">
-              Create your first tournament
-            </Button>
+        {filteredTournaments && filteredTournaments.length > 0 ? (
+          <div className="bg-card rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-border">
+                  <TableHead>Tournament</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Venue</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTournaments.map((tournament) => (
+                  <TableRow key={tournament.id} className="border-border">
+                    <TableCell className="font-medium text-foreground">{tournament.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(tournament.start_date).toLocaleDateString()} - {new Date(tournament.end_date).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {tournament.venue ? `${tournament.venue}, ${tournament.city || ''}` : '-'}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(tournament.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        {tournament.status === 'published' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/t/${tournament.id}/public`)}
+                            className="gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Public
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResume(tournament.id, tournament.status)}
+                        >
+                          Resume
+                        </Button>
+                        {isMaster && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteMutation.mutate(tournament.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="bg-card rounded-lg border border-border p-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              {searchQuery ? 'No tournaments match your search' : 'No tournaments yet'}
+            </p>
+            {!searchQuery && (
+              <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Your First Tournament
+              </Button>
+            )}
           </div>
         )}
       </div>
