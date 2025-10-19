@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,23 +6,44 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Auth() {
   const navigate = useNavigate();
+  const { user, signIn, signUp } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Mock authentication
-    if (email && password) {
-      toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
+  useEffect(() => {
+    if (user) {
       navigate("/dashboard");
-    } else {
-      toast.error("Please fill in all fields");
     }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    if (isLogin) {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Welcome back!");
+        navigate("/dashboard");
+      }
+    } else {
+      const { error } = await signUp(email, password);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Account created! Please check your email to confirm.");
+      }
+    }
+    
+    setLoading(false);
   };
 
   return (
@@ -70,8 +91,8 @@ export default function Auth() {
                 </Button>
               </div>
             )}
-            <Button type="submit" className="w-full">
-              {isLogin ? "Sign In" : "Create Account"}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (isLogin ? "Signing in..." : "Creating account...") : (isLogin ? "Sign In" : "Create Account")}
             </Button>
             <div className="text-center text-sm">
               <span className="text-muted-foreground">

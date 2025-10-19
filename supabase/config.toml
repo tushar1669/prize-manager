@@ -1,1 +1,10 @@
 project_id = "nvjjifnzwrueutbirpde"
+
+[functions.allocatePrizes]
+verify_jwt = true
+
+[functions.finalize]
+verify_jwt = true
+
+[functions.generatePdf]
+verify_jwt = true

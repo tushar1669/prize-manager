@@ -14,16 +14,441 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      allocations: {
+        Row: {
+          created_at: string | null
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          is_manual: boolean | null
+          player_id: string | null
+          prize_id: string | null
+          reason_codes: string[]
+          tournament_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          is_manual?: boolean | null
+          player_id?: string | null
+          prize_id?: string | null
+          reason_codes?: string[]
+          tournament_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          is_manual?: boolean | null
+          player_id?: string | null
+          prize_id?: string | null
+          reason_codes?: string[]
+          tournament_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allocations_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_prize_id_fkey"
+            columns: ["prize_id"]
+            isOneToOne: false
+            referencedRelation: "prizes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string | null
+          criteria_json: Json
+          id: string
+          is_main: boolean | null
+          name: string
+          order_idx: number | null
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          criteria_json?: Json
+          id?: string
+          is_main?: boolean | null
+          name: string
+          order_idx?: number | null
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string | null
+          criteria_json?: Json
+          id?: string
+          is_main?: boolean | null
+          name?: string
+          order_idx?: number | null
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conflict_decisions: {
+        Row: {
+          conflict_id: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: Json | null
+          id: string
+          note: string | null
+        }
+        Insert: {
+          conflict_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: Json | null
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          conflict_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: Json | null
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conflict_decisions_conflict_id_fkey"
+            columns: ["conflict_id"]
+            isOneToOne: false
+            referencedRelation: "conflicts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conflicts: {
+        Row: {
+          created_at: string | null
+          id: string
+          impacted_players: string[]
+          impacted_prizes: string[]
+          reasons: string[]
+          status: string
+          suggested: Json | null
+          tournament_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          impacted_players?: string[]
+          impacted_prizes?: string[]
+          reasons?: string[]
+          status?: string
+          suggested?: Json | null
+          tournament_id: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          impacted_players?: string[]
+          impacted_prizes?: string[]
+          reasons?: string[]
+          status?: string
+          suggested?: Json | null
+          tournament_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conflicts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          club: string | null
+          created_at: string | null
+          dob: string | null
+          gender: string | null
+          id: string
+          name: string
+          rank: number
+          rating: number | null
+          state: string | null
+          tags_json: Json | null
+          tournament_id: string
+          warnings_json: Json | null
+        }
+        Insert: {
+          club?: string | null
+          created_at?: string | null
+          dob?: string | null
+          gender?: string | null
+          id?: string
+          name: string
+          rank: number
+          rating?: number | null
+          state?: string | null
+          tags_json?: Json | null
+          tournament_id: string
+          warnings_json?: Json | null
+        }
+        Update: {
+          club?: string | null
+          created_at?: string | null
+          dob?: string | null
+          gender?: string | null
+          id?: string
+          name?: string
+          rank?: number
+          rating?: number | null
+          state?: string | null
+          tags_json?: Json | null
+          tournament_id?: string
+          warnings_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prizes: {
+        Row: {
+          cash_amount: number | null
+          category_id: string
+          created_at: string | null
+          has_medal: boolean | null
+          has_trophy: boolean | null
+          id: string
+          place: number
+        }
+        Insert: {
+          cash_amount?: number | null
+          category_id: string
+          created_at?: string | null
+          has_medal?: boolean | null
+          has_trophy?: boolean | null
+          id?: string
+          place: number
+        }
+        Update: {
+          cash_amount?: number | null
+          category_id?: string
+          created_at?: string | null
+          has_medal?: boolean | null
+          has_trophy?: boolean | null
+          id?: string
+          place?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prizes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publications: {
+        Row: {
+          id: string
+          is_active: boolean | null
+          published_at: string | null
+          published_by: string | null
+          slug: string
+          tournament_id: string
+          version: number
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean | null
+          published_at?: string | null
+          published_by?: string | null
+          slug: string
+          tournament_id: string
+          version?: number
+        }
+        Update: {
+          id?: string
+          is_active?: boolean | null
+          published_at?: string | null
+          published_by?: string | null
+          slug?: string
+          tournament_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publications_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rule_config: {
+        Row: {
+          allow_unrated_in_rating: boolean | null
+          category_priority_order: Json | null
+          created_at: string | null
+          prefer_category_rank_on_tie: boolean | null
+          prefer_main_on_equal_value: boolean | null
+          strict_age: boolean | null
+          tournament_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          allow_unrated_in_rating?: boolean | null
+          category_priority_order?: Json | null
+          created_at?: string | null
+          prefer_category_rank_on_tie?: boolean | null
+          prefer_main_on_equal_value?: boolean | null
+          strict_age?: boolean | null
+          tournament_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          allow_unrated_in_rating?: boolean | null
+          category_priority_order?: Json | null
+          created_at?: string | null
+          prefer_category_rank_on_tie?: boolean | null
+          prefer_main_on_equal_value?: boolean | null
+          strict_age?: boolean | null
+          tournament_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_config_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournaments: {
+        Row: {
+          brochure_url: string | null
+          city: string | null
+          created_at: string | null
+          end_date: string
+          event_code: string | null
+          id: string
+          notes: string | null
+          owner_id: string
+          slug: string | null
+          start_date: string
+          status: string
+          title: string
+          updated_at: string | null
+          venue: string | null
+        }
+        Insert: {
+          brochure_url?: string | null
+          city?: string | null
+          created_at?: string | null
+          end_date: string
+          event_code?: string | null
+          id?: string
+          notes?: string | null
+          owner_id: string
+          slug?: string | null
+          start_date: string
+          status?: string
+          title: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Update: {
+          brochure_url?: string | null
+          city?: string | null
+          created_at?: string | null
+          end_date?: string
+          event_code?: string | null
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          slug?: string | null
+          start_date?: string
+          status?: string
+          title?: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "master" | "organizer" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +575,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["master", "organizer", "user"],
+    },
   },
 } as const
