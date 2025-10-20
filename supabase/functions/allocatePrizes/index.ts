@@ -149,8 +149,13 @@ Deno.serve(async (req) => {
 
     // Track what each player could win (by prizeId)
     const eligiblePrizeIdsByPlayer = new Map<string, string[]>();
-    for (const prize of allPrizes) {
-      const eligible = eligibilityMap.get(prize.category_id) || [];
+    for (const prize of allPrizes as any[]) {
+      // Get the category for this prize (built above)
+      const cat = categoryByPrizeId.get(prize.id);
+      if (!cat) continue;
+
+      const eligible =
+        (eligibilityMap as any).get(cat.id) || []; // eligibilityMap is keyed by category.id
       for (const player of eligible) {
         if (!eligiblePrizeIdsByPlayer.has(player.id)) {
           eligiblePrizeIdsByPlayer.set(player.id, []);
@@ -195,10 +200,14 @@ Deno.serve(async (req) => {
     prizesByValue.forEach((prizes, value) => {
       if (value <= 0 || prizes.length < 2) return;
 
-      // playerId -> prizeIds (among this equal-value cluster)
+      // playerId -> prizeIds (within this equal-value cluster)
       const candidates = new Map<string, string[]>();
-      for (const prize of prizes) {
-        const eligible = eligibilityMap.get(prize.category_id) || [];
+      for (const prize of prizes as any[]) {
+        const cat = categoryByPrizeId.get(prize.id);
+        if (!cat) continue;
+
+        const eligible =
+          (eligibilityMap as any).get(cat.id) || []; // eligibilityMap is keyed by category.id
         for (const player of eligible) {
           if (!candidates.has(player.id)) candidates.set(player.id, []);
           candidates.get(player.id)!.push(prize.id);
