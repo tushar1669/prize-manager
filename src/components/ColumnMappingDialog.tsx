@@ -75,9 +75,9 @@ export function ColumnMappingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Map CSV Columns</DialogTitle>
+          <DialogTitle>Map File Columns</DialogTitle>
           <DialogDescription>
-            Match your CSV columns to the required fields. Required fields must be mapped.
+            Match your file columns to the required fields. Required fields must be mapped.
           </DialogDescription>
         </DialogHeader>
 

@@ -27,7 +27,7 @@ interface ParsedPlayer extends PlayerImportRow {
 export default function PlayerImport() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { parseCSV } = usePapaParser();
+  const { parseFile } = usePapaParser();
 
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -41,21 +41,16 @@ export default function PlayerImport() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (!selectedFile.name.endsWith('.csv')) {
-      toast.error("Please upload a CSV file");
-      return;
-    }
-
     setIsParsing(true);
 
     try {
-      const { data, headers: csvHeaders } = await parseCSV(selectedFile);
+      const { data, headers: csvHeaders } = await parseFile(selectedFile);
       setParsedData(data);
       setHeaders(csvHeaders);
       setShowMappingDialog(true);
     } catch (error) {
-      console.error('[parseCSV]', error);
-      toast.error("Failed to parse CSV file");
+      console.error('[parseFile]', error);
+      toast.error("Failed to parse file. Upload CSV or Excel (.xls/.xlsx).");
     } finally {
       setIsParsing(false);
     }
@@ -73,9 +68,20 @@ export default function PlayerImport() {
 
         if (fieldKey === 'rank' || fieldKey === 'rating') {
           value = value ? Number(value) : (fieldKey === 'rank' ? 0 : null);
-        } else if (fieldKey === 'dob' && value) {
-          const dateStr = String(value).trim();
-          value = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : null;
+        } else if (fieldKey === "dob" && value != null && value !== "") {
+          if (typeof value === "number") {
+            // Excel serial date → JS date
+            const jsDate = new Date(Math.round((value - 25569) * 86400 * 1000));
+            value = isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
+          } else {
+            const s = String(value).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+              value = s;
+            } else {
+              const parsed = new Date(s);
+              value = isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+            }
+          }
         }
 
         player[fieldKey] = value;
@@ -168,7 +174,7 @@ export default function PlayerImport() {
       <div className="container mx-auto px-6 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
-          <p className="text-muted-foreground">Upload a CSV file with player data</p>
+          <p className="text-muted-foreground">Upload a CSV or Excel (XLS/XLSX) file with player data</p>
         </div>
 
         {!hasData ? (
@@ -179,11 +185,11 @@ export default function PlayerImport() {
                 <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  CSV file with columns: rank, name, rating, DOB, gender, state, city
+                  CSV or Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
                 <input
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="csv-upload"
@@ -198,7 +204,7 @@ export default function PlayerImport() {
               <Alert>
                 <FileText className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>CSV Format:</strong> Ensure your file has headers and at least 'rank' and 'name' columns.
+                  <strong>File Format:</strong> Ensure your file has headers and at least 'rank' and 'name' columns.
                 </AlertDescription>
               </Alert>
             </CardContent>

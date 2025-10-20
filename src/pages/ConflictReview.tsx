@@ -91,7 +91,8 @@ export default function ConflictReview() {
   });
 
   useEffect(() => {
-    if (id) allocateMutation.mutate();
+    if (id) allocateMutation.mutate(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleAccept = (conflictId: string) => {
