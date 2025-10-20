@@ -25,6 +25,25 @@ interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
 }
 
+// Helper functions for smart retry
+const pick = (obj: Record<string, any>, keys: string[]) =>
+  keys.reduce((acc, k) => { if (k in obj) acc[k] = obj[k]; return acc; }, {} as Record<string, any>);
+
+const extractUnknownColumn = (msg: string): string | null => {
+  if (!msg) return null;
+  // Common PostgREST / Postgres patterns
+  const pats = [
+    /column\s+"?([a-zA-Z0-9_]+)"?\s+of\s+relation\s+"players"/i,
+    /No column '([a-zA-Z0-9_]+)'/i,
+    /column\s+"?([a-zA-Z0-9_]+)"?\s+does\s+not\s+exist/i
+  ];
+  for (const re of pats) {
+    const m = msg.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+};
+
 export default function PlayerImport() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -123,40 +142,17 @@ export default function PlayerImport() {
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
-    // Probe which optional columns exist
-    const columnExists = async (column: string) => {
-      const { error } = await supabase
-        .from('players')
-        .select(column)
-        .limit(0)
-        .maybeSingle();
-      return !error;
-    };
-
-    const getExistingOptionalColumns = async () => {
-      const optional = [
-        'rating', 'dob', 'gender', 'state', 'city',
-        // NEW: we'll probe and include whichever exist in the DB
-        'disability', 'disability_type', 'handicap', 'special_needs', 'special_notes', 'notes'
-      ];
-      const checks = await Promise.all(optional.map(async c => [c, await columnExists(c)] as const));
-      return new Set(checks.filter(([,ok]) => ok).map(([c]) => c));
-    };
-
-    const existingColumns = await getExistingOptionalColumns();
-
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
       const player: Record<string, any> = { _originalIndex: idx + 1 };
-      
-      Object.keys(mapping).forEach(fieldKey => {
-        const csvColumn = mapping[fieldKey];
-        let value = row[csvColumn];
+
+      Object.keys(mapping).forEach((fieldKey) => {
+        const col = mapping[fieldKey];
+        let value = row[col];
 
         if (fieldKey === 'rank' || fieldKey === 'rating') {
           value = value ? Number(value) : (fieldKey === 'rank' ? 0 : null);
-        } else if (fieldKey === "dob" && value != null && value !== "") {
-          if (typeof value === "number") {
-            // Excel serial date → JS date
+        } else if (fieldKey === 'dob' && value != null && value !== '') {
+          if (typeof value === 'number') {
             const jsDate = new Date(Math.round((value - 25569) * 86400 * 1000));
             value = isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
           } else {
@@ -170,10 +166,8 @@ export default function PlayerImport() {
           }
         }
 
-        // Only include column if it exists in the table
-        if (fieldKey === 'rank' || fieldKey === 'name' || existingColumns.has(fieldKey)) {
-          player[fieldKey] = value;
-        }
+        // Always carry what the mapping gave us; we'll strip unknown fields at insert time.
+        player[fieldKey] = value;
       });
 
       return player as ParsedPlayer;
@@ -232,39 +226,54 @@ export default function PlayerImport() {
 
   const importPlayersMutation = useMutation({
     mutationFn: async (players: ParsedPlayer[]) => {
-      const extras = [
-        'rating', 'dob', 'gender', 'state', 'city',
-        // NEW keys we support if the table has them and mapping provided it
-        'disability', 'disability_type', 'handicap', 'special_needs', 'special_notes', 'notes'
-      ];
+      // Start from the union of keys we actually have in ParsedPlayer objects
+      const extraKeys = new Set<string>();
+      players.forEach(p => Object.keys(p).forEach(k => extraKeys.add(k)));
 
-      const rowsToInsert = players.map(p => {
-        const row: any = {
-          tournament_id: id,
-          rank: p.rank,
-          name: p.name,
-          tags_json: {},
-          warnings_json: {}
-        };
-        for (const k of extras) {
-          if (k in p) row[k] = (p as any)[k] ?? null;
+      // Always required + whatever else we saw (minus our internal key)
+      let fields = Array.from(extraKeys).filter(k => k !== '_originalIndex');
+      if (!fields.includes('rank')) fields.push('rank');
+      if (!fields.includes('name')) fields.push('name');
+
+      // Build row payload factory
+      const buildRows = (fieldList: string[]) =>
+        players.map(p => {
+          const row: any = pick(p, fieldList);
+          // Required framework columns:
+          row.tournament_id = id;
+          row.tags_json = {};
+          row.warnings_json = {};
+          // Defaults
+          if ('rating' in row && (row.rating == null || row.rating === '')) row.rating = 0;
+          if ('dob' in row && row.dob === '') row.dob = null;
+          if ('gender' in row && row.gender === '') row.gender = null;
+          if ('state' in row && row.state === '') row.state = null;
+          if ('city' in row && row.city === '') row.city = null;
+          return row;
+        });
+
+      // Try up to 4 times, stripping unknown columns as needed
+      let attempts = 0;
+      let lastErr: any = null;
+      let currentFields = [...fields];
+      while (attempts < 4) {
+        const payload = buildRows(currentFields);
+        const { data, error } = await supabase.from('players').insert(payload).select('id');
+
+        if (!error) return data;
+
+        const unknown = extractUnknownColumn(error?.message || '');
+        if (unknown && currentFields.includes(unknown)) {
+          console.warn(`[import] Removing unknown column "${unknown}" and retrying insert`);
+          currentFields = currentFields.filter(f => f !== unknown);
+          attempts++;
+          continue;
         }
-        return row;
-      });
-
-      const { data, error } = await supabase
-        .from('players')
-        .insert(rowsToInsert)
-        .select('id');
-
-      if (error) throw error;
-      
-      // NEW: warn if 0
-      if (!data || data.length === 0) {
-        console.warn('[import] Insert returned 0 rows', { rowsToInsertCount: rowsToInsert.length });
-        toast.error('Import completed but 0 players were added. Check RLS/permissions or duplicate constraints.');
+        lastErr = error;
+        break;
       }
-      return data;
+
+      throw lastErr || new Error('Insert failed after retries');
     },
     onSuccess: (data) => {
       toast.success(`${data.length} players imported successfully`);
@@ -275,11 +284,10 @@ export default function PlayerImport() {
       }
       navigate(`/t/${id}/review`);
     },
-    onError: (error: any) => {
-      console.error('[importPlayers]', error);
-      toast.error(error.message?.includes('row-level security') 
-        ? "Permission denied" 
-        : `Import failed: ${error.message}`);
+    onError: (err: any) => {
+      const msg = err?.message || 'Import failed';
+      console.error('[players import] error', err);
+      toast.error(msg);
     }
   });
 
