@@ -1,0 +1,7 @@
+{
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "imports": {}
+}

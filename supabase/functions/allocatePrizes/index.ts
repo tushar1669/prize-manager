@@ -142,27 +142,24 @@ Deno.serve(async (req) => {
 
     // 8) Enhanced conflict detection
     const allPrizes = categories.flatMap(c => c.prizes || []);
-    const prizeById = new Map(allPrizes.map(p => [p.id, p]));
+    const prizeById = new Map(allPrizes.map((p: any) => [p.id, p]));
     const categoryByPrizeId = new Map(
-      categories.flatMap(c => (c.prizes || []).map((p: any) => [p.id, c]))
+      (categories || []).flatMap((c: any) => (c.prizes || []).map((p: any) => [p.id, c]))
     );
-    const winnerByPlayer = new Map<string, { prizeId: string }>();
-    winners.forEach(w => winnerByPlayer.set(w.playerId, { prizeId: w.prizeId }));
 
-    // A) Multi-eligibility: players eligible for >1 prizes (esp. unassigned ones)
+    // Track what each player could win (by prizeId)
     const eligiblePrizeIdsByPlayer = new Map<string, string[]>();
-    for (const category of categories) {
-      const eligible = eligibilityMap.get(category.id) || [];
-      for (const prize of (category.prizes || [])) {
-        for (const player of eligible) {
-          if (!eligiblePrizeIdsByPlayer.has(player.id)) {
-            eligiblePrizeIdsByPlayer.set(player.id, []);
-          }
-          eligiblePrizeIdsByPlayer.get(player.id)!.push(prize.id);
+    for (const prize of allPrizes) {
+      const eligible = eligibilityMap.get(prize.category_id) || [];
+      for (const player of eligible) {
+        if (!eligiblePrizeIdsByPlayer.has(player.id)) {
+          eligiblePrizeIdsByPlayer.set(player.id, []);
         }
+        eligiblePrizeIdsByPlayer.get(player.id)!.push(prize.id);
       }
     }
-    
+
+    // A) Multi-eligibility
     eligiblePrizeIdsByPlayer.forEach((prizeIds, playerId) => {
       const unique = Array.from(new Set(prizeIds));
       if (unique.length > 1) {
@@ -186,30 +183,28 @@ Deno.serve(async (req) => {
       }
     });
 
-    // B) Equal-value: clusters of unassigned prizes with same cash where some players are eligible for >1
-    const unassignedPrizes = allPrizes.filter(p => !winners.some(w => w.prizeId === p.id));
+    // B) Equal-value clusters among UNASSIGNED prizes
+    const unassignedPrizes = allPrizes.filter((p: any) => !winners.some(w => w.prizeId === p.id));
     const prizesByValue = new Map<number, any[]>();
-    unassignedPrizes.forEach(p => {
+    unassignedPrizes.forEach((p: any) => {
       const val = Number(p.cash_amount) || 0;
       if (!prizesByValue.has(val)) prizesByValue.set(val, []);
       prizesByValue.get(val)!.push(p);
     });
-    
+
     prizesByValue.forEach((prizes, value) => {
       if (value <= 0 || prizes.length < 2) return;
+
+      // playerId -> prizeIds (among this equal-value cluster)
       const candidates = new Map<string, string[]>();
       for (const prize of prizes) {
-        for (const category of categories) {
-          const eligible = eligibilityMap.get(category.id) || [];
-          if ((category.prizes || []).some((p: any) => p.id === prize.id)) {
-            for (const player of eligible) {
-              if (!candidates.has(player.id)) candidates.set(player.id, []);
-              candidates.get(player.id)!.push(prize.id);
-            }
-          }
+        const eligible = eligibilityMap.get(prize.category_id) || [];
+        for (const player of eligible) {
+          if (!candidates.has(player.id)) candidates.set(player.id, []);
+          candidates.get(player.id)!.push(prize.id);
         }
       }
-      
+
       candidates.forEach((ids, pid) => {
         const unique = Array.from(new Set(ids));
         if (unique.length > 1) {
@@ -227,9 +222,9 @@ Deno.serve(async (req) => {
       });
     });
 
-    // C) Rule-exclusion: if strict_age, flag winners outside category age range
+    // C) Rule-exclusion (strict_age)
     if (rules?.strict_age) {
-      const playersById = new Map(players.map((p: any) => [p.id, p]));
+      const playersById = new Map((players || []).map((p: any) => [p.id, p]));
       const calcAge = (dob: string) => {
         const d = new Date(dob);
         if (isNaN(d.getTime())) return null;
@@ -244,8 +239,8 @@ Deno.serve(async (req) => {
         const prize = prizeById.get(w.prizeId);
         const cat = prize ? categoryByPrizeId.get(prize.id) : null;
         const player = playersById.get(w.playerId);
-        const criteria = cat?.criteria_json || {};
-        const range = criteria.age_range;
+        const range = cat?.criteria_json?.age_range as [number, number] | undefined;
+
         if (player?.dob && Array.isArray(range) && range.length === 2) {
           const age = calcAge(player.dob);
           if (age !== null && (age < range[0] || age > range[1])) {
