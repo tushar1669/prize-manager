@@ -1,5 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,7 +96,12 @@ Deno.serve(async (req) => {
     prizeQueue.sort((a, b) => b.priority - a.priority);
 
     // 7) Greedy allocation
-    const winners = [];
+    const winners: Array<{
+      prizeId: string;
+      playerId: string;
+      reasons: string[];
+      isManual: boolean;
+    }> = [];
     const assignedPlayers = new Set();
     const conflicts = [];
 
@@ -116,8 +120,8 @@ Deno.serve(async (req) => {
 
       const eligible = eligibilityMap.get(prizeItem.category.id) || [];
       const availablePlayers = eligible
-        .filter(p => !assignedPlayers.has(p.id))
-        .sort((a, b) => a.rank - b.rank);
+        .filter((p: any) => !assignedPlayers.has(p.id))
+        .sort((a: any, b: any) => a.rank - b.rank);
 
       if (availablePlayers.length === 0) {
         conflicts.push({
@@ -155,7 +159,7 @@ Deno.serve(async (req) => {
       if (!cat) continue;
 
       const eligible =
-        (eligibilityMap as any).get(cat.id) || []; // eligibilityMap is keyed by category.id
+        (eligibilityMap as any).get((cat as any).id) || []; // eligibilityMap is keyed by category.id
       for (const player of eligible) {
         if (!eligiblePrizeIdsByPlayer.has(player.id)) {
           eligiblePrizeIdsByPlayer.set(player.id, []);
@@ -207,7 +211,7 @@ Deno.serve(async (req) => {
         if (!cat) continue;
 
         const eligible =
-          (eligibilityMap as any).get(cat.id) || []; // eligibilityMap is keyed by category.id
+          (eligibilityMap as any).get((cat as any).id) || []; // eligibilityMap is keyed by category.id
         for (const player of eligible) {
           if (!candidates.has(player.id)) candidates.set(player.id, []);
           candidates.get(player.id)!.push(prize.id);
@@ -248,7 +252,7 @@ Deno.serve(async (req) => {
         const prize = prizeById.get(w.prizeId);
         const cat = prize ? categoryByPrizeId.get(prize.id) : null;
         const player = playersById.get(w.playerId);
-        const range = cat?.criteria_json?.age_range as [number, number] | undefined;
+        const range = (cat as any)?.criteria_json?.age_range as [number, number] | undefined;
 
         if (player?.dob && Array.isArray(range) && range.length === 2) {
           const age = calcAge(player.dob);
@@ -271,14 +275,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ winners, conflicts }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
-  } catch (error) {
-    console.error('[allocatePrizes] Error:', error);
+  } catch (e: any) {
+    console.error('[allocatePrizes] fatal', e);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: String((e && e.message) || e) }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });

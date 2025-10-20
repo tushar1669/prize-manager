@@ -72,7 +72,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('tournaments')
         .insert(payload)
-        .select()
+        .select('*')
         .single();
 
       if (error) throw error;

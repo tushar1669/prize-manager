@@ -156,7 +156,7 @@ export default function TournamentSetup() {
           criteria_json: values.criteria_json || {},
           order_idx: categories?.length || 0
         })
-        .select()
+        .select('*')
         .single();
       
       if (error) throw error;
@@ -204,7 +204,7 @@ export default function TournamentSetup() {
             criteria_json: {},
             order_idx: 0
           })
-          .select()
+          .select('*')
           .single();
         
         if (error) throw error;

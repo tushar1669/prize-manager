@@ -84,9 +84,10 @@ export default function ConflictReview() {
       setConflicts(data.conflicts);
       toast.info(data.conflicts.length === 0 ? 'All clear!' : `${data.conflicts.length} conflicts found`);
     },
-    onError: (error: any) => {
-      console.error('[allocatePrizes]', error);
-      toast.error(`Allocation failed: ${error.message}`);
+    onError: async (err: any) => {
+      const msg = (err?.context?.error?.message) || (err?.message) || 'Allocation failed';
+      console.error('[allocatePrizes] error', err);
+      toast.error(`Allocation failed: ${msg}`);
     }
   });
 
