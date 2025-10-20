@@ -140,8 +140,128 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8) Detect conflicts (multi-eligibility, equal-value, etc.)
-    // Simplified for now - add detailed conflict detection logic here
+    // 8) Enhanced conflict detection
+    const allPrizes = categories.flatMap(c => c.prizes || []);
+    const prizeById = new Map(allPrizes.map(p => [p.id, p]));
+    const categoryByPrizeId = new Map(
+      categories.flatMap(c => (c.prizes || []).map((p: any) => [p.id, c]))
+    );
+    const winnerByPlayer = new Map<string, { prizeId: string }>();
+    winners.forEach(w => winnerByPlayer.set(w.playerId, { prizeId: w.prizeId }));
+
+    // A) Multi-eligibility: players eligible for >1 prizes (esp. unassigned ones)
+    const eligiblePrizeIdsByPlayer = new Map<string, string[]>();
+    for (const category of categories) {
+      const eligible = eligibilityMap.get(category.id) || [];
+      for (const prize of (category.prizes || [])) {
+        for (const player of eligible) {
+          if (!eligiblePrizeIdsByPlayer.has(player.id)) {
+            eligiblePrizeIdsByPlayer.set(player.id, []);
+          }
+          eligiblePrizeIdsByPlayer.get(player.id)!.push(prize.id);
+        }
+      }
+    }
+    
+    eligiblePrizeIdsByPlayer.forEach((prizeIds, playerId) => {
+      const unique = Array.from(new Set(prizeIds));
+      if (unique.length > 1) {
+        const currentWin = winners.find(w => w.playerId === playerId && unique.includes(w.prizeId));
+        const suggestedPrizeId =
+          currentWin?.prizeId ??
+          unique
+            .map(id => prizeById.get(id))
+            .filter(Boolean)
+            .sort((a: any, b: any) => (Number(b.cash_amount) || 0) - (Number(a.cash_amount) || 0))[0]?.id;
+
+        conflicts.push({
+          id: crypto.randomUUID(),
+          type: 'multi-eligibility',
+          impacted_players: [playerId],
+          impacted_prizes: unique,
+          reasons: ['Player eligible for multiple prizes'],
+          suggested: suggestedPrizeId ? { prizeId: suggestedPrizeId, playerId } : null,
+          tournament_id: tournamentId,
+        });
+      }
+    });
+
+    // B) Equal-value: clusters of unassigned prizes with same cash where some players are eligible for >1
+    const unassignedPrizes = allPrizes.filter(p => !winners.some(w => w.prizeId === p.id));
+    const prizesByValue = new Map<number, any[]>();
+    unassignedPrizes.forEach(p => {
+      const val = Number(p.cash_amount) || 0;
+      if (!prizesByValue.has(val)) prizesByValue.set(val, []);
+      prizesByValue.get(val)!.push(p);
+    });
+    
+    prizesByValue.forEach((prizes, value) => {
+      if (value <= 0 || prizes.length < 2) return;
+      const candidates = new Map<string, string[]>();
+      for (const prize of prizes) {
+        for (const category of categories) {
+          const eligible = eligibilityMap.get(category.id) || [];
+          if ((category.prizes || []).some((p: any) => p.id === prize.id)) {
+            for (const player of eligible) {
+              if (!candidates.has(player.id)) candidates.set(player.id, []);
+              candidates.get(player.id)!.push(prize.id);
+            }
+          }
+        }
+      }
+      
+      candidates.forEach((ids, pid) => {
+        const unique = Array.from(new Set(ids));
+        if (unique.length > 1) {
+          const currentWin = winners.find(w => w.playerId === pid && unique.includes(w.prizeId));
+          conflicts.push({
+            id: crypto.randomUUID(),
+            type: 'equal-value',
+            impacted_players: [pid],
+            impacted_prizes: unique,
+            reasons: [`Multiple equal-value prizes (₹${value}) eligible`],
+            suggested: currentWin ? { prizeId: currentWin.prizeId, playerId: pid } : null,
+            tournament_id: tournamentId,
+          });
+        }
+      });
+    });
+
+    // C) Rule-exclusion: if strict_age, flag winners outside category age range
+    if (rules?.strict_age) {
+      const playersById = new Map(players.map((p: any) => [p.id, p]));
+      const calcAge = (dob: string) => {
+        const d = new Date(dob);
+        if (isNaN(d.getTime())) return null;
+        const today = new Date();
+        let age = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+        return age;
+      };
+
+      winners.forEach(w => {
+        const prize = prizeById.get(w.prizeId);
+        const cat = prize ? categoryByPrizeId.get(prize.id) : null;
+        const player = playersById.get(w.playerId);
+        const criteria = cat?.criteria_json || {};
+        const range = criteria.age_range;
+        if (player?.dob && Array.isArray(range) && range.length === 2) {
+          const age = calcAge(player.dob);
+          if (age !== null && (age < range[0] || age > range[1])) {
+            conflicts.push({
+              id: crypto.randomUUID(),
+              type: 'rule-exclusion',
+              impacted_players: [w.playerId],
+              impacted_prizes: [w.prizeId],
+              reasons: ['Strict age violation'],
+              suggested: null,
+              tournament_id: tournamentId,
+            });
+          }
+        }
+      });
+    }
 
     console.log(`[allocatePrizes] Completed: ${winners.length} winners, ${conflicts.length} conflicts`);
 

@@ -21,6 +21,23 @@ export default function Finalize() {
   const location = useLocation();
   const winners = (location.state?.winners || []) as Winner[];
 
+  // Fetch next version number
+  const { data: nextVersion } = useQuery({
+    queryKey: ['next-version', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('allocations')
+        .select('version')
+        .eq('tournament_id', id)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.version ?? 0) + 1;
+    },
+  });
+
   // Fetch summary data
   const { data: summary } = useQuery({
     queryKey: ['finalize-summary', id, winners],
@@ -130,7 +147,9 @@ export default function Finalize() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
-            <Badge className="bg-primary text-primary-foreground">v1</Badge>
+            <span className="text-xs rounded-full px-2 py-1 bg-muted">
+              v{nextVersion ?? 1}
+            </span>
           </div>
           <p className="text-muted-foreground">
             Review final allocations before publishing
@@ -226,7 +245,7 @@ export default function Finalize() {
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground mb-4">
-                By publishing, you create an immutable version (v1) of these allocations.
+                By publishing, you create an immutable version (v{nextVersion ?? 1}) of these allocations.
                 The tournament will be available at a public URL that can be shared with participants.
               </p>
             </CardContent>
