@@ -40,13 +40,20 @@ const optionalFields = [
 const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
 
 const mappingRules: Record<string, string[]> = {
+  // required
   rank: ['rank', 'position', 'pos', 'rank#', '#'],
   name: ['name', 'player', 'player name', 'full name', 'playername'],
+
+  // existing optional
   rating: ['rating', 'elo', 'fide rating', 'elo rating', 'fide'],
   dob: ['dob', 'date of birth', 'birth date', 'd.o.b', 'birthdate'],
   gender: ['gender', 'sex', 'g'],
   state: ['state', 'province', 'region', 'st'],
-  city: ['city', 'town', 'location']
+  city: ['city', 'town', 'location'],
+
+  // NEW optional (synonyms included; these are mapped only if headers exist)
+  disability: ['disability', 'disability type', 'handicap', 'ph', 'pwd', 'physically handicapped', 'special category'],
+  special_notes: ['special notes', 'notes', 'remarks', 'special needs', 'accommodations', 'comments']
 };
 
 export function ColumnMappingDialog({ 

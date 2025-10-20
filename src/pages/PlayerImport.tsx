@@ -39,11 +39,11 @@ export default function PlayerImport() {
   const [isParsing, setIsParsing] = useState(false);
 
   const downloadTemplate = () => {
-    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city"];
+    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city", "disability", "special_notes"];
     const sample = [
-      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai"],
-      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru"],
-      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi"],
+      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai", "None", ""],
+      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru", "None", "Vegetarian lunch"],
+      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi", "Hearing", "Seat near arbiter"],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
@@ -55,6 +55,8 @@ export default function PlayerImport() {
       { wch: 8 },  // gender
       { wch: 8 },  // state
       { wch: 16 }, // city
+      { wch: 12 }, // disability
+      { wch: 20 }, // special_notes
     ];
 
     const wb = XLSX.utils.book_new();
@@ -132,7 +134,11 @@ export default function PlayerImport() {
     };
 
     const getExistingOptionalColumns = async () => {
-      const optional = ['rating', 'dob', 'gender', 'state', 'city'];
+      const optional = [
+        'rating', 'dob', 'gender', 'state', 'city',
+        // NEW: we'll probe and include whichever exist in the DB
+        'disability', 'disability_type', 'handicap', 'special_needs', 'special_notes', 'notes'
+      ];
       const checks = await Promise.all(optional.map(async c => [c, await columnExists(c)] as const));
       return new Set(checks.filter(([,ok]) => ok).map(([c]) => c));
     };
@@ -206,15 +212,32 @@ export default function PlayerImport() {
     });
 
     setDuplicates(dupes);
-    setMappedPlayers(validPlayers);
+    
+    // Filter out invalid rows before setting
+    const valid = validPlayers.filter(p => Number(p.rank) > 0 && String(p.name || '').trim().length > 0);
+    
+    if (valid.length === 0) {
+      console.warn('[import] No valid rows after mapping. Sample of first row:', mapped[0]);
+      toast.error('No valid rows to import. Check that "rank" and "name" columns are present and non-empty.');
+      setMappedPlayers([]);
+      return;
+    }
+    
+    setMappedPlayers(valid);
 
     if (errors.length === 0 && dupes.length === 0) {
-      toast.success(`${validPlayers.length} players ready to import`);
+      toast.success(`${valid.length} players ready to import`);
     }
   };
 
   const importPlayersMutation = useMutation({
     mutationFn: async (players: ParsedPlayer[]) => {
+      const extras = [
+        'rating', 'dob', 'gender', 'state', 'city',
+        // NEW keys we support if the table has them and mapping provided it
+        'disability', 'disability_type', 'handicap', 'special_needs', 'special_notes', 'notes'
+      ];
+
       const rowsToInsert = players.map(p => {
         const row: any = {
           tournament_id: id,
@@ -223,14 +246,9 @@ export default function PlayerImport() {
           tags_json: {},
           warnings_json: {}
         };
-        
-        // Only include fields that exist in parsed player
-        if ('rating' in p) row.rating = p.rating || 0;
-        if ('dob' in p) row.dob = p.dob || null;
-        if ('gender' in p) row.gender = p.gender || null;
-        if ('state' in p) row.state = p.state || null;
-        if ('city' in p) row.city = p.city || null;
-        
+        for (const k of extras) {
+          if (k in p) row[k] = (p as any)[k] ?? null;
+        }
         return row;
       });
 
@@ -240,6 +258,12 @@ export default function PlayerImport() {
         .select('id');
 
       if (error) throw error;
+      
+      // NEW: warn if 0
+      if (!data || data.length === 0) {
+        console.warn('[import] Insert returned 0 rows', { rowsToInsertCount: rowsToInsert.length });
+        toast.error('Import completed but 0 players were added. Check RLS/permissions or duplicate constraints.');
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -268,7 +292,7 @@ export default function PlayerImport() {
       <div className="container mx-auto px-6 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
-          <p className="text-muted-foreground">Upload Excel (XLS/XLSX) file with player data</p>
+          <p className="text-muted-foreground">Upload Excel (XLS/XLSX) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, disability, special_notes.</p>
         </div>
 
         {!hasData ? (
@@ -300,7 +324,7 @@ export default function PlayerImport() {
                   </Button>
                 </label>
                 <p className="text-sm text-muted-foreground mt-4">
-                  Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city.
+                  Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city, disability, special_notes.
                 </p>
               </div>
               <Alert>
