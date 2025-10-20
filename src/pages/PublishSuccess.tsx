@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,8 @@ import { useState } from "react";
 export default function PublishSuccess() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const version = location.state?.version || 1;
   const [isPublished, setIsPublished] = useState(true);
   const publicUrl = `https://prize-manager.com/t/${id}/public`;
 

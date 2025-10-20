@@ -57,3 +57,16 @@ export const prizeSchema = z.object({
 });
 
 export type PrizeForm = z.infer<typeof prizeSchema>;
+
+// Player Import schema
+export const playerImportSchema = z.object({
+  rank: z.number().min(1, "Rank must be at least 1"),
+  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  rating: z.number().min(0, "Rating cannot be negative").nullable().optional(),
+  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").nullable().optional(),
+  gender: z.enum(['M', 'F', 'Other']).nullable().optional(),
+  state: z.string().max(50, "State must be less than 50 characters").nullable().optional(),
+  city: z.string().max(50, "City must be less than 50 characters").nullable().optional()
+});
+
+export type PlayerImportRow = z.infer<typeof playerImportSchema>;

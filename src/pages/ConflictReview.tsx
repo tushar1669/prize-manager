@@ -1,300 +1,192 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RuleChip } from "@/components/ui/rule-chip";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, CheckCircle, RefreshCw, ArrowRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Winner {
+  prizeId: string;
+  playerId: string;
+  reasons: string[];
+  isManual: boolean;
+}
 
 interface Conflict {
   id: string;
-  player: string;
-  prizes: string[];
-  suggested: string;
+  type: string;
+  impacted_players: string[];
+  impacted_prizes: string[];
   reasons: string[];
-  type: "multi-eligibility" | "equal-value" | "rule-exclusion";
+  suggested: { prizeId: string; playerId: string } | null;
 }
 
 export default function ConflictReview() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [conflicts, setConflicts] = useState<Conflict[]>([
-    {
-      id: "1",
-      player: "Alice Kumar",
-      prizes: ["1st Place (Main)", "1st Place (U13)", "1st Place (Female)"],
-      suggested: "1st Place (Main)",
-      reasons: ["One-Prize Rule", "Main Priority", "Higher Cash Value"],
-      type: "multi-eligibility",
-    },
-    {
-      id: "2",
-      player: "Eve Patel",
-      prizes: ["5th Place (Main)", "2nd Place (Female)"],
-      suggested: "5th Place (Main)",
-      reasons: ["Equal Cash Value", "Prefer Main (Tie Rule)"],
-      type: "equal-value",
-    },
-  ]);
 
-  const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(conflicts[0]);
-  const [strictAge, setStrictAge] = useState(true);
-  const [allowUnrated, setAllowUnrated] = useState(false);
+  const [winners, setWinners] = useState<Winner[]>([]);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
+  const [overrideDrawerOpen, setOverrideDrawerOpen] = useState(false);
+  const [selectedPrize, setSelectedPrize] = useState("");
+  const [selectedPlayer, setSelectedPlayer] = useState("");
+
+  const { data: ruleConfig } = useQuery({
+    queryKey: ['rule-config', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('rule_config').select('*').eq('tournament_id', id).single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
+
+  const { data: players } = useQuery({
+    queryKey: ['players', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('players').select('*').eq('tournament_id', id).order('rank');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
+
+  const { data: categories } = useQuery({
+    queryKey: ['categories-prizes', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('categories').select('*, prizes(*)').eq('tournament_id', id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
+
+  const allocateMutation = useMutation({
+    mutationFn: async (ruleOverride?: any) => {
+      const { data, error } = await supabase.functions.invoke('allocatePrizes', {
+        body: { tournamentId: id, ruleConfigOverride: ruleOverride || undefined }
+      });
+      if (error) throw error;
+      return data as { winners: Winner[], conflicts: Conflict[] };
+    },
+    onSuccess: (data) => {
+      setWinners(data.winners);
+      setConflicts(data.conflicts);
+      toast.info(data.conflicts.length === 0 ? 'All clear!' : `${data.conflicts.length} conflicts found`);
+    },
+    onError: (error: any) => {
+      console.error('[allocatePrizes]', error);
+      toast.error(`Allocation failed: ${error.message}`);
+    }
+  });
+
+  useEffect(() => {
+    if (id) allocateMutation.mutate();
+  }, [id]);
 
   const handleAccept = (conflictId: string) => {
-    setConflicts(conflicts.filter((c) => c.id !== conflictId));
-    if (selectedConflict?.id === conflictId) {
-      setSelectedConflict(conflicts[0] || null);
-    }
-    toast.success("Conflict resolved");
+    const conflict = conflicts.find(c => c.id === conflictId);
+    if (!conflict?.suggested) return;
+
+    setWinners(prev => [
+      ...prev.filter(w => w.prizeId !== conflict.suggested!.prizeId),
+      { prizeId: conflict.suggested!.prizeId, playerId: conflict.suggested!.playerId, reasons: ['suggested_resolution'], isManual: false }
+    ]);
+    setConflicts(prev => prev.filter(c => c.id !== conflictId));
+    toast.success('Conflict resolved');
   };
 
   const handleAcceptAll = () => {
+    const newWinners = [...winners];
+    conflicts.forEach(conflict => {
+      if (conflict.suggested) {
+        const idx = newWinners.findIndex(w => w.prizeId === conflict.suggested!.prizeId);
+        if (idx !== -1) newWinners.splice(idx, 1);
+        newWinners.push({ prizeId: conflict.suggested.prizeId, playerId: conflict.suggested.playerId, reasons: ['suggested_resolution'], isManual: false });
+      }
+    });
+    setWinners(newWinners);
     setConflicts([]);
-    setSelectedConflict(null);
-    toast.success("All conflicts resolved");
+    toast.success('All conflicts resolved');
   };
 
-  const handleRecompute = () => {
-    toast.info("Recomputing allocations...");
+  const handleOverride = () => {
+    if (!selectedConflict || !selectedPrize || !selectedPlayer) return;
+    setConflicts(prev => prev.filter(c => c.id !== selectedConflict.id));
+    setWinners(prev => [...prev.filter(w => w.prizeId !== selectedPrize), { prizeId: selectedPrize, playerId: selectedPlayer, reasons: ['manual_override'], isManual: true }]);
+    toast.success('Override applied');
+    setOverrideDrawerOpen(false);
   };
 
-  const handleFinalize = () => {
-    if (conflicts.length === 0) {
-      toast.success("Moving to finalization");
-      navigate(`/t/${id}/finalize`);
-    } else {
-      toast.error("Please resolve all conflicts before finalizing");
-    }
-  };
+  const allPrizes = categories?.flatMap(c => c.prizes || []) || [];
+  const getPlayer = (playerId: string) => players?.find(p => p.id === playerId);
+  const getPrize = (prizeId: string) => allPrizes.find(p => p.id === prizeId);
 
   return (
     <div className="min-h-screen bg-background">
       <AppNav />
       
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Conflict Review & Rule Audit</h1>
-          <p className="text-muted-foreground">
-            Resolve all conflicts before finalizing allocations
-          </p>
+          <h1 className="text-3xl font-bold mb-2">Review Allocations</h1>
+          {conflicts.length > 0 && <Badge variant="destructive">{conflicts.length} Conflicts</Badge>}
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
-          {/* Conflicts List */}
-          <div className="col-span-5">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-warning" />
-                    Conflicts ({conflicts.length})
-                  </CardTitle>
-                  {conflicts.length > 0 && (
-                    <Button size="sm" variant="outline" onClick={handleAcceptAll}>
-                      Accept All
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {conflicts.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <CheckCircle className="h-12 w-12 mx-auto mb-3 text-success" />
-                    <p className="text-foreground font-medium mb-1">All Clear!</p>
-                    <p className="text-sm text-muted-foreground">
-                      No conflicts found. Ready to finalize.
-                    </p>
+        {allocateMutation.isPending ? (
+          <Card><CardContent className="py-12 text-center"><RefreshCw className="h-12 w-12 animate-spin mx-auto mb-4" /></CardContent></Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              {conflicts.length === 0 ? (
+                <Card><CardContent className="py-12 text-center"><CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" /><h3 className="text-lg font-semibold">All Clear!</h3></CardContent></Card>
+              ) : (
+                <ScrollArea className="h-[600px]">
+                  <div className="space-y-3">
+                    {conflicts.map(conflict => (
+                      <Card key={conflict.id} className="cursor-pointer" onClick={() => setSelectedConflict(conflict)}>
+                        <CardHeader><CardTitle className="text-base">{conflict.type}</CardTitle></CardHeader>
+                        <CardContent>
+                          <div className="flex gap-2 mt-3">
+                            {conflict.suggested && <Button size="sm" onClick={(e) => { e.stopPropagation(); handleAccept(conflict.id); }}>Accept</Button>}
+                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                ) : (
-                  <ScrollArea className="h-[500px] pr-4">
-                    <div className="space-y-3">
-                      {conflicts.map((conflict) => (
-                        <div
-                          key={conflict.id}
-                          className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                            selectedConflict?.id === conflict.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                          onClick={() => setSelectedConflict(conflict)}
-                        >
-                          <h4 className="font-medium text-foreground mb-2">{conflict.player}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Eligible for {conflict.prizes.length} prizes
-                          </p>
-                          <div className="flex flex-wrap gap-1">
-                            {conflict.reasons.map((reason, idx) => (
-                              <Badge
-                                key={idx}
-                                variant="outline"
-                                className="text-xs bg-warning/10 text-warning border-warning/30"
-                              >
-                                {reason}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+                </ScrollArea>
+              )}
+            </div>
+            <div><Card><CardHeader><CardTitle>Summary</CardTitle></CardHeader><CardContent><div>Winners: {winners.length}</div><div>Conflicts: {conflicts.length}</div></CardContent></Card></div>
           </div>
+        )}
 
-          {/* Detail Panel */}
-          <div className="col-span-7 space-y-6">
-            {selectedConflict ? (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{selectedConflict.player}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground mb-3 block">
-                        Eligible Prizes
-                      </Label>
-                      <div className="space-y-2">
-                        {selectedConflict.prizes.map((prize, idx) => (
-                          <div
-                            key={idx}
-                            className={`p-3 rounded-lg border ${
-                              prize === selectedConflict.suggested
-                                ? "border-primary bg-primary/5"
-                                : "border-border"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-foreground">{prize}</span>
-                              {prize === selectedConflict.suggested && (
-                                <Badge className="bg-primary text-primary-foreground">
-                                  Suggested
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-sm font-medium text-muted-foreground mb-3 block">
-                        Resolution Reasons
-                      </Label>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedConflict.reasons.map((reason, idx) => (
-                          <RuleChip key={idx}>{reason}</RuleChip>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-4">
-                      <Button
-                        onClick={() => handleAccept(selectedConflict.id)}
-                        className="flex-1"
-                      >
-                        Accept Suggestion
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        Override
-                      </Button>
-                      <Button variant="outline">
-                        Adjust Rule
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Global Rule Toggles</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="strict-age" className="text-foreground">Strict Age</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Players only eligible for their age group
-                        </p>
-                      </div>
-                      <Switch
-                        id="strict-age"
-                        checked={strictAge}
-                        onCheckedChange={setStrictAge}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="allow-unrated" className="text-foreground">
-                          Allow Unrated in Rating Categories
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          Include unrated players in rating brackets
-                        </p>
-                      </div>
-                      <Switch
-                        id="allow-unrated"
-                        checked={allowUnrated}
-                        onCheckedChange={setAllowUnrated}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={handleRecompute}
-                      className="w-full gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Recompute Allocations
-                    </Button>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <Card className="h-full flex items-center justify-center min-h-[500px]">
-                <CardContent className="text-center">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 text-success" />
-                  <h3 className="text-xl font-semibold text-foreground mb-2">
-                    Ready to Finalize
-                  </h3>
-                  <p className="text-muted-foreground mb-6">
-                    All conflicts have been resolved. You can now proceed to finalization.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-8 flex justify-between">
-          <Button variant="outline" onClick={() => navigate(`/t/${id}/import`)}>
-            Back to Import
-          </Button>
-          <Button
-            onClick={handleFinalize}
-            disabled={conflicts.length > 0}
-            className="gap-2"
-          >
-            {conflicts.length > 0 ? (
-              <>
-                <AlertCircle className="h-4 w-4" />
-                Resolve All Conflicts First
-              </>
-            ) : (
-              <>
-                Finalize Allocations
-                <ArrowRight className="h-4 w-4" />
-              </>
-            )}
-          </Button>
+        <div className="flex justify-between mt-8">
+          <Button variant="outline" onClick={() => navigate(`/t/${id}/import`)}>Back</Button>
+          <Button onClick={() => navigate(`/t/${id}/finalize`, { state: { winners } })} disabled={conflicts.length > 0}>Finalize <ArrowRight className="h-4 w-4 ml-2" /></Button>
         </div>
       </div>
+
+      <Sheet open={overrideDrawerOpen} onOpenChange={setOverrideDrawerOpen}>
+        <SheetContent>
+          <SheetHeader><SheetTitle>Manual Override</SheetTitle></SheetHeader>
+          {selectedConflict && <div className="space-y-6 mt-6">
+            <div><Label>Prize</Label><Select value={selectedPrize} onValueChange={setSelectedPrize}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{selectedConflict.impacted_prizes.map(pid => <SelectItem key={pid} value={pid}>{getPrize(pid)?.place}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>Player</Label><Select value={selectedPlayer} onValueChange={setSelectedPlayer}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{selectedConflict.impacted_players.map(pid => <SelectItem key={pid} value={pid}>{getPlayer(pid)?.name}</SelectItem>)}</SelectContent></Select></div>
+            <Button className="w-full" onClick={handleOverride}>Apply</Button>
+          </div>}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
