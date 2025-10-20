@@ -22,6 +22,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Upload, ArrowRight, X } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -85,6 +87,10 @@ export default function TournamentSetup() {
     }
   });
 
+  // Auth & role for organizer guard
+  const { user } = useAuth();
+  const { isMaster } = useUserRole();
+
   // Fetch tournament data
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['tournament', id],
@@ -126,6 +132,10 @@ export default function TournamentSetup() {
     enabled: !!id && id !== 'new'
   });
 
+  // Organizer guard: owner or master
+  const isOrganizer = 
+    (user && tournament && tournament.owner_id === user.id) || !!isMaster;
+
   // Fetch categories
   const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories', id],
@@ -143,6 +153,20 @@ export default function TournamentSetup() {
       return data;
     },
     enabled: !!id && activeTab === 'prizes'
+  });
+
+  // Player count for conditional CTA
+  const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
+    queryKey: ['player-count', id],
+    enabled: !!id && activeTab === 'prizes',
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('players')
+        .select('id', { head: true, count: 'exact' })
+        .eq('tournament_id', id);
+      if (error) throw error;
+      return count ?? 0;
+    },
   });
 
   // Update tournament mutation
@@ -740,13 +764,14 @@ export default function TournamentSetup() {
                     <CardTitle>Category Prizes</CardTitle>
                     <CardDescription>Age, rating, and special categories</CardDescription>
                   </div>
-                  <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" variant="outline" className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Add Category
-                      </Button>
-                    </DialogTrigger>
+                  {isOrganizer && (
+                    <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Add Category
+                        </Button>
+                      </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Add Category</DialogTitle>
@@ -796,6 +821,7 @@ export default function TournamentSetup() {
                       </Form>
                     </DialogContent>
                   </Dialog>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -817,77 +843,96 @@ export default function TournamentSetup() {
                             {/* Criteria Summary */}
                             {(() => {
                               const criteria = cat.criteria_json as any;
-                              return Object.keys(criteria || {}).length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                              if (!criteria || Object.keys(criteria).length === 0) return null;
+                              return (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {/* DOB */}
                                   {criteria.dob_on_or_after && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                                       DOB ≥ {criteria.dob_on_or_after}
-                                    </span>
+                                    </Badge>
                                   )}
+
+                                  {/* Rating */}
                                   {(criteria.min_rating || criteria.max_rating) && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
-                                      Rating: {criteria.min_rating || '0'}–
-                                      {criteria.max_rating || '∞'}
-                                      {criteria.include_unrated && ' (incl. unrated)'}
-                                    </span>
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      Rating: {criteria.min_rating ?? "0"}–{criteria.max_rating ?? "∞"}
+                                    </Badge>
                                   )}
-                                  {criteria.disability_types?.length > 0 && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
-                                      Disability: {criteria.disability_types.join(', ')}
-                                    </span>
+
+                                  {/* Unrated – always explicit when defined */}
+                                  {typeof criteria.include_unrated !== "undefined" && (
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      Unrated: {criteria.include_unrated === false ? "Excluded" : "Included"}
+                                    </Badge>
                                   )}
-                                  {criteria.allowed_cities?.length > 0 && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
-                                      Cities: {criteria.allowed_cities.join(', ')}
-                                    </span>
+
+                                  {/* Disability */}
+                                  {Array.isArray(criteria.disability_types) && criteria.disability_types.length > 0 && (
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      Disability: {criteria.disability_types.join(", ")}
+                                    </Badge>
                                   )}
-                                  {criteria.allowed_clubs?.length > 0 && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
-                                      Clubs: {criteria.allowed_clubs.join(', ')}
-                                    </span>
+
+                                  {/* Cities */}
+                                  {Array.isArray(criteria.allowed_cities) && criteria.allowed_cities.length > 0 && (
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      Cities: {criteria.allowed_cities.join(", ")}
+                                    </Badge>
                                   )}
+
+                                  {/* Clubs */}
+                                  {Array.isArray(criteria.allowed_clubs) && criteria.allowed_clubs.length > 0 && (
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      Clubs: {criteria.allowed_clubs.join(", ")}
+                                    </Badge>
+                                  )}
+
+                                  {/* Gender */}
                                   {criteria.gender && (
-                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                                       Gender: {String(criteria.gender).toUpperCase()}
-                                    </span>
+                                    </Badge>
                                   )}
                                 </div>
                               );
                             })()}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setCriteriaSheet({ open: true, category: cat })}
-                            >
-                              Edit Rules
-                            </Button>
-                            {cat.id && (
+                          {isOrganizer && (
+                            <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setPrizeDialog({ open: true, categoryId: cat.id })}
+                                onClick={() => setCriteriaSheet({ open: true, category: cat })}
                               >
-                                Add Prize
+                                Edit Rules
                               </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDupDialog({ open: true, sourceId: cat.id })}
-                            >
-                              Duplicate
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                              disabled={deleteCategoryMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                              {cat.id && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setPrizeDialog({ open: true, categoryId: cat.id })}
+                                >
+                                  Add Prize
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setDupDialog({ open: true, sourceId: cat.id })}
+                              >
+                                Duplicate
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                                disabled={deleteCategoryMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Prize List with Inline Editor */}
@@ -912,31 +957,33 @@ export default function TournamentSetup() {
                                             {p.has_trophy && ' · 🏆 Trophy'}
                                             {p.has_medal && ' · 🥇 Medal'}
                                           </span>
-                                          <div className="flex gap-2">
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              onClick={() => {
-                                                setInlineEditPrizeId(p.id);
-                                                setInlineDraft({
-                                                  place: p.place,
-                                                  cash_amount: Number(p.cash_amount || 0),
-                                                  has_trophy: !!p.has_trophy,
-                                                  has_medal: !!p.has_medal,
-                                                });
-                                              }}
-                                            >
-                                              Edit
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="destructive"
-                                              onClick={() => deletePrizeMutation.mutate(p.id)}
-                                              disabled={deletePrizeMutation.isPending}
-                                            >
-                                              Delete
-                                            </Button>
-                                          </div>
+                                          {isOrganizer && (
+                                            <div className="flex gap-2">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                  setInlineEditPrizeId(p.id);
+                                                  setInlineDraft({
+                                                    place: p.place,
+                                                    cash_amount: Number(p.cash_amount || 0),
+                                                    has_trophy: !!p.has_trophy,
+                                                    has_medal: !!p.has_medal,
+                                                  });
+                                                }}
+                                              >
+                                                Edit
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                onClick={() => deletePrizeMutation.mutate(p.id)}
+                                                disabled={deletePrizeMutation.isPending}
+                                              >
+                                                Delete
+                                              </Button>
+                                            </div>
+                                          )}
                                         </>
                                       ) : (
                                         <>
@@ -1048,12 +1095,29 @@ export default function TournamentSetup() {
                 >
                   Save Draft
                 </Button>
-                <Button 
-                  onClick={() => savePrizesMutation.mutate()} 
-                  disabled={savePrizesMutation.isPending}
+                <Button
+                  onClick={async () => {
+                    try {
+                      if (savePrizesMutation?.mutateAsync) {
+                        await savePrizesMutation.mutateAsync();
+                      }
+                    } catch (e) {
+                      // ignore save errors for navigation UX; user will be notified by toast already
+                    }
+                    if (playerCount > 0) {
+                      navigate(`/t/${id}/review`);
+                    } else {
+                      navigate(`/t/${id}/import`);
+                    }
+                  }}
+                  disabled={savePrizesMutation?.isPending || loadingPlayerCount}
                   className="gap-2"
                 >
-                  {savePrizesMutation.isPending ? 'Saving...' : 'Next: Import Players'}
+                  {loadingPlayerCount
+                    ? '...'
+                    : playerCount > 0
+                      ? 'Next: Review & Allocate'
+                      : 'Next: Import Players'}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>

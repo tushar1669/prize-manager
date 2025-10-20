@@ -11,6 +11,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -18,6 +28,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
+    { open: false, tournamentId: null, title: "" }
+  );
 
   // Helper to detect ownership column (owner_id vs created_by)
   async function detectOwnerColumn(): Promise<'owner_id' | 'created_by'> {
@@ -240,12 +253,11 @@ export default function Dashboard() {
                         >
                           Resume
                         </Button>
-                        {isMaster && (
+                        {isMaster && tournament.status === 'draft' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteMutation.mutate(tournament.id)}
-                            disabled={deleteMutation.isPending}
+                            onClick={() => setDeleteDialog({ open: true, tournamentId: tournament.id, title: tournament.title })}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -271,6 +283,33 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog(s => ({ ...s, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete draft "{deleteDialog.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the draft tournament and its data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialog({ open: false, tournamentId: null, title: "" })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!deleteDialog.tournamentId) return;
+                deleteMutation.mutate(deleteDialog.tournamentId, {
+                  onSettled: () => setDeleteDialog({ open: false, tournamentId: null, title: "" }),
+                });
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

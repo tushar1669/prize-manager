@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePapaParser } from "@/hooks/usePapaParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -56,6 +58,27 @@ export default function PlayerImport() {
   const [duplicates, setDuplicates] = useState<{ row: number; duplicate: string }[]>([]);
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+
+  // Auth & role for organizer guard
+  const { user } = useAuth();
+  const { isMaster } = useUserRole();
+
+  // Fetch tournament to check ownership
+  const { data: tournament } = useQuery({
+    queryKey: ['tournament', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('owner_id')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
 
   const downloadTemplate = () => {
     const headers = ["rank", "name", "rating", "dob", "gender", "state", "city", "club", "disability", "special_notes"];
@@ -308,40 +331,48 @@ export default function PlayerImport() {
           <Card>
             <CardHeader><CardTitle>Upload Excel File</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
-                <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Excel file with columns: rank, name, rating, DOB, gender, state, city
-                </p>
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <Button variant="outline" onClick={downloadTemplate}>
-                    Download Excel Template
-                  </Button>
+              {isOrganizer ? (
+                <>
+                  <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
+                    <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Excel file with columns: rank, name, rating, DOB, gender, state, city
+                    </p>
+                    <div className="flex items-center justify-center gap-3 mb-3">
+                      <Button variant="outline" onClick={downloadTemplate}>
+                        Download Excel Template
+                      </Button>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="csv-upload"
+                      disabled={isParsing}
+                    />
+                    <label htmlFor="csv-upload">
+                      <Button asChild disabled={isParsing}>
+                        <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
+                      </Button>
+                    </label>
+                    <p className="text-sm text-muted-foreground mt-4">
+                      Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city, disability, special_notes.
+                    </p>
+                  </div>
+                  <Alert>
+                    <FileText className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>File Format:</strong> Ensure your Excel file has headers and at least 'rank' and 'name' columns.
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground p-8 text-center">
+                  You have read-only access to this tournament. Please contact the organizer to import players.
                 </div>
-                <input
-                  type="file"
-                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  id="csv-upload"
-                  disabled={isParsing}
-                />
-                <label htmlFor="csv-upload">
-                  <Button asChild disabled={isParsing}>
-                    <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
-                  </Button>
-                </label>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city, disability, special_notes.
-                </p>
-              </div>
-              <Alert>
-                <FileText className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>File Format:</strong> Ensure your Excel file has headers and at least 'rank' and 'name' columns.
-                </AlertDescription>
-              </Alert>
+              )}
             </CardContent>
           </Card>
         ) : (
