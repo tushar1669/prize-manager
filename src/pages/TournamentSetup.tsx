@@ -32,6 +32,7 @@ export default function TournamentSetup() {
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [prizeDialog, setPrizeDialog] = useState<{open: boolean; categoryId: string | null}>({open: false, categoryId: null});
   const [prizes, setPrizes] = useState([
     { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
   ]);
@@ -156,7 +157,7 @@ export default function TournamentSetup() {
           criteria_json: values.criteria_json || {},
           order_idx: categories?.length || 0
         })
-        .select('*')
+        .select('id, name, criteria_json, is_main, order_idx')
         .single();
       
       if (error) throw error;
@@ -164,7 +165,7 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Category added');
+      toast.success('Category saved');
       setCategoryDialogOpen(false);
       categoryForm.reset();
     },
@@ -239,6 +240,27 @@ export default function TournamentSetup() {
     },
     onError: (error: any) => {
       toast.error('Failed to save prizes: ' + error.message);
+    }
+  });
+
+  // Add prize to category mutation
+  const addPrizeMutation = useMutation({
+    mutationFn: async (prizeData: { category_id: string; place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean }) => {
+      const { data, error } = await supabase
+        .from('prizes')
+        .insert(prizeData)
+        .select('id, place, cash_amount, has_trophy, has_medal, category_id')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.success('Prize added');
+      setPrizeDialog({open: false, categoryId: null});
+    },
+    onError: (error: any) => {
+      toast.error('Failed to add prize: ' + error.message);
     }
   });
 
@@ -607,7 +629,7 @@ export default function TournamentSetup() {
                         key={cat.id}
                         className="flex items-center justify-between p-4 border border-border rounded-lg"
                       >
-                        <div>
+                        <div className="flex-1">
                           <h4 className="font-medium text-foreground">{cat.name}</h4>
                           <p className="text-sm text-muted-foreground">
                             {Object.keys(cat.criteria_json || {}).length > 0 
@@ -615,14 +637,25 @@ export default function TournamentSetup() {
                               : 'No criteria set'}
                           </p>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                          disabled={deleteCategoryMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {cat.id && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => setPrizeDialog({open: true, categoryId: cat.id})}
+                            >
+                              Add Prize
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                            disabled={deleteCategoryMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -652,18 +685,91 @@ export default function TournamentSetup() {
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-              <Button 
-                onClick={() => savePrizesMutation.mutate()} 
-                disabled={savePrizesMutation.isPending}
-                className="gap-2"
-              >
-                {savePrizesMutation.isPending ? 'Saving...' : 'Next: Import Players'}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    toast.success('Draft saved');
+                  }}
+                >
+                  Save Draft
+                </Button>
+                <Button 
+                  onClick={() => savePrizesMutation.mutate()} 
+                  disabled={savePrizesMutation.isPending}
+                  className="gap-2"
+                >
+                  {savePrizesMutation.isPending ? 'Saving...' : 'Next: Import Players'}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Prize Dialog */}
+      <Dialog open={prizeDialog.open} onOpenChange={(open) => setPrizeDialog({open, categoryId: prizeDialog.categoryId})}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Prize</DialogTitle>
+            <DialogDescription>Add a prize to this category</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Place/Rank</Label>
+              <Input 
+                id="prize-place"
+                type="number" 
+                min="1" 
+                defaultValue="1"
+              />
+            </div>
+            <div>
+              <Label>Cash Amount</Label>
+              <Input 
+                id="prize-cash"
+                type="number" 
+                min="0" 
+                defaultValue="0"
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox id="prize-trophy" />
+                <Label htmlFor="prize-trophy">Trophy</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="prize-medal" />
+                <Label htmlFor="prize-medal">Medal</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              onClick={() => {
+                const place = Number((document.getElementById('prize-place') as HTMLInputElement)?.value || 1);
+                const cash = Number((document.getElementById('prize-cash') as HTMLInputElement)?.value || 0);
+                const trophy = (document.getElementById('prize-trophy') as HTMLInputElement)?.checked || false;
+                const medal = (document.getElementById('prize-medal') as HTMLInputElement)?.checked || false;
+                
+                if (prizeDialog.categoryId) {
+                  addPrizeMutation.mutate({
+                    category_id: prizeDialog.categoryId,
+                    place,
+                    cash_amount: cash,
+                    has_trophy: trophy,
+                    has_medal: medal
+                  });
+                }
+              }}
+              disabled={addPrizeMutation.isPending}
+            >
+              {addPrizeMutation.isPending ? 'Adding...' : 'Add Prize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

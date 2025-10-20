@@ -44,9 +44,11 @@ export function usePapaParser() {
 
   const parseFile = useCallback((file: File): Promise<Parsed> => {
     const name = (file.name || '').toLowerCase();
-    if (name.endsWith('.csv')) return parseCSV(file);
+    if (name.endsWith('.csv')) {
+      return Promise.reject(new Error('CSV is temporarily disabled. Please upload an Excel (.xls/.xlsx) file.'));
+    }
     if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
-    return Promise.reject(new Error('Unsupported file type. Please upload CSV or Excel.'));
+    return Promise.reject(new Error('Unsupported file type. Please upload Excel (.xls/.xlsx).'));
   }, [parseCSV, parseExcel]);
 
   return { parseFile };

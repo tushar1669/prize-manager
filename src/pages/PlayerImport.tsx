@@ -92,11 +92,29 @@ export default function PlayerImport() {
     }
   };
 
-  const handleMappingConfirm = (mapping: Record<string, string>) => {
+  const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
+    // Probe which optional columns exist
+    const columnExists = async (column: string) => {
+      const { error } = await supabase
+        .from('players')
+        .select(column)
+        .limit(0)
+        .maybeSingle();
+      return !error;
+    };
+
+    const getExistingOptionalColumns = async () => {
+      const optional = ['rating', 'dob', 'gender', 'state', 'city'];
+      const checks = await Promise.all(optional.map(async c => [c, await columnExists(c)] as const));
+      return new Set(checks.filter(([,ok]) => ok).map(([c]) => c));
+    };
+
+    const existingColumns = await getExistingOptionalColumns();
+
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
-      const player: any = { _originalIndex: idx + 1 };
+      const player: Record<string, any> = { _originalIndex: idx + 1 };
       
       Object.keys(mapping).forEach(fieldKey => {
         const csvColumn = mapping[fieldKey];
@@ -120,7 +138,10 @@ export default function PlayerImport() {
           }
         }
 
-        player[fieldKey] = value;
+        // Only include column if it exists in the table
+        if (fieldKey === 'rank' || fieldKey === 'name' || existingColumns.has(fieldKey)) {
+          player[fieldKey] = value;
+        }
       });
 
       return player as ParsedPlayer;
@@ -168,18 +189,24 @@ export default function PlayerImport() {
 
   const importPlayersMutation = useMutation({
     mutationFn: async (players: ParsedPlayer[]) => {
-      const rowsToInsert = players.map(p => ({
-        tournament_id: id,
-        rank: p.rank,
-        name: p.name,
-        rating: p.rating || 0,
-        dob: p.dob || null,
-        gender: p.gender || null,
-        state: p.state || null,
-        city: p.city || null,
-        tags_json: {},
-        warnings_json: {}
-      }));
+      const rowsToInsert = players.map(p => {
+        const row: any = {
+          tournament_id: id,
+          rank: p.rank,
+          name: p.name,
+          tags_json: {},
+          warnings_json: {}
+        };
+        
+        // Only include fields that exist in parsed player
+        if ('rating' in p) row.rating = p.rating || 0;
+        if ('dob' in p) row.dob = p.dob || null;
+        if ('gender' in p) row.gender = p.gender || null;
+        if ('state' in p) row.state = p.state || null;
+        if ('city' in p) row.city = p.city || null;
+        
+        return row;
+      });
 
       const { data, error } = await supabase
         .from('players')
@@ -215,22 +242,22 @@ export default function PlayerImport() {
       <div className="container mx-auto px-6 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
-          <p className="text-muted-foreground">Upload a CSV or Excel (XLS/XLSX) file with player data</p>
+          <p className="text-muted-foreground">Upload Excel (XLS/XLSX) file with player data</p>
         </div>
 
         {!hasData ? (
           <Card>
-            <CardHeader><CardTitle>Upload CSV or Excel File</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Upload Excel File</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
                 <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  CSV or Excel file with columns: rank, name, rating, DOB, gender, state, city
+                  Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
                 <input
                   type="file"
-                  accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="csv-upload"
@@ -238,14 +265,14 @@ export default function PlayerImport() {
                 />
                 <label htmlFor="csv-upload">
                   <Button asChild disabled={isParsing}>
-                    <span>{isParsing ? "Parsing..." : "Select File"}</span>
+                    <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
                   </Button>
                 </label>
               </div>
               <Alert>
                 <FileText className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>File Format:</strong> Ensure your file has headers and at least 'rank' and 'name' columns.
+                  <strong>File Format:</strong> Ensure your Excel file has headers and at least 'rank' and 'name' columns.
                 </AlertDescription>
               </Alert>
             </CardContent>
