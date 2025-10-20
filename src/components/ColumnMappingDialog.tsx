@@ -37,6 +37,18 @@ const optionalFields = [
   { key: 'city', label: 'City', description: 'Player city' }
 ];
 
+const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+
+const mappingRules: Record<string, string[]> = {
+  rank: ['rank', 'position', 'pos', 'rank#', '#'],
+  name: ['name', 'player', 'player name', 'full name', 'playername'],
+  rating: ['rating', 'elo', 'fide rating', 'elo rating', 'fide'],
+  dob: ['dob', 'date of birth', 'birth date', 'd.o.b', 'birthdate'],
+  gender: ['gender', 'sex', 'g'],
+  state: ['state', 'province', 'region', 'st'],
+  city: ['city', 'town', 'location']
+};
+
 export function ColumnMappingDialog({ 
   open, 
   onOpenChange, 
@@ -44,18 +56,16 @@ export function ColumnMappingDialog({
   onConfirm 
 }: ColumnMappingDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
-    // Auto-detect common column names
+    // Auto-detect common column names with fuzzy matching
     const autoMapping: Record<string, string> = {};
     
     detectedColumns.forEach(col => {
-      const lower = col.toLowerCase().trim();
-      if (lower === 'rank' || lower === 'position' || lower === 'pos') autoMapping.rank = col;
-      if (lower === 'name' || lower === 'player' || lower === 'player name') autoMapping.name = col;
-      if (lower === 'rating' || lower === 'elo') autoMapping.rating = col;
-      if (lower === 'dob' || lower === 'date of birth' || lower === 'birth date') autoMapping.dob = col;
-      if (lower === 'gender' || lower === 'sex') autoMapping.gender = col;
-      if (lower === 'state' || lower === 'province') autoMapping.state = col;
-      if (lower === 'city' || lower === 'town') autoMapping.city = col;
+      const normalized = norm(col);
+      Object.entries(mappingRules).forEach(([field, patterns]) => {
+        if (!autoMapping[field] && patterns.some(pattern => normalized === pattern || normalized.includes(pattern))) {
+          autoMapping[field] = col;
+        }
+      });
     });
     
     return autoMapping;
@@ -93,11 +103,11 @@ export function ColumnMappingDialog({
                     <span className="text-xs text-muted-foreground block">{field.description}</span>
                   </Label>
                   <Select
-                    value={mapping[field.key] || ""}
+                    value={mapping[field.key]}
                     onValueChange={(value) => setMapping(prev => ({ ...prev, [field.key]: value }))}
                   >
                     <SelectTrigger id={field.key}>
-                      <SelectValue placeholder="Select CSV column" />
+                      <SelectValue placeholder="Select file column" />
                     </SelectTrigger>
                     <SelectContent>
                       {detectedColumns.map(col => (
@@ -121,9 +131,9 @@ export function ColumnMappingDialog({
                     <span className="text-xs text-muted-foreground block">{field.description}</span>
                   </Label>
                   <Select
-                    value={mapping[field.key] || "skip"}
+                    value={mapping[field.key] ?? "__skip__"}
                     onValueChange={(value) => {
-                      if (value === "skip") {
+                      if (value === "__skip__") {
                         const newMapping = { ...mapping };
                         delete newMapping[field.key];
                         setMapping(newMapping);
@@ -136,7 +146,7 @@ export function ColumnMappingDialog({
                       <SelectValue placeholder="Skip this field" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="skip">Skip this field</SelectItem>
+                      <SelectItem value="__skip__">Skip this field</SelectItem>
                       {detectedColumns.map(col => (
                         <SelectItem key={col} value={col}>{col}</SelectItem>
                       ))}

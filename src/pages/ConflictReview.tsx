@@ -173,8 +173,22 @@ export default function ConflictReview() {
         )}
 
         <div className="flex justify-between mt-8">
-          <Button variant="outline" onClick={() => navigate(`/t/${id}/import`)}>Back</Button>
-          <Button onClick={() => navigate(`/t/${id}/finalize`, { state: { winners } })} disabled={conflicts.length > 0}>Finalize <ArrowRight className="h-4 w-4 ml-2" /></Button>
+          <Button variant="outline" onClick={() => {
+            if (!id) {
+              toast.error('Tournament ID missing');
+              navigate('/dashboard');
+              return;
+            }
+            navigate(`/t/${id}/import`);
+          }}>Back</Button>
+          <Button onClick={() => {
+            if (!id) {
+              toast.error('Tournament ID missing');
+              navigate('/dashboard');
+              return;
+            }
+            navigate(`/t/${id}/finalize`, { state: { winners } });
+          }} disabled={conflicts.length > 0}>Finalize <ArrowRight className="h-4 w-4 ml-2" /></Button>
         </div>
       </div>
 

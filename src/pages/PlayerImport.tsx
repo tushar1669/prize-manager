@@ -47,7 +47,43 @@ export default function PlayerImport() {
       const { data, headers: csvHeaders } = await parseFile(selectedFile);
       setParsedData(data);
       setHeaders(csvHeaders);
-      setShowMappingDialog(true);
+      
+      // Try auto-mapping; if both required fields found, skip dialog
+      const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+      const autoMapping: Record<string, string> = {};
+      
+      csvHeaders.forEach(h => {
+        const normalized = norm(h);
+        if (!autoMapping.rank && (normalized === 'rank' || normalized.includes('pos') || normalized === 'position')) {
+          autoMapping.rank = h;
+        }
+        if (!autoMapping.name && (normalized === 'name' || normalized.includes('player'))) {
+          autoMapping.name = h;
+        }
+        // Auto-map optional fields too
+        if (!autoMapping.rating && (normalized === 'rating' || normalized === 'elo')) {
+          autoMapping.rating = h;
+        }
+        if (!autoMapping.dob && (normalized === 'dob' || normalized.includes('birth'))) {
+          autoMapping.dob = h;
+        }
+        if (!autoMapping.gender && (normalized === 'gender' || normalized === 'sex')) {
+          autoMapping.gender = h;
+        }
+        if (!autoMapping.state && (normalized === 'state' || normalized === 'province')) {
+          autoMapping.state = h;
+        }
+        if (!autoMapping.city && (normalized === 'city' || normalized === 'town')) {
+          autoMapping.city = h;
+        }
+      });
+      
+      if (autoMapping.rank && autoMapping.name) {
+        handleMappingConfirm(autoMapping);
+        toast.info('Columns auto-mapped successfully');
+      } else {
+        setShowMappingDialog(true);
+      }
     } catch (error) {
       console.error('[parseFile]', error);
       toast.error("Failed to parse file. Upload CSV or Excel (.xls/.xlsx).");
@@ -155,6 +191,11 @@ export default function PlayerImport() {
     },
     onSuccess: (data) => {
       toast.success(`${data.length} players imported successfully`);
+      if (!id) {
+        toast.error('Tournament ID missing');
+        navigate('/dashboard');
+        return;
+      }
       navigate(`/t/${id}/review`);
     },
     onError: (error: any) => {
@@ -179,7 +220,7 @@ export default function PlayerImport() {
 
         {!hasData ? (
           <Card>
-            <CardHeader><CardTitle>Upload CSV File</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Upload CSV or Excel File</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
                 <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -197,7 +238,7 @@ export default function PlayerImport() {
                 />
                 <label htmlFor="csv-upload">
                   <Button asChild disabled={isParsing}>
-                    <span>{isParsing ? "Parsing..." : "Select CSV File"}</span>
+                    <span>{isParsing ? "Parsing..." : "Select File"}</span>
                   </Button>
                 </label>
               </div>
@@ -253,7 +294,14 @@ export default function PlayerImport() {
               </CardContent>
             </Card>
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}>
+              <Button variant="outline" onClick={() => {
+                if (!id) {
+                  toast.error('Tournament ID missing');
+                  navigate('/dashboard');
+                  return;
+                }
+                navigate(`/t/${id}/setup?tab=prizes`);
+              }}>
                 Back
               </Button>
               <Button

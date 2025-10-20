@@ -93,6 +93,11 @@ export default function Finalize() {
     },
     onSuccess: (data) => {
       toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
+      if (!id) {
+        toast.error('Tournament ID missing');
+        navigate('/dashboard');
+        return;
+      }
       navigate(`/t/${id}/publish`, { state: { version: data.version } });
     },
     onError: (error: any) => {
@@ -228,7 +233,14 @@ export default function Finalize() {
           </Card>
 
           <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={() => navigate(`/t/${id}/review`)}>
+            <Button variant="outline" onClick={() => {
+              if (!id) {
+                toast.error('Tournament ID missing');
+                navigate('/dashboard');
+                return;
+              }
+              navigate(`/t/${id}/review`);
+            }}>
               Back to Review
             </Button>
             <Button 
