@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Upload, ArrowRight, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +47,18 @@ export default function TournamentSetup() {
   const [prizes, setPrizes] = useState([
     { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
   ]);
+  const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
+  const [dupDialog, setDupDialog] = useState<{
+    open: boolean;
+    sourceId: string | null;
+  }>({ open: false, sourceId: null });
+  const [inlineEditPrizeId, setInlineEditPrizeId] = useState<string | null>(null);
+  const [inlineDraft, setInlineDraft] = useState<{
+    place?: number;
+    cash_amount?: number;
+    has_trophy?: boolean;
+    has_medal?: boolean;
+  }>({});
 
   // Details form
   const detailsForm = useForm<TournamentDetailsForm>({
@@ -173,11 +186,21 @@ export default function TournamentSetup() {
       if (error) throw error;
       return category;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Category saved');
-      setCategoryDialogOpen(false);
-      categoryForm.reset();
+    onSuccess: async (createdCategory) => {
+      try {
+        if (copyFromCategoryId) {
+          await copyPrizesForCategory(copyFromCategoryId, createdCategory.id);
+        }
+      } catch (err: any) {
+        console.warn('[copy prizes] failed', err);
+        toast.error('Category created. Failed to copy prizes.');
+      } finally {
+        queryClient.invalidateQueries({ queryKey: ['categories', id] });
+        toast.success('Category saved');
+        setCategoryDialogOpen(false);
+        setCopyFromCategoryId(null);
+        categoryForm.reset();
+      }
     },
     onError: (error: any) => {
       toast.error('Failed to add category: ' + error.message);
@@ -332,6 +355,75 @@ export default function TournamentSetup() {
     },
     onError: (e: any) => toast.error(e.message || 'Failed to save rules'),
   });
+
+  // Copy prizes helper
+  const copyPrizesForCategory = async (sourceCategoryId: string, targetCategoryId: string) => {
+    const { data: srcPrizes, error } = await supabase
+      .from('prizes')
+      .select('place, cash_amount, has_trophy, has_medal')
+      .eq('category_id', sourceCategoryId);
+
+    if (error) throw error;
+    if (!srcPrizes || srcPrizes.length === 0) return;
+
+    const rows = srcPrizes.map(p => ({
+      category_id: targetCategoryId,
+      place: p.place,
+      cash_amount: p.cash_amount,
+      has_trophy: p.has_trophy,
+      has_medal: p.has_medal,
+    }));
+
+    const { error: insertError } = await supabase.from('prizes').insert(rows);
+    if (insertError) throw insertError;
+  };
+
+  // Duplicate category helper
+  const duplicateCategoryWithPrizes = async ({
+    sourceId,
+    newName,
+    dobOnOrAfter,
+  }: {
+    sourceId: string;
+    newName: string;
+    dobOnOrAfter?: string | null;
+  }) => {
+    // 1) Fetch source category
+    const { data: cats, error: catError } = await supabase
+      .from('categories')
+      .select('id, criteria_json, name, order_idx, is_main, tournament_id')
+      .eq('id', sourceId)
+      .single();
+
+    if (catError) throw catError;
+    const src = cats;
+    if (!src) throw new Error('Source category not found');
+
+    // 2) Create new category with cloned criteria
+    const criteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
+      ? { ...(src.criteria_json as Record<string, any>) } 
+      : {} as Record<string, any>;
+    if (dobOnOrAfter) criteria.dob_on_or_after = dobOnOrAfter;
+
+    const { data: created, error: createError } = await supabase
+      .from('categories')
+      .insert({
+        tournament_id: src.tournament_id,
+        name: newName,
+        is_main: false,
+        criteria_json: criteria,
+        order_idx: (src.order_idx ?? 0) + 1,
+      })
+      .select('id')
+      .single();
+
+    if (createError) throw createError;
+
+    // 3) Copy prizes
+    await copyPrizesForCategory(sourceId, created.id);
+
+    return created.id;
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -675,6 +767,26 @@ export default function TournamentSetup() {
                               </FormItem>
                             )}
                           />
+                          <div>
+                            <Label htmlFor="copy-from">Copy prize structure from</Label>
+                            <select
+                              id="copy-from"
+                              className="border rounded px-2 py-1 w-full mt-2"
+                              value={copyFromCategoryId || ''}
+                              onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
+                            >
+                              <option value="">Do not copy</option>
+                              {Array.isArray(categories) &&
+                                categories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name} ({c.prizes?.length || 0} prizes)
+                                  </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Optional. Saves time when multiple categories share the same prize structure.
+                            </p>
+                          </div>
                           <DialogFooter>
                             <Button type="submit" disabled={createCategoryMutation.isPending}>
                               {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
@@ -734,6 +846,11 @@ export default function TournamentSetup() {
                                       Clubs: {criteria.allowed_clubs.join(', ')}
                                     </span>
                                   )}
+                                  {criteria.gender && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      Gender: {String(criteria.gender).toUpperCase()}
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })()}
@@ -756,6 +873,13 @@ export default function TournamentSetup() {
                               </Button>
                             )}
                             <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDupDialog({ open: true, sourceId: cat.id })}
+                            >
+                              Duplicate
+                            </Button>
+                            <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => deleteCategoryMutation.mutate(cat.id)}
@@ -766,7 +890,7 @@ export default function TournamentSetup() {
                           </div>
                         </div>
 
-                        {/* Prize List */}
+                        {/* Prize List with Inline Editor */}
                         <div className="mt-3 rounded bg-muted/30 p-3">
                           {(cat.prizes?.length ?? 0) === 0 ? (
                             <p className="text-sm text-muted-foreground">No prizes added yet.</p>
@@ -774,41 +898,115 @@ export default function TournamentSetup() {
                             <ul className="space-y-2">
                               {[...cat.prizes]
                                 .sort((a, b) => a.place - b.place)
-                                .map((p) => (
-                                  <li
-                                    key={p.id}
-                                    className="flex items-center justify-between text-sm"
-                                  >
-                                    <span>
-                                      <strong>#{p.place}</strong> — ₹{Number(p.cash_amount || 0)}
-                                      {p.has_trophy && ' · 🏆 Trophy'}
-                                      {p.has_medal && ' · 🥇 Medal'}
-                                    </span>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          setEditPrizeDialog({
-                                            open: true,
-                                            prize: p,
-                                            categoryId: cat.id,
-                                          })
-                                        }
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        onClick={() => deletePrizeMutation.mutate(p.id)}
-                                        disabled={deletePrizeMutation.isPending}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </li>
-                                ))}
+                                .map((p) => {
+                                  const isEditing = inlineEditPrizeId === p.id;
+                                  return (
+                                    <li
+                                      key={p.id}
+                                      className="flex items-center justify-between text-sm gap-2"
+                                    >
+                                      {!isEditing ? (
+                                        <>
+                                          <span>
+                                            <strong>#{p.place}</strong> — ₹{Number(p.cash_amount || 0)}
+                                            {p.has_trophy && ' · 🏆 Trophy'}
+                                            {p.has_medal && ' · 🥇 Medal'}
+                                          </span>
+                                          <div className="flex gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => {
+                                                setInlineEditPrizeId(p.id);
+                                                setInlineDraft({
+                                                  place: p.place,
+                                                  cash_amount: Number(p.cash_amount || 0),
+                                                  has_trophy: !!p.has_trophy,
+                                                  has_medal: !!p.has_medal,
+                                                });
+                                              }}
+                                            >
+                                              Edit
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={() => deletePrizeMutation.mutate(p.id)}
+                                              disabled={deletePrizeMutation.isPending}
+                                            >
+                                              Delete
+                                            </Button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="flex items-center gap-2 flex-wrap flex-1">
+                                            <div className="flex items-center gap-1">
+                                              <Label className="text-xs">Place</Label>
+                                              <Input
+                                                type="number"
+                                                className="w-16 h-8 px-2 text-sm"
+                                                value={inlineDraft.place ?? 1}
+                                                onChange={(e) => setInlineDraft(d => ({ ...d, place: Number(e.target.value || 0) }))}
+                                              />
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <Label className="text-xs">₹</Label>
+                                              <Input
+                                                type="number"
+                                                className="w-24 h-8 px-2 text-sm"
+                                                value={inlineDraft.cash_amount ?? 0}
+                                                onChange={(e) => setInlineDraft(d => ({ ...d, cash_amount: Number(e.target.value || 0) }))}
+                                              />
+                                            </div>
+                                            <label className="flex items-center gap-1 text-xs">
+                                              <Checkbox
+                                                checked={!!inlineDraft.has_trophy}
+                                                onCheckedChange={(checked) => setInlineDraft(d => ({ ...d, has_trophy: !!checked }))}
+                                              />
+                                              Trophy
+                                            </label>
+                                            <label className="flex items-center gap-1 text-xs">
+                                              <Checkbox
+                                                checked={!!inlineDraft.has_medal}
+                                                onCheckedChange={(checked) => setInlineDraft(d => ({ ...d, has_medal: !!checked }))}
+                                              />
+                                              Medal
+                                            </label>
+                                          </div>
+                                          <div className="flex gap-2">
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                if (!inlineEditPrizeId) return;
+                                                updatePrizeMutation.mutate({
+                                                  id: inlineEditPrizeId,
+                                                  place: inlineDraft.place ?? 1,
+                                                  cash_amount: inlineDraft.cash_amount ?? 0,
+                                                  has_trophy: !!inlineDraft.has_trophy,
+                                                  has_medal: !!inlineDraft.has_medal,
+                                                });
+                                                setInlineEditPrizeId(null);
+                                              }}
+                                            >
+                                              Save
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => {
+                                                setInlineEditPrizeId(null);
+                                                setInlineDraft({});
+                                              }}
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </li>
+                                  );
+                                })}
                             </ul>
                           )}
                         </div>
@@ -1011,6 +1209,66 @@ export default function TournamentSetup() {
         </DialogContent>
       </Dialog>
 
+      {/* Duplicate Category Dialog */}
+      <Dialog 
+        open={dupDialog.open} 
+        onOpenChange={(open) => setDupDialog({ open, sourceId: dupDialog.sourceId })}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate Category</DialogTitle>
+            <DialogDescription>
+              Clone rules & prizes from "{categories?.find(c => c.id === dupDialog.sourceId)?.name}" into a new category.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="dup-new-name">New Category Name</Label>
+              <Input id="dup-new-name" placeholder="e.g., U-9 Girls" />
+            </div>
+
+            <div>
+              <Label htmlFor="dup-dob">DOB On or After (optional override)</Label>
+              <Input id="dup-dob" type="date" />
+              <p className="text-xs text-muted-foreground mt-1">
+                Leave empty to keep the original DOB rule.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDupDialog({ open: false, sourceId: null })}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const name = (document.getElementById('dup-new-name') as HTMLInputElement)?.value?.trim();
+                  const dob = (document.getElementById('dup-dob') as HTMLInputElement)?.value || null;
+                  if (!dupDialog.sourceId) throw new Error('Source missing');
+                  if (!name) { toast.error('Please enter a name'); return; }
+
+                  await duplicateCategoryWithPrizes({ 
+                    sourceId: dupDialog.sourceId, 
+                    newName: name, 
+                    dobOnOrAfter: dob || undefined 
+                  });
+                  toast.success('Category duplicated');
+                  setDupDialog({ open: false, sourceId: null });
+                  queryClient.invalidateQueries({ queryKey: ['categories', id] });
+                } catch (e: any) {
+                  console.error('[duplicate]', e);
+                  toast.error(e?.message || 'Failed to duplicate');
+                }
+              }}
+            >
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Criteria Editor Sheet */}
       <Sheet
         open={criteriaSheet.open}
@@ -1029,6 +1287,96 @@ export default function TournamentSetup() {
           </SheetHeader>
 
           <div className="space-y-6 py-6">
+            {/* Preset Chips */}
+            <div className="border-b pb-4 mb-4">
+              <Label className="mb-2 block">Quick Presets</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
+                    if (el) el.value = 'F';
+                  }}
+                >
+                  Girls Only
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
+                    if (el) el.value = 'M';
+                  }}
+                >
+                  Boys Only
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
+                    if (el) el.value = '';
+                  }}
+                >
+                  Any Gender
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
+                    if (el) el.checked = true;
+                  }}
+                >
+                  Include Unrated
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
+                    if (el) el.checked = false;
+                  }}
+                >
+                  Exclude Unrated
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
+                    if (el) el.value = '2016-01-01';
+                  }}
+                >
+                  U-9 (DOB ≥ 2016)
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
+                    if (el) el.value = '2014-01-01';
+                  }}
+                >
+                  U-11 (DOB ≥ 2014)
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
+                    if (el) el.value = '2012-01-01';
+                  }}
+                >
+                  U-13 (DOB ≥ 2012)
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Click a preset to quickly fill fields. You can adjust values after clicking.
+              </p>
+            </div>
+
             {/* DOB Cutoff */}
             {(() => {
               const criteria = criteriaSheet.category?.criteria_json as any;
@@ -1084,6 +1432,23 @@ export default function TournamentSetup() {
                     </Label>
                   </div>
 
+                  {/* Gender Filter */}
+                  <div>
+                    <Label htmlFor="criteria-gender">Gender</Label>
+                    <select 
+                      id="criteria-gender" 
+                      className="border rounded px-2 py-1 w-full mt-2"
+                      defaultValue={criteria?.gender || ''}
+                    >
+                      <option value="">Any</option>
+                      <option value="F">Girls Only</option>
+                      <option value="M">Boys Only</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional. Restrict eligibility by gender.
+                    </p>
+                  </div>
+
                   {/* Disability Types */}
                   <div>
                     <Label htmlFor="criteria-disability">Disability Types (comma-separated)</Label>
@@ -1134,6 +1499,7 @@ export default function TournamentSetup() {
                 const minRating = Number((document.getElementById('criteria-min-rating') as HTMLInputElement)?.value) || null;
                 const maxRating = Number((document.getElementById('criteria-max-rating') as HTMLInputElement)?.value) || null;
                 const includeUnrated = (document.getElementById('criteria-include-unrated') as HTMLInputElement)?.checked ?? true;
+                const gender = (document.getElementById('criteria-gender') as HTMLSelectElement)?.value || '';
                 
                 const disabilityStr = (document.getElementById('criteria-disability') as HTMLInputElement)?.value || '';
                 const disability_types = disabilityStr
@@ -1158,6 +1524,7 @@ export default function TournamentSetup() {
                 if (minRating) criteria.min_rating = minRating;
                 if (maxRating) criteria.max_rating = maxRating;
                 criteria.include_unrated = includeUnrated;
+                if (gender) criteria.gender = gender;
                 if (disability_types.length > 0) criteria.disability_types = disability_types;
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
                 if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;

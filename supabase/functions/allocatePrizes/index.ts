@@ -288,12 +288,33 @@ Deno.serve(async (req) => {
 });
 
 // Helper functions
+const toISODate = (d: any) => {
+  if (!d) return null;
+  if (typeof d === 'number') {
+    // Excel serial date (days since 1900-01-01)
+    const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
+    return isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
+  }
+  const t = Date.parse(String(d));
+  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+};
+
+const normGender = (g: any) => {
+  if (!g) return null;
+  const s = String(g).trim().toLowerCase();
+  if (['f', 'female', 'girl', 'girls', 'woman', 'women', 'w'].includes(s)) return 'F';
+  if (['m', 'male', 'boy', 'boys', 'man', 'men'].includes(s)) return 'M';
+  return null;
+};
+
 function isEligibleForCategory(player: any, category: any, rules: any): boolean {
   const criteria = category.criteria_json || {};
   
-  // 1) DOB cutoff (dob_on_or_after)
+  // 1) DOB cutoff (dob_on_or_after) - robust date parsing
   if (criteria.dob_on_or_after && player.dob) {
-    if (player.dob < criteria.dob_on_or_after) return false;
+    const pDate = toISODate(player.dob);
+    const cDate = toISODate(criteria.dob_on_or_after);
+    if (pDate && cDate && pDate < cDate) return false;
   }
 
   // 2) Rating range
@@ -336,8 +357,13 @@ function isEligibleForCategory(player: any, category: any, rules: any): boolean 
   }
 
   // Legacy criteria (keep for backward compatibility)
-  // Gender check
-  if (criteria.gender && player.gender !== criteria.gender) return false;
+  // Gender check (now robust / case-insensitive)
+  if (criteria.gender) {
+    const want = normGender(criteria.gender);
+    const have = normGender(player.gender);
+    if (want && have && want !== have) return false;
+    if (want && !have) return false; // category requires gender but player has none
+  }
 
   // Old age_max (for backward compatibility)
   if (criteria.age_max && player.dob) {
