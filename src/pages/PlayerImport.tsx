@@ -11,6 +11,7 @@ import { usePapaParser } from "@/hooks/usePapaParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
 import { playerImportSchema, PlayerImportRow } from "@/lib/validations";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import * as XLSX from "xlsx";
 import {
   Table,
   TableBody,
@@ -36,6 +37,31 @@ export default function PlayerImport() {
   const [duplicates, setDuplicates] = useState<{ row: number; duplicate: string }[]>([]);
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+
+  const downloadTemplate = () => {
+    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city"];
+    const sample = [
+      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai"],
+      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru"],
+      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi"],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
+    (ws as any)["!cols"] = [
+      { wch: 6 },  // rank
+      { wch: 22 }, // name
+      { wch: 8 },  // rating
+      { wch: 12 }, // dob
+      { wch: 8 },  // gender
+      { wch: 8 },  // state
+      { wch: 16 }, // city
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Players");
+    XLSX.writeFile(wb, "players_template.xlsx");
+    toast.success("Template downloaded");
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -255,6 +281,11 @@ export default function PlayerImport() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <Button variant="outline" onClick={downloadTemplate}>
+                    Download Excel Template
+                  </Button>
+                </div>
                 <input
                   type="file"
                   accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -268,6 +299,9 @@ export default function PlayerImport() {
                     <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
                   </Button>
                 </label>
+                <p className="text-sm text-muted-foreground mt-4">
+                  Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city.
+                </p>
               </div>
               <Alert>
                 <FileText className="h-4 w-4" />
