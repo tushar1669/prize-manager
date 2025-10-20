@@ -17,6 +17,7 @@ import { RuleChip } from "@/components/ui/rule-chip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Plus, Trash2, Upload, ArrowRight, X } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +34,15 @@ export default function TournamentSetup() {
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [prizeDialog, setPrizeDialog] = useState<{open: boolean; categoryId: string | null}>({open: false, categoryId: null});
+  const [editPrizeDialog, setEditPrizeDialog] = useState<{
+    open: boolean;
+    prize: any | null;
+    categoryId: string | null;
+  }>({ open: false, prize: null, categoryId: null });
+  const [criteriaSheet, setCriteriaSheet] = useState<{
+    open: boolean;
+    category: any | null;
+  }>({ open: false, category: null });
   const [prizes, setPrizes] = useState([
     { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
   ]);
@@ -262,6 +272,65 @@ export default function TournamentSetup() {
     onError: (error: any) => {
       toast.error('Failed to add prize: ' + error.message);
     }
+  });
+
+  // Delete prize mutation
+  const deletePrizeMutation = useMutation({
+    mutationFn: async (prizeId: string) => {
+      const { error } = await supabase.from('prizes').delete().eq('id', prizeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.success('Prize deleted');
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to delete prize'),
+  });
+
+  // Update prize mutation
+  const updatePrizeMutation = useMutation({
+    mutationFn: async ({
+      id,
+      ...patch
+    }: {
+      id: string;
+      place?: number;
+      cash_amount?: number;
+      has_trophy?: boolean;
+      has_medal?: boolean;
+    }) => {
+      const { error } = await supabase.from('prizes').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.success('Prize updated');
+      setEditPrizeDialog({ open: false, prize: null, categoryId: null });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update prize'),
+  });
+
+  // Save criteria mutation
+  const saveCriteriaMutation = useMutation({
+    mutationFn: async ({
+      categoryId,
+      criteria,
+    }: {
+      categoryId: string;
+      criteria: any;
+    }) => {
+      const { error } = await supabase
+        .from('categories')
+        .update({ criteria_json: criteria })
+        .eq('id', categoryId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.success('Rules saved');
+      setCriteriaSheet({ open: false, category: null });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to save rules'),
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -627,34 +696,121 @@ export default function TournamentSetup() {
                     {categories.filter(c => !c.is_main).map((cat) => (
                       <div
                         key={cat.id}
-                        className="flex items-center justify-between p-4 border border-border rounded-lg"
+                        className="border border-border rounded-lg p-4 space-y-3"
                       >
-                        <div className="flex-1">
-                          <h4 className="font-medium text-foreground">{cat.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {Object.keys(cat.criteria_json || {}).length > 0 
-                              ? JSON.stringify(cat.criteria_json) 
-                              : 'No criteria set'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {cat.id && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => setPrizeDialog({open: true, categoryId: cat.id})}
+                        {/* Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-foreground mb-1">{cat.name}</h4>
+                            {/* Criteria Summary */}
+                            {(() => {
+                              const criteria = cat.criteria_json as any;
+                              return Object.keys(criteria || {}).length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                                  {criteria.dob_on_or_after && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      DOB ≥ {criteria.dob_on_or_after}
+                                    </span>
+                                  )}
+                                  {(criteria.min_rating || criteria.max_rating) && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      Rating: {criteria.min_rating || '0'}–
+                                      {criteria.max_rating || '∞'}
+                                      {criteria.include_unrated && ' (incl. unrated)'}
+                                    </span>
+                                  )}
+                                  {criteria.disability_types?.length > 0 && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      Disability: {criteria.disability_types.join(', ')}
+                                    </span>
+                                  )}
+                                  {criteria.allowed_cities?.length > 0 && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      Cities: {criteria.allowed_cities.join(', ')}
+                                    </span>
+                                  )}
+                                  {criteria.allowed_clubs?.length > 0 && (
+                                    <span className="bg-muted px-2 py-0.5 rounded">
+                                      Clubs: {criteria.allowed_clubs.join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setCriteriaSheet({ open: true, category: cat })}
                             >
-                              Add Prize
+                              Edit Rules
                             </Button>
+                            {cat.id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setPrizeDialog({ open: true, categoryId: cat.id })}
+                              >
+                                Add Prize
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteCategoryMutation.mutate(cat.id)}
+                              disabled={deleteCategoryMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Prize List */}
+                        <div className="mt-3 rounded bg-muted/30 p-3">
+                          {(cat.prizes?.length ?? 0) === 0 ? (
+                            <p className="text-sm text-muted-foreground">No prizes added yet.</p>
+                          ) : (
+                            <ul className="space-y-2">
+                              {[...cat.prizes]
+                                .sort((a, b) => a.place - b.place)
+                                .map((p) => (
+                                  <li
+                                    key={p.id}
+                                    className="flex items-center justify-between text-sm"
+                                  >
+                                    <span>
+                                      <strong>#{p.place}</strong> — ₹{Number(p.cash_amount || 0)}
+                                      {p.has_trophy && ' · 🏆 Trophy'}
+                                      {p.has_medal && ' · 🥇 Medal'}
+                                    </span>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          setEditPrizeDialog({
+                                            open: true,
+                                            prize: p,
+                                            categoryId: cat.id,
+                                          })
+                                        }
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() => deletePrizeMutation.mutate(p.id)}
+                                        disabled={deletePrizeMutation.isPending}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </li>
+                                ))}
+                            </ul>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                            disabled={deleteCategoryMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
                         </div>
                       </div>
                     ))}
@@ -708,7 +864,7 @@ export default function TournamentSetup() {
         </Tabs>
       </div>
 
-      {/* Prize Dialog */}
+      {/* Add Prize Dialog */}
       <Dialog open={prizeDialog.open} onOpenChange={(open) => setPrizeDialog({open, categoryId: prizeDialog.categoryId})}>
         <DialogContent>
           <DialogHeader>
@@ -770,6 +926,256 @@ export default function TournamentSetup() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Prize Dialog */}
+      <Dialog
+        open={editPrizeDialog.open}
+        onOpenChange={(open) =>
+          setEditPrizeDialog({ open, prize: null, categoryId: null })
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Prize</DialogTitle>
+            <DialogDescription>Update prize details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Place/Rank</Label>
+              <Input
+                id="edit-prize-place"
+                type="number"
+                min="1"
+                defaultValue={editPrizeDialog.prize?.place || 1}
+              />
+            </div>
+            <div>
+              <Label>Cash Amount</Label>
+              <Input
+                id="edit-prize-cash"
+                type="number"
+                min="0"
+                defaultValue={editPrizeDialog.prize?.cash_amount || 0}
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-prize-trophy"
+                  defaultChecked={editPrizeDialog.prize?.has_trophy}
+                />
+                <Label htmlFor="edit-prize-trophy">Trophy</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-prize-medal"
+                  defaultChecked={editPrizeDialog.prize?.has_medal}
+                />
+                <Label htmlFor="edit-prize-medal">Medal</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                const place = Number(
+                  (document.getElementById('edit-prize-place') as HTMLInputElement)
+                    ?.value || 1
+                );
+                const cash = Number(
+                  (document.getElementById('edit-prize-cash') as HTMLInputElement)
+                    ?.value || 0
+                );
+                const trophy =
+                  (document.getElementById('edit-prize-trophy') as HTMLInputElement)
+                    ?.checked || false;
+                const medal =
+                  (document.getElementById('edit-prize-medal') as HTMLInputElement)
+                    ?.checked || false;
+
+                if (editPrizeDialog.prize?.id) {
+                  updatePrizeMutation.mutate({
+                    id: editPrizeDialog.prize.id,
+                    place,
+                    cash_amount: cash,
+                    has_trophy: trophy,
+                    has_medal: medal,
+                  });
+                }
+              }}
+              disabled={updatePrizeMutation.isPending}
+            >
+              {updatePrizeMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Criteria Editor Sheet */}
+      <Sheet
+        open={criteriaSheet.open}
+        onOpenChange={(open) =>
+          setCriteriaSheet({ open, category: criteriaSheet.category })
+        }
+      >
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              Edit Rules: {criteriaSheet.category?.name}
+            </SheetTitle>
+            <SheetDescription>
+              Define eligibility criteria for this category
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6 py-6">
+            {/* DOB Cutoff */}
+            {(() => {
+              const criteria = criteriaSheet.category?.criteria_json as any;
+              return (
+                <>
+                  <div>
+                    <Label htmlFor="criteria-dob">
+                      Date of Birth On or After (minimum age)
+                    </Label>
+                    <Input
+                      id="criteria-dob"
+                      type="date"
+                      defaultValue={criteria?.dob_on_or_after}
+                      placeholder="YYYY-MM-DD"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Only players born on or after this date will be eligible
+                    </p>
+                  </div>
+
+                  {/* Rating Range */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="criteria-min-rating">Min Rating</Label>
+                      <Input
+                        id="criteria-min-rating"
+                        type="number"
+                        min="0"
+                        defaultValue={criteria?.min_rating}
+                        placeholder="e.g., 1200"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="criteria-max-rating">Max Rating</Label>
+                      <Input
+                        id="criteria-max-rating"
+                        type="number"
+                        min="0"
+                        defaultValue={criteria?.max_rating}
+                        placeholder="e.g., 1800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Include Unrated */}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="criteria-include-unrated"
+                      defaultChecked={criteria?.include_unrated ?? true}
+                    />
+                    <Label htmlFor="criteria-include-unrated">
+                      Include unrated players
+                    </Label>
+                  </div>
+
+                  {/* Disability Types */}
+                  <div>
+                    <Label htmlFor="criteria-disability">Disability Types (comma-separated)</Label>
+                    <Input
+                      id="criteria-disability"
+                      placeholder="e.g., Hearing, Visual, Physical"
+                      defaultValue={criteria?.disability_types?.join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave empty for no disability restriction
+                    </p>
+                  </div>
+
+                  {/* Allowed Cities */}
+                  <div>
+                    <Label htmlFor="criteria-cities">Allowed Cities (comma-separated)</Label>
+                    <Input
+                      id="criteria-cities"
+                      placeholder="e.g., Mumbai, Bengaluru, Delhi"
+                      defaultValue={criteria?.allowed_cities?.join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave empty to allow all cities
+                    </p>
+                  </div>
+
+                  {/* Allowed Clubs */}
+                  <div>
+                    <Label htmlFor="criteria-clubs">Allowed Clubs (comma-separated)</Label>
+                    <Input
+                      id="criteria-clubs"
+                      placeholder="e.g., Mumbai Chess Club, Karnataka CA"
+                      defaultValue={criteria?.allowed_clubs?.join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave empty to allow all clubs
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <SheetFooter>
+            <Button
+              onClick={() => {
+                const dob = (document.getElementById('criteria-dob') as HTMLInputElement)?.value || null;
+                const minRating = Number((document.getElementById('criteria-min-rating') as HTMLInputElement)?.value) || null;
+                const maxRating = Number((document.getElementById('criteria-max-rating') as HTMLInputElement)?.value) || null;
+                const includeUnrated = (document.getElementById('criteria-include-unrated') as HTMLInputElement)?.checked ?? true;
+                
+                const disabilityStr = (document.getElementById('criteria-disability') as HTMLInputElement)?.value || '';
+                const disability_types = disabilityStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
+                const citiesStr = (document.getElementById('criteria-cities') as HTMLInputElement)?.value || '';
+                const allowed_cities = citiesStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
+                const clubsStr = (document.getElementById('criteria-clubs') as HTMLInputElement)?.value || '';
+                const allowed_clubs = clubsStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
+                const criteria: any = {};
+                if (dob) criteria.dob_on_or_after = dob;
+                if (minRating) criteria.min_rating = minRating;
+                if (maxRating) criteria.max_rating = maxRating;
+                criteria.include_unrated = includeUnrated;
+                if (disability_types.length > 0) criteria.disability_types = disability_types;
+                if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
+                if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;
+
+                if (criteriaSheet.category?.id) {
+                  saveCriteriaMutation.mutate({
+                    categoryId: criteriaSheet.category.id,
+                    criteria,
+                  });
+                }
+              }}
+              disabled={saveCriteriaMutation.isPending}
+            >
+              {saveCriteriaMutation.isPending ? 'Saving...' : 'Save Rules'}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

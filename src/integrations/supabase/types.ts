@@ -196,12 +196,14 @@ export type Database = {
         Row: {
           club: string | null
           created_at: string | null
+          disability: string | null
           dob: string | null
           gender: string | null
           id: string
           name: string
           rank: number
           rating: number | null
+          special_notes: string | null
           state: string | null
           tags_json: Json | null
           tournament_id: string
@@ -210,12 +212,14 @@ export type Database = {
         Insert: {
           club?: string | null
           created_at?: string | null
+          disability?: string | null
           dob?: string | null
           gender?: string | null
           id?: string
           name: string
           rank: number
           rating?: number | null
+          special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
           tournament_id: string
@@ -224,12 +228,14 @@ export type Database = {
         Update: {
           club?: string | null
           created_at?: string | null
+          disability?: string | null
           dob?: string | null
           gender?: string | null
           id?: string
           name?: string
           rank?: number
           rating?: number | null
+          special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
           tournament_id?: string

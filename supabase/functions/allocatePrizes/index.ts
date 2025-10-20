@@ -291,20 +291,65 @@ Deno.serve(async (req) => {
 function isEligibleForCategory(player: any, category: any, rules: any): boolean {
   const criteria = category.criteria_json || {};
   
-  // Age check
+  // 1) DOB cutoff (dob_on_or_after)
+  if (criteria.dob_on_or_after && player.dob) {
+    if (player.dob < criteria.dob_on_or_after) return false;
+  }
+
+  // 2) Rating range
+  if (criteria.min_rating != null) {
+    const rating = player.rating ?? 0;
+    if (rating < criteria.min_rating) return false;
+  }
+  if (criteria.max_rating != null) {
+    const rating = player.rating ?? 0;
+    if (rating > criteria.max_rating) return false;
+  }
+
+  // 3) Unrated toggle
+  if (criteria.include_unrated === false) {
+    if (!player.rating || player.rating === 0) return false;
+  }
+
+  // 4) Disability types (support both 'disability' and legacy 'disability_type')
+  if (Array.isArray(criteria.disability_types) && criteria.disability_types.length > 0) {
+    const playerDisability = (player.disability || player.disability_type || '').toLowerCase();
+    const allowedSet = new Set(criteria.disability_types.map((s: string) => s.toLowerCase()));
+    if (!playerDisability || !allowedSet.has(playerDisability)) return false;
+  }
+
+  // 5) Allowed cities
+  if (Array.isArray(criteria.allowed_cities) && criteria.allowed_cities.length > 0) {
+    const playerCity = (player.city || '').toLowerCase();
+    const allowedSet = new Set(criteria.allowed_cities.map((s: string) => s.toLowerCase()));
+    if (!playerCity || !allowedSet.has(playerCity)) return false;
+  }
+
+  // 6) Allowed clubs (ignored if column missing in player object)
+  if (Array.isArray(criteria.allowed_clubs) && criteria.allowed_clubs.length > 0) {
+    if ('club' in player) {
+      const playerClub = (player.club || '').toLowerCase();
+      const allowedSet = new Set(criteria.allowed_clubs.map((s: string) => s.toLowerCase()));
+      if (!playerClub || !allowedSet.has(playerClub)) return false;
+    }
+    // If 'club' column doesn't exist, we don't filter by it
+  }
+
+  // Legacy criteria (keep for backward compatibility)
+  // Gender check
+  if (criteria.gender && player.gender !== criteria.gender) return false;
+
+  // Old age_max (for backward compatibility)
   if (criteria.age_max && player.dob) {
     const age = calculateAge(player.dob);
     if (age > criteria.age_max && rules.strict_age) return false;
   }
 
-  // Gender check
-  if (criteria.gender && player.gender !== criteria.gender) return false;
-
-  // Rating check
+  // Legacy rating checks (for backward compatibility)
   if (criteria.rating_min && player.rating < criteria.rating_min) return false;
   if (criteria.rating_max && player.rating > criteria.rating_max) return false;
 
-  // Unrated check
+  // Unrated check (legacy)
   if (!player.rating && !rules.allow_unrated_in_rating && (criteria.rating_min || criteria.rating_max)) {
     return false;
   }

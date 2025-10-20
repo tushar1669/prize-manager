@@ -58,11 +58,11 @@ export default function PlayerImport() {
   const [isParsing, setIsParsing] = useState(false);
 
   const downloadTemplate = () => {
-    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city", "disability", "special_notes"];
+    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city", "club", "disability", "special_notes"];
     const sample = [
-      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai", "None", ""],
-      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru", "None", "Vegetarian lunch"],
-      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi", "Hearing", "Seat near arbiter"],
+      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai", "Mumbai Chess Club", "", ""],
+      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru", "Karnataka CA", "Hearing", "Front row seat"],
+      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi", "", "", "Vegetarian lunch"],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
@@ -74,8 +74,9 @@ export default function PlayerImport() {
       { wch: 8 },  // gender
       { wch: 8 },  // state
       { wch: 16 }, // city
+      { wch: 20 }, // club
       { wch: 12 }, // disability
-      { wch: 20 }, // special_notes
+      { wch: 24 }, // special_notes
     ];
 
     const wb = XLSX.utils.book_new();
