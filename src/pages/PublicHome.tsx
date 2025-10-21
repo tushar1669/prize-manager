@@ -12,7 +12,7 @@ export default function PublicHome() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('*')
+        .select('id, title, start_date, end_date, city, venue, public_slug, brochure_url, chessresults_url, public_results_url')
         .eq('is_published', true)
         .order('start_date', { ascending: false });
       
