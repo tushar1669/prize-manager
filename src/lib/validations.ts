@@ -9,7 +9,9 @@ export const tournamentDetailsSchema = z.object({
   city: z.string().optional(),
   event_code: z.string().optional(),
   notes: z.string().optional(),
-  brochure_url: z.string().optional()
+  brochure_url: z.string().optional(),
+  chessresults_url: z.string().url().optional().or(z.literal('')),
+  public_results_url: z.string().url().optional().or(z.literal(''))
 }).refine(data => {
   if (data.start_date && data.end_date) {
     return new Date(data.end_date) >= new Date(data.start_date);

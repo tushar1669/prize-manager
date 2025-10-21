@@ -7,6 +7,7 @@ import { FileDown, ExternalLink, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { slugifyWithSuffix } from "@/lib/slug";
 
 interface Winner {
   prizeId: string;
@@ -120,6 +121,36 @@ export default function Finalize() {
     onError: (error: any) => {
       console.error('[finalize]', error);
       toast.error(`Finalization failed: ${error.message}`);
+    }
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('title, public_slug')
+        .eq('id', id)
+        .single();
+      
+      const slug = tournament?.public_slug || slugifyWithSuffix(tournament?.title || 'tournament');
+      
+      const { error } = await supabase
+        .from('tournaments')
+        .update({ 
+          is_published: true, 
+          public_slug: slug 
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      return slug;
+    },
+    onSuccess: (slug) => {
+      toast.success(`Published — /p/${slug}`);
+      navigate('/dashboard');
+    },
+    onError: (error: any) => {
+      toast.error(`Publish failed: ${error.message}`);
     }
   });
 
@@ -248,6 +279,14 @@ export default function Finalize() {
                 By publishing, you create an immutable version (v{nextVersion ?? 1}) of these allocations.
                 The tournament will be available at a public URL that can be shared with participants.
               </p>
+              <Button 
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
+                variant="outline"
+                className="w-full"
+              >
+                {publishMutation.isPending ? 'Publishing...' : 'Make Public'}
+              </Button>
             </CardContent>
           </Card>
 

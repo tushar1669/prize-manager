@@ -73,7 +73,9 @@ export default function TournamentSetup() {
       city: '',
       event_code: '',
       notes: '',
-      brochure_url: ''
+      brochure_url: '',
+      chessresults_url: '',
+      public_results_url: ''
     }
   });
 
@@ -117,7 +119,9 @@ export default function TournamentSetup() {
         city: data.city || '',
         event_code: data.event_code || '',
         notes: data.notes || '',
-        brochure_url: data.brochure_url || ''
+        brochure_url: data.brochure_url || '',
+        chessresults_url: data.chessresults_url || '',
+        public_results_url: data.public_results_url || ''
       });
 
       // Load signed URL for brochure if exists
@@ -667,6 +671,34 @@ export default function TournamentSetup() {
                         )}
                       </div>
                     </div>
+
+                    <FormField
+                      control={detailsForm.control}
+                      name="chessresults_url"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ChessResults URL (optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="https://chess-results.com/..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={detailsForm.control}
+                      name="public_results_url"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>External Final Results URL (optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="https://example.com/final-results" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </CardContent>
                 </Card>
 

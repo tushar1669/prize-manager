@@ -371,13 +371,17 @@ export type Database = {
       tournaments: {
         Row: {
           brochure_url: string | null
+          chessresults_url: string | null
           city: string | null
           created_at: string | null
           end_date: string
           event_code: string | null
           id: string
+          is_published: boolean
           notes: string | null
           owner_id: string
+          public_results_url: string | null
+          public_slug: string | null
           slug: string | null
           start_date: string
           status: string
@@ -387,13 +391,17 @@ export type Database = {
         }
         Insert: {
           brochure_url?: string | null
+          chessresults_url?: string | null
           city?: string | null
           created_at?: string | null
           end_date: string
           event_code?: string | null
           id?: string
+          is_published?: boolean
           notes?: string | null
           owner_id: string
+          public_results_url?: string | null
+          public_slug?: string | null
           slug?: string | null
           start_date: string
           status?: string
@@ -403,13 +411,17 @@ export type Database = {
         }
         Update: {
           brochure_url?: string | null
+          chessresults_url?: string | null
           city?: string | null
           created_at?: string | null
           end_date?: string
           event_code?: string | null
           id?: string
+          is_published?: boolean
           notes?: string | null
           owner_id?: string
+          public_results_url?: string | null
+          public_slug?: string | null
           slug?: string | null
           start_date?: string
           status?: string
@@ -423,18 +435,21 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          is_verified: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
+          is_verified?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          is_verified?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -445,6 +460,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bootstrap_master: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

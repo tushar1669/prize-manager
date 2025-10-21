@@ -5,11 +5,13 @@ import { useAuth } from "./useAuth";
 export function useUserRole() {
   const { user } = useAuth();
   const [role, setRole] = useState<'master' | 'organizer' | 'user' | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
       setRole(null);
+      setIsVerified(false);
       setLoading(false);
       return;
     }
@@ -17,15 +19,17 @@ export function useUserRole() {
     const fetchRole = async () => {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('role, is_verified')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) {
         console.error('Error fetching user role:', error);
         setRole('organizer'); // Default fallback
+        setIsVerified(false);
       } else {
         setRole(data?.role || 'organizer');
+        setIsVerified(data?.is_verified ?? false);
       }
       setLoading(false);
     };
@@ -33,5 +37,5 @@ export function useUserRole() {
     fetchRole();
   }, [user]);
 
-  return { role, loading, isMaster: role === 'master' };
+  return { role, loading, isMaster: role === 'master', isVerified };
 }

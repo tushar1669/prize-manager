@@ -12,6 +12,9 @@ import ConflictReview from "./pages/ConflictReview";
 import Finalize from "./pages/Finalize";
 import PublishSuccess from "./pages/PublishSuccess";
 import PublicTournament from "./pages/PublicTournament";
+import PublicHome from "./pages/PublicHome";
+import PublicResults from "./pages/PublicResults";
+import Bootstrap from "./pages/Bootstrap";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -24,8 +27,14 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/auth" replace />} />
+          {/* Public routes (no auth required) */}
+          <Route path="/" element={<PublicHome />} />
+          <Route path="/p/:slug" element={<PublicTournament />} />
+          <Route path="/p/:slug/results" element={<PublicResults />} />
+          
+          {/* Auth routes */}
           <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
           
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -36,8 +45,7 @@ const App = () => (
           <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
           <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           
-          {/* Public routes */}
-          <Route path="/t/:id/public" element={<PublicTournament />} />
+          {/* Fallback */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -24,13 +24,27 @@ import {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { role, loading: roleLoading, isMaster } = useUserRole();
+  const { role, loading: roleLoading, isMaster, isVerified } = useUserRole();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
     { open: false, tournamentId: null, title: "" }
   );
+
+  // Check if master exists for bootstrap link
+  const { data: masterExists } = useQuery({
+    queryKey: ['master-exists'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('user_roles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'master');
+      
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
+  });
 
   // Helper to detect ownership column (owner_id vs created_by)
   async function detectOwnerColumn(): Promise<'owner_id' | 'created_by'> {
@@ -192,11 +206,34 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-foreground mb-2">Tournament Dashboard</h1>
             <p className="text-muted-foreground">Manage your chess tournament prize allocations</p>
           </div>
-          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
-            <Plus className="h-4 w-4" />
-            {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
-          </Button>
+          {(isMaster || isVerified) && (
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
+            </Button>
+          )}
         </div>
+
+        {/* Creator gate banner */}
+        {!isMaster && !isVerified && (
+          <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Your account is awaiting master verification before you can create tournaments.
+            </p>
+          </div>
+        )}
+
+        {/* Bootstrap link if no master exists */}
+        {!masterExists && (
+          <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              No master organizer has been assigned yet.{' '}
+              <Button variant="link" className="p-0 h-auto text-blue-600 dark:text-blue-400" onClick={() => navigate('/auth/bootstrap')}>
+                Claim master role
+              </Button>
+            </p>
+          </div>
+        )}
 
         <div className="mb-6">
           <div className="relative max-w-sm">
