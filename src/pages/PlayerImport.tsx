@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
+import { BackBar } from "@/components/BackBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -46,6 +47,18 @@ const extractUnknownColumn = (msg: string): string | null => {
   return null;
 };
 
+// Helper: normalize DOB to YYYY-MM-DD
+const toISODate = (d: any): string | null => {
+  if (!d) return null;
+  if (typeof d === 'number') {
+    // Excel serial date
+    const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
+    return isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
+  }
+  const t = Date.parse(String(d));
+  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+};
+
 export default function PlayerImport() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,6 +71,7 @@ export default function PlayerImport() {
   const [duplicates, setDuplicates] = useState<{ row: number; duplicate: string }[]>([]);
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
 
   // Auth & role for organizer guard
   const { user } = useAuth();
@@ -155,9 +169,11 @@ export default function PlayerImport() {
       } else {
         setShowMappingDialog(true);
       }
+      setParseStatus('ok');
     } catch (error) {
       console.error('[parseFile]', error);
       toast.error("Failed to parse file. Please upload an Excel file (.xls or .xlsx).");
+      setParseStatus('error');
     } finally {
       setIsParsing(false);
     }
@@ -195,6 +211,19 @@ export default function PlayerImport() {
       });
 
       return player as ParsedPlayer;
+    });
+
+    // Normalize DOB to strict YYYY-MM-DD
+    mapped.forEach(player => {
+      if (player.dob) {
+        const normalized = toISODate(player.dob);
+        if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+          // Will be caught in validation below
+          player.dob = null;
+        } else {
+          player.dob = normalized;
+        }
+      }
     });
 
     const errors: { row: number; errors: string[] }[] = [];
@@ -245,6 +274,9 @@ export default function PlayerImport() {
 
     if (errors.length === 0 && dupes.length === 0) {
       toast.success(`${valid.length} players ready to import`);
+      setParseStatus('ok');
+    } else {
+      setParseStatus('error');
     }
   };
 
@@ -316,9 +348,11 @@ export default function PlayerImport() {
   });
 
   const hasData = mappedPlayers.length > 0;
+  const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrors.length === 0;
 
   return (
     <div className="min-h-screen bg-background">
+      <BackBar label="Back to Setup" to={`/t/${id}/setup`} />
       <AppNav />
       
       <div className="container mx-auto px-6 py-8 max-w-6xl">
@@ -418,6 +452,51 @@ export default function PlayerImport() {
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Persistent error panel */}
+            {parseStatus === 'error' && (validationErrors.length > 0 || duplicates.length > 0) && (
+              <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-destructive mb-2">
+                      Import Errors Found
+                    </h4>
+                    <div className="text-sm space-y-1 max-h-32 overflow-y-auto">
+                      {validationErrors.slice(0, 5).map((err, idx) => (
+                        <p key={idx}>
+                          <strong>Row {err.row}:</strong> {err.errors.join('; ')}
+                        </p>
+                      ))}
+                      {validationErrors.length > 5 && (
+                        <p className="text-muted-foreground">
+                          ...and {validationErrors.length - 5} more errors
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob(
+                      [JSON.stringify({ validationErrors, duplicates }, null, 2)],
+                      { type: 'application/json' }
+                    );
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `import-errors-${Date.now()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download Error Log (JSON)
+                </Button>
+              </div>
+            )}
+            
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => {
                 if (!id) {
@@ -431,9 +510,9 @@ export default function PlayerImport() {
               </Button>
               <Button
                 onClick={() => importPlayersMutation.mutate(mappedPlayers)}
-                disabled={validationErrors.length > 0 || importPlayersMutation.isPending}
+                disabled={!canProceed || importPlayersMutation.isPending}
               >
-                {importPlayersMutation.isPending ? "Importing..." : `Import ${mappedPlayers.length} Players`}
+                {importPlayersMutation.isPending ? "Importing..." : `Next: Review & Allocate`}
               </Button>
             </div>
           </div>

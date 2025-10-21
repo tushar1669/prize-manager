@@ -17,6 +17,8 @@ import PublicResults from "./pages/PublicResults";
 import Bootstrap from "./pages/Bootstrap";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import MasterDashboard from "./pages/MasterDashboard";
+import SpecialLanding from "./pages/SpecialLanding";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +46,8 @@ const App = () => (
           <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
           <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
           <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
+          <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
           
           {/* Fallback */}
           <Route path="*" element={<NotFound />} />

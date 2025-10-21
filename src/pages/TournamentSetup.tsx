@@ -24,6 +24,7 @@ import { Plus, Trash2, Upload, ArrowRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { BackBar } from "@/components/BackBar";
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -478,6 +479,16 @@ export default function TournamentSetup() {
   };
 
   const onCategorySubmit = (values: CategoryForm) => {
+    // If copying from a category, optionally include criteria
+    const includeCriteria = (document.getElementById('copy-criteria-checkbox') as HTMLInputElement)?.checked ?? false;
+    
+    if (copyFromCategoryId && includeCriteria) {
+      const source = categories?.find(c => c.id === copyFromCategoryId);
+      if (source?.criteria_json && typeof source.criteria_json === 'object' && !Array.isArray(source.criteria_json)) {
+        values.criteria_json = { ...(source.criteria_json as Record<string, any>) };
+      }
+    }
+    
     createCategoryMutation.mutate(values);
   };
 
@@ -510,6 +521,7 @@ export default function TournamentSetup() {
 
   return (
     <div className="min-h-screen bg-background">
+      <BackBar label="Back to Dashboard" to="/dashboard" />
       <AppNav />
       
       <div className="container mx-auto px-6 py-8">
@@ -828,7 +840,7 @@ export default function TournamentSetup() {
                             <Label htmlFor="copy-from">Copy prize structure from</Label>
                             <select
                               id="copy-from"
-                              className="border rounded px-2 py-1 w-full mt-2"
+                              className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
                               value={copyFromCategoryId || ''}
                               onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
                             >
@@ -843,6 +855,17 @@ export default function TournamentSetup() {
                             <p className="text-xs text-muted-foreground mt-1">
                               Optional. Saves time when multiple categories share the same prize structure.
                             </p>
+                            {copyFromCategoryId && (
+                              <div className="flex items-center gap-2 mt-3">
+                                <Checkbox 
+                                  id="copy-criteria-checkbox"
+                                  defaultChecked={true}
+                                />
+                                <Label htmlFor="copy-criteria-checkbox">
+                                  Include Rules (criteria)
+                                </Label>
+                              </div>
+                            )}
                           </div>
                           <DialogFooter>
                             <Button type="submit" disabled={createCategoryMutation.isPending}>
@@ -1388,8 +1411,9 @@ export default function TournamentSetup() {
               <Label className="mb-2 block">Quick Presets</Label>
               <div className="flex flex-wrap gap-2">
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-gender') as HTMLSelectElement;
                     if (el) el.value = 'F';
@@ -1398,8 +1422,9 @@ export default function TournamentSetup() {
                   Girls Only
                 </Button>
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-gender') as HTMLSelectElement;
                     if (el) el.value = 'M';
@@ -1408,8 +1433,9 @@ export default function TournamentSetup() {
                   Boys Only
                 </Button>
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-gender') as HTMLSelectElement;
                     if (el) el.value = '';
@@ -1418,8 +1444,9 @@ export default function TournamentSetup() {
                   Any Gender
                 </Button>
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
                     if (el) el.checked = true;
@@ -1428,8 +1455,9 @@ export default function TournamentSetup() {
                   Include Unrated
                 </Button>
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
                     if (el) el.checked = false;
@@ -1438,8 +1466,9 @@ export default function TournamentSetup() {
                   Exclude Unrated
                 </Button>
                 <Button 
-                  variant="secondary" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-dob') as HTMLInputElement;
                     if (el) el.value = '2016-01-01';
@@ -1533,7 +1562,7 @@ export default function TournamentSetup() {
                     <Label htmlFor="criteria-gender">Gender</Label>
                     <select 
                       id="criteria-gender" 
-                      className="border rounded px-2 py-1 w-full mt-2"
+                      className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
                       defaultValue={criteria?.gender || ''}
                     >
                       <option value="">Any</option>

@@ -1,5 +1,6 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
+import { BackBar } from "@/components/BackBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +173,7 @@ export default function Finalize() {
 
   return (
     <div className="min-h-screen bg-background">
+      <BackBar label="Back to Review" to={`/t/${id}/review`} />
       <AppNav />
       
       <div className="container mx-auto px-6 py-8 max-w-4xl">

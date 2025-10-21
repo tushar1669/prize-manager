@@ -13,6 +13,7 @@ import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { BackBar } from "@/components/BackBar";
 
 interface Winner {
   prizeId: string;
@@ -136,6 +137,7 @@ export default function ConflictReview() {
 
   return (
     <div className="min-h-screen bg-background">
+      <BackBar label="Back to Import" to={`/t/${id}/import`} />
       <AppNav />
       
       <div className="container mx-auto px-6 py-8 max-w-7xl">
