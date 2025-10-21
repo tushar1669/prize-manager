@@ -45,7 +45,7 @@ export default function ConflictReview() {
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule-config', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('rule_config').select('*').eq('tournament_id', id).single();
+      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id, created_at, updated_at').eq('tournament_id', id).single();
       if (error) throw error;
       return data;
     },
@@ -55,7 +55,7 @@ export default function ConflictReview() {
   const { data: players } = useQuery({
     queryKey: ['players', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('players').select('*').eq('tournament_id', id).order('rank');
+      const { data, error } = await supabase.from('players').select('id, name, rank, rating, dob, gender, club, state, tournament_id').eq('tournament_id', id).order('rank');
       if (error) throw error;
       return data;
     },

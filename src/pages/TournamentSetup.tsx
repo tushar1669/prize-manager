@@ -100,7 +100,7 @@ export default function TournamentSetup() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('*')
+        .select('id, title, start_date, end_date, venue, city, event_code, notes, brochure_url, chessresults_url, public_results_url, owner_id, status')
         .eq('id', id)
         .single();
       
@@ -267,7 +267,7 @@ export default function TournamentSetup() {
             criteria_json: {},
             order_idx: 0
           })
-          .select('*')
+          .select('id')
           .single();
         
         if (error) throw error;

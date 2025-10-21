@@ -41,7 +41,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('*')
+        .select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       

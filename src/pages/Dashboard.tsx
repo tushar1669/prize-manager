@@ -69,12 +69,12 @@ export default function Dashboard() {
       const { data, error } = role !== 'master'
         ? await supabase
             .from('tournaments')
-            .select('*')
+            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at')
             .eq(ownerCol as 'owner_id', user!.id)
             .order('created_at', { ascending: false })
         : await supabase
             .from('tournaments')
-            .select('*')
+            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at')
             .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -99,7 +99,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('tournaments')
         .insert(payload)
-        .select('*')
+        .select('id')
         .single();
 
       if (error) throw error;
