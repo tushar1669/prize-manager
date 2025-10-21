@@ -51,6 +51,7 @@ export default function TournamentSetup() {
     { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
   ]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
+  const [includeCriteriaOnCopy, setIncludeCriteriaOnCopy] = useState(true);
   const [dupDialog, setDupDialog] = useState<{
     open: boolean;
     sourceId: string | null;
@@ -227,6 +228,7 @@ export default function TournamentSetup() {
         queryClient.invalidateQueries({ queryKey: ['categories', id] });
         toast.success('Category saved');
         setCategoryDialogOpen(false);
+        setIncludeCriteriaOnCopy(true);
         setCopyFromCategoryId(null);
         categoryForm.reset();
       }
@@ -479,10 +481,8 @@ export default function TournamentSetup() {
   };
 
   const onCategorySubmit = (values: CategoryForm) => {
-    // If copying from a category, optionally include criteria
-    const includeCriteria = (document.getElementById('copy-criteria-checkbox') as HTMLInputElement)?.checked ?? false;
-    
-    if (copyFromCategoryId && includeCriteria) {
+    // If copying from a category, optionally include criteria (controlled state)
+    if (copyFromCategoryId && includeCriteriaOnCopy) {
       const source = categories?.find(c => c.id === copyFromCategoryId);
       if (source?.criteria_json && typeof source.criteria_json === 'object' && !Array.isArray(source.criteria_json)) {
         values.criteria_json = { ...(source.criteria_json as Record<string, any>) };
@@ -858,8 +858,8 @@ export default function TournamentSetup() {
                             {copyFromCategoryId && (
                               <div className="flex items-center gap-2 mt-3">
                                 <Checkbox 
-                                  id="copy-criteria-checkbox"
-                                  defaultChecked={true}
+                                  checked={includeCriteriaOnCopy}
+                                  onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
                                 />
                                 <Label htmlFor="copy-criteria-checkbox">
                                   Include Rules (criteria)
