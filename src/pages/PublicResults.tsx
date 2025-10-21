@@ -13,7 +13,7 @@ export default function PublicResults() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('*')
+        .select('id, title, is_published')
         .eq('public_slug', slug)
         .eq('is_published', true)
         .maybeSingle();

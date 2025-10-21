@@ -14,7 +14,7 @@ export default function PublicTournament() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('*')
+        .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, is_published')
         .eq('public_slug', slug)
         .eq('is_published', true)
         .maybeSingle();
