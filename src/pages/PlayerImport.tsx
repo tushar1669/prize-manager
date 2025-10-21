@@ -157,7 +157,7 @@ export default function PlayerImport() {
       }
     } catch (error) {
       console.error('[parseFile]', error);
-      toast.error("Failed to parse file. Upload CSV or Excel (.xls/.xlsx).");
+      toast.error("Failed to parse file. Please upload an Excel file (.xls or .xlsx).");
     } finally {
       setIsParsing(false);
     }
