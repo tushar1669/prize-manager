@@ -139,7 +139,14 @@ export default function PlayerImport() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+    console.log('[import] file selected:', selectedFile?.name, selectedFile?.type, selectedFile?.size);
+    
+    if (!selectedFile) {
+      toast.error('No file selected');
+      return;
+    }
+    
+    toast.info(`Uploading ${selectedFile.name}...`);
 
     setIsParsing(true);
 

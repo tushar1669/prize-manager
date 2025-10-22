@@ -27,36 +27,41 @@ export function usePapaParser() {
   }, []);
 
   const parseExcel = useCallback(async (file: File): Promise<Parsed> => {
-    const ab = await file.arrayBuffer();
-    const wb = XLSX.read(ab, { type: 'array' });
-    
-    // 🔍 DIAGNOSTIC: Log available sheets
-    console.log('[parseExcel] Available sheets:', wb.SheetNames);
-    
-    const wsName = wb.SheetNames[0];
-    console.log('[parseExcel] Selected sheet:', wsName);
-    
-    const ws = wb.Sheets[wsName];
+    try {
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type: 'array' });
+      
+      // 🔍 DIAGNOSTIC: Log available sheets
+      console.log('[parseExcel] Available sheets:', wb.SheetNames);
+      
+      const wsName = wb.SheetNames[0];
+      console.log('[parseExcel] Selected sheet:', wsName);
+      
+      const ws = wb.Sheets[wsName];
 
-    // Get first row as headers
-    const asRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-    
-    // 🔍 DIAGNOSTIC: Log raw first row
-    console.log('[parseExcel] Raw first row:', asRows[0]);
-    
-    const headers = normalizeHeaders(asRows[0] || []);
-    
-    // 🔍 DIAGNOSTIC: Log normalized headers
-    console.log('[parseExcel] Normalized headers:', headers);
+      // Get first row as headers
+      const asRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+      
+      // 🔍 DIAGNOSTIC: Log raw first row
+      console.log('[parseExcel] Raw first row:', asRows[0]);
+      
+      const headers = normalizeHeaders(asRows[0] || []);
+      
+      // 🔍 DIAGNOSTIC: Log normalized headers
+      console.log('[parseExcel] Normalized headers:', headers);
 
-    // Get data as objects using inferred headers
-    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    
-    // 🔍 DIAGNOSTIC: Log first 3 data rows
-    console.log('[parseExcel] First 3 data rows:', data.slice(0, 3));
-    console.log('[parseExcel] Total rows:', data.length);
+      // Get data as objects using inferred headers
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      
+      // 🔍 DIAGNOSTIC: Log first 3 data rows
+      console.log('[parseExcel] First 3 data rows:', data.slice(0, 3));
+      console.log('[parseExcel] Total rows:', data.length);
 
-    return { data, headers };
+      return { data, headers };
+    } catch (err) {
+      console.error('[parseExcel] XLSX.read error:', err);
+      throw new Error(`Parse error: ${err instanceof Error ? err.message : 'Unknown error reading Excel file'}`);
+    }
   }, []);
 
   const parseFile = useCallback((file: File): Promise<Parsed> => {
@@ -66,7 +71,7 @@ export function usePapaParser() {
     }
     if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
     return Promise.reject(new Error('Unsupported file type. Please upload Excel (.xls/.xlsx).'));
-  }, [parseCSV, parseExcel]);
+  }, [parseExcel]);
 
   return { parseFile };
 }
