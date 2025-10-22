@@ -19,6 +19,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import MasterDashboard from "./pages/MasterDashboard";
 import SpecialLanding from "./pages/SpecialLanding";
+import Account from "./pages/Account";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
           
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/t/:id/setup" element={<ProtectedRoute><TournamentSetup /></ProtectedRoute>} />
           <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
           <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />

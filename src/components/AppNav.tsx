@@ -50,7 +50,7 @@ export function AppNav() {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/account')}>
                   <Settings className="mr-2 h-4 w-4" />
                   Account Settings
                 </DropdownMenuItem>

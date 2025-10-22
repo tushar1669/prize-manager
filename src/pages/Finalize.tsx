@@ -127,13 +127,16 @@ export default function Finalize() {
 
   const publishMutation = useMutation({
     mutationFn: async () => {
-      const { data: tournament } = await supabase
+      const { data: tournament, error: tournamentError } = await supabase
         .from('tournaments')
         .select('title, public_slug')
         .eq('id', id)
-        .single();
+        .maybeSingle();
       
-      const slug = tournament?.public_slug || slugifyWithSuffix(tournament?.title || 'tournament');
+      if (tournamentError) throw tournamentError;
+      if (!tournament) throw new Error('Tournament not found');
+      
+      const slug = tournament.public_slug || slugifyWithSuffix(tournament.title || 'tournament');
       
       const { error } = await supabase
         .from('tournaments')
