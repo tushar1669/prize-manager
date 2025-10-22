@@ -1,3 +1,10 @@
+/**
+ * PlayerImport: XLSX/CSV upload with auto-mapping and validation
+ * 
+ * Column mapping note: While auto-mapping handles header name variations 
+ * (e.g., "Rank" vs "rank"), data must be in semantically correct columns.
+ * Swapped columns (e.g., city data in disability column) will cause validation errors.
+ */
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";

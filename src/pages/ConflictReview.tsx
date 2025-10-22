@@ -45,9 +45,17 @@ export default function ConflictReview() {
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule-config', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id, created_at, updated_at').eq('tournament_id', id).single();
+      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle();
       if (error) throw error;
-      return data;
+      // Provide defaults if rule_config doesn't exist yet
+      return data || {
+        strict_age: true,
+        allow_unrated_in_rating: false,
+        prefer_main_on_equal_value: true,
+        prefer_category_rank_on_tie: false,
+        category_priority_order: [],
+        tournament_id: id,
+      };
     },
     enabled: !!id
   });
@@ -86,9 +94,14 @@ export default function ConflictReview() {
       toast.info(data.conflicts.length === 0 ? 'All clear!' : `${data.conflicts.length} conflicts found`);
     },
     onError: (err: any) => {
-      const msg = err?.context?.error?.message || err?.message || 'Allocation failed';
       console.error('[allocatePrizes] error', err);
-      toast.error(`Allocation failed: ${msg}`);
+      // Check if it's a network-level failure
+      if (err?.message?.includes('net::ERR_FAILED') || err?.message?.includes('Failed to fetch')) {
+        toast.error('Allocation failed: Network error. Check your connection or try again.');
+      } else {
+        const msg = err?.context?.error?.message || err?.message || 'Unknown error';
+        toast.error(`Allocation failed: ${msg}`);
+      }
     }
   });
 

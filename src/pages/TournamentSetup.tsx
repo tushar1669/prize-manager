@@ -318,9 +318,9 @@ export default function TournamentSetup() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Prize added');
+      toast.success(`Prize #${data.place} added successfully`);
       setPrizeDialog({open: false, categoryId: null});
     },
     onError: (error: any) => {
@@ -358,7 +358,7 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Prize updated');
+      toast.success('Prize updated successfully');
       setEditPrizeDialog({ open: false, prize: null, categoryId: null });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to update prize'),
@@ -1125,8 +1125,19 @@ export default function TournamentSetup() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Allocation Rules</CardTitle>
-                <CardDescription>Default rules for prize allocation</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Allocation Rules</CardTitle>
+                    <CardDescription>Default rules for prize allocation</CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/t/${id}/settings`)}
+                  >
+                    Edit Rules
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
