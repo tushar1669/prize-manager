@@ -100,8 +100,9 @@ export default function PlayerImport() {
         .from('tournaments')
         .select('owner_id')
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Tournament not found');
       return data;
     },
     enabled: !!id,

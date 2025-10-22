@@ -84,11 +84,18 @@ export default function ConflictReview() {
     mutationFn: async (ruleOverride?: any) => {
       const { data: { session } } = await supabase.auth.getSession();
       
+      console.log('[allocatePrizes] invoking with:', {
+        tournamentId: id,
+        ruleConfigOverride: ruleOverride || null
+      });
+      
       const { data, error } = await supabase.functions.invoke('allocatePrizes', {
         body: { tournamentId: id, ruleConfigOverride: ruleOverride || undefined },
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
       if (error) throw error;
+      
+      console.log('[allocatePrizes] result:', data);
       return data as { winners: Winner[], conflicts: Conflict[] };
     },
     onSuccess: (data) => {

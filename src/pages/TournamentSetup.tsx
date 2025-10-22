@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -112,19 +112,6 @@ export default function TournamentSetup() {
         }
         throw error;
       }
-      
-      detailsForm.reset({
-        title: data.title,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        venue: data.venue || '',
-        city: data.city || '',
-        event_code: data.event_code || '',
-        notes: data.notes || '',
-        brochure_url: data.brochure_url || '',
-        chessresults_url: data.chessresults_url || '',
-        public_results_url: data.public_results_url || ''
-      });
 
       // Load signed URL for brochure if exists
       if (data.brochure_url) {
@@ -137,6 +124,25 @@ export default function TournamentSetup() {
     },
     enabled: !!id && id !== 'new'
   });
+
+  // Reset form only when tournament ID changes, not on every refetch
+  useEffect(() => {
+    if (tournament && !detailsForm.formState.isDirty) {
+      detailsForm.reset({
+        title: tournament.title,
+        start_date: tournament.start_date,
+        end_date: tournament.end_date,
+        venue: tournament.venue || '',
+        city: tournament.city || '',
+        event_code: tournament.event_code || '',
+        notes: tournament.notes || '',
+        brochure_url: tournament.brochure_url || '',
+        chessresults_url: tournament.chessresults_url || '',
+        public_results_url: tournament.public_results_url || ''
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament?.id]);
 
   // Organizer guard: owner or master
   const isOrganizer = 
@@ -299,11 +305,13 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Prize structure saved');
-      navigate(`/t/${id}/import`);
+      toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
+      // small delay so user sees the toast
+      setTimeout(() => navigate(`/t/${id}/import`), 600);
     },
     onError: (error: any) => {
-      toast.error('Failed to save prizes: ' + error.message);
+      console.error('[savePrizesMutation] failed:', error);
+      toast.error(`Failed to save prizes: ${error?.message || 'Unknown error'}`);
     }
   });
 
@@ -1238,6 +1246,15 @@ export default function TournamentSetup() {
                 const medal = (document.getElementById('prize-medal') as HTMLInputElement)?.checked || false;
                 
                 if (prizeDialog.categoryId) {
+                  // Check for duplicate place in this category
+                  const category = categories?.find(c => c.id === prizeDialog.categoryId);
+                  const existingPlaces = new Set((category?.prizes || []).map((p: any) => p.place));
+                  
+                  if (existingPlaces.has(place)) {
+                    toast.error(`Place #${place} already exists in this category`);
+                    return;
+                  }
+                  
                   addPrizeMutation.mutate({
                     category_id: prizeDialog.categoryId,
                     place,
