@@ -32,15 +32,22 @@ interface ParsedPlayer extends PlayerImportRow {
 const pick = (obj: Record<string, any>, keys: string[]) =>
   keys.reduce((acc, k) => { if (k in obj) acc[k] = obj[k]; return acc; }, {} as Record<string, any>);
 
+// Parses PostgREST/Postgres error messages to extract an unknown column name
 const extractUnknownColumn = (msg: string): string | null => {
   if (!msg) return null;
-  // Common PostgREST / Postgres patterns
-  const pats = [
+
+  // Known variants seen from PostgREST/Postgres
+  const patterns = [
     /column\s+"?([a-zA-Z0-9_]+)"?\s+of\s+relation\s+"players"/i,
     /No column '([a-zA-Z0-9_]+)'/i,
-    /column\s+"?([a-zA-Z0-9_]+)"?\s+does\s+not\s+exist/i
+    /column\s+"?([a-zA-Z0-9_]+)"?\s+does\s+not\s+exist/i,
+
+    // NEW: Supabase "schema cache" variant:
+    // e.g. "Could not find the 'city' column of 'players' in the schema cache"
+    /Could not find the '([a-zA-Z0-9_]+)' column of 'players' in the schema cache/i,
   ];
-  for (const re of pats) {
+
+  for (const re of patterns) {
     const m = msg.match(re);
     if (m?.[1]) return m[1];
   }
