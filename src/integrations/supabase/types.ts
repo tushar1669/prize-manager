@@ -194,6 +194,7 @@ export type Database = {
       }
       players: {
         Row: {
+          city: string | null
           club: string | null
           created_at: string | null
           disability: string | null
@@ -210,6 +211,7 @@ export type Database = {
           warnings_json: Json | null
         }
         Insert: {
+          city?: string | null
           club?: string | null
           created_at?: string | null
           disability?: string | null
@@ -226,6 +228,7 @@ export type Database = {
           warnings_json?: Json | null
         }
         Update: {
+          city?: string | null
           club?: string | null
           created_at?: string | null
           disability?: string | null
@@ -460,10 +463,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      bootstrap_master: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      bootstrap_master: { Args: never; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
