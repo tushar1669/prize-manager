@@ -62,8 +62,8 @@ export type PrizeForm = z.infer<typeof prizeSchema>;
 
 // Player Import schema
 export const playerImportSchema = z.object({
-  rank: z.number().min(1, "Rank must be at least 1"),
-  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  rank: z.number().min(1, "Rank must be a positive integer"),
+  name: z.string().trim().min(1, "Name is required and cannot be empty").max(100, "Name must be less than 100 characters"),
   rating: z.number().min(0, "Rating cannot be negative").nullable().optional(),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").nullable().optional(),
   gender: z.enum(['M', 'F', 'Other']).nullable().optional(),

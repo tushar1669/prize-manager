@@ -141,32 +141,30 @@ export default function PlayerImport() {
       setHeaders(csvHeaders);
       
       // Try auto-mapping; if both required fields found, skip dialog
-      const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+      const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '_');
       const autoMapping: Record<string, string> = {};
+      
+      // Comprehensive synonym lists matching ColumnMappingDialog
+      const synonyms: Record<string, string[]> = {
+        rank: ['rank', 'sr_no', 's_no', 'sno', 'seed', 'seeding', 'pos', 'position'],
+        name: ['name', 'player_name', 'full_name', 'player'],
+        rating: ['rating', 'elo', 'rtg'],
+        dob: ['dob', 'date_of_birth', 'birth_date', 'birthdate'],
+        gender: ['gender', 'sex'],
+        state: ['state', 'province'],
+        city: ['city', 'town'],
+        club: ['club', 'chess_club'],
+        disability: ['disability', 'special_needs'],
+        special_notes: ['special_notes', 'notes', 'remarks', 'comments']
+      };
       
       csvHeaders.forEach(h => {
         const normalized = norm(h);
-        if (!autoMapping.rank && (normalized === 'rank' || normalized.includes('pos') || normalized === 'position')) {
-          autoMapping.rank = h;
-        }
-        if (!autoMapping.name && (normalized === 'name' || normalized.includes('player'))) {
-          autoMapping.name = h;
-        }
-        // Auto-map optional fields too
-        if (!autoMapping.rating && (normalized === 'rating' || normalized === 'elo')) {
-          autoMapping.rating = h;
-        }
-        if (!autoMapping.dob && (normalized === 'dob' || normalized.includes('birth'))) {
-          autoMapping.dob = h;
-        }
-        if (!autoMapping.gender && (normalized === 'gender' || normalized === 'sex')) {
-          autoMapping.gender = h;
-        }
-        if (!autoMapping.state && (normalized === 'state' || normalized === 'province')) {
-          autoMapping.state = h;
-        }
-        if (!autoMapping.city && (normalized === 'city' || normalized === 'town')) {
-          autoMapping.city = h;
+        for (const [field, aliases] of Object.entries(synonyms)) {
+          if (!autoMapping[field] && aliases.includes(normalized)) {
+            autoMapping[field] = h;
+            break;
+          }
         }
       });
       
@@ -211,6 +209,9 @@ export default function PlayerImport() {
               value = isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
             }
           }
+        } else if (typeof value === 'string') {
+          // Trim all string fields and convert empty strings to null
+          value = value.trim() || null;
         }
 
         // Always carry what the mapping gave us; we'll strip unknown fields at insert time.
