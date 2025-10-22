@@ -79,6 +79,7 @@ export default function PlayerImport() {
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [parseError, setParseError] = useState<string | null>(null);
 
   // Auth & role for organizer guard
   const { user } = useAuth();
@@ -139,6 +140,7 @@ export default function PlayerImport() {
       const { data, headers: csvHeaders } = await parseFile(selectedFile);
       setParsedData(data);
       setHeaders(csvHeaders);
+      setParseError(null); // Clear any previous error
       
       // Try auto-mapping; if both required fields found, skip dialog
       const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '_');
@@ -174,10 +176,12 @@ export default function PlayerImport() {
       } else {
         setShowMappingDialog(true);
       }
-      setParseStatus('ok');
+      // Don't set parseStatus('ok') here - wait for validation in handleMappingConfirm
     } catch (error) {
       console.error('[parseFile]', error);
-      toast.error("Failed to parse file. Please upload an Excel file (.xls or .xlsx).");
+      const errMsg = error instanceof Error ? error.message : "Failed to parse file. Please upload an Excel file (.xls or .xlsx).";
+      setParseError(errMsg);
+      toast.error(errMsg);
       setParseStatus('error');
     } finally {
       setIsParsing(false);
@@ -275,11 +279,13 @@ export default function PlayerImport() {
       console.warn('[import] No valid rows after mapping. Sample of first row:', mapped[0]);
       toast.error('No valid rows to import. Check that "rank" and "name" columns are present and non-empty.');
       setMappedPlayers([]);
+      setParseStatus('error');
       return;
     }
     
     setMappedPlayers(valid);
 
+    // Set parseStatus AFTER validation is complete
     if (errors.length === 0 && dupes.length === 0) {
       toast.success(`${valid.length} players ready to import`);
       setParseStatus('ok');
@@ -462,7 +468,7 @@ export default function PlayerImport() {
             </Card>
             
             {/* Persistent error panel */}
-            {parseStatus === 'error' && (validationErrors.length > 0 || duplicates.length > 0) && (
+            {parseStatus === 'error' && (parseError || validationErrors.length > 0 || duplicates.length > 0) && (
               <div className="mb-6 p-4 bg-destructive/10 border border-destructive rounded-lg space-y-3">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
@@ -470,18 +476,31 @@ export default function PlayerImport() {
                     <h4 className="font-medium text-destructive mb-2">
                       Import Errors Found
                     </h4>
-                    <div className="text-sm space-y-1 max-h-32 overflow-y-auto">
-                      {validationErrors.slice(0, 5).map((err, idx) => (
-                        <p key={idx}>
-                          <strong>Row {err.row}:</strong> {err.errors.join('; ')}
-                        </p>
-                      ))}
-                      {validationErrors.length > 5 && (
-                        <p className="text-muted-foreground">
-                          ...and {validationErrors.length - 5} more errors
-                        </p>
-                      )}
-                    </div>
+                    
+                    {/* Parse error message */}
+                    {parseError && (
+                      <Alert variant="destructive" className="mb-3">
+                        <AlertDescription>
+                          <strong>Parse Error:</strong> {parseError}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
+                    {/* Validation errors */}
+                    {validationErrors.length > 0 && (
+                      <div className="text-sm space-y-1 max-h-32 overflow-y-auto">
+                        {validationErrors.slice(0, 5).map((err, idx) => (
+                          <p key={idx}>
+                            <strong>Row {err.row}:</strong> {err.errors.join('; ')}
+                          </p>
+                        ))}
+                        {validationErrors.length > 5 && (
+                          <p className="text-muted-foreground">
+                            ...and {validationErrors.length - 5} more errors
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Button
@@ -518,9 +537,9 @@ export default function PlayerImport() {
               </Button>
               <Button
                 onClick={() => importPlayersMutation.mutate(mappedPlayers)}
-                disabled={!canProceed || importPlayersMutation.isPending}
+                disabled={!canProceed || importPlayersMutation.isPending || isParsing}
               >
-                {importPlayersMutation.isPending ? "Importing..." : `Next: Review & Allocate`}
+                {isParsing ? "Processing..." : importPlayersMutation.isPending ? "Importing..." : `Next: Review & Allocate`}
               </Button>
             </div>
           </div>
