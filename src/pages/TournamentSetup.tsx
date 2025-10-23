@@ -27,6 +27,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
+import CategoryPrizesEditor, { PrizeDelta } from '@/components/prizes/CategoryPrizesEditor';
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -40,12 +41,6 @@ export default function TournamentSetup() {
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
-  const [prizeDialog, setPrizeDialog] = useState<{open: boolean; categoryId: string | null}>({open: false, categoryId: null});
-  const [editPrizeDialog, setEditPrizeDialog] = useState<{
-    open: boolean;
-    prize: any | null;
-    categoryId: string | null;
-  }>({ open: false, prize: null, categoryId: null });
   const [criteriaSheet, setCriteriaSheet] = useState<{
     open: boolean;
     category: any | null;
@@ -59,13 +54,7 @@ export default function TournamentSetup() {
     open: boolean;
     sourceId: string | null;
   }>({ open: false, sourceId: null });
-  const [inlineEditPrizeId, setInlineEditPrizeId] = useState<string | null>(null);
-  const [inlineDraft, setInlineDraft] = useState<{
-    place?: number;
-    cash_amount?: number;
-    has_trophy?: boolean;
-    has_medal?: boolean;
-  }>({});
+  const [savingAll, setSavingAll] = useState(false);
 
   // Details form
   const detailsForm = useForm<TournamentDetailsForm>({
@@ -329,85 +318,88 @@ export default function TournamentSetup() {
     }
   });
 
-  // Add prize to category mutation
-  const addPrizeMutation = useMutation({
-    mutationFn: async (prizeData: { category_id: string; place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean }) => {
-      console.log('[prizes] adding prize', prizeData);
-      
-      // Check for duplicate place in category (UI guard)
-      const category = categories?.find(c => c.id === prizeData.category_id);
-      const existingPlaces = new Set((category?.prizes || []).map((p: any) => p.place));
-      if (existingPlaces.has(prizeData.place)) {
-        throw new Error(`Place #${prizeData.place} already exists in this category`);
+  // Toggle category active
+  const toggleCategoryActive = async (categoryId: string, isActive: boolean) => {
+    console.log('[prizes-cat] toggle category', { categoryId, is_active: isActive });
+    const { error } = await supabase
+      .from('categories')
+      .update({ is_active: isActive })
+      .eq('id', categoryId);
+    
+    if (error) {
+      console.error('[prizes-cat] error', { scope: 'toggle', message: error.message });
+      toast.error('Failed to update category');
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ['categories', id] });
+  };
+
+  // Save category prizes mutation
+  const saveCategoryPrizesMutation = useMutation({
+    mutationFn: async ({ categoryId, delta }: { categoryId: string; delta: PrizeDelta }) => {
+      console.log('[prizes-cat] save category', { 
+        categoryId, 
+        inserts: delta.inserts.length, 
+        updates: delta.updates.length, 
+        deletes: delta.deletes.length 
+      });
+
+      // client-side duplicate guard
+      const places = [...delta.inserts.map(p => p.place), ...delta.updates.map(p => p.place)];
+      const seen = new Set<number>(), dup = new Set<number>();
+      for (const n of places) { 
+        if (seen.has(n)) dup.add(n); 
+        seen.add(n); 
       }
-      
-      const { data, error } = await supabase
-        .from('prizes')
-        .insert(prizeData)
-        .select('id, place, cash_amount, has_trophy, has_medal, category_id')
-        .single();
-      
-      // Check for DB unique constraint violation
-      if (error) {
-        if (String(error.message).includes("prizes_category_id_place_key")) {
-          throw new Error("Duplicate place in this category. Each place must be unique.");
+      if (dup.size) throw new Error('Each place must be unique within the category.');
+
+      const ops = [];
+      if (delta.deletes.length) {
+        ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
+      }
+      if (delta.inserts.length) {
+        const rows = delta.inserts.map(p => ({
+          category_id: categoryId,
+          place: p.place,
+          cash_amount: p.cash_amount,
+          has_trophy: p.has_trophy,
+          has_medal: p.has_medal,
+          is_active: p.is_active ?? true
+        }));
+        ops.push(supabase.from('prizes').insert(rows).then(r => r));
+      }
+      if (delta.updates.length) {
+        for (const p of delta.updates) {
+          ops.push(
+            supabase.from('prizes').update({
+              place: p.place,
+              cash_amount: p.cash_amount,
+              has_trophy: p.has_trophy,
+              has_medal: p.has_medal,
+              is_active: p.is_active ?? true
+            }).eq('id', p.id).then(r => r)
+          );
         }
-        throw error;
       }
-      
-      return data;
+
+      const results = await Promise.all(ops);
+      for (const r of results) {
+        if (r?.error) {
+          const msg = r.error.message || 'Unknown error';
+          if (String(msg).includes('prizes_category_id_place_key') || r.error.code === '23505') {
+            throw new Error('Each place must be unique within the category.');
+          }
+          throw new Error(msg);
+        }
+      }
     },
-    onSuccess: (data) => {
-      console.log('[prizes] prize added', data);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success(`Prize #${data.place} added successfully`);
-      setPrizeDialog({open: false, categoryId: null});
     },
     onError: (error: any) => {
-      console.error('[prizes] add prize error', error);
-      showError({
-        title: "Failed to add prize",
-        message: error?.message || "Unknown error",
-        hint: "Check that the place number is unique within this category."
-      });
-      toast.error(error?.message || 'Failed to add prize');
+      console.error('[prizes-cat] error', { scope: 'category', message: error?.message });
+      toast.error(error?.message || 'Failed to save prizes');
     }
-  });
-
-  // Delete prize mutation
-  const deletePrizeMutation = useMutation({
-    mutationFn: async (prizeId: string) => {
-      const { error } = await supabase.from('prizes').delete().eq('id', prizeId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Prize deleted');
-    },
-    onError: (e: any) => toast.error(e.message || 'Failed to delete prize'),
-  });
-
-  // Update prize mutation
-  const updatePrizeMutation = useMutation({
-    mutationFn: async ({
-      id,
-      ...patch
-    }: {
-      id: string;
-      place?: number;
-      cash_amount?: number;
-      has_trophy?: boolean;
-      has_medal?: boolean;
-    }) => {
-      const { error } = await supabase.from('prizes').update(patch).eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Prize updated successfully');
-      setEditPrizeDialog({ open: false, prize: null, categoryId: null });
-    },
-    onError: (e: any) => toast.error(e.message || 'Failed to update prize'),
   });
 
   // Save criteria mutation
@@ -944,234 +936,17 @@ export default function TournamentSetup() {
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   </div>
                 ) : categories && categories.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {categories.filter(c => !c.is_main).map((cat) => (
-                      <div
+                      <CategoryPrizesEditor
                         key={cat.id}
-                        className="border border-border rounded-lg p-4 space-y-3"
-                      >
-                        {/* Header */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-foreground mb-1">{cat.name}</h4>
-                            {/* Criteria Summary */}
-                            {(() => {
-                              const criteria = cat.criteria_json as any;
-                              if (!criteria || Object.keys(criteria).length === 0) return null;
-                              return (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  {/* DOB */}
-                                  {criteria.dob_on_or_after && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      DOB ≥ {criteria.dob_on_or_after}
-                                    </Badge>
-                                  )}
-
-                                  {/* Rating */}
-                                  {(criteria.min_rating || criteria.max_rating) && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Rating: {criteria.min_rating ?? "0"}–{criteria.max_rating ?? "∞"}
-                                    </Badge>
-                                  )}
-
-                                  {/* Unrated – always explicit when defined */}
-                                  {typeof criteria.include_unrated !== "undefined" && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Unrated: {criteria.include_unrated === false ? "Excluded" : "Included"}
-                                    </Badge>
-                                  )}
-
-                                  {/* Disability */}
-                                  {Array.isArray(criteria.disability_types) && criteria.disability_types.length > 0 && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Disability: {criteria.disability_types.join(", ")}
-                                    </Badge>
-                                  )}
-
-                                  {/* Cities */}
-                                  {Array.isArray(criteria.allowed_cities) && criteria.allowed_cities.length > 0 && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Cities: {criteria.allowed_cities.join(", ")}
-                                    </Badge>
-                                  )}
-
-                                  {/* Clubs */}
-                                  {Array.isArray(criteria.allowed_clubs) && criteria.allowed_clubs.length > 0 && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Clubs: {criteria.allowed_clubs.join(", ")}
-                                    </Badge>
-                                  )}
-
-                                  {/* Gender */}
-                                  {criteria.gender && (
-                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                      Gender: {String(criteria.gender).toUpperCase()}
-                                    </Badge>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                          {isOrganizer && (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setCriteriaSheet({ open: true, category: cat })}
-                              >
-                                Edit Rules
-                              </Button>
-                              {cat.id && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setPrizeDialog({ open: true, categoryId: cat.id })}
-                                >
-                                  Add Prize
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setDupDialog({ open: true, sourceId: cat.id })}
-                              >
-                                Duplicate
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                                disabled={deleteCategoryMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Prize List with Inline Editor */}
-                        <div className="mt-3 rounded bg-muted/30 p-3">
-                          {(cat.prizes?.length ?? 0) === 0 ? (
-                            <p className="text-sm text-muted-foreground">No prizes added yet.</p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {[...cat.prizes]
-                                .sort((a, b) => a.place - b.place)
-                                .map((p) => {
-                                  const isEditing = inlineEditPrizeId === p.id;
-                                  return (
-                                    <li
-                                      key={p.id}
-                                      className="flex items-center justify-between text-sm gap-2"
-                                    >
-                                      {!isEditing ? (
-                                        <>
-                                          <span>
-                                            <strong>#{p.place}</strong> — ₹{Number(p.cash_amount || 0)}
-                                            {p.has_trophy && ' · 🏆 Trophy'}
-                                            {p.has_medal && ' · 🥇 Medal'}
-                                          </span>
-                                          {isOrganizer && (
-                                            <div className="flex gap-2">
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                  setInlineEditPrizeId(p.id);
-                                                  setInlineDraft({
-                                                    place: p.place,
-                                                    cash_amount: Number(p.cash_amount || 0),
-                                                    has_trophy: !!p.has_trophy,
-                                                    has_medal: !!p.has_medal,
-                                                  });
-                                                }}
-                                              >
-                                                Edit
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="destructive"
-                                                onClick={() => deletePrizeMutation.mutate(p.id)}
-                                                disabled={deletePrizeMutation.isPending}
-                                              >
-                                                Delete
-                                              </Button>
-                                            </div>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <>
-                                          <div className="flex items-center gap-2 flex-wrap flex-1">
-                                            <div className="flex items-center gap-1">
-                                              <Label className="text-xs">Place</Label>
-                                              <Input
-                                                type="number"
-                                                className="w-16 h-8 px-2 text-sm"
-                                                value={inlineDraft.place ?? 1}
-                                                onChange={(e) => setInlineDraft(d => ({ ...d, place: Number(e.target.value || 0) }))}
-                                              />
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                              <Label className="text-xs">₹</Label>
-                                              <Input
-                                                type="number"
-                                                className="w-24 h-8 px-2 text-sm"
-                                                value={inlineDraft.cash_amount ?? 0}
-                                                onChange={(e) => setInlineDraft(d => ({ ...d, cash_amount: Number(e.target.value || 0) }))}
-                                              />
-                                            </div>
-                                            <label className="flex items-center gap-1 text-xs">
-                                              <Checkbox
-                                                checked={!!inlineDraft.has_trophy}
-                                                onCheckedChange={(checked) => setInlineDraft(d => ({ ...d, has_trophy: !!checked }))}
-                                              />
-                                              Trophy
-                                            </label>
-                                            <label className="flex items-center gap-1 text-xs">
-                                              <Checkbox
-                                                checked={!!inlineDraft.has_medal}
-                                                onCheckedChange={(checked) => setInlineDraft(d => ({ ...d, has_medal: !!checked }))}
-                                              />
-                                              Medal
-                                            </label>
-                                          </div>
-                                          <div className="flex gap-2">
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                if (!inlineEditPrizeId) return;
-                                                updatePrizeMutation.mutate({
-                                                  id: inlineEditPrizeId,
-                                                  place: inlineDraft.place ?? 1,
-                                                  cash_amount: inlineDraft.cash_amount ?? 0,
-                                                  has_trophy: !!inlineDraft.has_trophy,
-                                                  has_medal: !!inlineDraft.has_medal,
-                                                });
-                                                setInlineEditPrizeId(null);
-                                              }}
-                                            >
-                                              Save
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => {
-                                                setInlineEditPrizeId(null);
-                                                setInlineDraft({});
-                                              }}
-                                            >
-                                              Cancel
-                                            </Button>
-                                          </div>
-                                        </>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
+                        category={cat}
+                        onSave={(categoryId, delta) => 
+                          saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
+                        }
+                        onToggleCategory={toggleCategoryActive}
+                        isOrganizer={isOrganizer}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -1256,162 +1031,6 @@ export default function TournamentSetup() {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Add Prize Dialog */}
-      <Dialog open={prizeDialog.open} onOpenChange={(open) => setPrizeDialog({open, categoryId: prizeDialog.categoryId})}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Prize</DialogTitle>
-            <DialogDescription>Add a prize to this category</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Place/Rank</Label>
-              <Input 
-                id="prize-place"
-                type="number" 
-                min="1" 
-                defaultValue="1"
-              />
-            </div>
-            <div>
-              <Label>Cash Amount</Label>
-              <Input 
-                id="prize-cash"
-                type="number" 
-                min="0" 
-                defaultValue="0"
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox id="prize-trophy" />
-                <Label htmlFor="prize-trophy">Trophy</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="prize-medal" />
-                <Label htmlFor="prize-medal">Medal</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              onClick={() => {
-                const place = Number((document.getElementById('prize-place') as HTMLInputElement)?.value || 1);
-                const cash = Number((document.getElementById('prize-cash') as HTMLInputElement)?.value || 0);
-                const trophy = (document.getElementById('prize-trophy') as HTMLInputElement)?.checked || false;
-                const medal = (document.getElementById('prize-medal') as HTMLInputElement)?.checked || false;
-                
-                if (prizeDialog.categoryId) {
-                  // Check for duplicate place in this category
-                  const category = categories?.find(c => c.id === prizeDialog.categoryId);
-                  const existingPlaces = new Set((category?.prizes || []).map((p: any) => p.place));
-                  
-                  if (existingPlaces.has(place)) {
-                    toast.error(`Place #${place} already exists in this category`);
-                    return;
-                  }
-                  
-                  addPrizeMutation.mutate({
-                    category_id: prizeDialog.categoryId,
-                    place,
-                    cash_amount: cash,
-                    has_trophy: trophy,
-                    has_medal: medal
-                  });
-                }
-              }}
-              disabled={addPrizeMutation.isPending}
-            >
-              {addPrizeMutation.isPending ? 'Adding...' : 'Add Prize'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Prize Dialog */}
-      <Dialog
-        open={editPrizeDialog.open}
-        onOpenChange={(open) =>
-          setEditPrizeDialog({ open, prize: null, categoryId: null })
-        }
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Prize</DialogTitle>
-            <DialogDescription>Update prize details</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Place/Rank</Label>
-              <Input
-                id="edit-prize-place"
-                type="number"
-                min="1"
-                defaultValue={editPrizeDialog.prize?.place || 1}
-              />
-            </div>
-            <div>
-              <Label>Cash Amount</Label>
-              <Input
-                id="edit-prize-cash"
-                type="number"
-                min="0"
-                defaultValue={editPrizeDialog.prize?.cash_amount || 0}
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="edit-prize-trophy"
-                  defaultChecked={editPrizeDialog.prize?.has_trophy}
-                />
-                <Label htmlFor="edit-prize-trophy">Trophy</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="edit-prize-medal"
-                  defaultChecked={editPrizeDialog.prize?.has_medal}
-                />
-                <Label htmlFor="edit-prize-medal">Medal</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                const place = Number(
-                  (document.getElementById('edit-prize-place') as HTMLInputElement)
-                    ?.value || 1
-                );
-                const cash = Number(
-                  (document.getElementById('edit-prize-cash') as HTMLInputElement)
-                    ?.value || 0
-                );
-                const trophy =
-                  (document.getElementById('edit-prize-trophy') as HTMLInputElement)
-                    ?.checked || false;
-                const medal =
-                  (document.getElementById('edit-prize-medal') as HTMLInputElement)
-                    ?.checked || false;
-
-                if (editPrizeDialog.prize?.id) {
-                  updatePrizeMutation.mutate({
-                    id: editPrizeDialog.prize.id,
-                    place,
-                    cash_amount: cash,
-                    has_trophy: trophy,
-                    has_medal: medal,
-                  });
-                }
-              }}
-              disabled={updatePrizeMutation.isPending}
-            >
-              {updatePrizeMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Duplicate Category Dialog */}
       <Dialog 
