@@ -138,7 +138,31 @@ export default function PlayerImport() {
     toast.success("Template downloaded");
   };
 
+  const handleResetImport = () => {
+    // Clear all working state so we can start fresh
+    setParsedData([]);
+    setHeaders([]);
+    setMappedPlayers([]);
+    setValidationErrors([]);
+    setDuplicates([]);
+    setParseError(null);
+    setParseStatus('idle');
+    setShowMappingDialog(false);
+    setIsParsing(false);
+
+    // Also clear file input so the same file can be picked again
+    const input = document.getElementById('players-file-input') as HTMLInputElement | null;
+    if (input) input.value = '';
+    
+    toast.info('Import reset — you can choose a file again.');
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isParsing) {
+      toast.info('Already processing a file…');
+      return;
+    }
+    
     const selectedFile = e.target.files?.[0];
     console.log('[import] file selected:', selectedFile?.name, selectedFile?.type, selectedFile?.size);
     
@@ -146,6 +170,13 @@ export default function PlayerImport() {
       toast.error('No file selected');
       return;
     }
+    
+    // Clear previous run's state so UI can't show stale errors/results
+    setParseError(null);
+    setValidationErrors([]);
+    setDuplicates([]);
+    setMappedPlayers([]);
+    setParseStatus('idle');
     
     toast.info(`Uploading ${selectedFile.name}...`);
 
@@ -416,14 +447,26 @@ export default function PlayerImport() {
                       accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       onChange={handleFileSelect}
                       className="hidden"
-                      id="csv-upload"
+                      id="players-file-input"
                       disabled={isParsing}
                     />
-                    <label htmlFor="csv-upload">
-                      <Button asChild disabled={isParsing}>
-                        <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
-                      </Button>
-                    </label>
+                    <div className="flex items-center justify-center gap-3">
+                      <label htmlFor="players-file-input">
+                        <Button asChild disabled={isParsing}>
+                          <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
+                        </Button>
+                      </label>
+                      {(mappedPlayers.length > 0 || parseError || validationErrors.length > 0) && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleResetImport}
+                          disabled={isParsing || importPlayersMutation.isPending}
+                        >
+                          Reset Import
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground mt-4">
                       Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city, disability, special_notes.
                     </p>

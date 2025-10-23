@@ -34,6 +34,10 @@ export function usePapaParser() {
       // 🔍 DIAGNOSTIC: Log available sheets
       console.log('[parseExcel] Available sheets:', wb.SheetNames);
       
+      if (!wb.SheetNames || wb.SheetNames.length === 0) {
+        throw new Error('No sheets found in this workbook.');
+      }
+      
       const wsName = wb.SheetNames[0];
       console.log('[parseExcel] Selected sheet:', wsName);
       
@@ -45,10 +49,18 @@ export function usePapaParser() {
       // 🔍 DIAGNOSTIC: Log raw first row
       console.log('[parseExcel] Raw first row:', asRows[0]);
       
+      if (!asRows.length || !asRows[0] || (Array.isArray(asRows[0]) && asRows[0].every((c: any) => String(c ?? '').trim() === ''))) {
+        throw new Error('No header row found. Please use the provided template and ensure row 1 has headers.');
+      }
+      
       const headers = normalizeHeaders(asRows[0] || []);
       
       // 🔍 DIAGNOSTIC: Log normalized headers
       console.log('[parseExcel] Normalized headers:', headers);
+      
+      if (!headers.length) {
+        throw new Error('Could not detect any headers. Please verify the template.');
+      }
 
       // Get data as objects using inferred headers
       const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
