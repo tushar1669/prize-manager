@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { Trash2, Plus, Save, Trophy, Medal, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,16 @@ export interface PrizeDelta {
   deletes: string[];
 }
 
+export interface CategoryPrizesEditorHandle {
+  categoryId: string;
+  computeDelta: () => PrizeDelta;
+  validate: () => string | null;
+  hasDirty: () => boolean;
+  markSaved: () => void;
+}
+
+export type CategoryPrizesEditorRef = React.RefObject<CategoryPrizesEditorHandle>;
+
 interface Props {
   category: CategoryRow;
   onSave: (categoryId: string, delta: PrizeDelta) => Promise<any>;
@@ -44,7 +54,8 @@ interface Props {
   isOrganizer: boolean;
 }
 
-export default function CategoryPrizesEditor({ category, onSave, onToggleCategory, isOrganizer }: Props) {
+const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
+  ({ category, onSave, onToggleCategory, isOrganizer }, ref) => {
   const [draft, setDraft] = useState<PrizeRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
@@ -84,6 +95,22 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
     const hasDirty = draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted');
     setDirty(`cat-${category.id}`, hasDirty);
   }, [draft, category.id, setDirty]);
+
+  // Expose imperative API via ref
+  useImperativeHandle(ref, () => ({
+    categoryId: category.id,
+    computeDelta,
+    validate: validationError,
+    hasDirty: () => draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted'),
+    markSaved: () => {
+      const cleaned = draft
+        .filter(p => p._status !== 'deleted')
+        .map(p => ({ ...p, _status: 'clean' as const }));
+      setDraft(cleaned);
+      setLastSaved(cleaned);
+      resetDirty(`cat-${category.id}`);
+    },
+  }), [category.id, draft, resetDirty]);
 
   const nextPlace = useMemo(() => {
     const places = draft.filter(p => p._status !== 'deleted').map(p => Number(p.place) || 0);
@@ -352,4 +379,8 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
       </CardContent>
     </Card>
   );
-}
+});
+
+CategoryPrizesEditor.displayName = 'CategoryPrizesEditor';
+
+export default CategoryPrizesEditor;

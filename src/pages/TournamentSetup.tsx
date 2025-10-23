@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import React from 'react';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -20,14 +21,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
-import CategoryPrizesEditor, { PrizeDelta } from '@/components/prizes/CategoryPrizesEditor';
+import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
 import { useDirty } from "@/contexts/DirtyContext";
 
 export default function TournamentSetup() {
@@ -61,6 +62,15 @@ export default function TournamentSetup() {
     sourceId: string | null;
   }>({ open: false, sourceId: null });
   const [savingAll, setSavingAll] = useState(false);
+  const editorRefs = useRef(new Map<string, React.RefObject<CategoryPrizesEditorHandle>>());
+
+  // Helper to get/create editor refs
+  const getEditorRef = (catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
+    if (!editorRefs.current.has(catId)) {
+      editorRefs.current.set(catId, React.createRef());
+    }
+    return editorRefs.current.get(catId)!;
+  };
 
   // Details form
   const detailsForm = useForm<TournamentDetailsForm>({
@@ -478,6 +488,177 @@ export default function TournamentSetup() {
     },
     onError: (e: any) => toast.error(e.message || 'Failed to save rules'),
   });
+
+  // Save All Categories handler
+  const handleSaveAllCategories = async () => {
+    clearError();
+    
+    // Step 1: Collect & Validate
+    const dirtyRefs: Array<{
+      ref: React.RefObject<CategoryPrizesEditorHandle>;
+      categoryId: string;
+      categoryName: string;
+    }> = [];
+    const validationErrors: Array<{ categoryId: string; categoryName: string; message: string }> = [];
+
+    for (const [catId, ref] of editorRefs.current.entries()) {
+      const handle = ref.current;
+      if (!handle || !handle.hasDirty()) continue;
+      
+      const cat = categories?.find(c => c.id === catId);
+      if (!cat) continue;
+      
+      const error = handle.validate();
+      if (error) {
+        console.error('[prizes-cat] save all validate error', { categoryId: catId, message: error });
+        validationErrors.push({ categoryId: catId, categoryName: cat.name, message: error });
+      } else {
+        dirtyRefs.push({ ref, categoryId: catId, categoryName: cat.name });
+      }
+    }
+
+    // Abort if validation errors
+    if (validationErrors.length > 0) {
+      const errorList = validationErrors.map(e => `• ${e.categoryName}: ${e.message}`).join('\n');
+      showError({
+        title: 'Validation Errors',
+        message: `${validationErrors.length} ${validationErrors.length === 1 ? 'category has' : 'categories have'} validation errors.`,
+        hint: `Fix the errors below before saving:\n\n${errorList}`,
+      });
+      toast.error('Cannot save: validation errors present');
+      return;
+    }
+
+    // Nothing to save
+    if (dirtyRefs.length === 0) {
+      toast.info('Nothing to save');
+      return;
+    }
+
+    console.log('[prizes-cat] save all start', { total: categories?.length || 0, dirty: dirtyRefs.length });
+
+    setSavingAll(true);
+
+    // Step 2: Execute saves with partial failure handling
+    const savePromises = dirtyRefs.map(async ({ ref, categoryId, categoryName }) => {
+      try {
+        const handle = ref.current;
+        if (!handle) throw new Error('Handle lost');
+        
+        const delta = handle.computeDelta();
+        console.log('[prizes-cat] save all processing', { 
+          categoryId, 
+          inserts: delta.inserts.length, 
+          updates: delta.updates.length, 
+          deletes: delta.deletes.length 
+        });
+        
+        // Build operations in order: delete → update → insert
+        const ops = [];
+        
+        if (delta.deletes.length) {
+          ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
+        }
+        
+        if (delta.updates.length) {
+          for (const p of delta.updates) {
+            ops.push(
+              supabase.from('prizes').update({
+                place: p.place,
+                cash_amount: p.cash_amount,
+                has_trophy: p.has_trophy,
+                has_medal: p.has_medal,
+                is_active: p.is_active ?? true
+              }).eq('id', p.id).then(r => r)
+            );
+          }
+        }
+        
+        if (delta.inserts.length) {
+          const rows = delta.inserts.map(p => ({
+            category_id: categoryId,
+            place: p.place,
+            cash_amount: p.cash_amount,
+            has_trophy: p.has_trophy,
+            has_medal: p.has_medal,
+            is_active: p.is_active ?? true
+          }));
+          ops.push(supabase.from('prizes').insert(rows).select('id').then(r => r));
+        }
+        
+        const results = await Promise.all(ops);
+        
+        for (const result of results) {
+          if (result.error) {
+            const msg = result.error.message || 'Unknown error';
+            if (String(msg).includes('prizes_category_id_place_key') || result.error.code === '23505') {
+              throw new Error('Each place must be unique within the category.');
+            }
+            throw new Error(msg);
+          }
+        }
+        
+        console.log('[prizes-cat] save all ok', { categoryId });
+        return { ok: true, categoryId, categoryName };
+        
+      } catch (error: any) {
+        console.error('[prizes-cat] save all fail', { categoryId, message: error?.message });
+        return { ok: false, categoryId, categoryName, message: error?.message || 'Unknown error' };
+      }
+    });
+
+    const results = await Promise.allSettled(savePromises);
+
+    // Step 3: Process results
+    const successes: Array<{ categoryId: string; categoryName: string }> = [];
+    const failures: Array<{ categoryId: string; categoryName: string; message: string }> = [];
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        const { ok, categoryId, categoryName, message } = result.value;
+        if (ok) {
+          successes.push({ categoryId, categoryName });
+          const ref = editorRefs.current.get(categoryId);
+          ref?.current?.markSaved();
+        } else {
+          failures.push({ categoryId, categoryName, message: message || 'Unknown error' });
+        }
+      } else {
+        failures.push({ 
+          categoryId: 'unknown', 
+          categoryName: 'Unknown', 
+          message: result.reason?.message || 'Promise rejected' 
+        });
+      }
+    }
+
+    console.log('[prizes-cat] save all done', { ok: successes.length, fail: failures.length });
+
+    setSavingAll(false);
+
+    await queryClient.invalidateQueries({ queryKey: ['categories', id] });
+
+    // Display results
+    if (failures.length === 0) {
+      toast.success('All categories saved');
+    } else if (successes.length > 0) {
+      const failureList = failures.map(f => `• ${f.categoryName}: ${f.message}`).join('\n');
+      showError({
+        title: 'Some categories failed to save',
+        message: `${failures.length} of ${dirtyRefs.length} categories failed.`,
+        hint: `Fix the errors below, then retry. Successful categories (${successes.length}) are already saved.\n\n${failureList}`,
+      });
+      toast.error('Some categories failed to save');
+    } else {
+      const failureList = failures.map(f => `• ${f.categoryName}: ${f.message}`).join('\n');
+      showError({
+        title: 'All categories failed to save',
+        message: `${failures.length} ${failures.length === 1 ? 'category' : 'categories'} failed.`,
+        hint: `Fix the errors below:\n\n${failureList}`,
+      });
+      toast.error('All categories failed to save');
+    }
+  };
 
   // Copy prizes helper
   const copyPrizesForCategory = async (sourceCategoryId: string, targetCategoryId: string) => {
@@ -919,10 +1100,24 @@ export default function TournamentSetup() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          disabled
-                          onClick={() => toast.info('"Save All Categories" coming soon')}
+                          disabled={savingAll || !categories?.length}
+                          onClick={handleSaveAllCategories}
+                          title="Saves all edited category prizes in one go"
                         >
-                          Save All (coming soon)
+                          {savingAll ? (
+                            <>
+                              <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                              </svg>
+                              Saving All…
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              Save All Categories
+                            </>
+                          )}
                         </Button>
                         <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
                           <DialogTrigger asChild>
@@ -1006,6 +1201,7 @@ export default function TournamentSetup() {
                     {categories.filter(c => !c.is_main).map((cat) => (
                       <CategoryPrizesEditor
                         key={cat.id}
+                        ref={getEditorRef(cat.id)}
                         category={cat}
                         onSave={(categoryId, delta) => 
                           saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
