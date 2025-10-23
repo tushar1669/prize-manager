@@ -32,6 +32,7 @@ import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
+import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -41,7 +42,18 @@ export default function TournamentSetup() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
-  const { setDirty, resetDirty, registerOnSave } = useDirty();
+  const { setDirty, resetDirty, registerOnSave, sources } = useDirty();
+
+  // Compute dirty counts for tab indicators
+  const detailsDirty = !!sources['details'];
+  const mainPrizesDirty = !!sources['main-prizes'];
+  const categoryPrizesCount = Object.keys(sources).filter(k => k.startsWith('cat-')).length;
+  const prizesDirtyCount = (mainPrizesDirty ? 1 : 0) + categoryPrizesCount;
+
+  console.log('[dirty] tabs counts', { 
+    details: detailsDirty, 
+    prizes: prizesDirtyCount
+  });
   
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
@@ -223,17 +235,18 @@ export default function TournamentSetup() {
   // Track Criteria sheet dirty state (only when draft differs from saved)
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
-      const isDirty = JSON.stringify(criteriaSheet.category.criteria_json) !== JSON.stringify(savedCriteria);
+      const isDirty = !deepEqualNormalized(criteriaSheet.category.criteria_json, savedCriteria);
+      console.log('[criteria] normalized-diff dirty=', isDirty);
       setDirty('criteria-sheet', isDirty);
     } else {
       resetDirty('criteria-sheet');
     }
   }, [criteriaSheet, savedCriteria, setDirty, resetDirty]);
 
-  // Initialize savedCriteria when criteria sheet opens
+  // Initialize savedCriteria when criteria sheet opens (normalize for stable comparison)
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
-      setSavedCriteria(criteriaSheet.category.criteria_json);
+      setSavedCriteria(normalizeCriteria(criteriaSheet.category.criteria_json));
     }
   }, [criteriaSheet.open]);
 
@@ -641,6 +654,22 @@ export default function TournamentSetup() {
     return () => registerOnSave(null);
   }, [activeTab, registerOnSave, handleSaveAllCategories]);
 
+  // Register Details tab save handler for Cmd/Ctrl+S
+  useEffect(() => {
+    if (activeTab === 'details') {
+      const saveDetailsHandler = async () => {
+        if (!detailsForm.formState.isDirty) return;
+        console.log('[shortcut] saving details');
+        const values = detailsForm.getValues();
+        await updateTournamentMutation.mutateAsync(values);
+      };
+      registerOnSave(saveDetailsHandler);
+    }
+    return () => {
+      if (activeTab === 'details') registerOnSave(null);
+    };
+  }, [activeTab, detailsForm, updateTournamentMutation, registerOnSave]);
+
   // Copy prizes helper
   const copyPrizesForCategory = async (sourceCategoryId: string, targetCategoryId: string) => {
     const { data: srcPrizes, error } = await supabase
@@ -786,8 +815,16 @@ export default function TournamentSetup() {
 
         <Tabs value={activeTab} onValueChange={(v) => navigate(`/t/${id}/setup?tab=${v}`)}>
           <TabsList className="mb-6">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="prizes">Prize Structure</TabsTrigger>
+            <TabsTrigger value="details">
+              Details{detailsDirty && <span className="ml-1 text-amber-500">•</span>}
+            </TabsTrigger>
+            <TabsTrigger value="prizes">
+              Prize Structure{prizesDirtyCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                  {prizesDirtyCount}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-6">

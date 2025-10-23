@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
+import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import TournamentSetup from "./pages/TournamentSetup";
@@ -35,6 +36,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <NavigationGuard />
+          <GlobalShortcuts />
           <Routes>
           {/* Public routes (no auth required) */}
           <Route path="/" element={<PublicHome />} />

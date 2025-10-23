@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +24,46 @@ export function UnsavedChangesDialog({
   onLeave,
   onSaveAndContinue,
 }: UnsavedChangesDialogProps) {
+  const previousActiveRef = useRef<HTMLElement | null>(null);
+  const dialogTitleId = 'unsaved-changes-title';
+  const dialogDescId = 'unsaved-changes-desc';
+
+  // Focus management
+  useEffect(() => {
+    if (open) {
+      console.log('[a11y] dialog opened');
+      previousActiveRef.current = document.activeElement as HTMLElement;
+      
+      // Focus first focusable element after a brief delay (let dialog render)
+      setTimeout(() => {
+        const firstButton = document.querySelector('[role="dialog"] button');
+        if (firstButton instanceof HTMLElement) {
+          firstButton.focus();
+        }
+      }, 100);
+    } else if (previousActiveRef.current) {
+      console.log('[a11y] dialog closed, restoring focus');
+      previousActiveRef.current.focus();
+      previousActiveRef.current = null;
+    }
+  }, [open]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        console.log('[a11y] escape pressed → stay');
+        e.preventDefault();
+        onStay();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onStay]);
+
   const handleSaveAndContinue = async () => {
     if (onSaveAndContinue) {
       console.log('[guard] save-and-continue initiated');
@@ -39,10 +80,15 @@ export function UnsavedChangesDialog({
 
   return (
     <AlertDialog open={open}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        aria-labelledby={dialogTitleId}
+        aria-describedby={dialogDescId}
+      >
         <AlertDialogHeader>
-          <AlertDialogTitle>You have unsaved changes</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle id={dialogTitleId}>
+            You have unsaved changes
+          </AlertDialogTitle>
+          <AlertDialogDescription id={dialogDescId}>
             If you leave now, your changes will be lost.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -55,7 +101,10 @@ export function UnsavedChangesDialog({
           <AlertDialogCancel onClick={onStay} className="m-0">
             Stay on page
           </AlertDialogCancel>
-          <AlertDialogAction onClick={onLeave} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+          <AlertDialogAction 
+            onClick={onLeave} 
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
             Leave without saving
           </AlertDialogAction>
         </AlertDialogFooter>

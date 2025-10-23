@@ -290,10 +290,17 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
             onCheckedChange={(val: boolean) => onToggleCategory(category.id, !!val)}
             aria-label={`Include ${category.name}`}
           />
-          <CardTitle className="text-lg">{category.name}</CardTitle>
-          {category.is_main && (
-            <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5">Main</span>
-          )}
+          <CardTitle className="text-lg flex items-center gap-2">
+            {category.name}
+            {category.is_main && (
+              <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5">Main</span>
+            )}
+            {hasDirty && (
+              <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-amber-100 text-amber-700 border border-amber-200">
+                Unsaved
+              </span>
+            )}
+          </CardTitle>
         </div>
       </CardHeader>
       <CardContent>
@@ -369,7 +376,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                         <Checkbox
                           checked={!!row.has_trophy}
                           onCheckedChange={(val) => markDirty(rowIndex, { has_trophy: !!val })}
-                          aria-label="Has trophy"
+                          aria-label={`Toggle trophy for place ${row.place}`}
                         />
                         <Trophy className="h-4 w-4 opacity-70" />
                       </div>
@@ -379,7 +386,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                         <Checkbox
                           checked={!!row.has_medal}
                           onCheckedChange={(val) => markDirty(rowIndex, { has_medal: !!val })}
-                          aria-label="Has medal"
+                          aria-label={`Toggle medal for place ${row.place}`}
                         />
                         <Medal className="h-4 w-4 opacity-70" />
                       </div>
@@ -388,14 +395,15 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                       <Checkbox
                         checked={!!row.is_active}
                         onCheckedChange={() => handleTogglePrizeActive(rowIndex)}
-                        aria-label="Prize active"
+                        aria-label={`Toggle active for place ${row.place}`}
                       />
                     </td>
                     <td className="py-2 pl-4">
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`Remove prize ${row.place}`}
+                        aria-label={`Delete prize place ${row.place}`}
+                        title={`Delete prize place ${row.place}`}
                         onClick={() => handleRemove(rowIndex)}
                       >
                         <Trash2 className="h-4 w-4" />

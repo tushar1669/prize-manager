@@ -56,7 +56,7 @@ export default function CategoryOrderReview() {
   const [cats, setCats] = useState<Category[]>([]);
   const [lastSavedOrder, setLastSavedOrder] = useState<Category[]>([]);
   const { error, showError, clearError } = useErrorPanel();
-  const { setDirty, resetDirty } = useDirty();
+  const { setDirty, resetDirty, registerOnSave } = useDirty();
 
   // Autosave state
   const orderDraftKey = makeKey(`t:${id}:order-review`);
@@ -224,6 +224,22 @@ export default function CategoryOrderReview() {
       setSaving(false);
     }
   };
+
+  // Register save handler for global shortcut (after handleConfirm is defined)
+  useEffect(() => {
+    if (!isDirty) {
+      registerOnSave(null);
+      return;
+    }
+    
+    const saveHandler = async () => {
+      console.log('[shortcut] saving order review');
+      await handleConfirm();
+    };
+    registerOnSave(saveHandler);
+    
+    return () => registerOnSave(null);
+  }, [isDirty, handleConfirm, registerOnSave]);
 
   // Sortable category item component
   function SortableCategoryItem({
