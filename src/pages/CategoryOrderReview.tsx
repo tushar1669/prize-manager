@@ -7,8 +7,22 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppNav } from '@/components/AppNav';
 import { Trophy, Medal, GripVertical } from 'lucide-react';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { 
+  DndContext, 
+  closestCenter, 
+  PointerSensor, 
+  KeyboardSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent 
+} from '@dnd-kit/core';
+import { 
+  SortableContext, 
+  useSortable, 
+  arrayMove, 
+  verticalListSortingStrategy, 
+  sortableKeyboardCoordinates 
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
@@ -72,17 +86,17 @@ export default function CategoryOrderReview() {
     })();
   }, [id]);
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    setCats(prev => {
-      const oldIdx = prev.findIndex(c => c.id === active.id);
-      const newIdx = prev.findIndex(c => c.id === over.id);
+    setCats((prev: Category[]) => {
+      const oldIdx = prev.findIndex((c: Category) => c.id === active.id);
+      const newIdx = prev.findIndex((c: Category) => c.id === over.id);
       if (oldIdx < 0 || newIdx < 0) return prev;
 
       const reordered = arrayMove(prev, oldIdx, newIdx);
-      console.log('[order-review] dnd end', reordered.map((c, i) => ({ id: c.id, name: c.name, order: i })));
+      console.log('[order-review] dnd end', reordered.map((c: Category, i: number) => ({ id: c.id, name: c.name, order: i })));
       return reordered;
     });
   };
