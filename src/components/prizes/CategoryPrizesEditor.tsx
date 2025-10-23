@@ -50,12 +50,27 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
   const { error, showError, clearError } = useErrorPanel();
   const newRowFocusRef = useRef<HTMLInputElement | null>(null);
 
-  // initialize from props
+  // initialize/refresh from props (also when prizes list changes on refetch)
   useEffect(() => {
     const base = (category.prizes || []).map(p => ({ ...p, _status: 'clean' as const }));
-    setDraft(base);
-    setLastSaved(base);
-  }, [category.id]);
+    // Compare by stable shape to avoid clobbering live edits unnecessarily
+    const normalize = (rows: PrizeRow[]) =>
+      JSON.stringify(rows.map(r => ({
+        id: r.id,
+        place: r.place,
+        cash_amount: r.cash_amount,
+        has_trophy: r.has_trophy,
+        has_medal: r.has_medal,
+        is_active: r.is_active,
+      })));
+    const incoming = normalize(base);
+    const current  = normalize(lastSaved);
+    // If server data changed (e.g., inserts now have IDs), adopt it
+    if (incoming !== current) {
+      setDraft(base);
+      setLastSaved(base);
+    }
+  }, [category.id, category.prizes, lastSaved]);
 
   const visibleRows = useMemo(
     () => draft.filter(p => p._status !== 'deleted').sort((a, b) => (a.place || 0) - (b.place || 0)),
@@ -311,7 +326,10 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
-                <X className="h-4 w-4 mr-2 animate-pulse" />
+                <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                </svg>
                 Saving…
               </>
             ) : (

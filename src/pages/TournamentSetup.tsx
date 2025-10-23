@@ -353,20 +353,10 @@ export default function TournamentSetup() {
       }
       if (dup.size) throw new Error('Each place must be unique within the category.');
 
+      // Order: deletes → updates → inserts (avoid unique constraint conflicts)
       const ops = [];
       if (delta.deletes.length) {
         ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
-      }
-      if (delta.inserts.length) {
-        const rows = delta.inserts.map(p => ({
-          category_id: categoryId,
-          place: p.place,
-          cash_amount: p.cash_amount,
-          has_trophy: p.has_trophy,
-          has_medal: p.has_medal,
-          is_active: p.is_active ?? true
-        }));
-        ops.push(supabase.from('prizes').insert(rows).then(r => r));
       }
       if (delta.updates.length) {
         for (const p of delta.updates) {
@@ -380,6 +370,17 @@ export default function TournamentSetup() {
             }).eq('id', p.id).then(r => r)
           );
         }
+      }
+      if (delta.inserts.length) {
+        const rows = delta.inserts.map(p => ({
+          category_id: categoryId,
+          place: p.place,
+          cash_amount: p.cash_amount,
+          has_trophy: p.has_trophy,
+          has_medal: p.has_medal,
+          is_active: p.is_active ?? true
+        }));
+        ops.push(supabase.from('prizes').insert(rows).select('id').then(r => r));
       }
 
       const results = await Promise.all(ops);
@@ -859,14 +860,24 @@ export default function TournamentSetup() {
                     <CardTitle>Category Prizes</CardTitle>
                     <CardDescription>Age, rating, and special categories</CardDescription>
                   </div>
-                  {isOrganizer && (
-                    <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          Add Category
+                  <div className="flex items-center gap-2">
+                    {isOrganizer && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          disabled
+                          onClick={() => toast.info('"Save All Categories" coming soon')}
+                        >
+                          Save All (coming soon)
                         </Button>
-                      </DialogTrigger>
+                        <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline" className="gap-2">
+                              <Plus className="h-4 w-4" />
+                              Add Category
+                            </Button>
+                          </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Add Category</DialogTitle>
@@ -927,7 +938,9 @@ export default function TournamentSetup() {
                       </Form>
                     </DialogContent>
                   </Dialog>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
