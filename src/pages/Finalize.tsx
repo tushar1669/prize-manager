@@ -23,6 +23,50 @@ export default function Finalize() {
   const location = useLocation();
   const winners = (location.state?.winners || []) as Winner[];
 
+  // Block if no winners
+  if (winners.length === 0) {
+    toast.error('No winners to finalize. Resolve conflicts first.', { duration: 5000 });
+    navigate(`/t/${id}/review`);
+  }
+
+  // Fetch players and prizes to show winner details
+  const { data: playersList } = useQuery({
+    queryKey: ['players-finalize', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('players')
+        .select('id, name, rating, dob')
+        .eq('tournament_id', id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id && winners.length > 0
+  });
+
+  const { data: prizesList } = useQuery({
+    queryKey: ['prizes-finalize', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal)')
+        .eq('tournament_id', id);
+      if (error) throw error;
+      
+      const prizes = (data || []).flatMap(cat => 
+        (cat.prizes || []).map((p: any) => ({
+          id: p.id,
+          place: p.place,
+          cash_amount: p.cash_amount,
+          has_trophy: p.has_trophy,
+          has_medal: p.has_medal,
+          category_name: cat.name
+        }))
+      );
+      return prizes;
+    },
+    enabled: !!id && winners.length > 0
+  });
+
   // Fetch next version number
   const { data: nextVersion } = useQuery({
     queryKey: ['next-version', id],
@@ -239,6 +283,49 @@ export default function Finalize() {
               <div className="flex justify-between py-2">
                 <span className="text-muted-foreground">Medals Awarded</span>
                 <span className="font-medium text-foreground">{summary?.medalsAwarded || 0}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Winners Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Winners ({winners.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2">Prize</th>
+                      <th className="text-left p-2">Place</th>
+                      <th className="text-left p-2">Player</th>
+                      <th className="text-left p-2">Rating</th>
+                      <th className="text-left p-2">Amount</th>
+                      <th className="text-left p-2">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {winners.map((winner, idx) => {
+                      const prize = prizesList?.find(p => p.id === winner.prizeId);
+                      const player = playersList?.find(p => p.id === winner.playerId);
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="p-2">{prize?.category_name || 'N/A'}</td>
+                          <td className="p-2">#{prize?.place || 'N/A'}</td>
+                          <td className="p-2">{player?.name || 'N/A'}</td>
+                          <td className="p-2">{player?.rating || 'N/A'}</td>
+                          <td className="p-2">₹{prize?.cash_amount || 0}</td>
+                          <td className="p-2 text-xs text-muted-foreground">
+                            {winner.isManual ? 'Manual' : 'Auto'}
+                            {prize?.has_trophy ? ' 🏆' : ''}
+                            {prize?.has_medal ? ' 🥇' : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

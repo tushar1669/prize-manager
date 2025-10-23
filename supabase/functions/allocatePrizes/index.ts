@@ -276,7 +276,15 @@ Deno.serve(async (req) => {
     console.log(`[allocatePrizes] Completed: ${winners.length} winners, ${conflicts.length} conflicts`);
 
     return new Response(
-      JSON.stringify({ winners, conflicts }),
+      JSON.stringify({ 
+        winners, 
+        conflicts,
+        meta: {
+          playerCount: players.length,
+          prizeCount: allPrizes.length,
+          categoryCount: categories.length
+        }
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 

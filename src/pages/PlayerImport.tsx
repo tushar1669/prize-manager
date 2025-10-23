@@ -88,6 +88,7 @@ export default function PlayerImport() {
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(true);
 
   // Auth & role for organizer guard
   const { user } = useAuth();
@@ -353,6 +354,8 @@ export default function PlayerImport() {
 
   const importPlayersMutation = useMutation({
     mutationFn: async (players: ParsedPlayer[]) => {
+      console.time('[import] transaction');
+      
       // Start from the union of keys we actually have in ParsedPlayer objects
       const extraKeys = new Set<string>();
       players.forEach(p => Object.keys(p).forEach(k => extraKeys.add(k)));
@@ -361,6 +364,21 @@ export default function PlayerImport() {
       let fields = Array.from(extraKeys).filter(k => k !== '_originalIndex');
       if (!fields.includes('rank')) fields.push('rank');
       if (!fields.includes('name')) fields.push('name');
+
+      // Replace: delete existing players if checkbox is ON
+      if (replaceExisting) {
+        console.log('[import] Deleting existing players for tournament', id);
+        const { error: deleteError } = await supabase
+          .from('players')
+          .delete()
+          .eq('tournament_id', id);
+        
+        if (deleteError) {
+          console.error('[import] Delete failed:', deleteError);
+          throw new Error(`Failed to clear existing players: ${deleteError.message}`);
+        }
+        console.log('[import] Existing players cleared');
+      }
 
       // Build row payload factory
       const buildRows = (fieldList: string[]) =>
@@ -387,7 +405,10 @@ export default function PlayerImport() {
         const payload = buildRows(currentFields);
         const { data, error } = await supabase.from('players').insert(payload).select('id');
 
-        if (!error) return data;
+        if (!error) {
+          console.timeEnd('[import] transaction');
+          return data;
+        }
 
         const unknown = extractUnknownColumn(error?.message || '');
         if (unknown && currentFields.includes(unknown)) {
@@ -400,10 +421,12 @@ export default function PlayerImport() {
         break;
       }
 
+      console.timeEnd('[import] transaction');
       throw lastErr || new Error('Insert failed after retries');
     },
     onSuccess: (data) => {
-      toast.success(`${data.length} players imported successfully`);
+      const mode = replaceExisting ? 'replaced previous list' : 'appended';
+      toast.success(`Imported ${data.length} players (${mode})`);
       if (!id) {
         toast.error('Tournament ID missing');
         navigate('/dashboard');
@@ -415,6 +438,36 @@ export default function PlayerImport() {
       const msg = err?.message || 'Import failed';
       console.error('[players import] error', err);
       toast.error(msg);
+    }
+  });
+
+  const clearPlayersMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Tournament ID missing');
+      
+      console.log('[import] Clearing all players for tournament', id);
+      const { error } = await supabase
+        .from('players')
+        .delete()
+        .eq('tournament_id', id);
+      
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      toast.success('Cleared all players for this tournament');
+      // Reset UI state
+      setParsedData([]);
+      setHeaders([]);
+      setMappedPlayers([]);
+      setValidationErrors([]);
+      setDuplicates([]);
+      setParseError(null);
+      setParseStatus('idle');
+    },
+    onError: (err: any) => {
+      console.error('[import] Clear players error:', err);
+      toast.error(`Failed to clear players: ${err.message}`);
     }
   });
 
@@ -628,6 +681,54 @@ export default function PlayerImport() {
                   Download Error Log (JSON)
                 </Button>
               </div>
+            )}
+            
+            {/* Replace existing players checkbox */}
+            <Card className="border-muted">
+              <CardContent className="pt-6 pb-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="replace-existing"
+                    checked={replaceExisting}
+                    onChange={(e) => setReplaceExisting(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="replace-existing" className="text-sm cursor-pointer">
+                    <span className="font-medium">Replace existing players for this tournament</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      Deletes existing players for this tournament before importing
+                    </span>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Danger Zone */}
+            {isOrganizer && (
+              <Card className="border-destructive/30 bg-destructive/5">
+                <CardHeader>
+                  <CardTitle className="text-sm text-destructive">Danger Zone</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear all players for this tournament? This action cannot be undone.')) {
+                        clearPlayersMutation.mutate();
+                      }
+                    }}
+                    disabled={clearPlayersMutation.isPending || importPlayersMutation.isPending}
+                  >
+                    {clearPlayersMutation.isPending ? 'Clearing...' : 'Clear players for this tournament'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    This will permanently delete all player records for this tournament from the database.
+                  </p>
+                </CardContent>
+              </Card>
             )}
             
             <div className="flex justify-end gap-3">
