@@ -9,6 +9,8 @@ import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
 import { toast } from 'sonner';
 import { useDirty } from '@/contexts/DirtyContext';
+import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
+import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 
 export interface PrizeRow {
   id?: string;
@@ -62,6 +64,17 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty } = useDirty();
   const newRowFocusRef = useRef<HTMLInputElement | null>(null);
+  
+  // Autosave state
+  const draftKey = makeKey(`cat:${category.id}:prizes`);
+  const [restore, setRestore] = useState<null | { data: any; ageMs: number }>(null);
+
+  // Check for draft on mount or category change
+  useEffect(() => {
+    const saved = getDraft<any>(draftKey, 1);
+    if (saved) setRestore(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category.id]);
 
   // initialize/refresh from props (also when prizes list changes on refetch)
   useEffect(() => {
@@ -95,6 +108,17 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     const hasDirty = draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted');
     setDirty(`cat-${category.id}`, hasDirty);
   }, [draft, category.id, setDirty]);
+
+  // Autosave when dirty
+  const hasDirty = draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted');
+  
+  useAutosaveEffect({
+    key: draftKey,
+    data: draft,
+    enabled: hasDirty,
+    debounceMs: 1000,
+    version: 1,
+  });
 
   // Expose imperative API via ref
   useImperativeHandle(ref, () => ({
@@ -241,6 +265,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       setDraft(cleaned);
       setLastSaved(cleaned);
       resetDirty(`cat-${category.id}`);
+      clearDraft(draftKey);
       toast.success('Category prizes saved');
     } catch (e: any) {
       console.error('[prizes-cat] error', { scope: 'category', message: e?.message || String(e) });
@@ -273,6 +298,35 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       </CardHeader>
       <CardContent>
         <ErrorPanel error={error} onDismiss={() => clearError()} />
+        {restore && (
+          <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div>Saved draft from <strong>{formatAge(restore.ageMs)}</strong> is available.</div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDraft(restore.data || []);
+                    setRestore(null);
+                  }}
+                >
+                  Restore
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clearDraft(draftKey);
+                    setRestore(null);
+                  }}
+                >
+                  Discard
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>

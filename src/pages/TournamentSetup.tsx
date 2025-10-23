@@ -30,6 +30,8 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
 import { useDirty } from "@/contexts/DirtyContext";
+import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
+import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -63,6 +65,14 @@ export default function TournamentSetup() {
   }>({ open: false, sourceId: null });
   const [savingAll, setSavingAll] = useState(false);
   const editorRefs = useRef(new Map<string, React.RefObject<CategoryPrizesEditorHandle>>());
+
+  // Autosave state for Details form
+  const detailsDraftKey = makeKey(`t:${id}:details`);
+  const [detailsRestore, setDetailsRestore] = useState<null | { data: any; ageMs: number }>(null);
+
+  // Autosave state for Main Prizes
+  const mainPrizesDraftKey = makeKey(`t:${id}:main-prizes`);
+  const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: any; ageMs: number }>(null);
 
   // Helper to get/create editor refs
   const getEditorRef = (catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
@@ -151,6 +161,40 @@ export default function TournamentSetup() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
+
+  // Check for Details form draft on tab switch
+  useEffect(() => {
+    if (activeTab !== 'details' || detailsForm.formState.isDirty) return;
+    const draft = getDraft<any>(detailsDraftKey, 1);
+    if (draft) setDetailsRestore(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, tournament?.id]);
+
+  // Autosave Details form while dirty
+  useAutosaveEffect({
+    key: detailsDraftKey,
+    data: detailsForm.getValues(),
+    enabled: activeTab === 'details' && detailsForm.formState.isDirty,
+    debounceMs: 1200,
+    version: 1,
+  });
+
+  // Check for Main Prizes draft when opening Prizes tab
+  useEffect(() => {
+    if (activeTab !== 'prizes') return;
+    const draft = getDraft<any>(mainPrizesDraftKey, 1);
+    if (draft) setMainPrizesRestore(draft);
+  }, [activeTab, mainPrizesDraftKey]);
+
+  // Autosave Main Prizes while dirty
+  const isMainPrizesDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
+  useAutosaveEffect({
+    key: mainPrizesDraftKey,
+    data: prizes,
+    enabled: activeTab === 'prizes' && isMainPrizesDirty,
+    debounceMs: 1000,
+    version: 1,
+  });
 
   // Track Details form dirty state
   useEffect(() => {
@@ -242,6 +286,7 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       console.log('[details] save success');
+      clearDraft(detailsDraftKey);
       resetDirty('details');
       queryClient.invalidateQueries({ queryKey: ['tournament', id] });
       toast.success('Tournament details saved');
@@ -361,6 +406,7 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       console.log('[prizes] main prizes saved successfully');
+      clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
       setInitialPrizes(prizes);
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
@@ -745,6 +791,37 @@ export default function TournamentSetup() {
           </TabsList>
 
           <TabsContent value="details" className="space-y-6">
+            {detailsRestore && activeTab === 'details' && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    A saved draft from <strong>{formatAge(detailsRestore.ageMs)}</strong> is available.
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        detailsForm.reset(detailsRestore.data);
+                        setDetailsRestore(null);
+                      }}
+                    >
+                      Restore draft
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        clearDraft(detailsDraftKey);
+                        setDetailsRestore(null);
+                      }}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <Form {...detailsForm}>
               <form onSubmit={detailsForm.handleSubmit(onDetailsSubmit)} className="space-y-6">
                 <Card>
@@ -934,6 +1011,37 @@ export default function TournamentSetup() {
           </TabsContent>
 
           <TabsContent value="prizes" className="space-y-6">
+            {mainPrizesRestore && activeTab === 'prizes' && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPrizes(mainPrizesRestore.data || []);
+                        setMainPrizesRestore(null);
+                      }}
+                    >
+                      Restore draft
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        clearDraft(mainPrizesDraftKey);
+                        setMainPrizesRestore(null);
+                      }}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">

@@ -27,6 +27,8 @@ import { CSS } from '@dnd-kit/utilities';
 import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
 import { useDirty } from '@/contexts/DirtyContext';
+import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
+import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 
 type Prize = { 
   id: string; 
@@ -55,6 +57,10 @@ export default function CategoryOrderReview() {
   const [lastSavedOrder, setLastSavedOrder] = useState<Category[]>([]);
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty } = useDirty();
+
+  // Autosave state
+  const orderDraftKey = makeKey(`t:${id}:order-review`);
+  const [orderRestore, setOrderRestore] = useState<null | { data: { ids: string[]; active: Record<string, boolean> }; ageMs: number }>(null);
 
   // DnD sensors (mouse/touch + keyboard)
   const sensors = useSensors(
@@ -88,6 +94,13 @@ export default function CategoryOrderReview() {
     })();
   }, [id]);
 
+  // Check for draft when cats load
+  useEffect(() => {
+    const saved = getDraft<{ ids: string[]; active: Record<string, boolean> }>(orderDraftKey, 1);
+    if (saved) setOrderRestore(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   // Track dirty state (by *array order* + active flags), not order_idx (which changes only after save)
   useEffect(() => {
     const currentOrder = cats.map(c => c.id).join(',');
@@ -110,6 +123,28 @@ export default function CategoryOrderReview() {
     }
     setDirty('order-review', changed);
   }, [cats, lastSavedOrder, setDirty]);
+
+  // Derive minimal shape and dirty state for autosave
+  const minimal = {
+    ids: cats.map(c => c.id),
+    active: Object.fromEntries(cats.map(c => [c.id, !!c.is_active])),
+  };
+
+  const isDirty =
+    JSON.stringify(minimal.ids) !== JSON.stringify(lastSavedOrder.map(c => c.id)) ||
+    cats.some(c => {
+      const saved = lastSavedOrder.find(s => s.id === c.id);
+      return saved ? !!c.is_active !== !!saved.is_active : true;
+    });
+
+  // Autosave when dirty
+  useAutosaveEffect({
+    key: orderDraftKey,
+    data: minimal,
+    enabled: isDirty,
+    debounceMs: 900,
+    version: 1,
+  });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -172,6 +207,7 @@ export default function CategoryOrderReview() {
       
       setLastSavedOrder(cats); // update baseline after successful save
       resetDirty('order-review');
+      clearDraft(orderDraftKey);
       clearError();
       toast.success('Order & selections saved');
       navigate(`/t/${id}/import`);
@@ -289,6 +325,39 @@ export default function CategoryOrderReview() {
         </div>
 
         <ErrorPanel error={error} onDismiss={clearError} />
+
+        {orderRestore && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>Saved order draft from <strong>{formatAge(orderRestore.ageMs)}</strong> is available.</div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const byId = new Map(cats.map(c => [c.id, c]));
+                    const restored = (orderRestore.data.ids || []).map(id => byId.get(id)).filter(Boolean);
+                    const merged = restored.map((c: any) => ({ ...c, is_active: !!orderRestore.data.active[c.id] }));
+                    setCats(merged as any);
+                    setOrderRestore(null);
+                  }}
+                >
+                  Restore draft
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clearDraft(orderDraftKey);
+                    setOrderRestore(null);
+                  }}
+                >
+                  Discard
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
