@@ -98,7 +98,11 @@ export default function PublicResults() {
       };
 
       const deduplicated = uniqueByPrize(combined);
-      console.log('[publish] results loaded', { total: combined.length, deduplicated: deduplicated.length });
+      
+      console.groupCollapsed('[publish] results summary');
+      console.log('counts', { total: combined.length, deduplicated: deduplicated.length });
+      console.log('sample', deduplicated.slice(0, 3));
+      console.groupEnd();
 
       // Sort: main first, then by place
       return deduplicated.sort((a, b) => {

@@ -47,11 +47,13 @@ export default function CategoryOrderReview() {
         return; 
       }
       
-      setCats((data || []).map((c: any) => ({
+      const mapped = (data || []).map((c: any) => ({
         ...c,
         is_active: c.is_active ?? true,
         prizes: (c.prizes || []).map((p: any) => ({ ...p, is_active: p.is_active ?? true })),
-      })));
+      }));
+      console.log('[order-review] loaded', mapped.map(c => ({ id: c.id, name: c.name, order_idx: c.order_idx, is_active: c.is_active, prizes: (c.prizes||[]).length })));
+      setCats(mapped);
       setLoading(false);
     })();
   }, [id]);
@@ -62,44 +64,72 @@ export default function CategoryOrderReview() {
       const j = idx + dir;
       if (j < 0 || j >= next.length) return prev;
       [next[idx], next[j]] = [next[j], next[idx]];
+      console.log('[order-review] reorder', next.map((c, i) => ({ id: c.id, name: c.name, order: i })));
       return next;
     });
   };
 
-  const toggleCat = (cid: string) =>
+  const toggleCat = (cid: string) => {
+    console.log('[order-review] toggle category', { categoryId: cid });
     setCats(prev => prev.map(c => c.id === cid ? { ...c, is_active: !c.is_active } : c));
+  };
 
-  const togglePrize = (cid: string, pid: string) =>
+  const togglePrize = (cid: string, pid: string) => {
+    console.log('[order-review] toggle prize', { categoryId: cid, prizeId: pid });
     setCats(prev => prev.map(c => c.id === cid
       ? { ...c, prizes: c.prizes.map(p => p.id === pid ? { ...p, is_active: !p.is_active } : p) }
       : c
     ));
+  };
 
   const handleConfirm = async () => {
     try {
       setSaving(true);
-      // Persist order_idx + is_active for categories
-      for (let i = 0; i < cats.length; i++) {
-        const c = cats[i];
-        const { error: e1 } = await supabase
-          .from('categories')
-          .update({ order_idx: i, is_active: c.is_active ?? true })
-          .eq('id', c.id);
-        if (e1) throw e1;
-        
-        // Persist prize is_active
-        for (const p of c.prizes) {
-          const { error: e2 } = await supabase
-            .from('prizes')
-            .update({ is_active: p.is_active ?? true })
-            .eq('id', p.id);
-          if (e2) throw e2;
-        }
+      
+      // Build bulk updates
+      const catUpdates = cats.map((c, i) => ({ 
+        id: c.id, 
+        order_idx: i, 
+        is_active: c.is_active ?? true 
+      }));
+      const prizeUpdates = cats.flatMap(c => 
+        (c.prizes || []).map(p => ({ 
+          id: p.id, 
+          is_active: p.is_active ?? true 
+        }))
+      );
+      
+      console.log('[order-review] saving', { 
+        categories: catUpdates, 
+        prizes: prizeUpdates.length 
+      });
+      
+      // Bulk update categories using Promise.all for performance
+      await Promise.all(
+        catUpdates.map(c => 
+          supabase
+            .from('categories')
+            .update({ order_idx: c.order_idx, is_active: c.is_active })
+            .eq('id', c.id)
+        )
+      );
+      
+      // Bulk update prizes if any
+      if (prizeUpdates.length > 0) {
+        await Promise.all(
+          prizeUpdates.map(p => 
+            supabase
+              .from('prizes')
+              .update({ is_active: p.is_active })
+              .eq('id', p.id)
+          )
+        );
       }
+      
       toast.success('Order & selections saved');
       navigate(`/t/${id}/import`);
     } catch (err: any) {
-      console.error(err);
+      console.error('[order-review] save error', err);
       toast.error(err?.message || 'Failed to save order');
     } finally {
       setSaving(false);
