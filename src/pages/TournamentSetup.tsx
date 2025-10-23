@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import React from 'react';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,7 +39,7 @@ export default function TournamentSetup() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
-  const { setDirty, resetDirty } = useDirty();
+  const { setDirty, resetDirty, registerOnSave } = useDirty();
   
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
@@ -490,133 +490,112 @@ export default function TournamentSetup() {
   });
 
   // Save All Categories handler
-  const handleSaveAllCategories = async () => {
+  const handleSaveAllCategories = useCallback(async () => {
     clearError();
-    
-    // Step 1: Collect & Validate
-    const dirtyRefs: Array<{
-      ref: React.RefObject<CategoryPrizesEditorHandle>;
-      categoryId: string;
-      categoryName: string;
-    }> = [];
-    const validationErrors: Array<{ categoryId: string; categoryName: string; message: string }> = [];
-
-    for (const [catId, ref] of editorRefs.current.entries()) {
-      const handle = ref.current;
-      if (!handle || !handle.hasDirty()) continue;
-      
-      const cat = categories?.find(c => c.id === catId);
-      if (!cat) continue;
-      
-      const error = handle.validate();
-      if (error) {
-        console.error('[prizes-cat] save all validate error', { categoryId: catId, message: error });
-        validationErrors.push({ categoryId: catId, categoryName: cat.name, message: error });
-      } else {
-        dirtyRefs.push({ ref, categoryId: catId, categoryName: cat.name });
-      }
-    }
-
-    // Abort if validation errors
-    if (validationErrors.length > 0) {
-      const errorList = validationErrors.map(e => `• ${e.categoryName}: ${e.message}`).join('\n');
-      showError({
-        title: 'Validation Errors',
-        message: `${validationErrors.length} ${validationErrors.length === 1 ? 'category has' : 'categories have'} validation errors.`,
-        hint: `Fix the errors below before saving:\n\n${errorList}`,
-      });
-      toast.error('Cannot save: validation errors present');
-      return;
-    }
-
-    // Nothing to save
-    if (dirtyRefs.length === 0) {
-      toast.info('Nothing to save');
-      return;
-    }
-
-    console.log('[prizes-cat] save all start', { total: categories?.length || 0, dirty: dirtyRefs.length });
-
     setSavingAll(true);
+    
+    const nonMainCats = categories?.filter(c => !c.is_main) || [];
+    if (!nonMainCats.length) {
+      toast.info('No categories to save');
+      setSavingAll(false);
+      return;
+    }
 
-    // Step 2: Execute saves with partial failure handling
-    const savePromises = dirtyRefs.map(async ({ ref, categoryId, categoryName }) => {
+    const results: Array<{ ok: boolean; categoryId: string; categoryName: string; error?: string }> = [];
+    
+    for (const cat of nonMainCats) {
+      const editorRef = getEditorRef(cat.id);
+      if (!editorRef.current?.hasDirty()) {
+        console.log('[prizes-cat] skip clean', { cat: cat.name });
+        continue;
+      }
+
+      const delta = editorRef.current.computeDelta();
+      if (!delta.inserts.length && !delta.updates.length && !delta.deletes.length) {
+        console.log('[prizes-cat] skip empty delta', { cat: cat.name });
+        continue;
+      }
+
       try {
-        const handle = ref.current;
-        if (!handle) throw new Error('Handle lost');
-        
-        const delta = handle.computeDelta();
-        console.log('[prizes-cat] save all processing', { 
-          categoryId, 
-          inserts: delta.inserts.length, 
-          updates: delta.updates.length, 
+        console.log('[prizes-cat] saving', { 
+          cat: cat.name, 
+          inserts: delta.inserts.length,
+          updates: delta.updates.length,
           deletes: delta.deletes.length 
         });
         
         // Reuse the existing mutation (already handles delete→update→insert + constraint errors)
-        await saveCategoryPrizesMutation.mutateAsync({ categoryId, delta });
+        await saveCategoryPrizesMutation.mutateAsync({ categoryId: cat.id, delta });
         
-        console.log('[prizes-cat] save all ok', { categoryId });
-        return { ok: true, categoryId, categoryName };
-        
-      } catch (error: any) {
-        console.error('[prizes-cat] save all fail', { categoryId, message: error?.message });
-        return { ok: false, categoryId, categoryName, message: error?.message || 'Unknown error' };
-      }
-    });
-
-    const results = await Promise.allSettled(savePromises);
-
-    // Step 3: Process results
-    const successes: Array<{ categoryId: string; categoryName: string }> = [];
-    const failures: Array<{ categoryId: string; categoryName: string; message: string }> = [];
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        const { ok, categoryId, categoryName, message } = result.value;
-        if (ok) {
-          successes.push({ categoryId, categoryName });
-          const ref = editorRefs.current.get(categoryId);
-          ref?.current?.markSaved();
-        } else {
-          failures.push({ categoryId, categoryName, message: message || 'Unknown error' });
-        }
-      } else {
-        failures.push({ 
-          categoryId: 'unknown', 
-          categoryName: 'Unknown', 
-          message: result.reason?.message || 'Promise rejected' 
+        console.log('[prizes-cat] save all ok', { categoryId: cat.id });
+        results.push({ ok: true, categoryId: cat.id, categoryName: cat.name });
+      } catch (err: any) {
+        console.error('[prizes-cat] save all fail', { cat: cat.name, err });
+        results.push({ 
+          ok: false, 
+          categoryId: cat.id, 
+          categoryName: cat.name, 
+          error: err.message || 'Unknown error' 
         });
+        continue;
       }
     }
-
-    console.log('[prizes-cat] save all done', { ok: successes.length, fail: failures.length });
 
     setSavingAll(false);
 
-    await queryClient.invalidateQueries({ queryKey: ['categories', id] });
+    const succeeded = results.filter(r => r.ok);
+    const failed = results.filter(r => !r.ok);
 
-    // Display results
-    if (failures.length === 0) {
+    if (succeeded.length && !failed.length) {
       toast.success('All categories saved');
-    } else if (successes.length > 0) {
-      const failureList = failures.map(f => `• ${f.categoryName}: ${f.message}`).join('\n');
+      for (const s of succeeded) {
+        const ref = getEditorRef(s.categoryId);
+        ref.current?.markSaved();
+        setDirty(`cat-prizes-${s.categoryId}`, false);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['category-prizes', id] });
+    } else if (succeeded.length && failed.length) {
+      const failedNames = failed.map(f => f.categoryName).join(', ');
+      toast.warning(`Saved ${succeeded.length}, failed ${failed.length}: ${failedNames}`);
+      for (const s of succeeded) {
+        const ref = getEditorRef(s.categoryId);
+        ref.current?.markSaved();
+        setDirty(`cat-prizes-${s.categoryId}`, false);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['category-prizes', id] });
+      
+      const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
       showError({
         title: 'Some categories failed to save',
-        message: `${failures.length} of ${dirtyRefs.length} categories failed.`,
-        hint: `Fix the errors below, then retry. Successful categories (${successes.length}) are already saved.\n\n${failureList}`,
+        message: errorMsg
       });
-      toast.error('Some categories failed to save');
-    } else {
-      const failureList = failures.map(f => `• ${f.categoryName}: ${f.message}`).join('\n');
+    } else if (failed.length) {
+      const failedNames = failed.map(f => f.categoryName).join(', ');
+      toast.error(`Failed to save: ${failedNames}`);
+      
+      const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
       showError({
-        title: 'All categories failed to save',
-        message: `${failures.length} ${failures.length === 1 ? 'category' : 'categories'} failed.`,
-        hint: `Fix the errors below:\n\n${failureList}`,
+        title: 'Categories failed to save',
+        message: errorMsg
       });
-      toast.error('All categories failed to save');
     }
-  };
+
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+    } catch (err) {
+      console.error('[prizes-cat] save all err', err);
+    }
+  }, [categories, editorRefs, showError, clearError, toast, queryClient, id, saveCategoryPrizesMutation, setDirty, getEditorRef]);
+
+  // Register Save & Continue on Prizes tab
+  useEffect(() => {
+    if (activeTab === 'prizes') {
+      registerOnSave(handleSaveAllCategories);
+    } else {
+      registerOnSave(null);
+    }
+    return () => registerOnSave(null);
+  }, [activeTab, registerOnSave, handleSaveAllCategories]);
 
   // Copy prizes helper
   const copyPrizesForCategory = async (sourceCategoryId: string, targetCategoryId: string) => {
@@ -1073,7 +1052,14 @@ export default function TournamentSetup() {
                           ) : (
                             <>
                               <Save className="h-4 w-4 mr-2" />
-                              Save All Categories
+                              {(() => {
+                                const dirtyCount = Array.from(editorRefs.current.values())
+                                  .filter(ref => ref.current?.hasDirty())
+                                  .length;
+                                return dirtyCount > 0 
+                                  ? `Save All Categories (${dirtyCount})` 
+                                  : 'Save All Categories';
+                              })()}
                             </>
                           )}
                         </Button>
