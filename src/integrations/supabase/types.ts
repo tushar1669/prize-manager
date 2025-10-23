@@ -80,6 +80,7 @@ export type Database = {
           created_at: string | null
           criteria_json: Json
           id: string
+          is_active: boolean
           is_main: boolean | null
           name: string
           order_idx: number | null
@@ -89,6 +90,7 @@ export type Database = {
           created_at?: string | null
           criteria_json?: Json
           id?: string
+          is_active?: boolean
           is_main?: boolean | null
           name: string
           order_idx?: number | null
@@ -98,6 +100,7 @@ export type Database = {
           created_at?: string | null
           criteria_json?: Json
           id?: string
+          is_active?: boolean
           is_main?: boolean | null
           name?: string
           order_idx?: number | null
@@ -262,6 +265,7 @@ export type Database = {
           has_medal: boolean | null
           has_trophy: boolean | null
           id: string
+          is_active: boolean
           place: number
         }
         Insert: {
@@ -271,6 +275,7 @@ export type Database = {
           has_medal?: boolean | null
           has_trophy?: boolean | null
           id?: string
+          is_active?: boolean
           place: number
         }
         Update: {
@@ -280,6 +285,7 @@ export type Database = {
           has_medal?: boolean | null
           has_trophy?: boolean | null
           id?: string
+          is_active?: boolean
           place?: number
         }
         Relationships: [

@@ -1170,6 +1170,12 @@ export default function TournamentSetup() {
                   Save Draft
                 </Button>
                 <Button
+                  variant="secondary"
+                  onClick={() => navigate(`/t/${id}/order-review`)}
+                >
+                  Review Category Order
+                </Button>
+                <Button
                   onClick={async () => {
                     try {
                       if (savePrizesMutation?.mutateAsync) {
