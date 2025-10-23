@@ -100,11 +100,6 @@ export default function PlayerImport() {
     setDirty('import', mappedPlayers.length > 0);
   }, [mappedPlayers.length, setDirty]);
 
-  // Track dirty state when mapped players exist
-  useEffect(() => {
-    setDirty('import', mappedPlayers.length > 0);
-  }, [mappedPlayers, setDirty]);
-
   // Auth & role for organizer guard
   const { user } = useAuth();
   const { isMaster } = useUserRole();

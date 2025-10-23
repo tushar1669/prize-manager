@@ -18,19 +18,17 @@ export function NavigationGuard() {
 
   // Handle browser back/forward with popstate
   useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (isDirty) {
-        console.log('[guard] popstate blocked', { isDirty });
-        e.preventDefault();
-        // Push current location back to maintain history position
-        window.history.pushState(null, '', location.pathname);
-        setShowDialog(true);
-      }
+    if (!isDirty) return;
+    const handlePopState = () => {
+      console.log('[guard] popstate blocked', { isDirty });
+      // Cancel the back navigation by moving forward again, then show dialog
+      window.history.go(1);
+      setPendingLocation(null); // let user choose where to go next via in-app controls
+      setShowDialog(true);
     };
-
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isDirty, location.pathname]);
+  }, [isDirty]);
 
   // Handle browser refresh/close with beforeunload
   useEffect(() => {
@@ -70,13 +68,10 @@ export function NavigationGuard() {
           console.log('[guard] save-and-continue success');
           resetDirty();
           setShowDialog(false);
-          if (pendingLocation) {
-            navigate(pendingLocation);
-          }
+          if (pendingLocation) navigate(pendingLocation);
           setPendingLocation(null);
         } catch (error) {
           console.error('[guard] save-and-continue failed', error);
-          // Stay on page if save fails
         }
       }
     : null;

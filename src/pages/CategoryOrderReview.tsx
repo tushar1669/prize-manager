@@ -88,11 +88,27 @@ export default function CategoryOrderReview() {
     })();
   }, [id]);
 
-  // Track dirty state when order or active status changes
+  // Track dirty state (by *array order* + active flags), not order_idx (which changes only after save)
   useEffect(() => {
-    const isDirty = JSON.stringify(cats.map(c => ({ id: c.id, order_idx: c.order_idx, is_active: c.is_active, prizes: c.prizes.map(p => ({ id: p.id, is_active: p.is_active })) }))) 
-      !== JSON.stringify(lastSavedOrder.map(c => ({ id: c.id, order_idx: c.order_idx, is_active: c.is_active, prizes: c.prizes.map(p => ({ id: p.id, is_active: p.is_active })) })));
-    setDirty('order-review', isDirty);
+    const currentOrder = cats.map(c => c.id).join(',');
+    const savedOrder = lastSavedOrder.map(c => c.id).join(',');
+    if (currentOrder !== savedOrder) {
+      setDirty('order-review', true);
+      return;
+    }
+    // compare is_active on categories and their prizes
+    const byId = new Map(lastSavedOrder.map(c => [c.id, c]));
+    let changed = false;
+    for (const c of cats) {
+      const s = byId.get(c.id);
+      if (!s || (!!c.is_active !== !!s.is_active)) { changed = true; break; }
+      const savedPrizeActive = new Map((s.prizes || []).map(p => [p.id, !!p.is_active]));
+      for (const p of (c.prizes || [])) {
+        if (savedPrizeActive.get(p.id) !== !!p.is_active) { changed = true; break; }
+      }
+      if (changed) break;
+    }
+    setDirty('order-review', changed);
   }, [cats, lastSavedOrder, setDirty]);
 
   const handleDragEnd = (event: DragEndEvent) => {

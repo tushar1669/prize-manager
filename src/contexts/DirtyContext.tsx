@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 export type DirtyKey = string;
 
-interface DirtyContextValue {
+export interface DirtyContextValue {
   isDirty: boolean;
   sources: Record<DirtyKey, boolean>;
   setDirty: (key: DirtyKey, value: boolean) => void;
@@ -17,7 +17,7 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<Record<DirtyKey, boolean>>({});
   const [onSave, setOnSave] = useState<(() => Promise<void>) | null>(null);
 
-  const isDirty = Object.values(sources).some(v => v === true);
+  const isDirty = useMemo(() => Object.values(sources).some(Boolean), [sources]);
 
   const setDirty = useCallback((key: DirtyKey, value: boolean) => {
     console.log('[guard] setDirty', { key, value });
@@ -33,17 +33,17 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetDirty = useCallback((key?: DirtyKey) => {
-    if (key) {
-      console.log('[guard] resetDirty', { key });
-      setSources(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    } else {
+    if (!key) {
       console.log('[guard] resetDirty', { scope: 'all' });
       setSources({});
+      return;
     }
+    console.log('[guard] resetDirty', { key });
+    setSources(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   }, []);
 
   const registerOnSave = useCallback((fn: (() => Promise<void>) | null) => {
@@ -58,10 +58,8 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useDirty() {
-  const context = useContext(DirtyContext);
-  if (!context) {
-    throw new Error('useDirty must be used within DirtyProvider');
-  }
-  return context;
+export function useDirty(): DirtyContextValue {
+  const ctx = useContext(DirtyContext);
+  if (!ctx) throw new Error('useDirty must be used within DirtyProvider');
+  return ctx;
 }
