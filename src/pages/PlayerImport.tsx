@@ -19,6 +19,8 @@ import { usePapaParser } from "@/hooks/usePapaParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
 import { playerImportSchema, PlayerImportRow } from "@/lib/validations";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import ErrorPanel from "@/components/ui/ErrorPanel";
+import { useErrorPanel } from "@/hooks/useErrorPanel";
 import * as XLSX from "xlsx";
 import {
   Table,
@@ -77,6 +79,7 @@ export default function PlayerImport() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { parseFile } = usePapaParser();
+  const { error, showError, clearError } = useErrorPanel();
 
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -346,8 +349,14 @@ export default function PlayerImport() {
 
     if (duplicateRanks.length > 0) {
       const msg = 'Duplicate ranks found: ' + duplicateRanks.join('; ');
+      console.log('[import] duplicate ranks', duplicateRanks);
       setParseError(msg);
       setParseStatus('error');
+      showError({
+        title: "Duplicate ranks detected",
+        message: "Each player must have a unique rank.",
+        hint: msg
+      });
       toast.error(`Duplicate ranks detected. Each player must have a unique rank.`, { duration: 6000 });
       setMappedPlayers([]);
       return;

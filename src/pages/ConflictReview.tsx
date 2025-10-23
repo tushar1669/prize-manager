@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BackBar } from "@/components/BackBar";
+import ErrorPanel from "@/components/ui/ErrorPanel";
+import { useErrorPanel } from "@/hooks/useErrorPanel";
 
 interface Winner {
   prizeId: string;
@@ -34,6 +36,7 @@ interface Conflict {
 export default function ConflictReview() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { error, showError, clearError } = useErrorPanel();
 
   const [winners, setWinners] = useState<Winner[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
@@ -63,7 +66,7 @@ export default function ConflictReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal)')
+        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
@@ -242,8 +245,9 @@ export default function ConflictReview() {
     <div className="min-h-screen bg-background">
       <BackBar label="Back to Import" to={`/t/${id}/import`} />
       <AppNav />
+      <ErrorPanel error={error} onDismiss={clearError} />
       
-      <div className="container mx-auto px-6 py-8 max-w-7xl">
+      <div className="container mx-auto px-6 py-8 max-w-7xl">{" "}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Review Allocations</h1>
           <div className="flex items-center gap-3 flex-wrap">

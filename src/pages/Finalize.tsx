@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
+import ErrorPanel from "@/components/ui/ErrorPanel";
+import { useErrorPanel } from "@/hooks/useErrorPanel";
 
 interface Winner {
   prizeId: string;
@@ -22,6 +24,7 @@ export default function Finalize() {
   const navigate = useNavigate();
   const location = useLocation();
   const winners = (location.state?.winners || []) as Winner[];
+  const { error, showError, clearError } = useErrorPanel();
 
   // Block if no winners
   if (winners.length === 0) {
@@ -48,7 +51,7 @@ export default function Finalize() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal)')
+        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
@@ -144,6 +147,7 @@ export default function Finalize() {
 
   const finalizeMutation = useMutation({
     mutationFn: async (winners: Winner[]) => {
+      console.log('[finalize] invoking finalize', { tournamentId: id, winnersCount: winners.length });
       const { data: { session } } = await supabase.auth.getSession();
       
       const { data, error } = await supabase.functions.invoke('finalize', {
@@ -152,9 +156,11 @@ export default function Finalize() {
       });
       
       if (error) throw error;
+      console.log('[finalize] success', data);
       return data as { version: number; allocationsCount: number };
     },
     onSuccess: (data) => {
+      console.log('[finalize] finalize complete', data);
       toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
       if (!id) {
         toast.error('Tournament ID missing');
@@ -164,7 +170,12 @@ export default function Finalize() {
       navigate(`/t/${id}/publish`, { state: { version: data.version } });
     },
     onError: (error: any) => {
-      console.error('[finalize]', error);
+      console.error('[finalize] error', error);
+      showError({
+        title: "Finalization failed",
+        message: error?.message || "Unknown error",
+        hint: "Check console logs and try again."
+      });
       toast.error(`Finalization failed: ${error.message}`);
     }
   });
@@ -222,8 +233,9 @@ export default function Finalize() {
     <div className="min-h-screen bg-background">
       <BackBar label="Back to Review" to={`/t/${id}/review`} />
       <AppNav />
+      <ErrorPanel error={error} onDismiss={clearError} />
       
-      <div className="container mx-auto px-6 py-8 max-w-4xl">
+      <div className="container mx-auto px-6 py-8 max-w-4xl">{" "}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>

@@ -1,9 +1,10 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trophy, Medal } from "lucide-react";
+import { Trophy, Medal, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function PublicResults() {
   const { slug } = useParams();
@@ -64,13 +65,14 @@ export default function PublicResults() {
       
       if (catError) throw catError;
 
-      // Combine data
+      // Combine all data and deduplicate by prize_id
       const combined = allocations.map(alloc => {
         const player = players?.find(p => p.id === alloc.player_id);
         const prize = prizes?.find(p => p.id === alloc.prize_id);
         const category = categories?.find(c => c.id === prize?.category_id);
 
         return {
+          prize_id: alloc.prize_id,
           playerName: player?.name || 'Unknown',
           rank: player?.rank || 0,
           rating: player?.rating,
@@ -84,8 +86,22 @@ export default function PublicResults() {
         };
       });
 
+      // Deduplicate by prize_id
+      const uniqueByPrize = (rows: any[]) => {
+        const seen = new Set<string>();
+        return rows.filter(r => {
+          const key = String(r.prize_id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      };
+
+      const deduplicated = uniqueByPrize(combined);
+      console.log('[publish] results loaded', { total: combined.length, deduplicated: deduplicated.length });
+
       // Sort: main first, then by place
-      return combined.sort((a, b) => {
+      return deduplicated.sort((a, b) => {
         if (a.isMain && !b.isMain) return -1;
         if (!a.isMain && b.isMain) return 1;
         return a.place - b.place;
@@ -129,9 +145,17 @@ export default function PublicResults() {
       <div className="min-h-screen bg-background">
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
         <div className="container mx-auto px-6 py-12">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
-            <p className="text-lg text-muted-foreground">Final Results</p>
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
+              <p className="text-lg text-muted-foreground">Final Results</p>
+            </div>
+            <Button variant="outline" asChild>
+              <Link to={`/p/${slug}/details`}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View Details
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

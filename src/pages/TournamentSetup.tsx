@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
+import ErrorPanel from "@/components/ui/ErrorPanel";
+import { useErrorPanel } from "@/hooks/useErrorPanel";
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -33,6 +35,7 @@ export default function TournamentSetup() {
   const activeTab = searchParams.get("tab") || "details";
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { error, showError, clearError } = useErrorPanel();
   
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
@@ -156,7 +159,7 @@ export default function TournamentSetup() {
         .from('categories')
         .select(`
           *,
-          prizes (*)
+          prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
         `)
         .eq('tournament_id', id)
         .order('order_idx');
@@ -184,6 +187,7 @@ export default function TournamentSetup() {
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
     mutationFn: async (values: TournamentDetailsForm) => {
+      console.log('[details] saving tournament', id, values);
       const { error } = await supabase
         .from('tournaments')
         .update(values)
@@ -191,16 +195,19 @@ export default function TournamentSetup() {
       if (error) throw error;
     },
     onSuccess: () => {
+      console.log('[details] save success');
       queryClient.invalidateQueries({ queryKey: ['tournament', id] });
       toast.success('Tournament details saved');
       navigate(`/t/${id}/setup?tab=prizes`);
     },
     onError: (error: any) => {
-      if (error.message?.includes('row-level security')) {
-        toast.error("You don't have access to this tournament");
-      } else {
-        toast.error('Failed to save: ' + error.message);
-      }
+      console.error('[details] save error', error);
+      showError({
+        title: "Failed to save details",
+        message: error?.message || "Unknown error",
+        hint: "Please check your connection and try again."
+      });
+      toast.error(error?.message || 'Failed to save');
     }
   });
 
@@ -262,6 +269,7 @@ export default function TournamentSetup() {
   // Save prizes mutation
   const savePrizesMutation = useMutation({
     mutationFn: async () => {
+      console.log('[prizes] saving main prizes', prizes);
       // Find or create main category
       let mainCategoryId = categories?.find(c => c.is_main)?.id;
       
@@ -304,13 +312,19 @@ export default function TournamentSetup() {
       if (error) throw error;
     },
     onSuccess: () => {
+      console.log('[prizes] main prizes saved successfully');
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
       // small delay so user sees the toast
-      setTimeout(() => navigate(`/t/${id}/import`), 600);
+      setTimeout(() => navigate(`/t/${id}/order-review`), 600);
     },
     onError: (error: any) => {
-      console.error('[savePrizesMutation] failed:', error);
+      console.error('[prizes] save main prizes error', error);
+      showError({
+        title: "Failed to save prizes",
+        message: error?.message || "Unknown error",
+        hint: "Please check your connection and try again."
+      });
       toast.error(`Failed to save prizes: ${error?.message || 'Unknown error'}`);
     }
   });
@@ -318,21 +332,45 @@ export default function TournamentSetup() {
   // Add prize to category mutation
   const addPrizeMutation = useMutation({
     mutationFn: async (prizeData: { category_id: string; place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean }) => {
+      console.log('[prizes] adding prize', prizeData);
+      
+      // Check for duplicate place in category (UI guard)
+      const category = categories?.find(c => c.id === prizeData.category_id);
+      const existingPlaces = new Set((category?.prizes || []).map((p: any) => p.place));
+      if (existingPlaces.has(prizeData.place)) {
+        throw new Error(`Place #${prizeData.place} already exists in this category`);
+      }
+      
       const { data, error } = await supabase
         .from('prizes')
         .insert(prizeData)
         .select('id, place, cash_amount, has_trophy, has_medal, category_id')
         .single();
-      if (error) throw error;
+      
+      // Check for DB unique constraint violation
+      if (error) {
+        if (String(error.message).includes("prizes_category_id_place_key")) {
+          throw new Error("Duplicate place in this category. Each place must be unique.");
+        }
+        throw error;
+      }
+      
       return data;
     },
     onSuccess: (data) => {
+      console.log('[prizes] prize added', data);
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.success(`Prize #${data.place} added successfully`);
       setPrizeDialog({open: false, categoryId: null});
     },
     onError: (error: any) => {
-      toast.error('Failed to add prize: ' + error.message);
+      console.error('[prizes] add prize error', error);
+      showError({
+        title: "Failed to add prize",
+        message: error?.message || "Unknown error",
+        hint: "Check that the place number is unique within this category."
+      });
+      toast.error(error?.message || 'Failed to add prize');
     }
   });
 
@@ -736,8 +774,21 @@ export default function TournamentSetup() {
           <TabsContent value="prizes" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Main Prizes (Open)</CardTitle>
-                <CardDescription>Define prizes for top finishers</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Main Prizes (Open)</CardTitle>
+                    <CardDescription>Define prizes for top finishers</CardDescription>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Prize allocation rules are configured in{" "}
+                    <button 
+                      className="underline hover:no-underline text-primary font-medium" 
+                      onClick={() => navigate(`/t/${id}/settings`)}
+                    >
+                      Settings
+                    </button>
+                  </p>
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>

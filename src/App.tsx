@@ -14,6 +14,7 @@ import PublishSuccess from "./pages/PublishSuccess";
 import PublicTournament from "./pages/PublicTournament";
 import PublicHome from "./pages/PublicHome";
 import PublicResults from "./pages/PublicResults";
+import PublicTournamentDetails from "./pages/PublicTournamentDetails";
 import Bootstrap from "./pages/Bootstrap";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/" element={<PublicHome />} />
           <Route path="/p/:slug" element={<PublicTournament />} />
           <Route path="/p/:slug/results" element={<PublicResults />} />
+          <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
           
           {/* Auth routes */}
           <Route path="/auth" element={<Auth />} />
