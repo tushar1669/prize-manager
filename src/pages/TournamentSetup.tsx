@@ -1140,18 +1140,19 @@ export default function TournamentSetup() {
                   </div>
                 ) : categories && categories.length > 0 ? (
                   <div className="space-y-4">
-                    {categories.filter(c => !c.is_main).map((cat) => (
-                      <CategoryPrizesEditor
-                        key={cat.id}
-                        ref={getEditorRef(cat.id)}
-                        category={cat}
-                        onSave={(categoryId, delta) => 
-                          saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
-                        }
-                        onToggleCategory={toggleCategoryActive}
-                        isOrganizer={isOrganizer}
-                      />
-                    ))}
+                {categories.filter(c => !c.is_main).map((cat) => (
+                  <div key={cat.id} data-category-id={cat.id}>
+                    <CategoryPrizesEditor
+                      ref={getEditorRef(cat.id)}
+                      category={cat}
+                      onSave={(categoryId, delta) => 
+                        saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
+                      }
+                      onToggleCategory={toggleCategoryActive}
+                      isOrganizer={isOrganizer}
+                    />
+                  </div>
+                ))}
                   </div>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">
