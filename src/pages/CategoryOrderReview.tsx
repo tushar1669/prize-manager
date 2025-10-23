@@ -26,6 +26,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
+import { useDirty } from '@/contexts/DirtyContext';
 
 type Prize = { 
   id: string; 
@@ -87,6 +88,13 @@ export default function CategoryOrderReview() {
     })();
   }, [id]);
 
+  // Track dirty state when order or active status changes
+  useEffect(() => {
+    const isDirty = JSON.stringify(cats.map(c => ({ id: c.id, order_idx: c.order_idx, is_active: c.is_active, prizes: c.prizes.map(p => ({ id: p.id, is_active: p.is_active })) }))) 
+      !== JSON.stringify(lastSavedOrder.map(c => ({ id: c.id, order_idx: c.order_idx, is_active: c.is_active, prizes: c.prizes.map(p => ({ id: p.id, is_active: p.is_active })) })));
+    setDirty('order-review', isDirty);
+  }, [cats, lastSavedOrder, setDirty]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -147,6 +155,8 @@ export default function CategoryOrderReview() {
       }
       
       setLastSavedOrder(cats); // update baseline after successful save
+      resetDirty('order-review');
+      clearError();
       toast.success('Order & selections saved');
       navigate(`/t/${id}/import`);
     } catch (err: any) {

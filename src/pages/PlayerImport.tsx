@@ -5,7 +5,7 @@
  * (e.g., "Rank" vs "rank"), data must be in semantically correct columns.
  * Swapped columns (e.g., city data in disability column) will cause validation errors.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
@@ -98,6 +98,11 @@ export default function PlayerImport() {
   // Track dirty state when mapped players exist
   useEffect(() => {
     setDirty('import', mappedPlayers.length > 0);
+  }, [mappedPlayers.length, setDirty]);
+
+  // Track dirty state when mapped players exist
+  useEffect(() => {
+    setDirty('import', mappedPlayers.length > 0);
   }, [mappedPlayers, setDirty]);
 
   // Auth & role for organizer guard
@@ -161,6 +166,7 @@ export default function PlayerImport() {
     setParseStatus('idle');
     setShowMappingDialog(false);
     setIsParsing(false);
+    resetDirty('import');
 
     // Also clear file input so the same file can be picked again
     const input = document.getElementById('players-file-input') as HTMLInputElement | null;
@@ -469,6 +475,7 @@ export default function PlayerImport() {
     onSuccess: (data) => {
       const mode = replaceExisting ? 'replaced previous list' : 'appended';
       toast.success(`Imported ${data.length} players (${mode})`);
+      resetDirty('import');
       if (!id) {
         toast.error('Tournament ID missing');
         navigate('/dashboard');
