@@ -326,10 +326,13 @@ export default function PlayerImport() {
     const valid = validPlayers.filter(p => Number(p.rank) > 0 && String(p.name || '').trim().length > 0);
     
     if (valid.length === 0) {
-      console.warn('[import] No valid rows after mapping. Sample of first row:', mapped[0]);
-      toast.error('No valid rows to import. Check that "rank" and "name" columns are present and non-empty.');
-      setMappedPlayers([]);
+      console.warn('[import] No valid rows after mapping. First raw row:', parsedData?.[0]);
       setParseStatus('error');
+      setParseError(
+        'No valid rows after mapping. Please ensure Row 1 contains headers, data starts at Row 2, and at least "rank" and "name" are present. ' +
+        'If your headers include spaces (e.g., "Special Notes"), that is OK — they will be normalized automatically.'
+      );
+      setMappedPlayers([]);
       return;
     }
     
@@ -450,22 +453,30 @@ export default function PlayerImport() {
                       id="players-file-input"
                       disabled={isParsing}
                     />
-                    <div className="flex items-center justify-center gap-3">
+                    <div className="flex items-center gap-3">
                       <label htmlFor="players-file-input">
                         <Button asChild disabled={isParsing}>
-                          <span>{isParsing ? "Parsing..." : "Select Excel File"}</span>
+                          <span>{isParsing ? 'Parsing…' : 'Select Excel File'}</span>
                         </Button>
                       </label>
-                      {(mappedPlayers.length > 0 || parseError || validationErrors.length > 0) && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleResetImport}
-                          disabled={isParsing || importPlayersMutation.isPending}
-                        >
-                          Reset Import
-                        </Button>
-                      )}
+
+                      <Button
+                        variant="secondary"
+                        onClick={handleResetImport}
+                        disabled={
+                          isParsing ||
+                          (
+                            parseStatus === 'idle' &&
+                            mappedPlayers.length === 0 &&
+                            !parseError &&
+                            validationErrors.length === 0 &&
+                            duplicates.length === 0
+                          )
+                        }
+                        title="Clear the current import and start fresh"
+                      >
+                        Reset Import
+                      </Button>
                     </div>
                     <p className="text-sm text-muted-foreground mt-4">
                       Required columns: <strong>rank</strong>, <strong>name</strong>. Optional: rating, dob (YYYY-MM-DD or Excel date), gender, state, city, disability, special_notes.
@@ -512,15 +523,27 @@ export default function PlayerImport() {
                         <TableHead>Name</TableHead>
                         <TableHead>Rating</TableHead>
                         <TableHead>DOB</TableHead>
+                        <TableHead>Gender</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>City</TableHead>
+                        <TableHead>Club</TableHead>
+                        <TableHead>Disability</TableHead>
+                        <TableHead>Special Notes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {mappedPlayers.slice(0, 10).map((player, idx) => (
                         <TableRow key={idx}>
-                          <TableCell>{player.rank}</TableCell>
-                          <TableCell>{player.name}</TableCell>
-                          <TableCell>{player.rating || 0}</TableCell>
-                          <TableCell>{player.dob || '-'}</TableCell>
+                          <TableCell>{player.rank ?? ''}</TableCell>
+                          <TableCell>{player.name ?? ''}</TableCell>
+                          <TableCell>{player.rating ?? ''}</TableCell>
+                          <TableCell>{player.dob ?? ''}</TableCell>
+                          <TableCell>{player.gender ?? ''}</TableCell>
+                          <TableCell>{player.state ?? ''}</TableCell>
+                          <TableCell>{player.city ?? ''}</TableCell>
+                          <TableCell>{player.club ?? ''}</TableCell>
+                          <TableCell>{player.disability ?? ''}</TableCell>
+                          <TableCell>{player.special_notes ?? ''}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -68,7 +68,10 @@ export const playerImportSchema = z.object({
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format").nullable().optional(),
   gender: z.enum(['M', 'F', 'Other']).nullable().optional(),
   state: z.string().max(50, "State must be less than 50 characters").nullable().optional(),
-  city: z.string().max(50, "City must be less than 50 characters").nullable().optional()
+  city: z.string().max(50, "City must be less than 50 characters").nullable().optional(),
+  club: z.string().max(100, "Club must be less than 100 characters").nullable().optional(),
+  disability: z.string().max(100, "Disability must be less than 100 characters").nullable().optional(),
+  special_notes: z.string().max(500, "Special notes must be less than 500 characters").nullable().optional()
 });
 
 export type PlayerImportRow = z.infer<typeof playerImportSchema>;

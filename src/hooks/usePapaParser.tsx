@@ -62,8 +62,18 @@ export function usePapaParser() {
         throw new Error('Could not detect any headers. Please verify the template.');
       }
 
-      // Get data as objects using inferred headers
-      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      // Rebuild rows using our *normalized* headers so keys are deterministic
+      // - range: 1 tells SheetJS to start at row 2 (skip the header row we already read)
+      // - header: headers forces normalized keys in all row objects
+      const data = XLSX.utils.sheet_to_json(ws, {
+        header: headers,
+        range: 1,
+        defval: ''
+      });
+
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('No data rows found under the header row (Row 1). Please ensure your data starts at Row 2.');
+      }
       
       // 🔍 DIAGNOSTIC: Log first 3 data rows
       console.log('[parseExcel] First 3 data rows:', data.slice(0, 3));
