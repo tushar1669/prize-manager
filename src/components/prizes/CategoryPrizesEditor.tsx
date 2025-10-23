@@ -49,7 +49,7 @@ export type CategoryPrizesEditorRef = React.RefObject<CategoryPrizesEditorHandle
 
 interface Props {
   category: CategoryRow;
-  onSave: (categoryId: string, delta: PrizeDelta) => Promise<any>;
+  onSave: (categoryId: string, delta: PrizeDelta) => Promise<void>;
   onToggleCategory: (categoryId: string, isActive: boolean) => void;
   isOrganizer: boolean;
 }

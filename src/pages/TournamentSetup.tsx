@@ -553,50 +553,8 @@ export default function TournamentSetup() {
           deletes: delta.deletes.length 
         });
         
-        // Build operations in order: delete → update → insert
-        const ops = [];
-        
-        if (delta.deletes.length) {
-          ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
-        }
-        
-        if (delta.updates.length) {
-          for (const p of delta.updates) {
-            ops.push(
-              supabase.from('prizes').update({
-                place: p.place,
-                cash_amount: p.cash_amount,
-                has_trophy: p.has_trophy,
-                has_medal: p.has_medal,
-                is_active: p.is_active ?? true
-              }).eq('id', p.id).then(r => r)
-            );
-          }
-        }
-        
-        if (delta.inserts.length) {
-          const rows = delta.inserts.map(p => ({
-            category_id: categoryId,
-            place: p.place,
-            cash_amount: p.cash_amount,
-            has_trophy: p.has_trophy,
-            has_medal: p.has_medal,
-            is_active: p.is_active ?? true
-          }));
-          ops.push(supabase.from('prizes').insert(rows).select('id').then(r => r));
-        }
-        
-        const results = await Promise.all(ops);
-        
-        for (const result of results) {
-          if (result.error) {
-            const msg = result.error.message || 'Unknown error';
-            if (String(msg).includes('prizes_category_id_place_key') || result.error.code === '23505') {
-              throw new Error('Each place must be unique within the category.');
-            }
-            throw new Error(msg);
-          }
-        }
+        // Reuse the existing mutation (already handles delete→update→insert + constraint errors)
+        await saveCategoryPrizesMutation.mutateAsync({ categoryId, delta });
         
         console.log('[prizes-cat] save all ok', { categoryId });
         return { ok: true, categoryId, categoryName };
@@ -1100,7 +1058,7 @@ export default function TournamentSetup() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          disabled={savingAll || !categories?.length}
+                          disabled={savingAll || !categories?.some(c => !c.is_main)}
                           onClick={handleSaveAllCategories}
                           title="Saves all edited category prizes in one go"
                         >
