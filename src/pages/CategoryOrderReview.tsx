@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppNav } from '@/components/AppNav';
-import { ChevronUp, ChevronDown, Trophy, Medal } from 'lucide-react';
+import { Trophy, Medal, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import ErrorPanel from '@/components/ui/ErrorPanel';
+import { useErrorPanel } from '@/hooks/useErrorPanel';
 
 type Prize = { 
   id: string; 
@@ -32,6 +37,14 @@ export default function CategoryOrderReview() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
+  const [lastSavedOrder, setLastSavedOrder] = useState<Category[]>([]);
+  const { error, showError, clearError } = useErrorPanel();
+
+  // DnD sensors (mouse/touch + keyboard)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     (async () => {
@@ -54,32 +67,24 @@ export default function CategoryOrderReview() {
       }));
       console.log('[order-review] loaded', mapped.map(c => ({ id: c.id, name: c.name, order_idx: c.order_idx, is_active: c.is_active, prizes: (c.prizes||[]).length })));
       setCats(mapped);
+      setLastSavedOrder(mapped); // baseline for rollback on save error
       setLoading(false);
     })();
   }, [id]);
 
-  const move = (idx: number, dir: -1 | 1) => {
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
     setCats(prev => {
-      const next = [...prev];
-      const j = idx + dir;
-      if (j < 0 || j >= next.length) return prev;
-      [next[idx], next[j]] = [next[j], next[idx]];
-      console.log('[order-review] reorder', next.map((c, i) => ({ id: c.id, name: c.name, order: i })));
-      return next;
+      const oldIdx = prev.findIndex(c => c.id === active.id);
+      const newIdx = prev.findIndex(c => c.id === over.id);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+
+      const reordered = arrayMove(prev, oldIdx, newIdx);
+      console.log('[order-review] dnd end', reordered.map((c, i) => ({ id: c.id, name: c.name, order: i })));
+      return reordered;
     });
-  };
-
-  const toggleCat = (cid: string) => {
-    console.log('[order-review] toggle category', { categoryId: cid });
-    setCats(prev => prev.map(c => c.id === cid ? { ...c, is_active: !c.is_active } : c));
-  };
-
-  const togglePrize = (cid: string, pid: string) => {
-    console.log('[order-review] toggle prize', { categoryId: cid, prizeId: pid });
-    setCats(prev => prev.map(c => c.id === cid
-      ? { ...c, prizes: c.prizes.map(p => p.id === pid ? { ...p, is_active: !p.is_active } : p) }
-      : c
-    ));
   };
 
   const handleConfirm = async () => {
@@ -126,15 +131,97 @@ export default function CategoryOrderReview() {
         );
       }
       
+      setLastSavedOrder(cats); // update baseline after successful save
       toast.success('Order & selections saved');
       navigate(`/t/${id}/import`);
     } catch (err: any) {
       console.error('[order-review] save error', err);
+      setCats(lastSavedOrder); // rollback visual order
+      showError({
+        title: 'Failed to save order',
+        message: err?.message || 'Unknown error',
+        hint: 'Your changes have been reverted. Please try again.',
+      });
       toast.error(err?.message || 'Failed to save order');
     } finally {
       setSaving(false);
     }
   };
+
+  // Sortable category item component
+  function SortableCategoryItem({
+    cat,
+    onToggleCat,
+    onTogglePrize,
+  }: {
+    cat: Category;
+    onToggleCat: (id: string) => void;
+    onTogglePrize: (cid: string, pid: string) => void;
+  }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.6 : undefined,
+    } as React.CSSProperties;
+
+    return (
+      <Card ref={setNodeRef} style={style} className="overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-4">
+            {/* Drag handle (keyboard accessible) */}
+            <button
+              className="p-2 rounded hover:bg-muted/60 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Drag to reorder"
+              title="Drag to reorder. Press space or enter to pick up, arrow keys to move, enter to drop."
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="h-5 w-5 text-muted-foreground" />
+            </button>
+
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={!!cat.is_active}
+                  onCheckedChange={() => onToggleCat(cat.id)}
+                  aria-label={`Include ${cat.name}`}
+                />
+                <span className="font-semibold text-lg">{cat.name}</span>
+                {cat.is_main && (
+                  <span className="px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/30">
+                    Main
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-2 pl-8">
+                {(cat.prizes || []).sort((a, b) => a.place - b.place).map(p => (
+                  <div key={p.id} className="flex items-center gap-3 text-sm">
+                    <Checkbox
+                      checked={!!p.is_active}
+                      onCheckedChange={() => onTogglePrize(cat.id, p.id)}
+                      aria-label={`Include prize place #${p.place}`}
+                    />
+                    <span className="w-20 font-medium">Place #{p.place}</span>
+                    <span className="w-28 font-mono">₹{p.cash_amount ?? 0}</span>
+                    <div className="flex gap-1 text-muted-foreground">
+                      {p.has_trophy && <Trophy className="h-4 w-4" />}
+                      {p.has_medal && <Medal className="h-4 w-4" />}
+                    </div>
+                  </div>
+                ))}
+                {(!cat.prizes || cat.prizes.length === 0) && (
+                  <div className="text-sm text-muted-foreground">No prizes in this category.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (loading) {
     return (
@@ -155,72 +242,36 @@ export default function CategoryOrderReview() {
             Reorder categories and choose which categories/prizes are included in allocation.
             This order becomes brochure priority for prize allocation.
           </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            💡 Drag rows to set brochure order. This order becomes the source of truth for allocation priority.
+          </p>
         </div>
 
+        <ErrorPanel error={error} onDismiss={clearError} />
+
         <div className="space-y-4">
-          {cats.map((c, idx) => (
-            <Card key={c.id} className="overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => move(idx, -1)}
-                      disabled={idx === 0}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => move(idx, +1)}
-                      disabled={idx === cats.length - 1}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="flex-1 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        checked={!!c.is_active}
-                        onCheckedChange={() => toggleCat(c.id)}
-                      />
-                      <span className="font-semibold text-lg">{c.name}</span>
-                      {c.is_main && (
-                        <span className="px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/30">
-                          Main
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid gap-2 pl-8">
-                      {(c.prizes || []).sort((a, b) => a.place - b.place).map(p => (
-                        <div key={p.id} className="flex items-center gap-3 text-sm">
-                          <Checkbox
-                            checked={!!p.is_active}
-                            onCheckedChange={() => togglePrize(c.id, p.id)}
-                          />
-                          <span className="w-20 font-medium">Place #{p.place}</span>
-                          <span className="w-28 font-mono">₹{p.cash_amount ?? 0}</span>
-                          <div className="flex gap-1 text-muted-foreground">
-                            {p.has_trophy && <Trophy className="h-4 w-4" />}
-                            {p.has_medal && <Medal className="h-4 w-4" />}
-                          </div>
-                        </div>
-                      ))}
-                      {(!c.prizes || c.prizes.length === 0) && (
-                        <div className="text-sm text-muted-foreground">No prizes in this category.</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={cats.map(c => c.id)} strategy={verticalListSortingStrategy}>
+              {cats.map((c: Category) => (
+                <SortableCategoryItem
+                  key={c.id}
+                  cat={c}
+                  onToggleCat={(cid) => {
+                    console.log('[order-review] toggle category', { categoryId: cid });
+                    setCats(prev => prev.map(x => x.id === cid ? { ...x, is_active: !x.is_active } : x));
+                  }}
+                  onTogglePrize={(cid, pid) => {
+                    console.log('[order-review] toggle prize', { categoryId: cid, prizeId: pid });
+                    setCats(prev => prev.map(x =>
+                      x.id === cid
+                        ? { ...x, prizes: (x.prizes || []).map((p: Prize) => p.id === pid ? { ...p, is_active: !p.is_active } : p) }
+                        : x
+                    ));
+                  }}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
 
         <div className="flex justify-between pt-4">
