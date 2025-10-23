@@ -327,6 +327,32 @@ export default function PlayerImport() {
     // Filter out invalid rows before setting
     const valid = validPlayers.filter(p => Number(p.rank) > 0 && String(p.name || '').trim().length > 0);
     
+    // Check for duplicate ranks (hard error)
+    const rankMap = new Map<number, number[]>();
+    valid.forEach(player => {
+      const rank = Number(player.rank);
+      if (rank > 0) {
+        if (!rankMap.has(rank)) rankMap.set(rank, []);
+        rankMap.get(rank)!.push(player._originalIndex);
+      }
+    });
+
+    const duplicateRanks: string[] = [];
+    rankMap.forEach((rows, rank) => {
+      if (rows.length > 1) {
+        duplicateRanks.push(`Rank ${rank} at rows ${rows.join(', ')}`);
+      }
+    });
+
+    if (duplicateRanks.length > 0) {
+      const msg = 'Duplicate ranks found: ' + duplicateRanks.join('; ');
+      setParseError(msg);
+      setParseStatus('error');
+      toast.error(`Duplicate ranks detected. Each player must have a unique rank.`, { duration: 6000 });
+      setMappedPlayers([]);
+      return;
+    }
+    
     if (valid.length === 0) {
       console.warn('[import] No valid rows after mapping. First raw row:', parsedData?.[0]);
       setParseStatus('error');

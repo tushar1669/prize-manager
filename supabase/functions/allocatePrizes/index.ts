@@ -13,6 +13,25 @@ interface AllocatePrizesRequest {
   ruleConfigOverride?: any;
 }
 
+type PrizeRow = {
+  id: string;
+  place: number;
+  cash_amount: number | null;
+  has_trophy: boolean;
+  has_medal: boolean;
+  is_active?: boolean;
+};
+
+type CategoryRow = {
+  id: string;
+  name: string;
+  is_main: boolean;
+  order_idx: number;
+  is_active?: boolean;
+  criteria_json?: any;
+  prizes: PrizeRow[];
+};
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -30,26 +49,39 @@ Deno.serve(async (req) => {
 
     console.log(`[allocatePrizes] Starting allocation for tournament ${tournamentId}`);
 
-    // 1) Fetch tournament data
+    // 1) Fetch tournament data with start_date
     const { data: tournament, error: tournamentError } = await supabaseClient
       .from('tournaments')
-      .select('*')
+      .select('id, title, start_date, end_date')
       .eq('id', tournamentId)
-      .single();
+      .maybeSingle();
 
-    if (tournamentError) throw new Error(`Tournament not found: ${tournamentError.message}`);
+    if (tournamentError || !tournament) throw new Error(`Tournament not found: ${tournamentError?.message}`);
 
-    // 2) Fetch categories with prizes
+    // Use tournament start_date for age calculation, fallback to today
+    const tournamentStartDate = tournament.start_date ? new Date(tournament.start_date) : new Date();
+
+    // 2) Fetch categories with prizes (order by order_idx for brochure order)
     const { data: categories, error: categoriesError } = await supabaseClient
       .from('categories')
       .select(`
-        *,
-        prizes (*)
+        id, name, is_main, order_idx, is_active, criteria_json,
+        prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
       `)
       .eq('tournament_id', tournamentId)
       .order('order_idx', { ascending: true });
 
     if (categoriesError) throw new Error(`Failed to fetch categories: ${categoriesError.message}`);
+
+    // Filter to active categories and prizes
+    const activeCategories = (categories || [])
+      .filter(c => c.is_active !== false)
+      .map(c => ({
+        ...c,
+        prizes: (c.prizes || []).filter((p: any) => p.is_active !== false)
+      })) as CategoryRow[];
+
+    const activePrizes = activeCategories.flatMap(cat => cat.prizes || []);
 
     // 3) Fetch players
     const { data: players, error: playersError } = await supabaseClient
@@ -75,38 +107,29 @@ Deno.serve(async (req) => {
       category_priority_order: ['main', 'others']
     };
 
-    // 5) Build eligibility sets per category
-    const eligibilityMap = new Map();
-    for (const category of categories) {
-      const eligiblePlayers = players.filter(player => 
-        isEligibleForCategory(player, category, rules)
-      );
-      eligibilityMap.set(category.id, eligiblePlayers);
+    console.log('[alloc] tId', tournamentId, 'players', players?.length || 0, 'cats', activeCategories.length, 'prizes', activePrizes.length);
+
+    // 5) Build prize queue sorted by brochure order
+    const prizeQueue = activeCategories.flatMap(cat => 
+      cat.prizes.map(p => ({ cat, p }))
+    );
+
+    prizeQueue.sort(cmpPrize);
+
+    if (prizeQueue.length > 0) {
+      console.log('[alloc] queue', prizeQueue.length, 'firstKey', prizeKey(prizeQueue[0].cat, prizeQueue[0].p));
     }
 
-    // 6) Build prize queue (sorted by priority)
-    const prizeQueue = [];
-    for (const category of categories) {
-      for (const prize of (category.prizes || [])) {
-        prizeQueue.push({
-          ...prize,
-          category,
-          priority: calculatePrizePriority(prize, category, rules)
-        });
-      }
-    }
-    prizeQueue.sort((a, b) => b.priority - a.priority);
-
-    // 7) Greedy allocation
+    // 6) Greedy allocation: rank-first, filtered prize queue
     const winners: Array<{
       prizeId: string;
       playerId: string;
       reasons: string[];
       isManual: boolean;
     }> = [];
-    const assignedPlayers = new Set();
-    const conflicts = [];
+    const assignedPlayers = new Set<string>();
 
+    // Apply manual overrides first
     for (const override of overrides) {
       assignedPlayers.add(override.playerId);
       winners.push({
@@ -117,172 +140,103 @@ Deno.serve(async (req) => {
       });
     }
 
-    for (const prizeItem of prizeQueue) {
-      if (overrides.find(o => o.prizeId === prizeItem.id)) continue;
+    // Allocate prizes in brochure priority order
+    for (const { cat, p } of prizeQueue) {
+      // Skip if manually overridden
+      if (overrides.find(o => o.prizeId === p.id)) continue;
 
-      const eligible = eligibilityMap.get(prizeItem.category.id) || [];
-      const availablePlayers = eligible
-        .filter((p: any) => !assignedPlayers.has(p.id))
+      // Find eligible unassigned players
+      const eligible = (players || [])
+        .filter(player => 
+          isEligible(player, cat, rules, tournamentStartDate) && 
+          !assignedPlayers.has(player.id)
+        )
         .sort((a: any, b: any) => a.rank - b.rank);
 
-      if (availablePlayers.length === 0) {
-        conflicts.push({
-          type: 'insufficient',
-          impacted_prizes: [prizeItem.id],
-          impacted_players: [],
-          reasons: ['no_eligible_players_remaining'],
-          suggested: null
-        });
+      if (eligible.length === 0) {
+        // No eligible players left for this prize
         continue;
       }
 
-      const winner = availablePlayers[0];
+      // Pick first (lowest rank)
+      const winner = eligible[0];
       assignedPlayers.add(winner.id);
       winners.push({
-        prizeId: prizeItem.id,
+        prizeId: p.id,
         playerId: winner.id,
-        reasons: ['category_priority', 'rank_based'],
+        reasons: ['auto', 'rank', 'brochure_order', 'value_tier'],
         isManual: false
       });
+
+      console.log('[alloc] win', { prizeId: p.id, cat: cat.name, place: p.place, player: winner.name, rank: winner.rank });
     }
 
-    // 8) Enhanced conflict detection
-    const allPrizes = categories.flatMap(c => c.prizes || []);
-    const prizeById = new Map(allPrizes.map((p: any) => [p.id, p]));
-    const categoryByPrizeId = new Map(
-      (categories || []).flatMap((c: any) => (c.prizes || []).map((p: any) => [p.id, c]))
-    );
-
-    // Track what each player could win (by prizeId)
-    const eligiblePrizeIdsByPlayer = new Map<string, string[]>();
-    for (const prize of allPrizes as any[]) {
-      // Get the category for this prize (built above)
-      const cat = categoryByPrizeId.get(prize.id);
-      if (!cat) continue;
-
-      const eligible =
-        (eligibilityMap as any).get((cat as any).id) || []; // eligibilityMap is keyed by category.id
-      for (const player of eligible) {
-        if (!eligiblePrizeIdsByPlayer.has(player.id)) {
-          eligiblePrizeIdsByPlayer.set(player.id, []);
+    // 7) Minimal conflict detection: only for identical prizeKey ties
+    const conflicts: Array<{
+      id: string;
+      type: string;
+      impacted_players: string[];
+      impacted_prizes: string[];
+      reasons: string[];
+      suggested: { prizeId: string; playerId: string } | null;
+      tournament_id: string;
+    }> = [];
+    
+    // Build eligibility map: player -> prizes they're eligible for
+    const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
+    for (const { cat, p } of prizeQueue) {
+      for (const player of players || []) {
+        if (isEligible(player, cat, rules, tournamentStartDate)) {
+          if (!playerEligiblePrizes.has(player.id)) {
+            playerEligiblePrizes.set(player.id, []);
+          }
+          playerEligiblePrizes.get(player.id)!.push({ cat, p });
         }
-        eligiblePrizeIdsByPlayer.get(player.id)!.push(prize.id);
       }
     }
 
-    // A) Multi-eligibility
-    eligiblePrizeIdsByPlayer.forEach((prizeIds, playerId) => {
-      const unique = Array.from(new Set(prizeIds));
-      if (unique.length > 1) {
-        const currentWin = winners.find(w => w.playerId === playerId && unique.includes(w.prizeId));
-        const suggestedPrizeId =
-          currentWin?.prizeId ??
-          unique
-            .map(id => prizeById.get(id))
-            .filter(Boolean)
-            .sort((a: any, b: any) => (Number(b.cash_amount) || 0) - (Number(a.cash_amount) || 0))[0]?.id;
+    // Check for identical prizeKey conflicts (true ties)
+    playerEligiblePrizes.forEach((eligibleList, playerId) => {
+      if (eligibleList.length < 2) return;
 
-        conflicts.push({
-          id: crypto.randomUUID(),
-          type: 'multi-eligibility',
-          impacted_players: [playerId],
-          impacted_prizes: unique,
-          reasons: ['Player eligible for multiple prizes'],
-          suggested: suggestedPrizeId ? { prizeId: suggestedPrizeId, playerId } : null,
-          tournament_id: tournamentId,
-        });
-      }
-    });
-
-    // B) Equal-value clusters among UNASSIGNED prizes
-    const unassignedPrizes = allPrizes.filter((p: any) => !winners.some(w => w.prizeId === p.id));
-    const prizesByValue = new Map<number, any[]>();
-    unassignedPrizes.forEach((p: any) => {
-      const val = Number(p.cash_amount) || 0;
-      if (!prizesByValue.has(val)) prizesByValue.set(val, []);
-      prizesByValue.get(val)!.push(p);
-    });
-
-    prizesByValue.forEach((prizes, value) => {
-      if (value <= 0 || prizes.length < 2) return;
-
-      // playerId -> prizeIds (within this equal-value cluster)
-      const candidates = new Map<string, string[]>();
-      for (const prize of prizes as any[]) {
-        const cat = categoryByPrizeId.get(prize.id);
-        if (!cat) continue;
-
-        const eligible =
-          (eligibilityMap as any).get((cat as any).id) || []; // eligibilityMap is keyed by category.id
-        for (const player of eligible) {
-          if (!candidates.has(player.id)) candidates.set(player.id, []);
-          candidates.get(player.id)!.push(prize.id);
+      // Group by prizeKey
+      const keyGroups = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
+      for (const item of eligibleList) {
+        const key = JSON.stringify(prizeKey(item.cat, item.p));
+        if (!keyGroups.has(key)) {
+          keyGroups.set(key, []);
         }
+        keyGroups.get(key)!.push(item);
       }
 
-      candidates.forEach((ids, pid) => {
-        const unique = Array.from(new Set(ids));
-        if (unique.length > 1) {
-          const currentWin = winners.find(w => w.playerId === pid && unique.includes(w.prizeId));
+      // If any group has 2+ prizes with identical keys, it's a true tie
+      keyGroups.forEach((group, key) => {
+        if (group.length > 1) {
           conflicts.push({
             id: crypto.randomUUID(),
-            type: 'equal-value',
-            impacted_players: [pid],
-            impacted_prizes: unique,
-            reasons: [`Multiple equal-value prizes (₹${value}) eligible`],
-            suggested: currentWin ? { prizeId: currentWin.prizeId, playerId: pid } : null,
+            type: 'tie',
+            impacted_players: [playerId],
+            impacted_prizes: group.map(item => item.p.id),
+            reasons: ['identical_prize_priority'],
+            suggested: null,
             tournament_id: tournamentId,
           });
         }
       });
     });
 
-    // C) Rule-exclusion (strict_age)
-    if (rules?.strict_age) {
-      const playersById = new Map((players || []).map((p: any) => [p.id, p]));
-      const calcAge = (dob: string) => {
-        const d = new Date(dob);
-        if (isNaN(d.getTime())) return null;
-        const today = new Date();
-        let age = today.getFullYear() - d.getFullYear();
-        const m = today.getMonth() - d.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-        return age;
-      };
-
-      winners.forEach(w => {
-        const prize = prizeById.get(w.prizeId);
-        const cat = prize ? categoryByPrizeId.get(prize.id) : null;
-        const player = playersById.get(w.playerId);
-        const range = (cat as any)?.criteria_json?.age_range as [number, number] | undefined;
-
-        if (player?.dob && Array.isArray(range) && range.length === 2) {
-          const age = calcAge(player.dob);
-          if (age !== null && (age < range[0] || age > range[1])) {
-            conflicts.push({
-              id: crypto.randomUUID(),
-              type: 'rule-exclusion',
-              impacted_players: [w.playerId],
-              impacted_prizes: [w.prizeId],
-              reasons: ['Strict age violation'],
-              suggested: null,
-              tournament_id: tournamentId,
-            });
-          }
-        }
-      });
-    }
-
-    console.log(`[allocatePrizes] Completed: ${winners.length} winners, ${conflicts.length} conflicts`);
+    console.log('[alloc] done', { winners: winners.length, conflicts: conflicts.length });
 
     return new Response(
       JSON.stringify({ 
         winners, 
         conflicts,
         meta: {
-          playerCount: players.length,
-          prizeCount: allPrizes.length,
-          categoryCount: categories.length
+          playerCount: players?.length || 0,
+          activeCategoryCount: activeCategories.length,
+          activePrizeCount: activePrizes.length,
+          winnersCount: winners.length,
+          conflictCount: conflicts.length
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -297,124 +251,110 @@ Deno.serve(async (req) => {
   }
 });
 
-// Helper functions
-const toISODate = (d: any) => {
-  if (!d) return null;
-  if (typeof d === 'number') {
-    // Excel serial date (days since 1900-01-01)
-    const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
-    return isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
-  }
-  const t = Date.parse(String(d));
-  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
-};
+// ============= Helper Functions =============
 
-const normGender = (g: any) => {
+const normGender = (g?: string | null): string | null => {
   if (!g) return null;
   const s = String(g).trim().toLowerCase();
-  if (['f', 'female', 'girl', 'girls', 'woman', 'women', 'w'].includes(s)) return 'F';
-  if (['m', 'male', 'boy', 'boys', 'man', 'men'].includes(s)) return 'M';
+  if (['m', 'male', 'boy', 'boys'].includes(s)) return 'M';
+  if (['f', 'female', 'girl', 'girls'].includes(s)) return 'F';
   return null;
 };
 
-function isEligibleForCategory(player: any, category: any, rules: any): boolean {
-  const criteria = category.criteria_json || {};
+const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null => {
+  if (!dobISO) return null;
+  const d = new Date(dobISO);
+  if (Number.isNaN(d.getTime())) return null;
+  let y = onDate.getFullYear() - d.getFullYear();
+  const m = onDate.getMonth() - d.getMonth();
+  const day = onDate.getDate() - d.getDate();
+  if (m < 0 || (m === 0 && day < 0)) y -= 1;
+  return y;
+};
+
+// Detect rating category purely by presence of rating bounds
+const isRatingCategory = (criteria: any): boolean =>
+  criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number');
+
+const isEligible = (player: any, cat: CategoryRow, rules: any, onDate: Date): boolean => {
+  const c = cat.criteria_json || {};
   
-  // 1) DOB cutoff (dob_on_or_after) - robust date parsing
-  if (criteria.dob_on_or_after && player.dob) {
-    const pDate = toISODate(player.dob);
-    const cDate = toISODate(criteria.dob_on_or_after);
-    if (pDate && cDate && pDate < cDate) return false;
+  // Gender check
+  const reqG = c.gender?.toUpperCase?.() || null; // 'M' | 'F' | 'OPEN' | undefined
+  const pg = normGender(player.gender);
+  if (reqG === 'M' && pg !== 'M') return false;
+  if (reqG === 'F' && pg !== 'F') return false;
+  // OPEN allows both (no check)
+
+  // Age (strict ON by default)
+  const strict = rules?.strict_age !== false;
+  const age = yearsOn(player.dob ?? null, onDate);
+  if (c.max_age != null && strict) {
+    if (age == null || age > Number(c.max_age)) return false;  // U13 => age <= 13
+  }
+  if (c.min_age != null && strict) {
+    if (age == null || age < Number(c.min_age)) return false;  // Veteran 40+ => age >= 40
   }
 
-  // 2) Rating range
-  if (criteria.min_rating != null) {
-    const rating = player.rating ?? 0;
-    if (rating < criteria.min_rating) return false;
-  }
-  if (criteria.max_rating != null) {
-    const rating = player.rating ?? 0;
-    if (rating > criteria.max_rating) return false;
-  }
-
-  // 3) Unrated toggle
-  if (criteria.include_unrated === false) {
-    if (!player.rating || player.rating === 0) return false;
+  // Rating category handling
+  const ratingCat = isRatingCategory(c);
+  const allowUnrated = !!rules?.allow_unrated_in_rating;
+  const rating = (player.rating == null ? null : Number(player.rating));
+  if (ratingCat) {
+    if ((rating == null || rating === 0) && !allowUnrated) return false;
+    if (c.min_rating != null && rating != null && rating < Number(c.min_rating)) return false;
+    if (c.max_rating != null && rating != null && rating > Number(c.max_rating)) return false;
   }
 
-  // 4) Disability types (support both 'disability' and legacy 'disability_type')
-  if (Array.isArray(criteria.disability_types) && criteria.disability_types.length > 0) {
-    const playerDisability = (player.disability || player.disability_type || '').toLowerCase();
-    const allowedSet = new Set(criteria.disability_types.map((s: string) => s.toLowerCase()));
-    if (!playerDisability || !allowedSet.has(playerDisability)) return false;
+  // Optional filters (disability/city/state/club lists)
+  const inList = (val: any, arr?: any[]) => 
+    !arr || arr.length === 0 || arr.map(x => String(x).toLowerCase()).includes(String(val ?? '').toLowerCase());
+  
+  if (Array.isArray(c.allowed_disabilities) && c.allowed_disabilities.length > 0) {
+    if (!inList(player.disability, c.allowed_disabilities)) return false;
   }
-
-  // 5) Allowed cities
-  if (Array.isArray(criteria.allowed_cities) && criteria.allowed_cities.length > 0) {
-    const playerCity = (player.city || '').toLowerCase();
-    const allowedSet = new Set(criteria.allowed_cities.map((s: string) => s.toLowerCase()));
-    if (!playerCity || !allowedSet.has(playerCity)) return false;
+  if (Array.isArray(c.allowed_cities) && c.allowed_cities.length > 0) {
+    if (!inList(player.city, c.allowed_cities)) return false;
   }
-
-  // 6) Allowed clubs (ignored if column missing in player object)
-  if (Array.isArray(criteria.allowed_clubs) && criteria.allowed_clubs.length > 0) {
-    if ('club' in player) {
-      const playerClub = (player.club || '').toLowerCase();
-      const allowedSet = new Set(criteria.allowed_clubs.map((s: string) => s.toLowerCase()));
-      if (!playerClub || !allowedSet.has(playerClub)) return false;
-    }
-    // If 'club' column doesn't exist, we don't filter by it
+  if (Array.isArray(c.allowed_states) && c.allowed_states.length > 0) {
+    if (!inList(player.state, c.allowed_states)) return false;
   }
-
-  // Legacy criteria (keep for backward compatibility)
-  // Gender check (now robust / case-insensitive)
-  if (criteria.gender) {
-    const want = normGender(criteria.gender);
-    const have = normGender(player.gender);
-    if (want && have && want !== have) return false;
-    if (want && !have) return false; // category requires gender but player has none
-  }
-
-  // Old age_max (for backward compatibility)
-  if (criteria.age_max && player.dob) {
-    const age = calculateAge(player.dob);
-    if (age > criteria.age_max && rules.strict_age) return false;
-  }
-
-  // Legacy rating checks (for backward compatibility)
-  if (criteria.rating_min && player.rating < criteria.rating_min) return false;
-  if (criteria.rating_max && player.rating > criteria.rating_max) return false;
-
-  // Unrated check (legacy)
-  if (!player.rating && !rules.allow_unrated_in_rating && (criteria.rating_min || criteria.rating_max)) {
-    return false;
+  if (Array.isArray(c.allowed_clubs) && c.allowed_clubs.length > 0) {
+    if (!inList(player.club, c.allowed_clubs)) return false;
   }
 
   return true;
-}
+};
 
-function calculateAge(dob: string): number {
-  const birthDate = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
+// Value tier: Cash+Trophy > Cash+Medal > Cash > Trophy > Medal > None
+const valueTier = (p: PrizeRow): number => {
+  const cash = (p.cash_amount ?? 0) > 0;
+  if (cash && p.has_trophy) return 4;     // Cash + Trophy
+  if (cash && p.has_medal) return 3;      // Cash + Medal
+  if (cash) return 2;                     // Cash only
+  if (p.has_trophy) return 1;             // Trophy only
+  if (p.has_medal) return 0;              // Medal only
+  return -1; // no value
+};
 
-function calculatePrizePriority(prize: any, category: any, rules: any): number {
-  let priority = 0;
-  
-  // Main category gets highest priority
-  if (category.is_main) priority += 1000;
-  
-  // Cash value
-  priority += parseFloat(prize.cash_amount || 0);
-  
-  // Place (lower is better)
-  priority -= prize.place * 0.1;
-  
-  return priority;
-}
+const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
+  return {
+    order: cat.order_idx ?? 0,                 // brochure order (ASC)
+    tier: valueTier(p),                        // DESC
+    cash: p.cash_amount ?? 0,                  // DESC
+    main: cat.is_main ? 1 : 0,                 // DESC
+    place: p.place ?? 9999,                    // ASC
+    pid: p.id                                  // ASC (stable)
+  };
+};
+
+// Sort comparator: brochure order ASC, tier DESC, cash DESC, main DESC, place ASC, pid ASC
+const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
+  const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
+  if (ak.order !== bk.order) return ak.order - bk.order;
+  if (ak.tier !== bk.tier) return bk.tier - ak.tier;
+  if (ak.cash !== bk.cash) return bk.cash - ak.cash;
+  if (ak.main !== bk.main) return bk.main - ak.main;
+  if (ak.place !== bk.place) return ak.place - bk.place;
+  return String(ak.pid).localeCompare(String(bk.pid));
+};

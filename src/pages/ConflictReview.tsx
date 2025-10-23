@@ -246,7 +246,12 @@ export default function ConflictReview() {
       <div className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Review Allocations</h1>
-          {conflicts.length > 0 && <Badge variant="destructive">{conflicts.length} Conflicts</Badge>}
+          <div className="flex items-center gap-3 flex-wrap">
+            {conflicts.length > 0 && <Badge variant="destructive">{conflicts.length} Conflicts</Badge>}
+            <div className="text-sm text-muted-foreground">
+              Players: {playersList?.length || 0} · Active prizes: {prizesList?.length || 0} · Winners: {winners.length} · Conflicts: {conflicts.length}
+            </div>
+          </div>
         </div>
 
         {allocateMutation.isPending ? (
@@ -276,8 +281,8 @@ export default function ConflictReview() {
                           <Card key={conflict.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedConflict(conflict)}>
                             <CardHeader>
                               <CardTitle className="text-base flex items-center gap-2">
-                                <Badge variant={conflict.type === 'multi-eligibility' ? 'default' : conflict.type === 'equal-value' ? 'secondary' : 'destructive'}>
-                                  {conflict.type}
+                                <Badge variant="destructive">
+                                  {conflict.type === 'tie' ? 'Tie – identical prize priority' : conflict.type}
                                 </Badge>
                               </CardTitle>
                             </CardHeader>
@@ -293,7 +298,10 @@ export default function ConflictReview() {
                                 </p>
                               )}
                               <p className="text-xs text-muted-foreground">
-                                {conflict.reasons.join(', ')}
+                                {conflict.type === 'tie' 
+                                  ? `Player is equally eligible for ${conflict.impacted_prizes.length} prizes with identical brochure order, value tier, cash, main-ness and place. Choose one.`
+                                  : conflict.reasons.join(', ')
+                                }
                               </p>
                               <div className="flex gap-2 mt-3">
                                 {conflict.suggested && <Button size="sm" onClick={(e) => { e.stopPropagation(); handleAccept(conflict.id); }}>Accept</Button>}
