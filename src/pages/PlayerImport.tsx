@@ -87,6 +87,7 @@ export default function PlayerImport() {
   const [isParsing, setIsParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
+  const [showAllRows, setShowAllRows] = useState(false);
 
   // Auth & role for organizer guard
   const { user } = useAuth();
@@ -333,6 +334,9 @@ export default function PlayerImport() {
         'If your headers include spaces (e.g., "Special Notes"), that is OK — they will be normalized automatically.'
       );
       setMappedPlayers([]);
+      if (parsedData.length > 0) {
+        toast.error('We read the sheet but could not map any valid rows. Check that Rank and Name columns exist.');
+      }
       return;
     }
     
@@ -461,6 +465,7 @@ export default function PlayerImport() {
                       </label>
 
                       <Button
+                        type="button"
                         variant="secondary"
                         onClick={handleResetImport}
                         disabled={
@@ -513,7 +518,20 @@ export default function PlayerImport() {
               </Alert>
             )}
             <Card>
-              <CardHeader><CardTitle>Preview ({mappedPlayers.length} players)</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Preview ({mappedPlayers.length} players)</CardTitle>
+                  {mappedPlayers.length > 10 && (
+                    <button
+                      type="button"
+                      className="text-sm underline"
+                      onClick={() => setShowAllRows(v => !v)}
+                    >
+                      {showAllRows ? 'Show first 10' : `Show all ${mappedPlayers.length}`}
+                    </button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 <div className="rounded-md border overflow-auto max-h-96">
                   <Table>
@@ -532,20 +550,23 @@ export default function PlayerImport() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mappedPlayers.slice(0, 10).map((player, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell>{player.rank ?? ''}</TableCell>
-                          <TableCell>{player.name ?? ''}</TableCell>
-                          <TableCell>{player.rating ?? ''}</TableCell>
-                          <TableCell>{player.dob ?? ''}</TableCell>
-                          <TableCell>{player.gender ?? ''}</TableCell>
-                          <TableCell>{player.state ?? ''}</TableCell>
-                          <TableCell>{player.city ?? ''}</TableCell>
-                          <TableCell>{player.club ?? ''}</TableCell>
-                          <TableCell>{player.disability ?? ''}</TableCell>
-                          <TableCell>{player.special_notes ?? ''}</TableCell>
-                        </TableRow>
-                      ))}
+                      {(() => {
+                        const rowsToShow = showAllRows ? mappedPlayers : mappedPlayers.slice(0, 10);
+                        return rowsToShow.map((player, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{player.rank ?? ''}</TableCell>
+                            <TableCell>{player.name ?? ''}</TableCell>
+                            <TableCell>{player.rating ?? ''}</TableCell>
+                            <TableCell>{player.dob ?? ''}</TableCell>
+                            <TableCell>{player.gender ?? ''}</TableCell>
+                            <TableCell>{player.state ?? ''}</TableCell>
+                            <TableCell>{player.city ?? ''}</TableCell>
+                            <TableCell>{player.club ?? ''}</TableCell>
+                            <TableCell>{player.disability ?? ''}</TableCell>
+                            <TableCell>{player.special_notes ?? ''}</TableCell>
+                          </TableRow>
+                        ));
+                      })()}
                     </TableBody>
                   </Table>
                 </div>

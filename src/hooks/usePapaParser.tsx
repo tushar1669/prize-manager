@@ -53,7 +53,8 @@ export function usePapaParser() {
         throw new Error('No header row found. Please use the provided template and ensure row 1 has headers.');
       }
       
-      const headers = normalizeHeaders(asRows[0] || []);
+      const headersRaw = asRows[0] || [];
+      const headers = normalizeHeaders(headersRaw);
       
       // 🔍 DIAGNOSTIC: Log normalized headers
       console.log('[parseExcel] Normalized headers:', headers);
@@ -70,6 +71,8 @@ export function usePapaParser() {
         range: 1,
         defval: ''
       });
+
+      console.log('[parseExcel] Using normalized keys for data:', headers);
 
       if (!Array.isArray(data) || data.length === 0) {
         throw new Error('No data rows found under the header row (Row 1). Please ensure your data starts at Row 2.');
