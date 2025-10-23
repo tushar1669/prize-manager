@@ -551,18 +551,16 @@ export default function TournamentSetup() {
       for (const s of succeeded) {
         const ref = getEditorRef(s.categoryId);
         ref.current?.markSaved();
-        setDirty(`cat-prizes-${s.categoryId}`, false);
       }
-      await queryClient.invalidateQueries({ queryKey: ['category-prizes', id] });
+      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
     } else if (succeeded.length && failed.length) {
       const failedNames = failed.map(f => f.categoryName).join(', ');
       toast.warning(`Saved ${succeeded.length}, failed ${failed.length}: ${failedNames}`);
       for (const s of succeeded) {
         const ref = getEditorRef(s.categoryId);
         ref.current?.markSaved();
-        setDirty(`cat-prizes-${s.categoryId}`, false);
       }
-      await queryClient.invalidateQueries({ queryKey: ['category-prizes', id] });
+      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
       
       const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
       showError({
