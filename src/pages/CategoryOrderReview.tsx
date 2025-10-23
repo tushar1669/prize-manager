@@ -53,6 +53,7 @@ export default function CategoryOrderReview() {
   const [cats, setCats] = useState<Category[]>([]);
   const [lastSavedOrder, setLastSavedOrder] = useState<Category[]>([]);
   const { error, showError, clearError } = useErrorPanel();
+  const { setDirty, resetDirty } = useDirty();
 
   // DnD sensors (mouse/touch + keyboard)
   const sensors = useSensors(

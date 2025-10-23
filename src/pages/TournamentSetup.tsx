@@ -28,6 +28,7 @@ import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta } from '@/components/prizes/CategoryPrizesEditor';
+import { useDirty } from "@/contexts/DirtyContext";
 
 export default function TournamentSetup() {
   const { id } = useParams();
@@ -37,6 +38,7 @@ export default function TournamentSetup() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
+  const { setDirty, resetDirty } = useDirty();
   
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
@@ -45,7 +47,11 @@ export default function TournamentSetup() {
     open: boolean;
     category: any | null;
   }>({ open: false, category: null });
+  const [savedCriteria, setSavedCriteria] = useState<any>(null);
   const [prizes, setPrizes] = useState([
+    { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
+  ]);
+  const [initialPrizes, setInitialPrizes] = useState([
     { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
   ]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
@@ -136,6 +142,47 @@ export default function TournamentSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournament?.id]);
 
+  // Track Details form dirty state
+  useEffect(() => {
+    if (activeTab === 'details') {
+      setDirty('details', detailsForm.formState.isDirty);
+    }
+  }, [activeTab, detailsForm.formState.isDirty, setDirty]);
+
+  // Track Main prizes table dirty state
+  useEffect(() => {
+    if (activeTab === 'prizes') {
+      const isDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
+      setDirty('main-prizes', isDirty);
+    }
+  }, [activeTab, prizes, initialPrizes, setDirty]);
+
+  // Track Add Category dialog dirty state
+  useEffect(() => {
+    if (categoryDialogOpen) {
+      setDirty('add-category', categoryForm.formState.isDirty);
+    } else {
+      resetDirty('add-category');
+    }
+  }, [categoryDialogOpen, categoryForm.formState.isDirty, setDirty, resetDirty]);
+
+  // Track Criteria sheet dirty state (only when draft differs from saved)
+  useEffect(() => {
+    if (criteriaSheet.open && criteriaSheet.category) {
+      const isDirty = JSON.stringify(criteriaSheet.category.criteria_json) !== JSON.stringify(savedCriteria);
+      setDirty('criteria-sheet', isDirty);
+    } else {
+      resetDirty('criteria-sheet');
+    }
+  }, [criteriaSheet, savedCriteria, setDirty, resetDirty]);
+
+  // Initialize savedCriteria when criteria sheet opens
+  useEffect(() => {
+    if (criteriaSheet.open && criteriaSheet.category) {
+      setSavedCriteria(criteriaSheet.category.criteria_json);
+    }
+  }, [criteriaSheet.open]);
+
   // Organizer guard: owner or master
   const isOrganizer = 
     (user && tournament && tournament.owner_id === user.id) || !!isMaster;
@@ -185,6 +232,7 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       console.log('[details] save success');
+      resetDirty('details');
       queryClient.invalidateQueries({ queryKey: ['tournament', id] });
       toast.success('Tournament details saved');
       navigate(`/t/${id}/setup?tab=prizes`);
@@ -229,6 +277,7 @@ export default function TournamentSetup() {
       } finally {
         queryClient.invalidateQueries({ queryKey: ['categories', id] });
         toast.success('Category saved');
+        resetDirty('add-category');
         setCategoryDialogOpen(false);
         setIncludeCriteriaOnCopy(true);
         setCopyFromCategoryId(null);
@@ -302,6 +351,8 @@ export default function TournamentSetup() {
     },
     onSuccess: () => {
       console.log('[prizes] main prizes saved successfully');
+      resetDirty('main-prizes');
+      setInitialPrizes(prizes);
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
       // small delay so user sees the toast
@@ -421,6 +472,8 @@ export default function TournamentSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.success('Rules saved');
+      resetDirty('criteria-sheet');
+      setSavedCriteria(null);
       setCriteriaSheet({ open: false, category: null });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to save rules'),

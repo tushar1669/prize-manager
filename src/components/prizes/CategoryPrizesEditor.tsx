@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
 import { toast } from 'sonner';
+import { useDirty } from '@/contexts/DirtyContext';
 
 export interface PrizeRow {
   id?: string;
@@ -48,6 +49,7 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
   const { error, showError, clearError } = useErrorPanel();
+  const { setDirty, resetDirty } = useDirty();
   const newRowFocusRef = useRef<HTMLInputElement | null>(null);
 
   // initialize/refresh from props (also when prizes list changes on refetch)
@@ -76,6 +78,12 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
     () => draft.filter(p => p._status !== 'deleted').sort((a, b) => (a.place || 0) - (b.place || 0)),
     [draft]
   );
+
+  // Track dirty state for this category
+  useEffect(() => {
+    const hasDirty = draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted');
+    setDirty(`cat-${category.id}`, hasDirty);
+  }, [draft, category.id, setDirty]);
 
   const nextPlace = useMemo(() => {
     const places = draft.filter(p => p._status !== 'deleted').map(p => Number(p.place) || 0);
@@ -205,6 +213,7 @@ export default function CategoryPrizesEditor({ category, onSave, onToggleCategor
         .map(p => ({ ...p, _status: 'clean' as const }));
       setDraft(cleaned);
       setLastSaved(cleaned);
+      resetDirty(`cat-${category.id}`);
       toast.success('Category prizes saved');
     } catch (e: any) {
       console.error('[prizes-cat] error', { scope: 'category', message: e?.message || String(e) });

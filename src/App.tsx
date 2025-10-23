@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DirtyProvider } from "@/contexts/DirtyContext";
+import { NavigationGuard } from "@/components/NavigationGuard";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import TournamentSetup from "./pages/TournamentSetup";
@@ -28,10 +30,12 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+      <DirtyProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <NavigationGuard />
+          <Routes>
           {/* Public routes (no auth required) */}
           <Route path="/" element={<PublicHome />} />
           <Route path="/p/:slug" element={<PublicTournament />} />
@@ -57,8 +61,9 @@ const App = () => (
           
           {/* Fallback */}
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </DirtyProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useDirty } from "@/contexts/DirtyContext";
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -80,6 +81,7 @@ export default function PlayerImport() {
   const navigate = useNavigate();
   const { parseFile } = usePapaParser();
   const { error, showError, clearError } = useErrorPanel();
+  const { setDirty, resetDirty } = useDirty();
 
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -92,6 +94,11 @@ export default function PlayerImport() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
+
+  // Track dirty state when mapped players exist
+  useEffect(() => {
+    setDirty('import', mappedPlayers.length > 0);
+  }, [mappedPlayers, setDirty]);
 
   // Auth & role for organizer guard
   const { user } = useAuth();
