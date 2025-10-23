@@ -200,6 +200,10 @@ export default function PlayerImport() {
       setParseStatus('error');
     } finally {
       setIsParsing(false);
+      // Reset file input to allow re-uploading same filename
+      if (e?.target && 'value' in e.target) {
+        (e.target as HTMLInputElement).value = '';
+      }
     }
   };
 
