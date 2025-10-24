@@ -33,9 +33,20 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext";
+import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
+import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
+import { downloadPlayersTemplateXlsx, downloadErrorXlsx } from '@/utils/excel';
+import { 
+  HEADER_ALIASES, 
+  generatePlayerKey, 
+  normalizeName,
+  ImportConflict,
+  ImportConflictType 
+} from '@/utils/importSchema';
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
+  fide_id?: string | null;
 }
 
 // Helper functions for smart retry
@@ -95,6 +106,32 @@ export default function PlayerImport() {
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
 
+  // NEW: DB players for conflict detection
+  const [dbPlayers, setDbPlayers] = useState<Array<{
+    id: string;
+    name: string;
+    dob?: string | null;
+    rating?: number | null;
+    fide_id?: string | null;
+  }>>([]);
+
+  // NEW: Conflicts (separate from duplicates)
+  const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
+
+  // NEW: Autosave
+  const importDraftKey = makeKey(`t:${id}:import`);
+  const [importRestore, setImportRestore] = useState<null | { 
+    data: { 
+      mappedPlayers: ParsedPlayer[]; 
+      conflicts: ImportConflict[];
+      replaceExisting: boolean;
+    }; 
+    ageMs: number 
+  }>(null);
+
+  // NEW: Conflict resolution tracking
+  const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
+
   // Track dirty state when mapped players exist
   useEffect(() => {
     setDirty('import', mappedPlayers.length > 0);
@@ -122,32 +159,55 @@ export default function PlayerImport() {
 
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
 
+  // NEW: Fetch existing players for duplicate/conflict detection
+  const { data: existingPlayers } = useQuery({
+    queryKey: ['players', id],
+    queryFn: async () => {
+      // Try to select fide_id, but handle gracefully if column doesn't exist
+      const { data, error } = await supabase
+        .from('players')
+        .select('id, name, dob, rating')
+        .eq('tournament_id', id);
+      if (error) throw error;
+      return (data || []).map(p => ({ ...p, fide_id: null }));
+    },
+    enabled: !!id
+  });
+
+  useEffect(() => {
+    if (existingPlayers) {
+      console.log('[import] Loaded', existingPlayers.length, 'existing players');
+      setDbPlayers(existingPlayers);
+    }
+  }, [existingPlayers]);
+
+  // NEW: Check for autosave draft on mount
+  useEffect(() => {
+    if (mappedPlayers.length > 0) return; // Don't overwrite existing work
+    const draft = getDraft<{ 
+      mappedPlayers: ParsedPlayer[]; 
+      conflicts: ImportConflict[];
+      replaceExisting: boolean;
+    }>(importDraftKey, 1);
+    
+    if (draft) {
+      console.log('[import] Draft found:', draft.data.mappedPlayers.length, 'players');
+      setImportRestore(draft);
+    }
+  }, [id, importDraftKey, mappedPlayers.length]);
+
+  // NEW: Autosave mapped data + conflicts + checkbox state
+  useAutosaveEffect({
+    key: importDraftKey,
+    data: { mappedPlayers, conflicts, replaceExisting },
+    enabled: mappedPlayers.length > 0,
+    debounceMs: 800,
+    version: 1
+  });
+
   const downloadTemplate = () => {
-    const headers = ["rank", "name", "rating", "dob", "gender", "state", "city", "club", "disability", "special_notes"];
-    const sample = [
-      [1, "Aditi Sharma", 1850, "2007-03-17", "F", "MH", "Mumbai", "Mumbai Chess Club", "", ""],
-      [2, "Rohan Iyer", 1720, "2005-11-02", "M", "KA", "Bengaluru", "Karnataka CA", "Hearing", "Front row seat"],
-      [3, "Sia Verma", 1500, "2010-08-25", "F", "DL", "New Delhi", "", "", "Vegetarian lunch"],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
-    (ws as any)["!cols"] = [
-      { wch: 6 },  // rank
-      { wch: 22 }, // name
-      { wch: 8 },  // rating
-      { wch: 12 }, // dob
-      { wch: 8 },  // gender
-      { wch: 8 },  // state
-      { wch: 16 }, // city
-      { wch: 20 }, // club
-      { wch: 12 }, // disability
-      { wch: 24 }, // special_notes
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Players");
-    XLSX.writeFile(wb, "players_template.xlsx");
-    toast.success("Template downloaded");
+    downloadPlayersTemplateXlsx();
+    toast.success('Excel template downloaded');
   };
 
   const handleResetImport = () => {
@@ -205,19 +265,8 @@ export default function PlayerImport() {
       const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '_');
       const autoMapping: Record<string, string> = {};
       
-      // Comprehensive synonym lists matching ColumnMappingDialog
-      const synonyms: Record<string, string[]> = {
-        rank: ['rank', 'sr_no', 's_no', 'sno', 'seed', 'seeding', 'pos', 'position'],
-        name: ['name', 'player_name', 'full_name', 'player'],
-        rating: ['rating', 'elo', 'rtg'],
-        dob: ['dob', 'date_of_birth', 'birth_date', 'birthdate'],
-        gender: ['gender', 'sex'],
-        state: ['state', 'province'],
-        city: ['city', 'town'],
-        club: ['club', 'chess_club'],
-        disability: ['disability', 'special_needs'],
-        special_notes: ['special_notes', 'notes', 'remarks', 'comments']
-      };
+      // Use centralized aliases
+      const synonyms = HEADER_ALIASES;
       
       csvHeaders.forEach(h => {
         const normalized = norm(h);
@@ -254,6 +303,7 @@ export default function PlayerImport() {
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
+    // Map data with fide_id support
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
       const player: Record<string, any> = { _originalIndex: idx + 1 };
 
@@ -276,12 +326,13 @@ export default function PlayerImport() {
               value = isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
             }
           }
+        } else if (fieldKey === 'fide_id' && value != null) {
+          // NEW: Normalize FIDE ID (trim, convert to string)
+          value = String(value).trim() || null;
         } else if (typeof value === 'string') {
-          // Trim all string fields and convert empty strings to null
           value = value.trim() || null;
         }
 
-        // Always carry what the mapping gave us; we'll strip unknown fields at insert time.
         player[fieldKey] = value;
       });
 
@@ -293,7 +344,6 @@ export default function PlayerImport() {
       if (player.dob) {
         const normalized = toISODate(player.dob);
         if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-          // Will be caught in validation below
           player.dob = null;
         } else {
           player.dob = normalized;
@@ -301,6 +351,7 @@ export default function PlayerImport() {
       }
     });
 
+    // Validate
     const errors: { row: number; errors: string[] }[] = [];
     const validPlayers: ParsedPlayer[] = [];
 
@@ -318,22 +369,85 @@ export default function PlayerImport() {
 
     setValidationErrors(errors);
 
-    const dupes: { row: number; duplicate: string }[] = [];
-    const seen = new Map<string, number>();
+    // NEW: Enhanced duplicate detection (within file + DB conflicts)
+    const newDupes: { row: number; duplicate: string }[] = [];
+    const newConflicts: ImportConflict[] = [];
+    const seenInFile = new Map<string, number>();
 
     validPlayers.forEach(player => {
-      if (player.name && player.dob) {
-        const key = `${player.name.toLowerCase().trim()}|${player.dob}`;
-        const existing = seen.get(key);
-        if (existing) {
-          dupes.push({ row: player._originalIndex, duplicate: `Duplicate of row ${existing}` });
-        } else {
-          seen.set(key, player._originalIndex);
+      if (!player.name) return; // Skip if no name
+      
+      const key = generatePlayerKey(player as { name: string; dob?: string | null; fide_id?: string | null });
+      
+      // Check within file
+      const existingRow = seenInFile.get(key);
+      if (existingRow) {
+        newDupes.push({ 
+          row: player._originalIndex, 
+          duplicate: `Duplicate of row ${existingRow}` 
+        });
+        newConflicts.push({
+          row: player._originalIndex,
+          type: 'duplicate_in_file',
+          message: `Duplicate of row ${existingRow} (same ${player.fide_id ? 'FIDE ID' : 'name+DOB'})`
+        });
+      } else {
+        seenInFile.set(key, player._originalIndex);
+      }
+      
+      // Check against DB players
+      if (dbPlayers.length > 0 && !existingRow) {
+        const dbMatch = dbPlayers.find(db => {
+          // Match by FIDE ID first
+          if (player.fide_id && db.fide_id) {
+            return player.fide_id === db.fide_id;
+          }
+          // Fallback to name+DOB
+          if (player.name && player.dob && db.name && db.dob) {
+            return normalizeName(player.name) === normalizeName(db.name) && 
+                   player.dob === db.dob;
+          }
+          return false;
+        });
+        
+        if (dbMatch) {
+          const dobMismatch = player.dob && dbMatch.dob && player.dob !== dbMatch.dob;
+          const ratingMismatch = player.rating != null && dbMatch.rating != null && 
+                                Math.abs(player.rating - dbMatch.rating) > 100;
+          
+          if (dobMismatch) {
+            newConflicts.push({
+              row: player._originalIndex,
+              playerId: dbMatch.id,
+              type: 'conflict_different_dob',
+              message: `Player exists with different DOB: existing ${dbMatch.dob}, new ${player.dob}`,
+              existingPlayer: dbMatch
+            });
+          } else if (ratingMismatch) {
+            newConflicts.push({
+              row: player._originalIndex,
+              playerId: dbMatch.id,
+              type: 'conflict_different_rating',
+              message: `Player exists with different rating: existing ${dbMatch.rating}, new ${player.rating}`,
+              existingPlayer: dbMatch
+            });
+          } else {
+            newConflicts.push({
+              row: player._originalIndex,
+              playerId: dbMatch.id,
+              type: 'already_exists',
+              message: 'Player already exists in tournament',
+              existingPlayer: dbMatch
+            });
+          }
         }
       }
     });
 
-    setDuplicates(dupes);
+    setDuplicates(newDupes);
+    setConflicts(newConflicts);
+    
+    console.log('[import] Conflicts detected:', newConflicts.length);
     
     // Filter out invalid rows before setting
     const valid = validPlayers.filter(p => Number(p.rank) > 0 && String(p.name || '').trim().length > 0);
@@ -365,29 +479,24 @@ export default function PlayerImport() {
         message: "Each player must have a unique rank.",
         hint: msg
       });
-      toast.error(`Duplicate ranks detected. Each player must have a unique rank.`, { duration: 6000 });
+      toast.error('Duplicate ranks detected. Each player must have a unique rank.', { duration: 6000 });
       setMappedPlayers([]);
       return;
     }
     
     if (valid.length === 0) {
-      console.warn('[import] No valid rows after mapping. First raw row:', parsedData?.[0]);
+      console.warn('[import] No valid rows after mapping');
       setParseStatus('error');
-      setParseError(
-        'No valid rows after mapping. Please ensure Row 1 contains headers, data starts at Row 2, and at least "rank" and "name" are present. ' +
-        'If your headers include spaces (e.g., "Special Notes"), that is OK — they will be normalized automatically.'
-      );
+      setParseError('No valid rows after mapping. Ensure Rank and Name columns exist.');
       setMappedPlayers([]);
-      if (parsedData.length > 0) {
-        toast.error('We read the sheet but could not map any valid rows. Check that Rank and Name columns exist.');
-      }
+      toast.error('No valid rows found. Check that Rank and Name columns exist.');
       return;
     }
     
     setMappedPlayers(valid);
 
-    // Set parseStatus AFTER validation is complete
-    if (errors.length === 0 && dupes.length === 0) {
+    // Set parseStatus
+    if (errors.length === 0 && newDupes.length === 0) {
       toast.success(`${valid.length} players ready to import`);
       setParseStatus('ok');
     } else {
@@ -397,93 +506,113 @@ export default function PlayerImport() {
 
   const importPlayersMutation = useMutation({
     mutationFn: async (players: ParsedPlayer[]) => {
-      console.time('[import] transaction');
+      console.time('[import] batch-insert');
       
-      // Start from the union of keys we actually have in ParsedPlayer objects
-      const extraKeys = new Set<string>();
-      players.forEach(p => Object.keys(p).forEach(k => extraKeys.add(k)));
-
-      // Always required + whatever else we saw (minus our internal key)
-      let fields = Array.from(extraKeys).filter(k => k !== '_originalIndex');
-      if (!fields.includes('rank')) fields.push('rank');
-      if (!fields.includes('name')) fields.push('name');
-
-      // Replace: delete existing players if checkbox is ON
+      const CHUNK_SIZE = 500;
+      const fields = ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club', 'disability', 'special_notes'];
+      
+      // Replace logic
       if (replaceExisting) {
-        console.log('[import] Deleting existing players for tournament', id);
+        console.log('[import] Deleting existing players');
         const { error: deleteError } = await supabase
           .from('players')
           .delete()
           .eq('tournament_id', id);
         
         if (deleteError) {
-          console.error('[import] Delete failed:', deleteError);
           throw new Error(`Failed to clear existing players: ${deleteError.message}`);
         }
-        console.log('[import] Existing players cleared');
       }
 
-      // Build row payload factory
-      const buildRows = (fieldList: string[]) =>
-        players.map(p => {
-          const row: any = pick(p, fieldList);
-          // Required framework columns:
-          row.tournament_id = id;
-          row.tags_json = {};
-          row.warnings_json = {};
-          // Defaults
-          if ('rating' in row && (row.rating == null || row.rating === '')) row.rating = 0;
-          if ('dob' in row && row.dob === '') row.dob = null;
-          if ('gender' in row && row.gender === '') row.gender = null;
-          if ('state' in row && row.state === '') row.state = null;
-          if ('city' in row && row.city === '') row.city = null;
-          return row;
-        });
+      const buildRows = (playerList: ParsedPlayer[]) =>
+        playerList.map(p => ({
+          ...pick(p, fields),
+          tournament_id: id,
+          tags_json: {},
+          warnings_json: {}
+        }));
 
-      // Try up to 4 times, stripping unknown columns as needed
-      let attempts = 0;
-      let lastErr: any = null;
-      let currentFields = [...fields];
-      while (attempts < 4) {
-        const payload = buildRows(currentFields);
+      // Chunk insert
+      const chunks: ParsedPlayer[][] = [];
+      for (let i = 0; i < players.length; i += CHUNK_SIZE) {
+        chunks.push(players.slice(i, i + CHUNK_SIZE));
+      }
+
+      const results: { 
+        success: ParsedPlayer[]; 
+        failed: Array<{ player: ParsedPlayer; error: string }> 
+      } = { success: [], failed: [] };
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
+        
+        const payload = buildRows(chunk);
         const { data, error } = await supabase.from('players').insert(payload).select('id');
 
         if (!error) {
-          console.timeEnd('[import] transaction');
-          return data;
+          results.success.push(...chunk);
+        } else {
+          console.warn('[import] Chunk failed, trying individual inserts');
+          for (const player of chunk) {
+            const singlePayload = buildRows([player]);
+            const { error: singleError } = await supabase.from('players').insert(singlePayload);
+            
+            if (singleError) {
+              results.failed.push({ player, error: singleError.message || 'Unknown error' });
+            } else {
+              results.success.push(player);
+            }
+          }
         }
-
-        const unknown = extractUnknownColumn(error?.message || '');
-        if (unknown && currentFields.includes(unknown)) {
-          console.warn(`[import] Removing unknown column "${unknown}" and retrying insert`);
-          currentFields = currentFields.filter(f => f !== unknown);
-          attempts++;
-          continue;
-        }
-        lastErr = error;
-        break;
       }
 
-      console.timeEnd('[import] transaction');
-      throw lastErr || new Error('Insert failed after retries');
+      console.timeEnd('[import] batch-insert');
+      return results;
     },
-    onSuccess: (data) => {
-      const mode = replaceExisting ? 'replaced previous list' : 'appended';
-      toast.success(`Imported ${data.length} players (${mode})`);
+    onSuccess: (results) => {
+      clearDraft(importDraftKey);
       resetDirty('import');
-      if (!id) {
-        toast.error('Tournament ID missing');
-        navigate('/dashboard');
-        return;
+      
+      if (results.failed.length === 0) {
+        toast.success(`Imported all ${results.success.length} players`);
+        navigate(`/t/${id}/review`);
+      } else {
+        toast.warning(`Imported ${results.success.length} players. ${results.failed.length} failed.`);
+        
+        const errorRows = results.failed.map(f => ({
+          row: f.player._originalIndex,
+          error: f.error,
+          rank: f.player.rank,
+          name: f.player.name,
+          rating: f.player.rating,
+          dob: f.player.dob,
+          gender: f.player.gender
+        }));
+        
+        downloadErrorXlsx(errorRows);
+        toast.info('Error Excel downloaded');
       }
-      navigate(`/t/${id}/review`);
     },
     onError: (err: any) => {
-      const msg = err?.message || 'Import failed';
-      console.error('[players import] error', err);
-      toast.error(msg);
+      toast.error(err?.message || 'Import failed');
     }
   });
+
+  // Register Cmd/Ctrl+S
+  const { registerOnSave } = useDirty();
+
+  useEffect(() => {
+    if (mappedPlayers.length > 0 && validationErrors.length === 0 && !importPlayersMutation.isPending) {
+      registerOnSave(async () => {
+        console.log('[shortcut] importing players');
+        await importPlayersMutation.mutateAsync(mappedPlayers);
+      });
+    } else {
+      registerOnSave(null);
+    }
+    return () => registerOnSave(null);
+  }, [mappedPlayers, validationErrors, importPlayersMutation, registerOnSave]);
 
   const clearPlayersMutation = useMutation({
     mutationFn: async () => {

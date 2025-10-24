@@ -11,19 +11,11 @@ function normalizeHeaders(headers: any[]): string[] {
 }
 
 export function usePapaParser() {
+  // CSV parsing is disabled - users must upload Excel
   const parseCSV = useCallback((file: File): Promise<Parsed> => {
-    return new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        dynamicTyping: true,
-        complete: (results) => {
-          const headers = normalizeHeaders(results.meta.fields || []);
-          resolve({ data: results.data as any[], headers });
-        },
-        error: (err) => reject(err)
-      });
-    });
+    return Promise.reject(
+      new Error('Please upload Excel (.xlsx or .xls). CSV files are not supported.')
+    );
   }, []);
 
   const parseExcel = useCallback(async (file: File): Promise<Parsed> => {
@@ -92,10 +84,10 @@ export function usePapaParser() {
   const parseFile = useCallback((file: File): Promise<Parsed> => {
     const name = (file.name || '').toLowerCase();
     if (name.endsWith('.csv')) {
-      return Promise.reject(new Error('CSV is temporarily disabled. Please upload an Excel (.xls/.xlsx) file.'));
+      return Promise.reject(new Error('Please upload Excel (.xlsx or .xls). CSV files are not supported.'));
     }
     if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
-    return Promise.reject(new Error('Unsupported file type. Please upload Excel (.xls/.xlsx).'));
+    return Promise.reject(new Error('Unsupported file type. Please upload Excel (.xls or .xlsx).'));
   }, [parseExcel]);
 
   return { parseFile };

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { HEADER_ALIASES } from "@/utils/importSchema";
 import {
   Dialog,
   DialogContent,
@@ -29,36 +30,22 @@ const requiredFields = [
   { key: 'name', label: 'Name (required)', description: 'Player full name' }
 ];
 
-const optionalFields = [
-  { key: 'rating', label: 'Rating', description: 'Player rating (number)' },
-  { key: 'dob', label: 'Date of Birth', description: 'Format: YYYY-MM-DD' },
-  { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
-  { key: 'state', label: 'State', description: 'Player state/province' },
-  { key: 'city', label: 'City', description: 'Player city' },
-  { key: 'club', label: 'Club', description: 'Chess club or organization' },
-  { key: 'disability', label: 'Disability', description: 'Disability type (e.g., Hearing, Visual)' },
-  { key: 'special_notes', label: 'Special Notes', description: 'Special requirements or accommodations' }
-];
+  const optionalFields = [
+    { key: 'rating', label: 'Rating', description: 'Player rating (number)' },
+    { key: 'dob', label: 'Date of Birth', description: 'Format: YYYY-MM-DD' },
+    { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
+    { key: 'fide_id', label: 'FIDE ID', description: 'FIDE identification number (for duplicate detection)' },
+    { key: 'state', label: 'State', description: 'Player state/province' },
+    { key: 'city', label: 'City', description: 'Player city' },
+    { key: 'club', label: 'Club', description: 'Chess club or organization' },
+    { key: 'disability', label: 'Disability', description: 'Disability type (e.g., Hearing, Visual)' },
+    { key: 'special_notes', label: 'Special Notes', description: 'Special requirements or accommodations' }
+  ];
 
 const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
 
-const mappingRules: Record<string, string[]> = {
-  // required
-  rank: ['rank', 'position', 'pos', 'rank#', '#'],
-  name: ['name', 'player', 'player name', 'full name', 'playername'],
-
-  // existing optional
-  rating: ['rating', 'elo', 'fide rating', 'elo rating', 'fide'],
-  dob: ['dob', 'date of birth', 'birth date', 'd.o.b', 'birthdate'],
-  gender: ['gender', 'sex', 'g'],
-  state: ['state', 'province', 'region', 'st'],
-  city: ['city', 'town', 'location'],
-
-  // NEW optional (synonyms included; these are mapped only if headers exist)
-  club: ['club', 'chess club', 'organization', 'academy'],
-  disability: ['disability', 'disability type', 'handicap', 'ph', 'pwd', 'physically handicapped', 'special category'],
-  special_notes: ['special notes', 'notes', 'remarks', 'special needs', 'accommodations', 'comments']
-};
+// Use centralized aliases from importSchema
+const mappingRules = HEADER_ALIASES;
 
 export function ColumnMappingDialog({ 
   open, 
