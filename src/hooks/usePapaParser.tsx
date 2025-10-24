@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
 type Parsed = { data: any[]; headers: string[] };
@@ -11,13 +10,6 @@ function normalizeHeaders(headers: any[]): string[] {
 }
 
 export function usePapaParser() {
-  // CSV parsing is disabled - users must upload Excel
-  const parseCSV = useCallback((file: File): Promise<Parsed> => {
-    return Promise.reject(
-      new Error('Please upload Excel (.xlsx or .xls). CSV files are not supported.')
-    );
-  }, []);
-
   const parseExcel = useCallback(async (file: File): Promise<Parsed> => {
     try {
       const ab = await file.arrayBuffer();
