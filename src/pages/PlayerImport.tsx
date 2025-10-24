@@ -525,12 +525,24 @@ export default function PlayerImport() {
       }
 
       const buildRows = (playerList: ParsedPlayer[]) =>
-        playerList.map(p => ({
-          ...pick(p, fields),
-          tournament_id: id,
-          tags_json: {},
-          warnings_json: {}
-        }));
+        playerList.map(p => {
+          const picked = pick(p, fields);
+          return {
+            rank: Number(p.rank), // Required: must be a number
+            name: String(p.name || ''), // Required: must be a string
+            rating: picked.rating != null ? Number(picked.rating) : null,
+            dob: picked.dob || null,
+            gender: picked.gender || null,
+            state: picked.state || null,
+            city: picked.city || null,
+            club: picked.club || null,
+            disability: picked.disability || null,
+            special_notes: picked.special_notes || null,
+            tournament_id: id!,
+            tags_json: {},
+            warnings_json: {}
+          };
+        });
 
       // Chunk insert
       const chunks: ParsedPlayer[][] = [];
@@ -655,8 +667,46 @@ export default function PlayerImport() {
       <div className="container mx-auto px-6 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
-          <p className="text-muted-foreground">Upload Excel (XLS/XLSX) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, disability, special_notes.</p>
+          <p className="text-muted-foreground">Upload Excel (.xlsx or .xls) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, club, disability, special_notes, fide_id.</p>
         </div>
+
+        {/* Restore banner */}
+        {importRestore && !hasData && (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                A saved draft from <strong>{formatAge(importRestore.ageMs)}</strong> with{' '}
+                <strong>{importRestore.data.mappedPlayers.length} players</strong> is available.
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setMappedPlayers(importRestore.data.mappedPlayers);
+                    setConflicts(importRestore.data.conflicts);
+                    setReplaceExisting(importRestore.data.replaceExisting);
+                    setImportRestore(null);
+                    setParseStatus('ok');
+                    toast.success('Draft restored');
+                  }}
+                >
+                  Restore draft
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clearDraft(importDraftKey);
+                    setImportRestore(null);
+                  }}
+                >
+                  Discard
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!hasData ? (
           <Card>
@@ -729,6 +779,93 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
+            {/* Conflict resolution UI */}
+            {conflicts.length > 0 && (
+              <Card className="border-amber-300 bg-amber-50/50">
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    Conflicts Detected ({conflicts.filter(c => !resolvedConflicts.has(c.row)).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                  {conflicts.filter(c => !resolvedConflicts.has(c.row)).map((conflict, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex items-start justify-between gap-3 p-3 bg-white border rounded-md"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">Row {conflict.row}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${
+                            conflict.type === 'duplicate_in_file' ? 'bg-red-100 text-red-700' :
+                            conflict.type === 'already_exists' ? 'bg-blue-100 text-blue-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {conflict.type.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{conflict.message}</p>
+                        {conflict.existingPlayer && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Existing: {conflict.existingPlayer.name} 
+                            {conflict.existingPlayer.dob && ` (${conflict.existingPlayer.dob})`}
+                            {conflict.existingPlayer.rating && ` • Rating: ${conflict.existingPlayer.rating}`}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          aria-label={`Keep new player from row ${conflict.row}`}
+                          onClick={() => {
+                            setResolvedConflicts(prev => new Set(prev).add(conflict.row));
+                            toast.info(`Row ${conflict.row}: keeping new player`);
+                          }}
+                        >
+                          Keep New
+                        </Button>
+                        {conflict.existingPlayer && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            aria-label={`Use existing player for row ${conflict.row}`}
+                            onClick={() => {
+                              setMappedPlayers(prev => 
+                                prev.filter(p => p._originalIndex !== conflict.row)
+                              );
+                              setResolvedConflicts(prev => new Set(prev).add(conflict.row));
+                              toast.info(`Row ${conflict.row}: using existing player`);
+                            }}
+                          >
+                            Use Existing
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          aria-label={`Skip row ${conflict.row}`}
+                          onClick={() => {
+                            setMappedPlayers(prev => 
+                              prev.filter(p => p._originalIndex !== conflict.row)
+                            );
+                            setResolvedConflicts(prev => new Set(prev).add(conflict.row));
+                            toast.info(`Row ${conflict.row}: skipped`);
+                          }}
+                        >
+                          Skip
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {validationErrors.length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -760,38 +897,55 @@ export default function PlayerImport() {
               </CardHeader>
               <CardContent>
                 <div className="rounded-md border overflow-auto max-h-96">
-                  <Table>
+                  <Table role="table" aria-label="Player import preview">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Rank</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Rating</TableHead>
-                        <TableHead>DOB</TableHead>
-                        <TableHead>Gender</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>City</TableHead>
-                        <TableHead>Club</TableHead>
-                        <TableHead>Disability</TableHead>
-                        <TableHead>Special Notes</TableHead>
+                        <TableHead scope="col">Rank</TableHead>
+                        <TableHead scope="col">Name</TableHead>
+                        <TableHead scope="col">Rating</TableHead>
+                        <TableHead scope="col">DOB</TableHead>
+                        <TableHead scope="col">Gender</TableHead>
+                        <TableHead scope="col">State</TableHead>
+                        <TableHead scope="col">City</TableHead>
+                        <TableHead scope="col">Club</TableHead>
+                        <TableHead scope="col">Disability</TableHead>
+                        <TableHead scope="col">Special Notes</TableHead>
+                        <TableHead scope="col">FIDE ID</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(() => {
                         const rowsToShow = showAllRows ? mappedPlayers : mappedPlayers.slice(0, 10);
-                        return rowsToShow.map((player, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{player.rank ?? ''}</TableCell>
-                            <TableCell>{player.name ?? ''}</TableCell>
-                            <TableCell>{player.rating ?? ''}</TableCell>
-                            <TableCell>{player.dob ?? ''}</TableCell>
-                            <TableCell>{player.gender ?? ''}</TableCell>
-                            <TableCell>{player.state ?? ''}</TableCell>
-                            <TableCell>{player.city ?? ''}</TableCell>
-                            <TableCell>{player.club ?? ''}</TableCell>
-                            <TableCell>{player.disability ?? ''}</TableCell>
-                            <TableCell>{player.special_notes ?? ''}</TableCell>
-                          </TableRow>
-                        ));
+                        return rowsToShow.map((player, idx) => {
+                          const hasConflict = conflicts.some(c => c.row === player._originalIndex);
+                          return (
+                            <TableRow 
+                              key={idx}
+                              tabIndex={0}
+                              aria-rowindex={idx + 1}
+                              className={hasConflict ? 'bg-amber-50/50' : ''}
+                            >
+                              <TableCell>{player.rank ?? ''}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {player.name ?? ''}
+                                  {hasConflict && (
+                                    <span className="text-xs text-amber-600" title="Conflict detected">⚠️</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>{player.rating ?? ''}</TableCell>
+                              <TableCell>{player.dob ?? ''}</TableCell>
+                              <TableCell>{player.gender ?? ''}</TableCell>
+                              <TableCell>{player.state ?? ''}</TableCell>
+                              <TableCell>{player.city ?? ''}</TableCell>
+                              <TableCell>{player.club ?? ''}</TableCell>
+                              <TableCell>{player.disability ?? ''}</TableCell>
+                              <TableCell>{player.special_notes ?? ''}</TableCell>
+                              <TableCell>{player.fide_id ?? ''}</TableCell>
+                            </TableRow>
+                          );
+                        });
                       })()}
                     </TableBody>
                   </Table>
@@ -839,19 +993,16 @@ export default function PlayerImport() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const blob = new Blob(
-                      [JSON.stringify({ validationErrors, duplicates }, null, 2)],
-                      { type: 'application/json' }
-                    );
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `import-errors-${Date.now()}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    const errorRows = validationErrors.map(err => ({
+                      row: err.row,
+                      error: err.errors.join('; '),
+                      ...mappedPlayers.find(p => p._originalIndex === err.row)
+                    }));
+                    downloadErrorXlsx(errorRows);
+                    toast.success('Error Excel downloaded');
                   }}
                 >
-                  Download Error Log (JSON)
+                  Download Error Excel
                 </Button>
               </div>
             )}
