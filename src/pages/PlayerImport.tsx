@@ -599,11 +599,17 @@ export default function PlayerImport() {
           name: f.player.name,
           rating: f.player.rating,
           dob: f.player.dob,
-          gender: f.player.gender
+          gender: f.player.gender,
+          state: f.player.state,
+          city: f.player.city,
+          club: f.player.club,
+          disability: f.player.disability,
+          special_notes: f.player.special_notes,
+          fide_id: f.player.fide_id,
         }));
         
         downloadErrorXlsx(errorRows);
-        toast.info('Error Excel downloaded');
+        toast.info('Error Excel downloaded automatically');
       }
     },
     onError: (err: any) => {
@@ -615,7 +621,15 @@ export default function PlayerImport() {
   const { registerOnSave } = useDirty();
 
   useEffect(() => {
-    if (mappedPlayers.length > 0 && validationErrors.length === 0 && !importPlayersMutation.isPending) {
+    const unresolved = conflicts.filter(c => !resolvedConflicts.has(c.row)).length;
+
+    const ready =
+      mappedPlayers.length > 0 &&
+      validationErrors.length === 0 &&
+      unresolved === 0 &&
+      !importPlayersMutation.isPending;
+
+    if (ready) {
       registerOnSave(async () => {
         console.log('[shortcut] importing players');
         await importPlayersMutation.mutateAsync(mappedPlayers);
@@ -623,8 +637,16 @@ export default function PlayerImport() {
     } else {
       registerOnSave(null);
     }
+
     return () => registerOnSave(null);
-  }, [mappedPlayers, validationErrors, importPlayersMutation, registerOnSave]);
+  }, [
+    mappedPlayers,
+    validationErrors,
+    conflicts,
+    resolvedConflicts,
+    importPlayersMutation.isPending,
+    registerOnSave,
+  ]);
 
   const clearPlayersMutation = useMutation({
     mutationFn: async () => {
