@@ -198,12 +198,15 @@ export default function TournamentSetup() {
     if (draft) setMainPrizesRestore(draft);
   }, [activeTab, mainPrizesDraftKey]);
 
-  // Autosave Main Prizes while dirty
+  // Track if we've hydrated prizes from DB (to guard autosave)
+  const [hasHydratedPrizes, setHasHydratedPrizes] = useState(false);
+
+  // Autosave Main Prizes while dirty (only after hydration)
   const isMainPrizesDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
   useAutosaveEffect({
     key: mainPrizesDraftKey,
     data: prizes,
-    enabled: activeTab === 'prizes' && isMainPrizesDirty,
+    enabled: hasHydratedPrizes && activeTab === 'prizes' && isMainPrizesDirty,
     debounceMs: 1000,
     version: 1,
   });
@@ -272,6 +275,28 @@ export default function TournamentSetup() {
     },
     enabled: !!id && activeTab === 'prizes'
   });
+
+  // Hydrate main prizes from DB when categories load
+  useEffect(() => {
+    if (!categories || hasHydratedPrizes) return;
+    
+    const mainCat = categories.find(c => c.is_main);
+    if (mainCat?.prizes && mainCat.prizes.length > 0) {
+      const dbPrizes = mainCat.prizes.map(p => ({
+        place: p.place,
+        cash_amount: p.cash_amount,
+        has_trophy: p.has_trophy,
+        has_medal: p.has_medal
+      }));
+      
+      console.log('[prizes] hydrating main prizes from DB', { count: dbPrizes.length });
+      setPrizes(dbPrizes);
+      setInitialPrizes(dbPrizes);
+      setHasHydratedPrizes(true);
+    } else if (mainCat) {
+      setHasHydratedPrizes(true);
+    }
+  }, [categories, hasHydratedPrizes]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
@@ -1290,6 +1315,7 @@ export default function TournamentSetup() {
                     <CategoryPrizesEditor
                       ref={getEditorRef(cat.id)}
                       category={cat}
+                      onEditRules={(category) => setCriteriaSheet({ open: true, category })}
                       onSave={(categoryId, delta) => 
                         saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
                       }

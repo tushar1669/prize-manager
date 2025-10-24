@@ -53,11 +53,12 @@ interface Props {
   category: CategoryRow;
   onSave: (categoryId: string, delta: PrizeDelta) => Promise<void>;
   onToggleCategory: (categoryId: string, isActive: boolean) => void;
+  onEditRules?: (category: CategoryRow) => void;
   isOrganizer: boolean;
 }
 
 const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
-  ({ category, onSave, onToggleCategory, isOrganizer }, ref) => {
+  ({ category, onSave, onToggleCategory, onEditRules, isOrganizer }, ref) => {
   const [draft, setDraft] = useState<PrizeRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
@@ -301,6 +302,18 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
               </span>
             )}
           </CardTitle>
+          {!category.is_main && onEditRules && isOrganizer && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                console.log('[rules] opening criteria sheet', { categoryId: category.id });
+                onEditRules(category);
+              }}
+            >
+              Edit Rules
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
