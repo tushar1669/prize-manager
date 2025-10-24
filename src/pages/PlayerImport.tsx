@@ -15,7 +15,7 @@ import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { usePapaParser } from "@/hooks/usePapaParser";
+import { useExcelParser } from "@/hooks/useExcelParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
 import { playerImportSchema, PlayerImportRow } from "@/lib/validations";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -90,7 +90,7 @@ const toISODate = (d: any): string | null => {
 export default function PlayerImport() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { parseFile } = usePapaParser();
+  const { parseFile } = useExcelParser();
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty } = useDirty();
 
