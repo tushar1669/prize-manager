@@ -69,6 +69,7 @@ export default function CategoryOrderReview() {
   );
 
   useEffect(() => {
+    console.log('[order-review] mount', { id });
     (async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -401,7 +402,13 @@ export default function CategoryOrderReview() {
         </div>
 
         <div className="flex justify-between pt-4">
-          <Button variant="outline" onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              console.log('[order-review] cancel click');
+              navigate(`/t/${id}/setup?tab=prizes`);
+            }}
+          >
             Cancel
           </Button>
           <Button onClick={handleConfirm} disabled={saving}>

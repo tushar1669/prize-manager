@@ -16,6 +16,8 @@ export default function Settings() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
+  console.log('[settings] mount', { id });
 
   const form = useForm<RuleConfigForm>({
     resolver: zodResolver(ruleConfigSchema),
@@ -28,12 +30,16 @@ export default function Settings() {
     }
   });
 
+  // TODO Phase 2: Replace with real categories from DB
+  // This is hardcoded and will be replaced with draggable UI in Phase 2
   const categories = [
     { id: "1", name: "Main (Open)", locked: true },
     { id: "2", name: "Under 13" },
     { id: "3", name: "Under 17" },
     { id: "4", name: "Female" },
   ];
+  
+  console.log('[settings] categories render (hardcoded)', { count: categories?.length, sample: categories?.[0] });
 
   // Fetch rule_config
   const { isLoading } = useQuery({
@@ -44,6 +50,8 @@ export default function Settings() {
         .select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
+      
+      console.log('[settings] load rules', { id, found: !!data });
       
       if (error && error.code !== 'PGRST116') {
         if (error.message?.includes('row-level security')) {
@@ -70,6 +78,8 @@ export default function Settings() {
   // Upsert mutation
   const saveMutation = useMutation({
     mutationFn: async (values: RuleConfigForm) => {
+      console.log('[settings] save rules', { id, payload: values });
+      
       const { error } = await supabase
         .from('rule_config')
         .upsert({

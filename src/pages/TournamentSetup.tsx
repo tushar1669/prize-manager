@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import React from 'react';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -43,6 +43,8 @@ export default function TournamentSetup() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty, registerOnSave, sources } = useDirty();
+  
+  console.log('[boot] setup mount', { path: window.location.pathname, id, activeTab });
 
   // Compute dirty counts for tab indicators
   const detailsDirty = !!sources['details'];
@@ -202,7 +204,12 @@ export default function TournamentSetup() {
   }, [id]);
 
   // Autosave Main Prizes while dirty (only after hydration)
-  const isMainPrizesDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
+  const isMainPrizesDirty = useMemo(() => {
+    if (!hasHydratedPrizes) return false;
+    if (!Array.isArray(prizes) || prizes.length === 0) return false;
+    return JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
+  }, [prizes, initialPrizes, hasHydratedPrizes]);
+  
   useAutosaveEffect({
     key: mainPrizesDraftKey,
     data: prizes,
@@ -260,6 +267,7 @@ export default function TournamentSetup() {
   const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories', id],
     queryFn: async () => {
+      console.log('[categories] query start', { id, tab: activeTab });
       const { data, error } = await supabase
         .from('categories')
         .select(`
@@ -279,6 +287,7 @@ export default function TournamentSetup() {
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
+    console.log('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories });
     if (!categories || hasHydratedPrizes || activeTab !== 'prizes') return;
     
     const mainCat = categories.find(c => c.is_main);
@@ -401,6 +410,19 @@ export default function TournamentSetup() {
   // Save prizes mutation
   const savePrizesMutation = useMutation({
     mutationFn: async () => {
+      console.log('[prizes] mutate start', { count: prizes?.length, prizes });
+      
+      if (!id) throw new Error('No tournament ID');
+      if (!Array.isArray(prizes)) throw new Error('No prizes in state');
+      
+      // Filter out invalid rows
+      const validPrizes = prizes.filter(p => p && typeof p.place === 'number');
+      
+      // Prevent accidental deletion of all prizes
+      if (validPrizes.length === 0) {
+        throw new Error('Cannot save an empty prize list. Add at least one row or keep existing prizes.');
+      }
+      
       // Find or create main category
       let mainCategoryId = categories?.find(c => c.is_main)?.id;
       
@@ -421,14 +443,16 @@ export default function TournamentSetup() {
         mainCategoryId = data.id;
       }
 
+      console.log('[prizes] deleting then inserting', { mainCategoryId });
+      
       // Delete existing prizes for main category
       await supabase
         .from('prizes')
         .delete()
         .eq('category_id', mainCategoryId);
 
-      // Insert new prizes
-      const prizesToInsert = prizes.map(p => ({
+      // Insert new prizes (use validPrizes)
+      const prizesToInsert = validPrizes.map(p => ({
         category_id: mainCategoryId,
         place: p.place,
         cash_amount: p.cash_amount,
@@ -444,6 +468,7 @@ export default function TournamentSetup() {
     },
     onSuccess: async () => {
       console.log('[prizes] save ok', { count: prizes.length });
+      console.log('[nav] to order-review', { id });
       clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
       setInitialPrizes(prizes);
