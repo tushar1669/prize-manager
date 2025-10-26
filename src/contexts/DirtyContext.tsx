@@ -23,16 +23,9 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
     setSources(prev => {
       const wasSet = !!prev[key];
       if (value === wasSet) return prev; // No change, skip update
-      
       const next = { ...prev };
-      if (value) {
-        next[key] = true;
-      } else {
-        delete next[key];
-      }
-      
-      // Only log on actual transitions
-      console.log('[guard] setDirty', { key, value, changed: true });
+      if (value) next[key] = true; else delete next[key];
+      // Quiet by default (flip DEBUG in Setup if you need noise)
       return next;
     });
   }, []);

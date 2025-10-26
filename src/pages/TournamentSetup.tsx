@@ -34,6 +34,10 @@ import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/auto
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 
+// Flip to true only when debugging
+const DEBUG = false;
+const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
+
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -44,7 +48,7 @@ export default function TournamentSetup() {
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty, registerOnSave, sources } = useDirty();
   
-  console.log('[boot] setup mount', { path: window.location.pathname, id, activeTab });
+  dlog('[boot] setup mount', { path: window.location.pathname, id, activeTab });
 
   // Compute dirty counts for tab indicators
   const detailsDirty = !!sources['details'];
@@ -79,8 +83,11 @@ export default function TournamentSetup() {
   const detailsDraftKey = makeKey(`t:${id}:details`);
   const [detailsRestore, setDetailsRestore] = useState<null | { data: any; ageMs: number }>(null);
 
-  // Autosave state for Main Prizes
-  const mainPrizesDraftKey = makeKey(`t:${id}:main-prizes`);
+  // Autosave key: compute only when a valid id exists (prevents "undefined" keys)
+  const tid = useMemo(() => (id ? String(id).trim() : ''), [id]);
+  const mainPrizesDraftKey = useMemo(() => (
+    tid ? makeKey(`t:${tid}:main-prizes`) : ''
+  ), [tid]);
   const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: any; ageMs: number }>(null);
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
 
@@ -189,9 +196,9 @@ export default function TournamentSetup() {
     version: 1,
   });
 
-  // Check for Main Prizes draft when opening Prizes tab
+  // Check for Main Prizes draft when opening Prizes tab (only when we have a valid key)
   useEffect(() => {
-    if (activeTab !== 'prizes') return;
+    if (activeTab !== 'prizes' || !mainPrizesDraftKey) return;
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
     if (draft) { 
       setMainPrizesRestore(draft); 
@@ -300,7 +307,7 @@ export default function TournamentSetup() {
   const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories', id],
     queryFn: async () => {
-      console.log('[categories] query start', { id, tab: activeTab });
+      dlog('[categories] query start', { id, tab: activeTab });
       const { data, error } = await supabase
         .from('categories')
         .select(`
@@ -320,7 +327,7 @@ export default function TournamentSetup() {
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
-    console.log('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories, hasPendingDraft });
+    dlog('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories, hasPendingDraft });
     if (!categories || hasHydratedPrizes || activeTab !== 'prizes' || hasPendingDraft) return;
     
     const mainCat = categories.find(c => c.is_main);
@@ -746,23 +753,20 @@ export default function TournamentSetup() {
     }
   }, [categories, editorRefs, showError, clearError, toast, queryClient, id, saveCategoryPrizesMutation, setDirty, getEditorRef]);
 
-  // Register Save & Continue on Prizes tab (local draft only for main prizes)
+  // Register keyboard Save (Cmd/Ctrl+S) on Prizes tab => save *draft locally* only
+  const saveDraftHotkey = useCallback(async () => {
+    if (activeTab !== 'prizes' || !mainPrizesDraftKey) return;
+    dlog('[shortcut] saving draft from keyboard', { count: prizes?.length });
+    setDraft(mainPrizesDraftKey, prizes, 1);
+    setInitialPrizes(prizes);
+    resetDirty('main-prizes');
+    toast.success('Draft saved locally (Cmd/Ctrl+S)');
+  }, [activeTab, mainPrizesDraftKey, prizes, resetDirty]);
+
   useEffect(() => {
-    if (activeTab === 'prizes') {
-      // On Prizes tab, Cmd/Ctrl+S saves draft locally
-      const saveDraftHandler = async () => {
-        console.log('[shortcut] saving draft from keyboard', { count: prizes?.length });
-        setDraft(mainPrizesDraftKey, prizes, 1);
-        setInitialPrizes(prizes);
-        resetDirty('main-prizes');
-        toast.success('Draft saved locally (Cmd/Ctrl+S)');
-      };
-      registerOnSave(saveDraftHandler);
-    } else {
-      registerOnSave(null);
-    }
+    registerOnSave(saveDraftHotkey);
     return () => registerOnSave(null);
-  }, [activeTab, registerOnSave, prizes, mainPrizesDraftKey, setDraft, resetDirty]);
+  }, [registerOnSave, saveDraftHotkey]);
 
   // Register Details tab save handler for Cmd/Ctrl+S
   useEffect(() => {
@@ -1169,7 +1173,7 @@ export default function TournamentSetup() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        console.log('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
+                        dlog('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
                         setPrizes(mainPrizesRestore.data || []);
                         setInitialPrizes(mainPrizesRestore.data || []);
                         setMainPrizesRestore(null);
@@ -1183,7 +1187,7 @@ export default function TournamentSetup() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        console.log('[draft] discarding draft');
+                        dlog('[draft] discarding draft');
                         clearDraft(mainPrizesDraftKey);
                         setMainPrizesRestore(null);
                         setHasPendingDraft(false);
