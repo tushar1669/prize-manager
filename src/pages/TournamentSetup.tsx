@@ -82,6 +82,7 @@ export default function TournamentSetup() {
   // Autosave state for Main Prizes
   const mainPrizesDraftKey = makeKey(`t:${id}:main-prizes`);
   const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: any; ageMs: number }>(null);
+  const [hasPendingDraft, setHasPendingDraft] = useState(false);
 
   // Helper to get/create editor refs
   const getEditorRef = (catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
@@ -192,7 +193,12 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (activeTab !== 'prizes') return;
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
-    if (draft) setMainPrizesRestore(draft);
+    if (draft) { 
+      setMainPrizesRestore(draft); 
+      setHasPendingDraft(true);
+    } else { 
+      setHasPendingDraft(false); 
+    }
   }, [activeTab, mainPrizesDraftKey]);
 
   // Track if we've hydrated prizes from DB (to guard autosave)
@@ -229,10 +235,19 @@ export default function TournamentSetup() {
     version: 1,
   });
 
+  // Refs for debouncing setDirty calls
+  const lastDetailsDirty = useRef(false);
+  const lastMainPrizesDirty = useRef(false);
+  const lastCriteriaSheetDirty = useRef(false);
+
   // Track Details form dirty state
   useEffect(() => {
     if (activeTab === 'details') {
-      setDirty('details', detailsForm.formState.isDirty);
+      const isDirty = detailsForm.formState.isDirty;
+      if (isDirty !== lastDetailsDirty.current) {
+        lastDetailsDirty.current = isDirty;
+        setDirty('details', isDirty);
+      }
     }
   }, [activeTab, detailsForm.formState.isDirty, setDirty]);
 
@@ -240,7 +255,10 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (activeTab === 'prizes') {
       const isDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
-      setDirty('main-prizes', isDirty);
+      if (isDirty !== lastMainPrizesDirty.current) {
+        lastMainPrizesDirty.current = isDirty;
+        setDirty('main-prizes', isDirty);
+      }
     }
   }, [activeTab, prizes, initialPrizes, setDirty]);
 
@@ -257,8 +275,12 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
       const isDirty = !deepEqualNormalized(criteriaSheet.category.criteria_json, savedCriteria);
-      setDirty('criteria-sheet', isDirty);
+      if (isDirty !== lastCriteriaSheetDirty.current) {
+        lastCriteriaSheetDirty.current = isDirty;
+        setDirty('criteria-sheet', isDirty);
+      }
     } else {
+      lastCriteriaSheetDirty.current = false;
       resetDirty('criteria-sheet');
     }
   }, [criteriaSheet, savedCriteria, setDirty, resetDirty]);
@@ -298,8 +320,8 @@ export default function TournamentSetup() {
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
-    console.log('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories });
-    if (!categories || hasHydratedPrizes || activeTab !== 'prizes') return;
+    console.log('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories, hasPendingDraft });
+    if (!categories || hasHydratedPrizes || activeTab !== 'prizes' || hasPendingDraft) return;
     
     const mainCat = categories.find(c => c.is_main);
     if (mainCat?.prizes && mainCat.prizes.length > 0) {
@@ -317,7 +339,7 @@ export default function TournamentSetup() {
     } else if (mainCat) {
       setHasHydratedPrizes(true);
     }
-  }, [categories, hasHydratedPrizes, activeTab]);
+  }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
@@ -724,15 +746,23 @@ export default function TournamentSetup() {
     }
   }, [categories, editorRefs, showError, clearError, toast, queryClient, id, saveCategoryPrizesMutation, setDirty, getEditorRef]);
 
-  // Register Save & Continue on Prizes tab
+  // Register Save & Continue on Prizes tab (local draft only for main prizes)
   useEffect(() => {
     if (activeTab === 'prizes') {
-      registerOnSave(handleSaveAllCategories);
+      // On Prizes tab, Cmd/Ctrl+S saves draft locally
+      const saveDraftHandler = async () => {
+        console.log('[shortcut] saving draft from keyboard', { count: prizes?.length });
+        setDraft(mainPrizesDraftKey, prizes, 1);
+        setInitialPrizes(prizes);
+        resetDirty('main-prizes');
+        toast.success('Draft saved locally (Cmd/Ctrl+S)');
+      };
+      registerOnSave(saveDraftHandler);
     } else {
       registerOnSave(null);
     }
     return () => registerOnSave(null);
-  }, [activeTab, registerOnSave, handleSaveAllCategories]);
+  }, [activeTab, registerOnSave, prizes, mainPrizesDraftKey, setDraft, resetDirty]);
 
   // Register Details tab save handler for Cmd/Ctrl+S
   useEffect(() => {
@@ -1139,8 +1169,12 @@ export default function TournamentSetup() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        console.log('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
                         setPrizes(mainPrizesRestore.data || []);
+                        setInitialPrizes(mainPrizesRestore.data || []);
                         setMainPrizesRestore(null);
+                        setHasPendingDraft(false);
+                        setHasHydratedPrizes(true);
                       }}
                     >
                       Restore draft
@@ -1149,8 +1183,10 @@ export default function TournamentSetup() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        console.log('[draft] discarding draft');
                         clearDraft(mainPrizesDraftKey);
                         setMainPrizesRestore(null);
+                        setHasPendingDraft(false);
                       }}
                     >
                       Discard
@@ -1433,42 +1469,23 @@ export default function TournamentSetup() {
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={async () => {
+                  onClick={() => {
                     console.log('[nav] review category order clicked', { isDirty: isMainPrizesDirty });
-                    
-                    // If dirty, save first
-                    if (isMainPrizesDirty) {
-                      try {
-                        await savePrizesMutation.mutateAsync();
-                      } catch (e) {
-                        console.error('[nav] save failed before navigation', e);
-                        return; // Don't navigate if save fails
-                      }
-                    }
-                    
-                    console.log('[nav] navigating to order-review', { id });
                     navigate(`/t/${id}/order-review`);
                   }}
-                  disabled={savePrizesMutation.isPending}
                 >
                   Review Category Order
                 </Button>
                 <Button
-                  onClick={async () => {
-                    try {
-                      if (savePrizesMutation?.mutateAsync) {
-                        await savePrizesMutation.mutateAsync();
-                      }
-                    } catch (e) {
-                      // ignore save errors for navigation UX; user will be notified by toast already
-                    }
+                  onClick={() => {
+                    console.log('[nav] next clicked', { playerCount });
                     if (playerCount > 0) {
                       navigate(`/t/${id}/review`);
                     } else {
                       navigate(`/t/${id}/import`);
                     }
                   }}
-                  disabled={savePrizesMutation?.isPending || loadingPlayerCount}
+                  disabled={loadingPlayerCount}
                   className="gap-2"
                 >
                   {loadingPlayerCount
