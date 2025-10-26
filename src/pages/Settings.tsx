@@ -6,10 +6,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { ruleConfigSchema, RuleConfigForm } from "@/lib/validations";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { GripVertical, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Settings() {
@@ -31,15 +32,23 @@ export default function Settings() {
   });
 
   // TODO Phase 2: Replace with real categories from DB
-  // This is hardcoded and will be replaced with draggable UI in Phase 2
-  const categories = [
-    { id: "1", name: "Main (Open)", locked: true },
-    { id: "2", name: "Under 13" },
-    { id: "3", name: "Under 17" },
-    { id: "4", name: "Female" },
-  ];
-  
-  console.log('[settings] categories render (hardcoded)', { count: categories?.length, sample: categories?.[0] });
+  // Fetch real categories from the database
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, is_main, order_idx')
+        .eq('tournament_id', id)
+        .order('order_idx');
+      
+      console.log('[settings] categories render', { count: data?.length, sample: data?.[0] });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id
+  });
 
   // Fetch rule_config
   const { isLoading } = useQuery({
@@ -236,30 +245,51 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Tournament Policy Summary</CardTitle>
+                <CardDescription>
+                  Effective allocation configuration for this tournament
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Allow Unrated in Rating: <strong>{form.watch('allow_unrated_in_rating') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Prefer Main on Equal Value: <strong>{form.watch('prefer_main_on_equal_value') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Prefer Category Rank on Tie: <strong>{form.watch('prefer_category_rank_on_tie') ? 'ON' : 'OFF'}</strong></li>
+                </ul>
+                <div className="mt-4 text-sm text-muted-foreground">
+                  💡 For per-category eligibility (age/rating/gender etc.), use <strong>Prize Structure → Edit Rules</strong> on each category.
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Category Priority Order</CardTitle>
                 <CardDescription>
-                  Drag to reorder categories by priority (higher = better when values are equal)
+                  Categories are evaluated in this order during prize allocation
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {categories.map((category) => (
-                    <div
-                      key={category.id}
-                      className="flex items-center gap-3 p-3 bg-muted rounded-lg border border-border"
-                    >
-                      {!category.locked && (
-                        <GripVertical className="h-5 w-5 text-muted-foreground cursor-move" />
+                <ol className="space-y-2 mb-4">
+                  {categories.map((c, idx) => (
+                    <li key={c.id} className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground font-mono">#{idx + 1}</span>
+                      <span className="font-medium">{c.name}</span>
+                      {c.is_main && (
+                        <Badge variant="secondary" className="ml-auto">Main (Fixed)</Badge>
                       )}
-                      <span className="flex-1 font-medium text-foreground">{category.name}</span>
-                      {category.locked && (
-                        <span className="text-xs text-muted-foreground">(Fixed)</span>
-                      )}
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate(`/t/${id}/order-review`)}
+                >
+                  Edit Category Order
+                </Button>
               </CardContent>
             </Card>
 

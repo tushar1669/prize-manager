@@ -30,7 +30,7 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
 import { useDirty } from "@/contexts/DirtyContext";
-import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
+import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 
@@ -207,6 +207,17 @@ export default function TournamentSetup() {
   const isMainPrizesDirty = useMemo(() => {
     if (!hasHydratedPrizes) return false;
     if (!Array.isArray(prizes) || prizes.length === 0) return false;
+    
+    // Block on default one-row placeholder like [{place:1,cash_amount:0,...}]
+    const looksDefault =
+      prizes.length === 1 &&
+      prizes[0] &&
+      prizes[0].place === 1 &&
+      (prizes[0].cash_amount ?? 0) === 0 &&
+      !prizes[0].has_trophy &&
+      !prizes[0].has_medal;
+    if (looksDefault) return false;
+    
     return JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
   }, [prizes, initialPrizes, hasHydratedPrizes]);
   
@@ -415,13 +426,17 @@ export default function TournamentSetup() {
       if (!id) throw new Error('No tournament ID');
       if (!Array.isArray(prizes)) throw new Error('No prizes in state');
       
-      // Filter out invalid rows
-      const validPrizes = prizes.filter(p => p && typeof p.place === 'number');
+      // Filter out invalid rows with better validation
+      const validPrizes = prizes.filter(
+        p => p && Number.isFinite(p.place) && Number.isFinite(p.cash_amount)
+      );
       
       // Prevent accidental deletion of all prizes
       if (validPrizes.length === 0) {
         throw new Error('Cannot save an empty prize list. Add at least one row or keep existing prizes.');
       }
+      
+      console.log('[prizes] valid prizes count', { total: prizes.length, valid: validPrizes.length });
       
       // Find or create main category
       let mainCategoryId = categories?.find(c => c.is_main)?.id;
@@ -445,11 +460,21 @@ export default function TournamentSetup() {
 
       console.log('[prizes] deleting then inserting', { mainCategoryId });
       
+      // Check existing count before delete for debugging
+      const { count: beforeCount } = await supabase
+        .from('prizes')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', mainCategoryId);
+      console.log('[prizes] before delete count', beforeCount);
+      
       // Delete existing prizes for main category
-      await supabase
+      const { error: delErr } = await supabase
         .from('prizes')
         .delete()
         .eq('category_id', mainCategoryId);
+      if (delErr) throw delErr;
+      
+      console.log('[prizes] inserting', { rows: validPrizes.length });
 
       // Insert new prizes (use validPrizes)
       const prizesToInsert = validPrizes.map(p => ({
@@ -460,9 +485,12 @@ export default function TournamentSetup() {
         has_medal: p.has_medal
       }));
 
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('prizes')
-        .insert(prizesToInsert);
+        .insert(prizesToInsert)
+        .select('id'); // Force return to ensure insert happened
+      
+      console.log('[prizes] inserted count', { count: data?.length });
       
       if (error) throw error;
     },
@@ -1393,14 +1421,35 @@ export default function TournamentSetup() {
                 <Button 
                   variant="outline"
                   onClick={() => {
-                    toast.success('Draft saved');
+                    console.log('[draft] save draft click', { count: prizes?.length, hasHydratedPrizes });
+                    // Persist only to session storage, no DB writes
+                    setDraft(mainPrizesDraftKey, prizes, 1);
+                    setInitialPrizes(prizes);
+                    resetDirty('main-prizes');
+                    toast.success('Draft saved locally');
                   }}
                 >
                   Save Draft
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => navigate(`/t/${id}/order-review`)}
+                  onClick={async () => {
+                    console.log('[nav] review category order clicked', { isDirty: isMainPrizesDirty });
+                    
+                    // If dirty, save first
+                    if (isMainPrizesDirty) {
+                      try {
+                        await savePrizesMutation.mutateAsync();
+                      } catch (e) {
+                        console.error('[nav] save failed before navigation', e);
+                        return; // Don't navigate if save fails
+                      }
+                    }
+                    
+                    console.log('[nav] navigating to order-review', { id });
+                    navigate(`/t/${id}/order-review`);
+                  }}
+                  disabled={savePrizesMutation.isPending}
                 >
                   Review Category Order
                 </Button>
