@@ -237,7 +237,7 @@ export default function TournamentSetup() {
   useAutosaveEffect({
     key: mainPrizesDraftKey,
     data: prizes,
-    enabled: hasHydratedPrizes && prizes.length > 0 && activeTab === 'prizes' && isMainPrizesDirty,
+    enabled: !!mainPrizesDraftKey && hasHydratedPrizes && prizes.length > 0 && activeTab === 'prizes' && isMainPrizesDirty,
     debounceMs: 1000,
     version: 1,
   });
