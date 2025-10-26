@@ -201,6 +201,11 @@ export default function TournamentSetup() {
   // Track if we've hydrated prizes from DB (to guard autosave)
   const [hasHydratedPrizes, setHasHydratedPrizes] = useState(false);
 
+  // Reset hydration state when tournament changes
+  useEffect(() => {
+    setHasHydratedPrizes(false);
+  }, [id]);
+
   // Autosave Main Prizes while dirty (only after hydration)
   const isMainPrizesDirty = JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
   useAutosaveEffect({
@@ -239,7 +244,6 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
       const isDirty = !deepEqualNormalized(criteriaSheet.category.criteria_json, savedCriteria);
-      console.log('[criteria] normalized-diff dirty=', isDirty);
       setDirty('criteria-sheet', isDirty);
     } else {
       resetDirty('criteria-sheet');
@@ -296,7 +300,7 @@ export default function TournamentSetup() {
     } else if (mainCat) {
       setHasHydratedPrizes(true);
     }
-  }, [categories, hasHydratedPrizes]);
+  }, [categories, hasHydratedPrizes, id]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
@@ -400,7 +404,6 @@ export default function TournamentSetup() {
   // Save prizes mutation
   const savePrizesMutation = useMutation({
     mutationFn: async () => {
-      console.log('[prizes] saving main prizes', prizes);
       // Find or create main category
       let mainCategoryId = categories?.find(c => c.is_main)?.id;
       
@@ -443,11 +446,12 @@ export default function TournamentSetup() {
       if (error) throw error;
     },
     onSuccess: () => {
-      console.log('[prizes] main prizes saved successfully');
+      console.log('[prizes] save ok', { count: prizes.length });
       clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
       setInitialPrizes(prizes);
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.info('Prizes saved', { duration: 1500 });
       toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
       // small delay so user sees the toast
       setTimeout(() => navigate(`/t/${id}/order-review`), 600);
@@ -563,8 +567,10 @@ export default function TournamentSetup() {
         .eq('id', categoryId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      console.log('[rules] save ok', { categoryId: variables.categoryId });
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.info('Rules saved', { duration: 1500 });
       toast.success('Rules saved');
       resetDirty('criteria-sheet');
       setSavedCriteria(null);
@@ -1135,7 +1141,7 @@ export default function TournamentSetup() {
                   </TableHeader>
                   <TableBody>
                     {prizes.map((prize, index) => (
-                      <TableRow key={index} className="border-border">
+                      <TableRow key={index} className="border-border" data-testid="prize-row">
                         <TableCell className="font-medium">{prize.place}</TableCell>
                         <TableCell>
                           <Input

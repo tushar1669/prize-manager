@@ -283,7 +283,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   };
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6" data-testid="category-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <Checkbox
