@@ -49,11 +49,6 @@ export default function TournamentSetup() {
   const mainPrizesDirty = !!sources['main-prizes'];
   const categoryPrizesCount = Object.keys(sources).filter(k => k.startsWith('cat-')).length;
   const prizesDirtyCount = (mainPrizesDirty ? 1 : 0) + categoryPrizesCount;
-
-  console.log('[dirty] tabs counts', { 
-    details: detailsDirty, 
-    prizes: prizesDirtyCount
-  });
   
   const [uploading, setUploading] = useState(false);
   const [brochureSignedUrl, setBrochureSignedUrl] = useState<string | null>(null);
@@ -211,7 +206,7 @@ export default function TournamentSetup() {
   useAutosaveEffect({
     key: mainPrizesDraftKey,
     data: prizes,
-    enabled: hasHydratedPrizes && activeTab === 'prizes' && isMainPrizesDirty,
+    enabled: hasHydratedPrizes && prizes.length > 0 && activeTab === 'prizes' && isMainPrizesDirty,
     debounceMs: 1000,
     version: 1,
   });
@@ -277,12 +272,14 @@ export default function TournamentSetup() {
       if (error) throw error;
       return data;
     },
-    enabled: !!id && activeTab === 'prizes'
+    enabled: !!id && activeTab === 'prizes',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
   });
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
-    if (!categories || hasHydratedPrizes) return;
+    if (!categories || hasHydratedPrizes || activeTab !== 'prizes') return;
     
     const mainCat = categories.find(c => c.is_main);
     if (mainCat?.prizes && mainCat.prizes.length > 0) {
@@ -300,7 +297,7 @@ export default function TournamentSetup() {
     } else if (mainCat) {
       setHasHydratedPrizes(true);
     }
-  }, [categories, hasHydratedPrizes, id]);
+  }, [categories, hasHydratedPrizes, activeTab]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
@@ -445,13 +442,12 @@ export default function TournamentSetup() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('[prizes] save ok', { count: prizes.length });
       clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
       setInitialPrizes(prizes);
-      queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.info('Prizes saved', { duration: 1500 });
+      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
       // small delay so user sees the toast
       setTimeout(() => navigate(`/t/${id}/order-review`), 600);
