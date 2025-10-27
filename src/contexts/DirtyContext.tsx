@@ -45,7 +45,6 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerOnSave = useCallback((fn: (() => Promise<void>) | null) => {
-    console.log('[guard] registerOnSave', { registered: !!fn });
     setOnSave(() => fn);
   }, []);
 

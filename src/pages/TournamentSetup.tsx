@@ -753,20 +753,33 @@ export default function TournamentSetup() {
     }
   }, [categories, editorRefs, showError, clearError, toast, queryClient, id, saveCategoryPrizesMutation, setDirty, getEditorRef]);
 
+  // Keep latest values in refs so handler stays stable
+  const prizesRef = useRef(prizes);
+  useEffect(() => { prizesRef.current = prizes; }, [prizes]);
+
+  const draftKeyRef = useRef(mainPrizesDraftKey);
+  useEffect(() => { draftKeyRef.current = mainPrizesDraftKey; }, [mainPrizesDraftKey]);
+
   // Register keyboard Save (Cmd/Ctrl+S) on Prizes tab => save *draft locally* only
   const saveDraftHotkey = useCallback(async () => {
-    if (activeTab !== 'prizes' || !mainPrizesDraftKey) return;
-    dlog('[shortcut] saving draft from keyboard', { count: prizes?.length });
-    setDraft(mainPrizesDraftKey, prizes, 1);
-    setInitialPrizes(prizes);
+    const key = draftKeyRef.current;
+    if (!key) return;
+    dlog('[shortcut] saving draft from keyboard', { count: prizesRef.current?.length });
+    setDraft(key, prizesRef.current, 1);
+    setInitialPrizes(prizesRef.current);
+    setHasHydratedPrizes(true); // Prevent DB re-hydration on return
     resetDirty('main-prizes');
     toast.success('Draft saved locally (Cmd/Ctrl+S)');
-  }, [activeTab, mainPrizesDraftKey, prizes, resetDirty]);
+  }, [resetDirty, setHasHydratedPrizes]);
 
   useEffect(() => {
-    registerOnSave(saveDraftHotkey);
+    if (activeTab === 'prizes') {
+      registerOnSave(saveDraftHotkey);
+    } else {
+      registerOnSave(null);
+    }
     return () => registerOnSave(null);
-  }, [registerOnSave, saveDraftHotkey]);
+  }, [activeTab, registerOnSave, saveDraftHotkey]);
 
   // Register Details tab save handler for Cmd/Ctrl+S
   useEffect(() => {
@@ -1465,6 +1478,7 @@ export default function TournamentSetup() {
                     // Persist only to session storage, no DB writes
                     setDraft(mainPrizesDraftKey, prizes, 1);
                     setInitialPrizes(prizes);
+                    setHasHydratedPrizes(true); // Prevent DB re-hydration on return
                     resetDirty('main-prizes');
                     toast.success('Draft saved locally');
                   }}
