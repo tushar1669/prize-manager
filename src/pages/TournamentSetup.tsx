@@ -18,6 +18,7 @@ import { RuleChip } from "@/components/ui/rule-chip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
@@ -100,6 +101,26 @@ export default function TournamentSetup() {
   }>({ open: false, sourceId: null });
   const [savingAll, setSavingAll] = useState(false);
   const editorRefs = useRef(new Map<string, React.RefObject<CategoryPrizesEditorHandle>>());
+  
+  // Category delete dialog state
+  const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
+
+  // Delete category mutation (non-main only). FK CASCADE deletes prizes automatically.
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      toast.success('Category deleted');
+      setCatDelete({ open: false });
+    },
+    onError: (err: any) => {
+      console.error('[prizes] delete category error', err);
+      toast.error(err?.message || 'Failed to delete category');
+    }
+  });
 
   // Autosave state for Details form
   const detailsDraftKey = makeKey(`t:${id}:details`);
@@ -464,21 +485,6 @@ export default function TournamentSetup() {
     },
     onError: (error: any) => {
       toast.error('Failed to add category: ' + error.message);
-    }
-  });
-
-  // Delete category mutation
-  const deleteCategoryMutation = useMutation({
-    mutationFn: async (categoryId: string) => {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', categoryId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success('Category deleted');
     }
   });
 
@@ -1465,6 +1471,14 @@ export default function TournamentSetup() {
                       }
                       onToggleCategory={toggleCategoryActive}
                       isOrganizer={isOrganizer}
+                      onDeleteCategory={(category) => {
+                        setCatDelete({ 
+                          open: true, 
+                          id: category.id, 
+                          name: category.name, 
+                          prizeCount: category.prizes?.length ?? 0 
+                        });
+                      }}
                     />
                   </div>
                 ))}
@@ -1911,6 +1925,39 @@ export default function TournamentSetup() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Delete Category Confirmation Dialog */}
+      <AlertDialog open={!!catDelete.open} onOpenChange={(open) => !open && setCatDelete({ open: false })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category: {catDelete.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the category and <strong>{catDelete.prizeCount ?? 0} prize(s)</strong> associated with it. This action cannot be undone.
+              <div className="mt-3 font-medium">Type the category name to confirm:</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            className="mt-2"
+            placeholder="Type category name to confirm"
+            onChange={(e) => setCatDelete(prev => ({ ...prev, confirm: e.target.value }))}
+            autoFocus
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCatDelete({ open: false })}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={catDelete.confirm !== catDelete.name || deleteCategoryMutation.isPending}
+              onClick={() => {
+                if (catDelete.id && catDelete.confirm === catDelete.name) {
+                  deleteCategoryMutation.mutate(catDelete.id);
+                }
+              }}
+            >
+              {deleteCategoryMutation.isPending ? 'Deleting…' : 'Delete Category'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

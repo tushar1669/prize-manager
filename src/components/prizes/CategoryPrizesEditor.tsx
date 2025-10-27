@@ -54,11 +54,12 @@ interface Props {
   onSave: (categoryId: string, delta: PrizeDelta) => Promise<void>;
   onToggleCategory: (categoryId: string, isActive: boolean) => void;
   onEditRules?: (category: CategoryRow) => void;
+  onDeleteCategory?: (category: CategoryRow) => void;
   isOrganizer: boolean;
 }
 
 const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
-  ({ category, onSave, onToggleCategory, onEditRules, isOrganizer }, ref) => {
+  ({ category, onSave, onToggleCategory, onEditRules, onDeleteCategory, isOrganizer }, ref) => {
   const [draft, setDraft] = useState<PrizeRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
@@ -314,6 +315,17 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
               Edit Rules
             </Button>
           )}
+          {!category.is_main && onDeleteCategory && isOrganizer && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => onDeleteCategory(category)}
+              title="Delete category"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -355,7 +367,6 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                 <th className="text-left py-2 pr-4 w-40">Cash (₹)</th>
                 <th className="text-left py-2 pr-4 w-24">Trophy</th>
                 <th className="text-left py-2 pr-4 w-24">Medal</th>
-                <th className="text-left py-2 pr-4 w-24">Active</th>
                 <th className="text-right py-2 pl-4 w-16"> </th>
               </tr>
             </thead>
@@ -403,13 +414,6 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                         />
                         <Medal className="h-4 w-4 opacity-70" />
                       </div>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Checkbox
-                        checked={!!row.is_active}
-                        onCheckedChange={() => handleTogglePrizeActive(rowIndex)}
-                        aria-label={`Toggle active for place ${row.place}`}
-                      />
                     </td>
                     <td className="py-2 pl-4">
                       <Button
