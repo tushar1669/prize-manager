@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppNav } from '@/components/AppNav';
-import { Trophy, Medal, GripVertical } from 'lucide-react';
+import { Trophy, Medal, GripVertical, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { useMutation } from '@tanstack/react-query';
 import { 
   DndContext, 
   closestCenter, 
@@ -94,6 +97,67 @@ export default function CategoryOrderReview() {
       setLoading(false);
     })();
   }, [id]);
+
+  // Delete category state and mutation
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; category: Category | null }>({ 
+    open: false, 
+    category: null 
+  });
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId);
+      if (error) throw error;
+    },
+    onSuccess: async (_, deletedId) => {
+      // Re-fetch categories
+      const { data: freshCats, error: fetchErr } = await supabase
+        .from('categories')
+        .select('*, prizes(*)')
+        .eq('tournament_id', id)
+        .order('order_idx');
+      
+      if (fetchErr) {
+        console.error('[delete-cat] refetch err', fetchErr);
+        showError({ title: 'Refresh Error', message: 'Failed to refresh categories after delete' });
+        return;
+      }
+
+      // Compact order_idx (0..N-1)
+      const updatePromises = (freshCats || []).map((c, idx) => 
+        supabase
+          .from('categories')
+          .update({ order_idx: idx })
+          .eq('id', c.id)
+      );
+
+      if (updatePromises.length > 0) {
+        const results = await Promise.all(updatePromises);
+        const updateErr = results.find(r => r.error)?.error;
+        
+        if (updateErr) {
+          console.error('[delete-cat] reindex err', updateErr);
+          showError({ title: 'Reindex Error', message: 'Failed to reindex categories' });
+          return;
+        }
+      }
+
+      // Update local state
+      setCats((freshCats || []).map((c, idx) => ({ ...c, order_idx: idx, prizes: c.prizes || [] })));
+      resetDirty('order-review');
+      toast.success('Category deleted successfully');
+      setDeleteDialog({ open: false, category: null });
+      setDeleteConfirmText('');
+    },
+    onError: (err: any) => {
+      console.error('[delete-cat] err', err);
+      showError({ title: 'Delete Error', message: `Failed to delete category: ${err.message || 'Unknown error'}` });
+    },
+  });
 
   // Check for draft when cats load
   useEffect(() => {
@@ -247,10 +311,12 @@ export default function CategoryOrderReview() {
     cat,
     onToggleCat,
     onTogglePrize,
+    onDeleteCategory,
   }: {
     cat: Category;
     onToggleCat: (id: string) => void;
     onTogglePrize: (cid: string, pid: string) => void;
+    onDeleteCategory?: (cat: Category) => void;
   }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
 
@@ -287,6 +353,20 @@ export default function CategoryOrderReview() {
                   <span className="px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/30">
                     Main
                   </span>
+                )}
+                {!cat.is_main && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteCategory?.(cat);
+                    }}
+                    title="Delete category"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
 
@@ -395,6 +475,7 @@ export default function CategoryOrderReview() {
                         : x
                     ));
                   }}
+                  onDeleteCategory={(cat) => setDeleteDialog({ open: true, category: cat })}
                 />
               ))}
             </SortableContext>
@@ -415,6 +496,50 @@ export default function CategoryOrderReview() {
             {saving ? 'Saving…' : 'Confirm & Continue'}
           </Button>
         </div>
+
+        <AlertDialog open={deleteDialog.open} onOpenChange={(open) => {
+          if (!open) {
+            setDeleteDialog({ open: false, category: null });
+            setDeleteConfirmText('');
+          }
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Category: {deleteDialog.category?.name}</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the category and <strong>{deleteDialog.category?.prizes?.length || 0} prize(s)</strong> associated with it. 
+                This action cannot be undone.
+                <br /><br />
+                Type <strong>{deleteDialog.category?.name}</strong> to confirm:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type category name to confirm"
+              className="mt-2"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setDeleteDialog({ open: false, category: null });
+                setDeleteConfirmText('');
+              }}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteConfirmText !== deleteDialog.category?.name || deleteCategoryMutation.isPending}
+                onClick={() => {
+                  if (deleteDialog.category?.id) {
+                    deleteCategoryMutation.mutate(deleteDialog.category.id);
+                  }
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteCategoryMutation.isPending ? 'Deleting...' : 'Delete Category'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

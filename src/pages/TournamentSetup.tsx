@@ -38,6 +38,28 @@ import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 const DEBUG = false;
 const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
 
+// Helper functions for silent auto-restore on nav-away
+function setNavAwayFlag(tournamentId: string) {
+  try {
+    sessionStorage.setItem(`nav-away:t:${tournamentId}`, String(Date.now()));
+  } catch { /* ignore */ }
+}
+
+function getNavAwayFlag(tournamentId: string): number | null {
+  try {
+    const raw = sessionStorage.getItem(`nav-away:t:${tournamentId}`);
+    return raw ? parseInt(raw, 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearNavAwayFlag(tournamentId: string) {
+  try {
+    sessionStorage.removeItem(`nav-away:t:${tournamentId}`);
+  } catch { /* ignore */ }
+}
+
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -198,15 +220,28 @@ export default function TournamentSetup() {
 
   // Check for Main Prizes draft when opening Prizes tab (only when we have a valid key)
   useEffect(() => {
-    if (activeTab !== 'prizes' || !mainPrizesDraftKey) return;
+    if (activeTab !== 'prizes' || !mainPrizesDraftKey || !id) return;
+    
+    const navAwayTimestamp = getNavAwayFlag(id);
+    const recentNavAway = navAwayTimestamp && (Date.now() - navAwayTimestamp < 5 * 60 * 1000); // 5 min TTL
+    
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
-    if (draft) { 
-      setMainPrizesRestore(draft); 
+    if (draft && recentNavAway) {
+      // Silent auto-restore: apply draft without showing banner
+      dlog('[draft] silent auto-restore on return', { count: draft.data?.length, ageMs: draft.ageMs });
+      setPrizes(draft.data || []);
+      setInitialPrizes(draft.data || []);
+      setHasHydratedPrizes(true); // Block DB hydration
+      setHasPendingDraft(false); // No banner
+      clearNavAwayFlag(id);
+    } else if (draft) {
+      // Normal draft detection: show banner for manual restore
+      setMainPrizesRestore(draft);
       setHasPendingDraft(true);
-    } else { 
-      setHasPendingDraft(false); 
+    } else {
+      setHasPendingDraft(false);
     }
-  }, [activeTab, mainPrizesDraftKey]);
+  }, [activeTab, mainPrizesDraftKey, id]);
 
   // Track if we've hydrated prizes from DB (to guard autosave)
   const [hasHydratedPrizes, setHasHydratedPrizes] = useState(false);
@@ -1192,6 +1227,7 @@ export default function TournamentSetup() {
                         setMainPrizesRestore(null);
                         setHasPendingDraft(false);
                         setHasHydratedPrizes(true);
+                        if (id) clearNavAwayFlag(id);
                       }}
                     >
                       Restore draft
@@ -1451,7 +1487,16 @@ export default function TournamentSetup() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => navigate(`/t/${id}/settings`)}
+                    onClick={() => {
+                      // Set nav-away flag and auto-save current draft before navigating
+                      if (id && !!mainPrizesDraftKey && isMainPrizesDirty) {
+                        dlog('[nav-away] auto-saving draft before Settings', { count: prizes?.length });
+                        setDraft(mainPrizesDraftKey, prizes, 1);
+                        setInitialPrizes(prizes);
+                        setNavAwayFlag(id);
+                      }
+                      navigate(`/t/${id}/settings`);
+                    }}
                   >
                     Edit Rules
                   </Button>
@@ -1488,6 +1533,13 @@ export default function TournamentSetup() {
                 <Button
                   variant="secondary"
                   onClick={() => {
+                    // Set nav-away flag and auto-save current draft before navigating
+                    if (id && !!mainPrizesDraftKey && isMainPrizesDirty) {
+                      dlog('[nav-away] auto-saving draft before Order Review', { count: prizes?.length });
+                      setDraft(mainPrizesDraftKey, prizes, 1);
+                      setInitialPrizes(prizes);
+                      setNavAwayFlag(id);
+                    }
                     console.log('[nav] review category order clicked', { isDirty: isMainPrizesDirty });
                     navigate(`/t/${id}/order-review`);
                   }}
