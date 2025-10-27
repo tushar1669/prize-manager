@@ -103,7 +103,7 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rule_config', id] });
       toast.success('Settings saved successfully');
-      navigate('/dashboard');
+      navigate(`/t/${id}/setup?tab=prizes`);
     },
     onError: (error: any) => {
       if (error.message?.includes('row-level security')) {
@@ -294,7 +294,14 @@ export default function Settings() {
             </Card>
 
             <div className="flex justify-between pt-4">
-              <Button type="button" variant="outline" onClick={() => navigate("/dashboard")}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  if (window.history.length > 1) navigate(-1);
+                  else navigate(`/t/${id}/setup?tab=prizes`);
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={saveMutation.isPending} className="gap-2">
