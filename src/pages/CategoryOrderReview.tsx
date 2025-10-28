@@ -332,6 +332,7 @@ export default function CategoryOrderReview() {
           <div className="flex items-start gap-4">
             {/* Drag handle (keyboard accessible) */}
             <button
+              type="button"
               className="p-2 rounded hover:bg-muted/60 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label="Drag to reorder"
               title="Drag to reorder. Press space or enter to pick up, arrow keys to move, enter to drop."
@@ -356,6 +357,7 @@ export default function CategoryOrderReview() {
                 )}
                 {!cat.is_main && (
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -429,6 +431,7 @@ export default function CategoryOrderReview() {
               <div>Saved order draft from <strong>{formatAge(orderRestore.ageMs)}</strong> is available.</div>
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => {
@@ -442,6 +445,7 @@ export default function CategoryOrderReview() {
                   Restore draft
                 </Button>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => {
@@ -484,6 +488,7 @@ export default function CategoryOrderReview() {
 
         <div className="flex justify-between pt-4">
           <Button 
+            type="button"
             variant="outline" 
             onClick={() => {
               console.log('[order-review] cancel click');
@@ -492,7 +497,7 @@ export default function CategoryOrderReview() {
           >
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={saving}>
+          <Button type="button" onClick={handleConfirm} disabled={saving}>
             {saving ? 'Saving…' : 'Confirm & Continue'}
           </Button>
         </div>
@@ -520,13 +525,17 @@ export default function CategoryOrderReview() {
               className="mt-2"
             />
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => {
-                setDeleteDialog({ open: false, category: null });
-                setDeleteConfirmText('');
-              }}>
+              <AlertDialogCancel 
+                type="button"
+                onClick={() => {
+                  setDeleteDialog({ open: false, category: null });
+                  setDeleteConfirmText('');
+                }}
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
+                type="button"
                 disabled={deleteConfirmText !== deleteDialog.category?.name || deleteCategoryMutation.isPending}
                 onClick={() => {
                   if (deleteDialog.category?.id) {
