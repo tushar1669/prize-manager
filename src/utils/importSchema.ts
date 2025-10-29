@@ -52,3 +52,63 @@ export function generatePlayerKey(player: {
   }
   return `name:${normalizeName(player.name)}`;
 }
+
+/**
+ * Normalize DOB for API/import
+ * Handles: YYYY, YYYY/00/00, YYYY-00-00, YYYY\00\00, full dates
+ * Returns: { dob_raw, dob, inferred, inferredReason }
+ */
+export function normalizeDobForImport(input?: string | null): { 
+  dob_raw: string | null; 
+  dob: string | null; 
+  inferred: boolean;
+  inferredReason?: string;
+} {
+  if (!input) return { dob_raw: null, dob: null, inferred: false };
+  
+  const raw = String(input).trim();
+  if (!raw) return { dob_raw: null, dob: null, inferred: false };
+  
+  // Pattern 1: Year only (YYYY)
+  const yOnlyMatch = /^(\d{4})$/.exec(raw);
+  if (yOnlyMatch) {
+    const year = yOnlyMatch[1];
+    return { 
+      dob_raw: raw, 
+      dob: `${year}-01-01`, 
+      inferred: true,
+      inferredReason: 'Year only - assumed Jan 1'
+    };
+  }
+  
+  // Pattern 2: YYYY/00/00 or YYYY-00-00 or YYYY\00\00
+  const yZeroMatch = /^(\d{4})[\\/\-]00[\\/\-]00$/.exec(raw);
+  if (yZeroMatch) {
+    const year = yZeroMatch[1];
+    return { 
+      dob_raw: raw, 
+      dob: `${year}-01-01`, 
+      inferred: true,
+      inferredReason: 'Unknown month/day - assumed Jan 1'
+    };
+  }
+  
+  // Pattern 3: Full date - normalize separators
+  const normalized = raw.replace(/\//g, '-').replace(/\\/g, '-');
+  
+  // Validate full date format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return { 
+      dob_raw: raw, 
+      dob: normalized, 
+      inferred: false 
+    };
+  }
+  
+  // Invalid format - let validation catch it
+  return { 
+    dob_raw: raw, 
+    dob: null, 
+    inferred: false 
+  };
+}

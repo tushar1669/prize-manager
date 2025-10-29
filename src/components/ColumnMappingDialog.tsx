@@ -32,7 +32,7 @@ const requiredFields = [
 
   const optionalFields = [
     { key: 'rating', label: 'Rating', description: 'Player rating (number)' },
-    { key: 'dob', label: 'Date of Birth', description: 'Format: YYYY-MM-DD' },
+    { key: 'dob', label: 'Date of Birth', description: 'Accepts: YYYY-MM-DD (full), YYYY/00/00 (year only), or YYYY. Partial dates assume Jan 1 for eligibility.' },
     { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
     { key: 'fide_id', label: 'FIDE ID', description: 'FIDE identification number (for duplicate detection)' },
     { key: 'state', label: 'State', description: 'Player state/province' },

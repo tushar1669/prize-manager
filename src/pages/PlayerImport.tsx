@@ -40,6 +40,7 @@ import {
   HEADER_ALIASES, 
   generatePlayerKey, 
   normalizeName,
+  normalizeDobForImport,
   ImportConflict,
   ImportConflictType 
 } from '@/utils/importSchema';
@@ -47,6 +48,9 @@ import {
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
   fide_id?: string | null;
+  dob_raw?: string | null;
+  _dobInferred?: boolean;
+  _dobInferredReason?: string;
 }
 
 // Helper functions for smart retry
@@ -75,16 +79,20 @@ const extractUnknownColumn = (msg: string): string | null => {
   return null;
 };
 
-// Helper: normalize DOB to YYYY-MM-DD
-const toISODate = (d: any): string | null => {
-  if (!d) return null;
+// Helper: normalize DOB to YYYY-MM-DD, handling partial dates
+const toISODate = (d: any): { dob: string | null; dob_raw: string | null; inferred: boolean; inferredReason?: string } => {
+  if (!d) return { dob: null, dob_raw: null, inferred: false };
+  
+  // Handle Excel serial dates
   if (typeof d === 'number') {
-    // Excel serial date
     const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
-    return isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
+    if (isNaN(jsDate.getTime())) return { dob: null, dob_raw: String(d), inferred: false };
+    const normalized = jsDate.toISOString().slice(0, 10);
+    return { dob: normalized, dob_raw: normalized, inferred: false };
   }
-  const t = Date.parse(String(d));
-  return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+  
+  // Use centralized normalization
+  return normalizeDobForImport(String(d));
 };
 
 export default function PlayerImport() {
@@ -314,18 +322,12 @@ export default function PlayerImport() {
         if (fieldKey === 'rank' || fieldKey === 'rating') {
           value = value ? Number(value) : (fieldKey === 'rank' ? 0 : null);
         } else if (fieldKey === 'dob' && value != null && value !== '') {
-          if (typeof value === 'number') {
-            const jsDate = new Date(Math.round((value - 25569) * 86400 * 1000));
-            value = isNaN(jsDate.getTime()) ? null : jsDate.toISOString().slice(0, 10);
-          } else {
-            const s = String(value).trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-              value = s;
-            } else {
-              const parsed = new Date(s);
-              value = isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
-            }
-          }
+          const result = toISODate(value);
+          player.dob = result.dob;
+          player.dob_raw = result.dob_raw;
+          player._dobInferred = result.inferred;
+          player._dobInferredReason = result.inferredReason;
+          return; // Skip setting value below since we handled it
         } else if (fieldKey === 'fide_id' && value != null) {
           // NEW: Normalize FIDE ID (trim, convert to string)
           value = String(value).trim() || null;
@@ -337,18 +339,6 @@ export default function PlayerImport() {
       });
 
       return player as ParsedPlayer;
-    });
-
-    // Normalize DOB to strict YYYY-MM-DD
-    mapped.forEach(player => {
-      if (player.dob) {
-        const normalized = toISODate(player.dob);
-        if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-          player.dob = null;
-        } else {
-          player.dob = normalized;
-        }
-      }
     });
 
     // Validate
@@ -509,7 +499,7 @@ export default function PlayerImport() {
       console.time('[import] batch-insert');
       
       const CHUNK_SIZE = 500;
-      const fields = ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club', 'disability', 'special_notes'];
+      const fields = ['rank', 'name', 'rating', 'dob', 'dob_raw', 'gender', 'state', 'city', 'club', 'disability', 'special_notes'];
       
       // Replace logic
       if (replaceExisting) {
@@ -532,6 +522,7 @@ export default function PlayerImport() {
             name: String(p.name || ''), // Required: must be a string
             rating: picked.rating != null ? Number(picked.rating) : null,
             dob: picked.dob || null,
+            dob_raw: picked.dob_raw || picked.dob || null,
             gender: picked.gender || null,
             state: picked.state || null,
             city: picked.city || null,
@@ -957,7 +948,19 @@ export default function PlayerImport() {
                                 </div>
                               </TableCell>
                               <TableCell>{player.rating ?? ''}</TableCell>
-                              <TableCell>{player.dob ?? ''}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span>{player.dob ?? ''}</span>
+                                  {player._dobInferred && (
+                                    <span 
+                                      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground border border-border"
+                                      title={player._dobInferredReason}
+                                    >
+                                      Inferred
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell>{player.gender ?? ''}</TableCell>
                               <TableCell>{player.state ?? ''}</TableCell>
                               <TableCell>{player.city ?? ''}</TableCell>

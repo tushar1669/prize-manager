@@ -51,7 +51,7 @@ export default function ConflictReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('players')
-        .select('id, name, dob, rating')
+        .select('id, name, dob, dob_raw, rating')
         .eq('tournament_id', id)
         .order('rank', { ascending: true, nullsFirst: false });
       if (error) throw error;
@@ -398,7 +398,17 @@ export default function ConflictReview() {
                 <SelectContent>
                   {(playersList || []).map(player => (
                     <SelectItem key={player.id} value={player.id}>
-                      {player.name} (Rating: {player.rating || 'N/A'}, DOB: {player.dob || 'N/A'})
+                      <div className="flex items-center gap-2">
+                        {player.name} (Rating: {player.rating || 'N/A'}, DOB: {player.dob || 'N/A'})
+                        {player.dob_raw && player.dob_raw !== player.dob && (
+                          <span 
+                            className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground border border-border"
+                            title="Month/day inferred as Jan 1"
+                          >
+                            Inferred
+                          </span>
+                        )}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
