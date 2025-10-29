@@ -202,6 +202,7 @@ export type Database = {
           created_at: string | null
           disability: string | null
           dob: string | null
+          dob_raw: string | null
           gender: string | null
           id: string
           name: string
@@ -219,6 +220,7 @@ export type Database = {
           created_at?: string | null
           disability?: string | null
           dob?: string | null
+          dob_raw?: string | null
           gender?: string | null
           id?: string
           name: string
@@ -236,6 +238,7 @@ export type Database = {
           created_at?: string | null
           disability?: string | null
           dob?: string | null
+          dob_raw?: string | null
           gender?: string | null
           id?: string
           name?: string
@@ -477,6 +480,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_dob_input: { Args: { in_raw: string }; Returns: string }
     }
     Enums: {
       app_role: "master" | "organizer" | "user"
