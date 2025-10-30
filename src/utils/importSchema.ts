@@ -2,18 +2,63 @@
 // Centralized header aliases, conflict types, and helper functions for player import
 
 export const HEADER_ALIASES: Record<string, string[]> = {
-  rank: ['rank', 'sr_no', 's_no', 'sno', 'seed', 'seeding', 'pos', 'position', 'rank#', '#'],
-  name: ['name', 'player_name', 'full_name', 'player', 'playername'],
-  rating: ['rating', 'elo', 'rtg', 'fide', 'fide_rating', 'elo_rating'],
-  dob: ['dob', 'date_of_birth', 'birth_date', 'birthdate', 'd.o.b'],
-  gender: ['gender', 'sex', 'g'],
-  state: ['state', 'province', 'region', 'st'],
-  city: ['city', 'town', 'location'],
-  club: ['club', 'chess_club', 'organization', 'academy'],
+  // CRITICAL: rank and sno MUST BE SEPARATE (Swiss-Manager has both columns)
+  rank: ['rank', 'rk', 'final_rank', 'position', 'pos'], // NO SNo here!
+  sno: ['sno', 's_no', 'sno.', 'start_no', 'startno', 'seed', 'seeding', 'sr_no', 'srno'], // Start Number (distinct from rank)
+  
+  // Rating with priority (Rtg preferred over IRtg for Swiss-Manager)
+  rating: ['rtg', 'irtg', 'nrtg', 'rating', 'elo', 'fide_rating', 'std', 'standard'],
+  
+  name: ['name', 'player_name', 'full_name', 'player', 'playername', 'participant'],
+  
+  // Swiss-Manager uses "Birth" header (not "DOB")
+  dob: ['birth', 'dob', 'date_of_birth', 'birth_date', 'birthdate', 'd.o.b', 'd_o_b'],
+  
+  // Swiss-Manager uses "fs" for female indicator column
+  gender: ['fs', 'gender', 'sex', 'g', 'm/f', 'boy/girl', 'b/g'],
+  
+  state: ['state', 'province', 'region', 'st', 'association'],
+  city: ['city', 'town', 'location', 'place'],
+  club: ['club', 'chess_club', 'organization', 'academy', 'team'],
+  
+  // Swiss-Manager uses "Fide-No." (with period and hyphen)
+  fide_id: ['fide-no.', 'fide_no', 'fide-no', 'fideno', 'fide_id', 'fideid', 'fide', 'id'],
+  
+  // Additional Swiss-Manager fields
+  federation: ['fed', 'fed.', 'federation', 'country', 'nat', 'fide_fed'],
+  
   disability: ['disability', 'disability_type', 'pwd', 'ph', 'physically_handicapped', 'special_category'],
   special_notes: ['special_notes', 'notes', 'remarks', 'special_needs', 'accommodations', 'comments'],
-  fide_id: ['fide_id', 'fideid', 'fide', 'id']
+  
+  // Support for unrated flag detection
+  unrated: ['unrated', 'urated', 'u_r', 'u-rated', 'u/r', 'not_rated']
 };
+
+/**
+ * Rating column priority for Swiss-Manager files
+ * Prefer Rtg (current rating) over IRtg (initial rating)
+ */
+export const RATING_COLUMN_PRIORITY = ['rtg', 'irtg', 'nrtg', 'rating', 'elo', 'std'];
+
+/**
+ * Select the best rating column when multiple are present
+ * Returns the original column name (preserves case)
+ */
+export function selectBestRatingColumn(detectedColumns: string[]): string | null {
+  const normalized = detectedColumns.map(c => 
+    c.toLowerCase().trim().replace(/\s+/g, '_')
+  );
+  
+  for (const preferred of RATING_COLUMN_PRIORITY) {
+    const idx = normalized.indexOf(preferred);
+    if (idx >= 0) {
+      console.log(`[importSchema] Selected rating column: '${detectedColumns[idx]}' (priority: ${preferred})`);
+      return detectedColumns[idx]; // Return original case
+    }
+  }
+  
+  return null;
+}
 
 export type ImportConflictType = 
   | 'duplicate_in_file' 

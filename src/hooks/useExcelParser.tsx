@@ -1,7 +1,14 @@
 import { useCallback } from "react";
 import * as XLSX from "xlsx";
+import { detectHeaderRow } from "@/utils/sheetDetection";
+import { isFeatureEnabled } from "@/utils/featureFlags";
 
-type Parsed = { data: any[]; headers: string[] };
+type Parsed = { 
+  data: any[]; 
+  headers: string[]; 
+  sheetName?: string; 
+  headerRow?: number; 
+};
 
 function normalizeHeaders(headers: any[]): string[] {
   return (headers || [])
@@ -15,60 +22,83 @@ export function useExcelParser() {
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(ab, { type: 'array' });
       
-      // 🔍 DIAGNOSTIC: Log available sheets
       console.log('[parseExcel] Available sheets:', wb.SheetNames);
       
       if (!wb.SheetNames || wb.SheetNames.length === 0) {
         throw new Error('No sheets found in this workbook.');
       }
       
-      const wsName = wb.SheetNames[0];
-      console.log('[parseExcel] Selected sheet:', wsName);
+      // Phase 1: Multi-sheet header detection (feature flag controlled)
+      let wsName: string;
+      let headerRowIndex: number;
+      let headers: string[];
       
-      const ws = wb.Sheets[wsName];
-
-      // Get first row as headers
-      const asRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-      
-      // 🔍 DIAGNOSTIC: Log raw first row
-      console.log('[parseExcel] Raw first row:', asRows[0]);
-      
-      if (!asRows.length || !asRows[0] || (Array.isArray(asRows[0]) && asRows[0].every((c: any) => String(c ?? '').trim() === ''))) {
-        throw new Error('No header row found. Please use the provided template and ensure row 1 has headers.');
+      if (isFeatureEnabled('HEADER_DETECTION')) {
+        // V2: Auto-detect header row across all sheets (Swiss-Manager support)
+        const allSheets: Record<string, any[][]> = {};
+        wb.SheetNames.forEach(name => {
+          allSheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { 
+            header: 1, 
+            defval: '', 
+            raw: false 
+          }) as any[][];
+        });
+        
+        const detected = detectHeaderRow(allSheets, 25);
+        wsName = detected.sheetName;
+        headerRowIndex = detected.headerRowIndex;
+        headers = detected.headers;
+        
+        console.log('[parseExcel] V2 Header detection:', {
+          sheet: wsName,
+          row: headerRowIndex,
+          confidence: detected.confidence,
+          headers: headers.slice(0, 10)
+        });
+      } else {
+        // V1: Legacy behavior (row 1 as header)
+        wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+        const asRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        
+        if (!asRows.length || !asRows[0]) {
+          throw new Error('No header row found. Please use the provided template and ensure row 1 has headers.');
+        }
+        
+        headerRowIndex = 0;
+        headers = normalizeHeaders(asRows[0]);
+        
+        console.log('[parseExcel] V1 Legacy mode (row 1):', headers);
       }
-      
-      const headersRaw = asRows[0] || [];
-      const headers = normalizeHeaders(headersRaw);
-      
-      // 🔍 DIAGNOSTIC: Log normalized headers
-      console.log('[parseExcel] Normalized headers:', headers);
       
       if (!headers.length) {
         throw new Error('Could not detect any headers. Please verify the template.');
       }
-
-      // Rebuild rows using our *normalized* headers so keys are deterministic
-      // - range: 1 tells SheetJS to start at row 2 (skip the header row we already read)
-      // - header: headers forces normalized keys in all row objects
+      
+      const ws = wb.Sheets[wsName];
+      
+      // Parse data starting AFTER the detected header row
       const data = XLSX.utils.sheet_to_json(ws, {
         header: headers,
-        range: 1,
+        range: headerRowIndex + 1, // Start after header row
         defval: ''
       });
 
-      console.log('[parseExcel] Using normalized keys for data:', headers);
-
       if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('No data rows found under the header row (Row 1). Please ensure your data starts at Row 2.');
+        throw new Error('No data rows found under the header row. Please ensure your data follows the header.');
       }
       
-      // 🔍 DIAGNOSTIC: Log first 3 data rows
-      console.log('[parseExcel] First 3 data rows:', data.slice(0, 3));
-      console.log('[parseExcel] Total rows:', data.length);
+      console.log('[parseExcel] Parsed', data.length, 'data rows');
+      console.log('[parseExcel] Sample row:', data[0]);
 
-      return { data, headers };
+      return { 
+        data, 
+        headers, 
+        sheetName: wsName, 
+        headerRow: headerRowIndex 
+      };
     } catch (err) {
-      console.error('[parseExcel] XLSX.read error:', err);
+      console.error('[parseExcel] Parse error:', err);
       throw new Error(`Parse error: ${err instanceof Error ? err.message : 'Unknown error reading Excel file'}`);
     }
   }, []);

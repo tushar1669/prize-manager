@@ -63,6 +63,7 @@ export type PrizeForm = z.infer<typeof prizeSchema>;
 // Player Import schema
 export const playerImportSchema = z.object({
   rank: z.number().min(1, "Rank must be a positive integer"),
+  sno: z.number().int().positive().nullable().optional(), // Start Number (distinct from rank)
   name: z.string().trim().min(1, "Name is required and cannot be empty").max(100, "Name must be less than 100 characters"),
   rating: z.number().min(0, "Rating cannot be negative").nullable().optional(),
   dob: z.string()
@@ -79,7 +80,8 @@ export const playerImportSchema = z.object({
   club: z.string().max(100, "Club must be less than 100 characters").nullable().optional(),
   disability: z.string().max(100, "Disability must be less than 100 characters").nullable().optional(),
   special_notes: z.string().max(500, "Special notes must be less than 500 characters").nullable().optional(),
-  fide_id: z.string().max(20, "FIDE ID must be less than 20 characters").nullable().optional()
+  fide_id: z.string().max(20, "FIDE ID must be less than 20 characters").nullable().optional(),
+  unrated: z.boolean().nullable().optional() // Unrated flag (explicit or inferred)
 });
 
 export type PlayerImportRow = z.infer<typeof playerImportSchema>;

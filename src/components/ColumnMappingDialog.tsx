@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { HEADER_ALIASES } from "@/utils/importSchema";
+import { HEADER_ALIASES, selectBestRatingColumn } from "@/utils/importSchema";
+import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 interface ColumnMappingDialogProps {
   open: boolean;
@@ -26,21 +29,23 @@ interface ColumnMappingDialogProps {
 }
 
 const requiredFields = [
-  { key: 'rank', label: 'Rank (required)', description: 'Player rank/position in tournament' },
+  { key: 'rank', label: 'Rank (required)', description: 'Final player rank/position (NOT start number)' },
   { key: 'name', label: 'Name (required)', description: 'Player full name' }
 ];
 
-  const optionalFields = [
-    { key: 'rating', label: 'Rating', description: 'Player rating (number)' },
-    { key: 'dob', label: 'Date of Birth', description: 'Accepts: YYYY-MM-DD (full), YYYY/00/00 (year only), or YYYY. Partial dates assume Jan 1 for eligibility.' },
-    { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
-    { key: 'fide_id', label: 'FIDE ID', description: 'FIDE identification number (for duplicate detection)' },
-    { key: 'state', label: 'State', description: 'Player state/province' },
-    { key: 'city', label: 'City', description: 'Player city' },
-    { key: 'club', label: 'Club', description: 'Chess club or organization' },
-    { key: 'disability', label: 'Disability', description: 'Disability type (e.g., Hearing, Visual)' },
-    { key: 'special_notes', label: 'Special Notes', description: 'Special requirements or accommodations' }
-  ];
+const optionalFields = [
+  { key: 'sno', label: 'Start Number (SNo)', description: 'Initial seed/start number (distinct from final rank)' },
+  { key: 'rating', label: 'Rating', description: 'Player rating (Rtg preferred over IRtg)' },
+  { key: 'dob', label: 'Date of Birth', description: 'Accepts: YYYY-MM-DD (full), YYYY/00/00 (year only), or YYYY. Partial dates assume Jan 1 for eligibility.' },
+  { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
+  { key: 'fide_id', label: 'FIDE ID', description: 'FIDE identification number (for duplicate detection)' },
+  { key: 'state', label: 'State', description: 'Player state/province' },
+  { key: 'city', label: 'City', description: 'Player city' },
+  { key: 'club', label: 'Club', description: 'Chess club or organization' },
+  { key: 'disability', label: 'Disability', description: 'Disability type (e.g., Hearing, Visual)' },
+  { key: 'special_notes', label: 'Special Notes', description: 'Special requirements or accommodations' },
+  { key: 'unrated', label: 'Unrated', description: 'Whether player is unrated (Y/N)' }
+];
 
 const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
 
@@ -54,17 +59,34 @@ export function ColumnMappingDialog({
   onConfirm 
 }: ColumnMappingDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
-    // Auto-detect common column names with fuzzy matching
+    // Phase 2-4: Enhanced auto-detection with rating priority
     const autoMapping: Record<string, string> = {};
     
+    // Phase 3: Special handling for rating column priority (Rtg > IRtg)
+    if (isFeatureEnabled('RATING_PRIORITY')) {
+      const bestRating = selectBestRatingColumn(detectedColumns);
+      if (bestRating) {
+        autoMapping.rating = bestRating;
+      }
+    }
+    
+    // Standard field auto-mapping
     detectedColumns.forEach(col => {
       const normalized = norm(col);
       Object.entries(mappingRules).forEach(([field, patterns]) => {
-        if (!autoMapping[field] && patterns.some(pattern => normalized === pattern || normalized.includes(pattern))) {
+        // Skip rating if already handled by priority logic
+        if (field === 'rating' && autoMapping.rating) return;
+        
+        if (!autoMapping[field] && patterns.some(pattern => {
+          const normPattern = norm(pattern);
+          return normalized === normPattern || normalized.includes(normPattern);
+        })) {
           autoMapping[field] = col;
         }
       });
     });
+    
+    console.log('[ColumnMapping] Auto-mapped fields:', autoMapping);
     
     return autoMapping;
   });
@@ -90,6 +112,19 @@ export function ColumnMappingDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Phase 3: Rating priority notice */}
+          {isFeatureEnabled('RATING_PRIORITY') && mapping.rating && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Rating mapped to <strong>{mapping.rating}</strong>.
+                {detectedColumns.some(c => norm(c) === 'irtg') && 
+                  detectedColumns.some(c => norm(c) === 'rtg') && 
+                  ' (Rtg preferred over IRtg for current rating)'}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {/* Required Fields */}
           <div>
             <h3 className="text-sm font-semibold mb-3">Required Fields</h3>

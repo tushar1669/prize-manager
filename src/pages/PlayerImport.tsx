@@ -30,6 +30,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext";
@@ -44,6 +46,12 @@ import {
   ImportConflict,
   ImportConflictType 
 } from '@/utils/importSchema';
+import { 
+  normalizeGender, 
+  normalizeRating, 
+  inferUnrated,
+  UnratedInferenceConfig 
+} from '@/utils/valueNormalizers';
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -139,6 +147,14 @@ export default function PlayerImport() {
 
   // NEW: Conflict resolution tracking
   const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
+
+  // Phase 6: Import configuration state
+  const [importConfig, setImportConfig] = useState({
+    stripCommasFromRating: true,
+    preferRtgOverIRtg: true,
+    treatEmptyAsUnrated: false,
+    inferUnratedFromMissingData: false
+  });
 
   // Track dirty state when mapped players exist
   useEffect(() => {
@@ -311,7 +327,7 @@ export default function PlayerImport() {
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
-    // Map data with fide_id support
+    // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
       const player: Record<string, any> = { _originalIndex: idx + 1 };
 
@@ -319,8 +335,17 @@ export default function PlayerImport() {
         const col = mapping[fieldKey];
         let value = row[col];
 
-        if (fieldKey === 'rank' || fieldKey === 'rating') {
-          value = value ? Number(value) : (fieldKey === 'rank' ? 0 : null);
+        // Phase 6: Apply value normalizers
+        if (fieldKey === 'rank') {
+          value = value ? Number(value) : 0;
+        } else if (fieldKey === 'sno') {
+          value = value ? Number(value) : null;
+        } else if (fieldKey === 'rating') {
+          // Apply rating normalizer with comma stripping config
+          value = normalizeRating(value, importConfig.stripCommasFromRating);
+        } else if (fieldKey === 'gender') {
+          // Apply gender normalizer
+          value = normalizeGender(value);
         } else if (fieldKey === 'dob' && value != null && value !== '') {
           const result = toISODate(value);
           player.dob = result.dob;
@@ -329,8 +354,11 @@ export default function PlayerImport() {
           player._dobInferredReason = result.inferredReason;
           return; // Skip setting value below since we handled it
         } else if (fieldKey === 'fide_id' && value != null) {
-          // NEW: Normalize FIDE ID (trim, convert to string)
           value = String(value).trim() || null;
+        } else if (fieldKey === 'unrated') {
+          // Store raw unrated value for inference
+          player._rawUnrated = value;
+          return; // Will infer after all fields mapped
         } else if (typeof value === 'string') {
           value = value.trim() || null;
         }
@@ -338,18 +366,48 @@ export default function PlayerImport() {
         player[fieldKey] = value;
       });
 
+      // Phase 6: Infer unrated flag after all fields mapped
+      player.unrated = inferUnrated(
+        { 
+          rating: player.rating, 
+          fide_id: player.fide_id,
+          unrated: player._rawUnrated 
+        },
+        {
+          treatEmptyAsUnrated: importConfig.treatEmptyAsUnrated,
+          inferFromMissingRating: importConfig.inferUnratedFromMissingData
+        }
+      );
+
       return player as ParsedPlayer;
     });
 
-    // Validate
+    // Phase 5: Validate with detailed breakdown
     const errors: { row: number; errors: string[] }[] = [];
     const validPlayers: ParsedPlayer[] = [];
+    const skippedBreakdown: Record<string, { count: number; sample: string[] }> = {};
 
     mapped.forEach(player => {
       const result = playerImportSchema.safeParse(player);
       if (result.success) {
         validPlayers.push(player);
       } else {
+        // Categorize errors for transparency
+        result.error.errors.forEach(e => {
+          const fieldName = String(e.path[0] || 'unknown');
+          const reason = `${fieldName}: ${e.message}`;
+          
+          if (!skippedBreakdown[reason]) {
+            skippedBreakdown[reason] = { count: 0, sample: [] };
+          }
+          skippedBreakdown[reason].count++;
+          
+          // Collect sample rows (max 3 per reason)
+          if (skippedBreakdown[reason].sample.length < 3) {
+            skippedBreakdown[reason].sample.push(`Row ${player._originalIndex}: ${player.name || 'N/A'}`);
+          }
+        });
+        
         errors.push({
           row: player._originalIndex,
           errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
@@ -357,7 +415,37 @@ export default function PlayerImport() {
       }
     });
 
+    // Phase 5: Log validation summary with top reasons
+    const topReasons = Object.entries(skippedBreakdown)
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 10);
+
+    console.log('[import] Validation summary:', {
+      total: mapped.length,
+      valid: validPlayers.length,
+      skipped: errors.length,
+      topReasons: topReasons.map(([reason, data]) => `${reason} (${data.count} rows)`)
+    });
+
     setValidationErrors(errors);
+
+    // Phase 5: Show detailed error message if no valid rows
+    if (validPlayers.length === 0 && mapped.length > 0) {
+      const msg = topReasons.length > 0
+        ? `No valid rows after mapping. Top issues:\n${topReasons.slice(0, 3).map(([r, d]) => `• ${r}: ${d.count} rows`).join('\n')}`
+        : 'No valid rows after mapping. Check column mapping and data format.';
+      
+      setParseError(msg);
+      setParseStatus('error');
+      toast.error(msg, { duration: 8000 });
+      
+      showError({
+        title: 'Import Validation Failed',
+        message: msg,
+        hint: 'Download error report for full details. Verify columns are correctly mapped.'
+      });
+      return;
+    }
 
     // NEW: Enhanced duplicate detection (within file + DB conflicts)
     const newDupes: { row: number; duplicate: string }[] = [];
@@ -727,17 +815,37 @@ export default function PlayerImport() {
             <CardContent className="space-y-6">
               {isOrganizer ? (
                 <>
-                  <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
-                    <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Excel file with columns: rank, name, rating, DOB, gender, state, city
-                    </p>
-                    <div className="flex items-center justify-center gap-3 mb-3">
-                      <Button variant="outline" onClick={downloadTemplate}>
-                        Download Excel Template
-                      </Button>
+              <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
+                <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Excel file with columns: rank, name, rating, DOB, gender, state, city
+                </p>
+                
+                {/* Phase 6: Import Options - shown before upload */}
+                <Card className="mb-6 text-left max-w-2xl mx-auto">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Import Options</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="strip-commas-pre" className="cursor-pointer">Strip commas from ratings</Label>
+                      <Switch id="strip-commas-pre" checked={importConfig.stripCommasFromRating} 
+                        onCheckedChange={(v) => setImportConfig(prev => ({ ...prev, stripCommasFromRating: v }))} />
                     </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="infer-unrated-pre" className="cursor-pointer">Infer unrated (rating=0, no FIDE ID)</Label>
+                      <Switch id="infer-unrated-pre" checked={importConfig.inferUnratedFromMissingData}
+                        onCheckedChange={(v) => setImportConfig(prev => ({ ...prev, inferUnratedFromMissingData: v }))} />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <Button variant="outline" onClick={downloadTemplate}>
+                    Download Excel Template
+                  </Button>
+                </div>
                     <input
                       type="file"
                       accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
