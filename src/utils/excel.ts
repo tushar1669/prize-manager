@@ -114,9 +114,112 @@ export function downloadPlayersTemplateXlsx() {
 }
 
 /**
+ * Download Swiss-Manager mapping reference workbook
+ * Shows exact Swiss-Manager headers with sample data for operator cross-checking
+ */
+export function downloadSwissManagerReferenceXlsx() {
+  // === SHEET 1: SWISS-MANAGER REF ===
+  const headers = [
+    'Rank', 'SNo.', 'Name', 'Rtg', 'IRtg', 'Birth', 'fs', 
+    'Fide-No.', 'Federation', 'State', 'City', 'Club'
+  ];
+  
+  const sampleData = [
+    [1, 57, 'Aditi Sharma', 1850, 1780, '2007/00/00', 'F', '35012345', 'IND', 'MH', 'Pune', 'XYZ Chess'],
+    [12, 101, 'Rohan Iyer', 1720, 0, '2005/00/00', '', '', 'IND', 'KA', 'Bengaluru', ''],
+    [28, 64, 'Sia Verma', 1500, 1450, '2010/00/00', 'F', '', 'IND', 'DL', 'New Delhi', ''],
+  ];
+
+  const wsRef = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+  
+  // Column widths
+  (wsRef as any)['!cols'] = [
+    { wch: 6 },  // Rank
+    { wch: 7 },  // SNo.
+    { wch: 28 }, // Name
+    { wch: 7 },  // Rtg
+    { wch: 7 },  // IRtg
+    { wch: 14 }, // Birth
+    { wch: 4 },  // fs
+    { wch: 12 }, // Fide-No.
+    { wch: 11 }, // Federation
+    { wch: 12 }, // State
+    { wch: 14 }, // City
+    { wch: 20 }  // Club
+  ];
+
+  // Freeze top row and enable filter
+  (wsRef as any)['!freeze'] = { xSplit: 0, ySplit: 1 };
+  (wsRef as any)['!autofilter'] = { ref: 'A1:L1' };
+
+  // === SHEET 2: README ===
+  const readmeContent = [
+    ['SWISS-MANAGER MAPPING REFERENCE'],
+    [''],
+    ['HOW TO EXPORT FROM SWISS-MANAGER'],
+    ['1. Open your tournament in Swiss-Manager.'],
+    ['2. Use the Export Ranking or Export Interim Ranking to Excel option.'],
+    ['3. Ensure these columns appear in your export: Rank, SNo., Name, Rtg, IRtg, Birth, fs, Fide-No., Federation, State, City, Club.'],
+    ['4. Do NOT edit header names in the exported file.'],
+    [''],
+    ['HOW TO USE THIS REFERENCE WITH OUR IMPORTER'],
+    ['Our app automatically detects the header row (typically around row 20 in Swiss-Manager exports) and maps columns as follows:'],
+    [''],
+    ['FIELD MAPPING RULES (Swiss-Manager → App Field):'],
+    ['• rank ← Rank (final tournament position; NEVER SNo.)'],
+    ['• sno ← SNo. (start number/seed)'],
+    ['• name ← Name (player full name)'],
+    ['• rating ← Rtg (current rating; when both Rtg & IRtg exist, we ALWAYS prefer Rtg)'],
+    ['• dob ← Birth (supports YYYY/00/00, YYYY, or YYYY-MM-DD formats)'],
+    ['• gender ← fs (F = Female; blank or empty = Male)'],
+    ['• fide_id ← Fide-No. (punctuation preserved)'],
+    ['• federation ← Federation (country code, e.g., IND)'],
+    ['• state ← State (state/province)'],
+    ['• city ← City (city name)'],
+    ['• club ← Club (chess club or academy)'],
+    [''],
+    ['UNRATED PLAYER HANDLING:'],
+    ['• Rtg may be blank or 0 for unrated players.'],
+    ['• The app can infer "unrated" status when rating=0 and FIDE ID is missing.'],
+    ['• Values like "", "-", "NA" in rating fields are treated as not-rated signals when feature is enabled.'],
+    ['• IRtg (initial rating) is informational only; we use Rtg for current rating.'],
+    [''],
+    ['WHEN TO USE THIS VS. PLAYERS TEMPLATE'],
+    ['• Use this REFERENCE to cross-check auto-mapping from native Swiss-Manager export files.'],
+    ['• Use players_template_v2.xlsx to hand-enter players or paste cleaned data with organizer-friendly headers.'],
+    [''],
+    ['EXAMPLE USE CASE'],
+    ['1. Export your Interim Ranking List from Swiss-Manager.'],
+    ['2. Upload the exported .xlsx file directly to our import page.'],
+    ['3. The app will auto-detect the header row and map columns using the rules above.'],
+    ['4. If any columns are not auto-detected, use the manual column mapping dialog.'],
+    ['5. Review the preview and proceed with import.'],
+    [''],
+    ['SUPPORT'],
+    ['If auto-detection fails or mappings look incorrect, contact support with your Swiss-Manager export file attached.'],
+  ];
+
+  const wsReadme = XLSX.utils.aoa_to_sheet(readmeContent);
+  
+  // Column widths for ReadMe
+  (wsReadme as any)['!cols'] = [
+    { wch: 100 }  // Single wide column for instructions
+  ];
+
+  // === ASSEMBLE WORKBOOK ===
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsRef, 'SwissManagerRef');
+  XLSX.utils.book_append_sheet(wb, wsReadme, 'ReadMe');
+  
+  XLSX.writeFile(wb, 'swiss_manager_mapping_reference.xlsx');
+  
+  console.log('[excel] Swiss-Manager reference downloaded: SwissManagerRef + ReadMe sheets');
+}
+
+/**
  * Download errors as Excel workbook
  */
-export function downloadErrorXlsx(rows: Array<{ 
+export function downloadErrorXlsx(rows: Array<{
   row: number; 
   error: string 
 } & Record<string, any>>) {
