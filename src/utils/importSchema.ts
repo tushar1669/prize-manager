@@ -141,15 +141,30 @@ export function normalizeDobForImport(input?: string | null): {
   const yZeroMatch = /^(\d{4})[\\/\-]00[\\/\-]00$/.exec(raw);
   if (yZeroMatch) {
     const year = yZeroMatch[1];
-    return { 
-      dob_raw: raw, 
-      dob: `${year}-01-01`, 
+    return {
+      dob_raw: raw,
+      dob: `${year}-01-01`,
       inferred: true,
       inferredReason: 'Unknown month/day - assumed Jan 1'
     };
   }
-  
-  // Pattern 3: Full date - normalize separators
+
+  // Pattern 3: YYYY/MM/00 where month present but day missing
+  const yearMonthOnlyMatch = /^(\d{4})[\\/\-](\d{2})[\\/\-]00$/.exec(raw);
+  if (yearMonthOnlyMatch) {
+    const year = yearMonthOnlyMatch[1];
+    const month = yearMonthOnlyMatch[2];
+    if (month !== '00') {
+      return {
+        dob_raw: raw,
+        dob: `${year}-${month}-01`,
+        inferred: true,
+        inferredReason: 'Unknown day - assumed first of month'
+      };
+    }
+  }
+
+  // Pattern 4: Full date - normalize separators
   const normalized = raw.replace(/\//g, '-').replace(/\\/g, '-');
   
   // Validate full date format

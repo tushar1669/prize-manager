@@ -49,6 +49,7 @@ export function useExcelParser() {
         headerRowIndex = detected.headerRowIndex;
         headers = detected.headers;
         
+        console.log(`[detect] headerRow=${headerRowIndex + 1} sheet=${wsName}`);
         console.log('[parseExcel] V2 Header detection:', {
           sheet: wsName,
           row: headerRowIndex,
@@ -68,6 +69,7 @@ export function useExcelParser() {
         headerRowIndex = 0;
         headers = normalizeHeaders(asRows[0]);
         
+        console.log(`[detect] headerRow=1 sheet=${wsName} (legacy)`);
         console.log('[parseExcel] V1 Legacy mode (row 1):', headers);
       }
       
