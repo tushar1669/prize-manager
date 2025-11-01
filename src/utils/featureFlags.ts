@@ -22,6 +22,8 @@ export const IMPORT_V2_FLAGS = {
 } as const;
 
 export const PUBLISH_V2_ENABLED = true;
+export const ENABLE_PDF_EXPORT = true;
+export const PUBLIC_DOB_MASKING = true;
 
 /**
  * Check if a feature flag is enabled
