@@ -21,6 +21,8 @@ export const IMPORT_V2_FLAGS = {
   UNRATED_INFERENCE: true,
 } as const;
 
+export const PUBLISH_V2_ENABLED = true;
+
 /**
  * Check if a feature flag is enabled
  */

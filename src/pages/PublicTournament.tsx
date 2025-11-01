@@ -13,13 +13,15 @@ export default function PublicTournament() {
     queryKey: ['public-tournament', slug],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tournaments')
-        .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, is_published')
-        .eq('public_slug', slug)
-        .eq('is_published', true)
+        .from('published_tournaments')
+        .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, slug, version')
+        .eq('slug', slug)
         .maybeSingle();
-      
+
       if (error) throw error;
+      if (data) {
+        console.log(`[public] anon fetch ok slug=${slug}`);
+      }
       return data;
     },
     enabled: !!slug,
