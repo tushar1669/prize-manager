@@ -41,16 +41,27 @@ export const HEADER_ALIASES: Record<string, string[]> = {
 export const RATING_COLUMN_PRIORITY = ['rtg', 'irtg', 'nrtg', 'rating', 'elo', 'std'];
 
 /**
+ * Unified header normalization for matching
+ * Strips punctuation, collapses spaces, converts to lowercase
+ * Used consistently across PlayerImport and ColumnMappingDialog
+ */
+export function normalizeHeaderForMatching(header: string): string {
+  return header
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s]/g, '')  // Remove all punctuation (periods, hyphens, etc.)
+    .replace(/\s+/g, '_');     // Collapse spaces to underscore
+}
+
+/**
  * Select the best rating column when multiple are present
  * Returns the original column name (preserves case)
  */
 export function selectBestRatingColumn(detectedColumns: string[]): string | null {
-  const normalized = detectedColumns.map(c => 
-    c.toLowerCase().trim().replace(/\s+/g, '_')
-  );
+  const normalized = detectedColumns.map(c => normalizeHeaderForMatching(c));
   
   for (const preferred of RATING_COLUMN_PRIORITY) {
-    const idx = normalized.indexOf(preferred);
+    const idx = normalized.indexOf(normalizeHeaderForMatching(preferred));
     if (idx >= 0) {
       console.log(`[importSchema] Selected rating column: '${detectedColumns[idx]}' (priority: ${preferred})`);
       return detectedColumns[idx]; // Return original case

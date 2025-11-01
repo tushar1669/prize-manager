@@ -43,6 +43,7 @@ import {
   generatePlayerKey, 
   normalizeName,
   normalizeDobForImport,
+  normalizeHeaderForMatching,
   ImportConflict,
   ImportConflictType 
 } from '@/utils/importSchema';
@@ -285,28 +286,44 @@ export default function PlayerImport() {
       setHeaders(csvHeaders);
       setParseError(null); // Clear any previous error
       
-      // Try auto-mapping; if both required fields found, skip dialog
-      const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '_');
+      console.log('[import] Detected headers:', csvHeaders);
+      console.log('[import] Parsed', data.length, 'data rows');
+      
+      // Try auto-mapping with unified normalization
       const autoMapping: Record<string, string> = {};
       
-      // Use centralized aliases
-      const synonyms = HEADER_ALIASES;
+      // Pre-normalize all aliases once for efficiency
+      const normalizedAliases: Record<string, string[]> = {};
+      Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
+        normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
+      });
       
+      // Map each header to a field
       csvHeaders.forEach(h => {
-        const normalized = norm(h);
-        for (const [field, aliases] of Object.entries(synonyms)) {
+        const normalized = normalizeHeaderForMatching(h);
+        for (const [field, aliases] of Object.entries(normalizedAliases)) {
           if (!autoMapping[field] && aliases.includes(normalized)) {
-            autoMapping[field] = h;
+            autoMapping[field] = h; // Store original header name
             break;
           }
         }
       });
       
-      if (autoMapping.rank && autoMapping.name) {
+      console.log('[import] Auto-mapped fields:', autoMapping);
+      console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
+      
+      // Pre-flight validation: check required fields
+      if (!autoMapping.rank || !autoMapping.name) {
+        console.warn('[import] Auto-mapping incomplete. Missing required fields:', {
+          rank: !autoMapping.rank,
+          name: !autoMapping.name
+        });
+        setShowMappingDialog(true);
+        toast.warning('Please map required fields: Rank and Name');
+      } else {
+        console.log('[import] Auto-mapping successful. Mapped fields:', Object.keys(autoMapping).join(', '));
         handleMappingConfirm(autoMapping);
         toast.info('Columns auto-mapped successfully');
-      } else {
-        setShowMappingDialog(true);
       }
       // Don't set parseStatus('ok') here - wait for validation in handleMappingConfirm
     } catch (error) {

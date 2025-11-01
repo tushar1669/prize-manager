@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HEADER_ALIASES, selectBestRatingColumn } from "@/utils/importSchema";
+import { HEADER_ALIASES, selectBestRatingColumn, normalizeHeaderForMatching } from "@/utils/importSchema";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
   Dialog,
@@ -47,8 +47,6 @@ const optionalFields = [
   { key: 'unrated', label: 'Unrated', description: 'Whether player is unrated (Y/N)' }
 ];
 
-const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-
 // Use centralized aliases from importSchema
 const mappingRules = HEADER_ALIASES;
 
@@ -70,23 +68,28 @@ export function ColumnMappingDialog({
       }
     }
     
-    // Standard field auto-mapping
+    // Pre-normalize all aliases once for efficiency
+    const normalizedAliases: Record<string, string[]> = {};
+    Object.entries(mappingRules).forEach(([field, patterns]) => {
+      normalizedAliases[field] = patterns.map(normalizeHeaderForMatching);
+    });
+    
+    // Standard field auto-mapping with unified normalization
     detectedColumns.forEach(col => {
-      const normalized = norm(col);
-      Object.entries(mappingRules).forEach(([field, patterns]) => {
+      const normalized = normalizeHeaderForMatching(col);
+      Object.entries(normalizedAliases).forEach(([field, patterns]) => {
         // Skip rating if already handled by priority logic
         if (field === 'rating' && autoMapping.rating) return;
         
-        if (!autoMapping[field] && patterns.some(pattern => {
-          const normPattern = norm(pattern);
-          return normalized === normPattern || normalized.includes(normPattern);
-        })) {
+        // Use exact matching after normalization
+        if (!autoMapping[field] && patterns.includes(normalized)) {
           autoMapping[field] = col;
         }
       });
     });
     
     console.log('[ColumnMapping] Auto-mapped fields:', autoMapping);
+    console.log('[ColumnMapping] Mapped field count:', Object.keys(autoMapping).length);
     
     return autoMapping;
   });
@@ -118,8 +121,8 @@ export function ColumnMappingDialog({
               <Info className="h-4 w-4" />
               <AlertDescription>
                 Rating mapped to <strong>{mapping.rating}</strong>.
-                {detectedColumns.some(c => norm(c) === 'irtg') && 
-                  detectedColumns.some(c => norm(c) === 'rtg') && 
+                {detectedColumns.some(c => normalizeHeaderForMatching(c) === 'irtg') && 
+                  detectedColumns.some(c => normalizeHeaderForMatching(c) === 'rtg') && 
                   ' (Rtg preferred over IRtg for current rating)'}
               </AlertDescription>
             </Alert>
