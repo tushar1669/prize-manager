@@ -46,46 +46,21 @@ export default function Dashboard() {
     },
   });
 
-  // Helper to detect ownership column (owner_id vs created_by)
-  async function detectOwnerColumn(): Promise<'owner_id' | 'created_by'> {
-    try {
-      // probe with a harmless limited select
-      const { error } = await supabase.from('tournaments')
-        .select('owner_id')
-        .limit(1);
-      if (!error) return 'owner_id';
-      if (String(error.message).toLowerCase().includes('owner_id')) return 'created_by';
-    } catch {}
-    return 'owner_id';
-  }
-
   // Fetch tournaments
   const { data: tournaments, isLoading, error } = useQuery({
     queryKey: ['tournaments', user?.id, role],
     queryFn: async () => {
-      console.log('[dashboard] Fetching tournaments for user:', user?.id, 'role:', role);
-      
-      const ownerCol = await detectOwnerColumn();
-      console.log('[dashboard] Using owner column:', ownerCol);
-      
-      // Organizers see only their own; Masters see all
-      const { data, error } = role !== 'master'
-        ? await supabase
-            .from('tournaments')
-            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at, is_published')
-            .eq(ownerCol as 'owner_id', user!.id)
-            .order('created_at', { ascending: false })
-        : await supabase
-            .from('tournaments')
-            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at, is_published')
-            .order('created_at', { ascending: false });
+      const includeAll = role === 'master';
+      console.log('[dashboard] fetching via RPC include_all=', includeAll);
+
+      const { data, error } = await supabase.rpc('list_my_tournaments', { include_all: includeAll });
 
       if (error) {
-        console.error('[dashboard] Query error:', error);
+        console.error('[dashboard] rpc error', error);
         throw error;
       }
-      
-      console.log('[dashboard] Fetched', data?.length || 0, 'tournaments');
+
+      console.log('[dashboard] list_my_tournaments fetched=', data?.length ?? 0);
       return data;
     },
     enabled: !!user && !roleLoading
@@ -94,7 +69,6 @@ export default function Dashboard() {
   // Create tournament mutation
   const createMutation = useMutation({
     mutationFn: async () => {
-      const ownerCol = await detectOwnerColumn();
       const today = new Date().toISOString().split('T')[0];
       const payload: any = {
         title: 'Untitled Tournament',
@@ -102,7 +76,7 @@ export default function Dashboard() {
         end_date: today,
         status: 'draft'
       };
-      payload[ownerCol] = user!.id;
+      payload.owner_id = user!.id;
 
       const { data, error } = await supabase
         .from('tournaments')
