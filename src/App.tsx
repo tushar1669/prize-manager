@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { isFeatureEnabled } from "@/utils/featureFlags";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import TournamentSetup from "./pages/TournamentSetup";
@@ -28,46 +30,54 @@ import CategoryOrderReview from "./pages/CategoryOrderReview";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <DirtyProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <NavigationGuard />
-          <GlobalShortcuts />
-          <Routes>
-          {/* Public routes (no auth required) */}
-          <Route path="/" element={<PublicHome />} />
-          <Route path="/p/:slug" element={<PublicTournament />} />
-          <Route path="/p/:slug/results" element={<PublicResults />} />
-          <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
-          
-          {/* Auth routes */}
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
-          
-          {/* Protected routes */}
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-          <Route path="/t/:id/setup" element={<ProtectedRoute><TournamentSetup /></ProtectedRoute>} />
-          <Route path="/t/:id/order-review" element={<ProtectedRoute><CategoryOrderReview /></ProtectedRoute>} />
-          <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
-          <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />
-          <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
-          <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
-          <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
-          <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
-          
-          {/* Fallback */}
-          <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </DirtyProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  useEffect(() => {
+    console.log(
+      `[flags] HEADER_DETECTION=${isFeatureEnabled('HEADER_DETECTION')} RATING_PRIORITY=${isFeatureEnabled('RATING_PRIORITY')} UNRATED_INFERENCE=${isFeatureEnabled('UNRATED_INFERENCE')}`
+    );
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <DirtyProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <NavigationGuard />
+            <GlobalShortcuts />
+            <Routes>
+              {/* Public routes (no auth required) */}
+              <Route path="/" element={<PublicHome />} />
+              <Route path="/p/:slug" element={<PublicTournament />} />
+              <Route path="/p/:slug/results" element={<PublicResults />} />
+              <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
+
+              {/* Auth routes */}
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
+
+              {/* Protected routes */}
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+              <Route path="/t/:id/setup" element={<ProtectedRoute><TournamentSetup /></ProtectedRoute>} />
+              <Route path="/t/:id/order-review" element={<ProtectedRoute><CategoryOrderReview /></ProtectedRoute>} />
+              <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
+              <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />
+              <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
+              <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
+              <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
+              <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
+
+              {/* Fallback */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </DirtyProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

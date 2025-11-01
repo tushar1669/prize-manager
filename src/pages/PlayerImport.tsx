@@ -5,7 +5,7 @@
  * (e.g., "Rank" vs "rank"), data must be in semantically correct columns.
  * Swapped columns (e.g., city data in disability column) will cause validation errors.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
@@ -37,22 +37,23 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
-import { downloadPlayersTemplateXlsx, downloadErrorXlsx } from '@/utils/excel';
-import { 
-  HEADER_ALIASES, 
-  generatePlayerKey, 
+import { downloadPlayersTemplateXlsx, downloadErrorXlsx, downloadPlayersXlsx } from '@/utils/excel';
+import {
+  HEADER_ALIASES,
+  generatePlayerKey,
   normalizeName,
   normalizeDobForImport,
   normalizeHeaderForMatching,
+  selectBestRatingColumn,
   ImportConflict,
-  ImportConflictType 
+  ImportConflictType
 } from '@/utils/importSchema';
-import { 
-  normalizeGender, 
-  normalizeRating, 
-  inferUnrated,
-  UnratedInferenceConfig 
+import {
+  normalizeGender,
+  normalizeRating,
+  inferUnrated
 } from '@/utils/valueNormalizers';
+import { isFeatureEnabled } from '@/utils/featureFlags';
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -60,6 +61,7 @@ interface ParsedPlayer extends PlayerImportRow {
   dob_raw?: string | null;
   _dobInferred?: boolean;
   _dobInferredReason?: string;
+  _rawUnrated?: unknown;
 }
 
 // Helper functions for smart retry
@@ -122,6 +124,8 @@ export default function PlayerImport() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
+  const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
+  const hasMappedRef = useRef(false);
 
   // NEW: DB players for conflict detection
   const [dbPlayers, setDbPlayers] = useState<Array<{
@@ -150,12 +154,12 @@ export default function PlayerImport() {
   const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
 
   // Phase 6: Import configuration state
-  const [importConfig, setImportConfig] = useState({
+  const [importConfig, setImportConfig] = useState(() => ({
     stripCommasFromRating: true,
     preferRtgOverIRtg: true,
     treatEmptyAsUnrated: false,
-    inferUnratedFromMissingData: false
-  });
+    inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE')
+  }));
 
   // Track dirty state when mapped players exist
   useEffect(() => {
@@ -172,7 +176,7 @@ export default function PlayerImport() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('owner_id')
+        .select('owner_id, slug')
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
@@ -183,6 +187,7 @@ export default function PlayerImport() {
   });
 
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
+  const tournamentSlug = (tournament as { slug?: string } | null | undefined)?.slug ?? 'tournament';
 
   // NEW: Fetch existing players for duplicate/conflict detection
   const { data: existingPlayers } = useQuery({
@@ -191,10 +196,18 @@ export default function PlayerImport() {
       // Try to select fide_id, but handle gracefully if column doesn't exist
       const { data, error } = await supabase
         .from('players')
-        .select('id, name, dob, rating')
+        .select('id, name, dob, rating, fide_id')
         .eq('tournament_id', id);
-      if (error) throw error;
-      return (data || []).map(p => ({ ...p, fide_id: null }));
+      if (error) {
+        console.warn('[import] FIDE ID column missing, falling back without it:', error.message);
+        const fallback = await supabase
+          .from('players')
+          .select('id, name, dob, rating')
+          .eq('tournament_id', id);
+        if (fallback.error) throw fallback.error;
+        return (fallback.data || []).map(p => ({ ...p, fide_id: null }));
+      }
+      return (data || []).map(p => ({ ...p, fide_id: p.fide_id ?? null }));
     },
     enabled: !!id
   });
@@ -205,6 +218,21 @@ export default function PlayerImport() {
       setDbPlayers(existingPlayers);
     }
   }, [existingPlayers]);
+
+  useEffect(() => {
+    hasMappedRef.current = false;
+  }, [headers, parsedData]);
+
+  useEffect(() => {
+    if (headers.length === 0) {
+      setImportSource('unknown');
+      return;
+    }
+
+    const normalizedHeaders = headers.map(normalizeHeaderForMatching);
+    const hasSwissMarkers = normalizedHeaders.some(h => h === 'fs' || h === 'fideno');
+    setImportSource(hasSwissMarkers ? 'swiss-manager' : 'template');
+  }, [headers]);
 
   // NEW: Check for autosave draft on mount
   useEffect(() => {
@@ -246,6 +274,8 @@ export default function PlayerImport() {
     setParseStatus('idle');
     setShowMappingDialog(false);
     setIsParsing(false);
+    setImportSource('unknown');
+    hasMappedRef.current = false;
     resetDirty('import');
 
     // Also clear file input so the same file can be picked again
@@ -279,6 +309,8 @@ export default function PlayerImport() {
     toast.info(`Uploading ${selectedFile.name}...`);
 
     setIsParsing(true);
+    setImportSource('unknown');
+    hasMappedRef.current = false;
 
     try {
       const { data, headers: csvHeaders } = await parseFile(selectedFile);
@@ -306,21 +338,27 @@ export default function PlayerImport() {
 
   // Auto-mapping useEffect - runs AFTER headers state is committed
   useEffect(() => {
-    // Only run when we have fresh headers and data but haven't processed yet
     if (headers.length === 0 || parsedData.length === 0) return;
-    if (mappedPlayers.length > 0) return; // Already processed
-    
+    if (hasMappedRef.current) return;
+
+    hasMappedRef.current = true;
+
     console.log('[import] Running auto-mapping with', headers.length, 'headers');
-    
+
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
-    
-    // Pre-normalize all aliases
+
+    if (isFeatureEnabled('RATING_PRIORITY')) {
+      const bestRating = selectBestRatingColumn(headers);
+      if (bestRating) {
+        autoMapping.rating = bestRating;
+      }
+    }
+
     Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
       normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
     });
-    
-    // Map each detected header
+
     headers.forEach(h => {
       const normalized = normalizeHeaderForMatching(h);
       for (const [field, aliases] of Object.entries(normalizedAliases)) {
@@ -330,11 +368,10 @@ export default function PlayerImport() {
         }
       }
     });
-    
+
     console.log('[import] Auto-mapped fields:', autoMapping);
     console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
-    
-    // Pre-flight validation
+
     if (!autoMapping.rank || !autoMapping.name) {
       console.warn('[import] Missing required fields:', {
         rank: !autoMapping.rank,
@@ -347,7 +384,7 @@ export default function PlayerImport() {
       handleMappingConfirm(autoMapping);
       toast.info('Columns auto-mapped successfully');
     }
-  }, [headers, parsedData]); // Trigger when state updates
+  }, [headers, parsedData]);
 
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
@@ -445,12 +482,19 @@ export default function PlayerImport() {
       .sort(([, a], [, b]) => b.count - a.count)
       .slice(0, 10);
 
-    console.log('[import] Validation summary:', {
-      total: mapped.length,
-      valid: validPlayers.length,
-      skipped: errors.length,
-      topReasons: topReasons.map(([reason, data]) => `${reason} (${data.count} rows)`)
-    });
+    console.log(`[validate] total=${mapped.length} valid=${validPlayers.length} skipped=${errors.length}`);
+    if (topReasons.length > 0) {
+      const summary = topReasons
+        .slice(0, 3)
+        .map(([reason, data]) => {
+          const sample = data.sample[0] ? ` e.g. ${data.sample[0]}` : '';
+          return `${reason} (${data.count})${sample}`;
+        })
+        .join('; ');
+      console.log('[import] top reasons:', summary);
+    } else {
+      console.log('[import] top reasons: none');
+    }
 
     setValidationErrors(errors);
 
@@ -612,7 +656,23 @@ export default function PlayerImport() {
       console.time('[import] batch-insert');
       
       const CHUNK_SIZE = 500;
-      const fields = ['rank', 'name', 'rating', 'dob', 'dob_raw', 'gender', 'state', 'city', 'club', 'disability', 'special_notes'];
+      const fields = [
+        'rank',
+        'sno',
+        'name',
+        'rating',
+        'dob',
+        'dob_raw',
+        'gender',
+        'state',
+        'city',
+        'club',
+        'disability',
+        'special_notes',
+        'fide_id',
+        'unrated',
+        'federation'
+      ];
       
       // Replace logic
       if (replaceExisting) {
@@ -630,8 +690,15 @@ export default function PlayerImport() {
       const buildRows = (playerList: ParsedPlayer[]) =>
         playerList.map(p => {
           const picked = pick(p, fields);
+          const normalizedUnrated =
+            typeof picked.unrated === 'boolean'
+              ? picked.unrated
+              : picked.unrated == null
+                ? null
+                : Boolean(picked.unrated);
           return {
             rank: Number(p.rank), // Required: must be a number
+            sno: picked.sno != null ? Number(picked.sno) : null,
             name: String(p.name || ''), // Required: must be a string
             rating: picked.rating != null ? Number(picked.rating) : null,
             dob: picked.dob || null,
@@ -642,6 +709,9 @@ export default function PlayerImport() {
             club: picked.club || null,
             disability: picked.disability || null,
             special_notes: picked.special_notes || null,
+            fide_id: picked.fide_id ? String(picked.fide_id) : null,
+            unrated: normalizedUnrated,
+            federation: picked.federation || null,
             tournament_id: id!,
             tags_json: {},
             warnings_json: {}
@@ -710,9 +780,10 @@ export default function PlayerImport() {
           disability: f.player.disability,
           special_notes: f.player.special_notes,
           fide_id: f.player.fide_id,
+          federation: f.player.federation,
         }));
         
-        downloadErrorXlsx(errorRows);
+        downloadErrorXlsx(errorRows, tournamentSlug);
         toast.info('Error Excel downloaded automatically');
       }
     },
@@ -1030,15 +1101,38 @@ export default function PlayerImport() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Preview ({mappedPlayers.length} players)</CardTitle>
-                  {mappedPlayers.length > 10 && (
-                    <button
-                      type="button"
-                      className="text-sm underline"
-                      onClick={() => setShowAllRows(v => !v)}
-                    >
-                      {showAllRows ? 'Show first 10' : `Show all ${mappedPlayers.length}`}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {canProceed && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          try {
+                            downloadPlayersXlsx(mappedPlayers, {
+                              tournamentSlug,
+                              importSource
+                            });
+                            toast.success('Players XLSX downloaded');
+                          } catch (err) {
+                            const error = err as Error;
+                            console.error('[import] Players export failed:', error);
+                            toast.error('Failed to download players XLSX');
+                          }
+                        }}
+                      >
+                        Export Players (XLSX)
+                      </Button>
+                    )}
+                    {mappedPlayers.length > 10 && (
+                      <button
+                        type="button"
+                        className="text-sm underline"
+                        onClick={() => setShowAllRows(v => !v)}
+                      >
+                        {showAllRows ? 'Show first 10' : `Show all ${mappedPlayers.length}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1156,7 +1250,7 @@ export default function PlayerImport() {
                       error: err.errors.join('; '),
                       ...mappedPlayers.find(p => p._originalIndex === err.row)
                     }));
-                    downloadErrorXlsx(errorRows);
+                    downloadErrorXlsx(errorRows, tournamentSlug);
                     toast.success('Error Excel downloaded');
                   }}
                 >

@@ -3,6 +3,167 @@
 
 import * as XLSX from 'xlsx';
 
+type ImportSource = 'swiss-manager' | 'template' | 'unknown';
+
+const IST_TIME_ZONE = 'Asia/Kolkata';
+
+function sanitizeSlug(slug?: string | null): string {
+  if (!slug) return 'tournament';
+  return slug
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
+function formatIstParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: IST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(date).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== 'literal') {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second
+  };
+}
+
+function formatIstTimestampForFile(date: Date): string {
+  const { year, month, day, hour, minute } = formatIstParts(date);
+  return `${year}${month}${day}-${hour}${minute}IST`;
+}
+
+function formatIstIso(date: Date): string {
+  const { year, month, day, hour, minute, second } = formatIstParts(date);
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
+}
+
+function toExcelDate(dob?: string | null): Date | null {
+  if (!dob) return null;
+  const [year, month, day] = dob.split('-').map(v => Number(v));
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+export function downloadPlayersXlsx(
+  players: Array<Record<string, any>>,
+  options: { tournamentSlug?: string | null; importSource?: ImportSource } = {}
+) {
+  if (!players || players.length === 0) {
+    console.warn('[excel] No players available for export');
+    return;
+  }
+
+  const now = new Date();
+  const slug = sanitizeSlug(options.tournamentSlug);
+  const timestamp = formatIstTimestampForFile(now);
+  const generatedAtIst = formatIstIso(now);
+
+  const headers = [
+    'Rank',
+    'SNo',
+    'Name',
+    'Rating',
+    'Unrated',
+    'DOB',
+    'DOB_Raw',
+    'DOB_Inferred',
+    'Gender',
+    'FIDE_ID',
+    'Federation',
+    'State',
+    'City',
+    'Club',
+    'Import_Source',
+    'Imported_At',
+    'Notes'
+  ];
+
+  const rows = players.map(player => {
+    const dobDate = toExcelDate(player.dob);
+    const unratedValue = player.unrated;
+    const importSource: ImportSource = options.importSource ?? 'unknown';
+    const sourceValue = importSource === 'unknown' ? 'template' : importSource;
+
+    return [
+      player.rank != null ? Number(player.rank) : null,
+      player.sno != null && player.sno !== '' ? Number(player.sno) : null,
+      player.name ?? '',
+      player.rating != null && player.rating !== '' ? Number(player.rating) : null,
+      unratedValue == null ? null : Boolean(unratedValue),
+      dobDate,
+      player.dob_raw ?? player.dob ?? null,
+      Boolean(player._dobInferred ?? player.dob_inferred),
+      player.gender ?? null,
+      player.fide_id ?? null,
+      player.federation ?? null,
+      player.state ?? null,
+      player.city ?? null,
+      player.club ?? null,
+      sourceValue,
+      generatedAtIst,
+      player.special_notes ?? player.notes ?? null
+    ];
+  });
+
+  const worksheetData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  // Apply date format for DOB column (column F)
+  for (let r = 1; r < worksheetData.length; r++) {
+    const cellAddress = XLSX.utils.encode_cell({ c: 5, r });
+    const cell = ws[cellAddress];
+    if (cell && cell.v instanceof Date) {
+      cell.z = 'yyyy-mm-dd';
+    }
+  }
+
+  (ws as any)['!cols'] = [
+    { wch: 6 }, // Rank
+    { wch: 6 }, // SNo
+    { wch: 28 }, // Name
+    { wch: 8 }, // Rating
+    { wch: 9 }, // Unrated
+    { wch: 12 }, // DOB
+    { wch: 14 }, // DOB_Raw
+    { wch: 12 }, // DOB_Inferred
+    { wch: 8 }, // Gender
+    { wch: 14 }, // FIDE_ID
+    { wch: 11 }, // Federation
+    { wch: 10 }, // State
+    { wch: 16 }, // City
+    { wch: 20 }, // Club
+    { wch: 16 }, // Import_Source
+    { wch: 22 }, // Imported_At
+    { wch: 30 } // Notes
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Players');
+
+  const filename = `players_${slug}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, filename);
+
+  console.log('[excel] Players workbook downloaded:', filename, `(rows=${players.length})`);
+}
+
 /**
  * Download Excel template with sample player data (v2)
  * Two sheets: Players (data entry) + ReadMe (instructions)
@@ -219,10 +380,13 @@ export function downloadSwissManagerReferenceXlsx() {
 /**
  * Download errors as Excel workbook
  */
-export function downloadErrorXlsx(rows: Array<{
-  row: number; 
-  error: string 
-} & Record<string, any>>) {
+export function downloadErrorXlsx(
+  rows: Array<{
+    row: number;
+    error: string;
+  } & Record<string, any>>,
+  tournamentSlug?: string | null
+) {
   if (rows.length === 0) return;
 
   // Collect all unique columns from error rows
@@ -238,7 +402,7 @@ export function downloadErrorXlsx(rows: Array<{
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-  
+
   // Auto-size columns
   const maxWidths = headers.map((h, idx) => {
     const colData = data.map(row => String(row[idx] || ''));
@@ -249,7 +413,11 @@ export function downloadErrorXlsx(rows: Array<{
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Errors');
-  XLSX.writeFile(wb, `import_errors_${Date.now()}.xlsx`);
-  
-  console.log('[import] Error Excel downloaded:', rows.length, 'rows');
+  const now = new Date();
+  const slug = sanitizeSlug(tournamentSlug);
+  const timestamp = formatIstTimestampForFile(now);
+  const filename = `players_errors_${slug}_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, filename);
+
+  console.log('[import] Error Excel downloaded:', filename, rows.length, 'rows');
 }
