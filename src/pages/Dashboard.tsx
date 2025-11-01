@@ -88,7 +88,8 @@ export default function Dashboard() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, role] });
+      console.log('[dashboard] query invalidated after mutation');
       navigate(`/t/${data.id}/setup?tab=details`);
     },
     onError: (error: any) => {
@@ -110,7 +111,8 @@ export default function Dashboard() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, role] });
+      console.log('[dashboard] query invalidated after mutation');
       toast.success('Tournament deleted');
     },
     onError: (error: any) => {
