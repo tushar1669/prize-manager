@@ -184,7 +184,7 @@ export default function Finalize() {
     mutationFn: async () => {
       const { data: tournament, error: tournamentError } = await supabase
         .from('tournaments')
-        .select('title, public_slug')
+        .select('title, public_slug, id')
         .eq('id', id)
         .maybeSingle();
       
@@ -193,22 +193,44 @@ export default function Finalize() {
       
       const slug = tournament.public_slug || slugifyWithSuffix(tournament.title || 'tournament');
       
-      const { error } = await supabase
+      // Update tournament status
+      const { error: updateError } = await supabase
         .from('tournaments')
         .update({ 
           is_published: true, 
-          public_slug: slug 
+          public_slug: slug,
+          status: 'published'
         })
         .eq('id', id);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
+      
+      // Insert/update publication record
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: pubError } = await supabase
+        .from('publications')
+        .upsert({
+          tournament_id: id,
+          slug: slug,
+          version: nextVersion || 1,
+          published_by: user?.id,
+          is_active: true
+        }, { onConflict: 'tournament_id,version' });
+      
+      if (pubError) {
+        console.error('[publish] Failed to create publication:', pubError);
+        throw pubError;
+      }
+      
+      console.log('[publish] Published tournament', id, 'with slug', slug);
       return slug;
     },
     onSuccess: (slug) => {
       toast.success(`Published — /p/${slug}`);
-      navigate('/dashboard');
+      navigate(`/t/${id}/publish`, { state: { slug } });
     },
     onError: (error: any) => {
+      console.error('[publish] Error:', error);
       toast.error(`Publish failed: ${error.message}`);
     }
   });

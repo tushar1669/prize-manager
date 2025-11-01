@@ -288,44 +288,7 @@ export default function PlayerImport() {
       
       console.log('[import] Detected headers:', csvHeaders);
       console.log('[import] Parsed', data.length, 'data rows');
-      
-      // Try auto-mapping with unified normalization
-      const autoMapping: Record<string, string> = {};
-      
-      // Pre-normalize all aliases once for efficiency
-      const normalizedAliases: Record<string, string[]> = {};
-      Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
-        normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
-      });
-      
-      // Map each header to a field
-      csvHeaders.forEach(h => {
-        const normalized = normalizeHeaderForMatching(h);
-        for (const [field, aliases] of Object.entries(normalizedAliases)) {
-          if (!autoMapping[field] && aliases.includes(normalized)) {
-            autoMapping[field] = h; // Store original header name
-            break;
-          }
-        }
-      });
-      
-      console.log('[import] Auto-mapped fields:', autoMapping);
-      console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
-      
-      // Pre-flight validation: check required fields
-      if (!autoMapping.rank || !autoMapping.name) {
-        console.warn('[import] Auto-mapping incomplete. Missing required fields:', {
-          rank: !autoMapping.rank,
-          name: !autoMapping.name
-        });
-        setShowMappingDialog(true);
-        toast.warning('Please map required fields: Rank and Name');
-      } else {
-        console.log('[import] Auto-mapping successful. Mapped fields:', Object.keys(autoMapping).join(', '));
-        handleMappingConfirm(autoMapping);
-        toast.info('Columns auto-mapped successfully');
-      }
-      // Don't set parseStatus('ok') here - wait for validation in handleMappingConfirm
+      // Auto-mapping will be handled by useEffect below
     } catch (error) {
       console.error('[parseFile]', error);
       const errMsg = error instanceof Error ? error.message : "Failed to parse file. Please upload an Excel file (.xls or .xlsx).";
@@ -340,6 +303,51 @@ export default function PlayerImport() {
       }
     }
   };
+
+  // Auto-mapping useEffect - runs AFTER headers state is committed
+  useEffect(() => {
+    // Only run when we have fresh headers and data but haven't processed yet
+    if (headers.length === 0 || parsedData.length === 0) return;
+    if (mappedPlayers.length > 0) return; // Already processed
+    
+    console.log('[import] Running auto-mapping with', headers.length, 'headers');
+    
+    const autoMapping: Record<string, string> = {};
+    const normalizedAliases: Record<string, string[]> = {};
+    
+    // Pre-normalize all aliases
+    Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
+      normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
+    });
+    
+    // Map each detected header
+    headers.forEach(h => {
+      const normalized = normalizeHeaderForMatching(h);
+      for (const [field, aliases] of Object.entries(normalizedAliases)) {
+        if (!autoMapping[field] && aliases.includes(normalized)) {
+          autoMapping[field] = h;
+          break;
+        }
+      }
+    });
+    
+    console.log('[import] Auto-mapped fields:', autoMapping);
+    console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
+    
+    // Pre-flight validation
+    if (!autoMapping.rank || !autoMapping.name) {
+      console.warn('[import] Missing required fields:', {
+        rank: !autoMapping.rank,
+        name: !autoMapping.name
+      });
+      setShowMappingDialog(true);
+      toast.warning('Please map required fields: Rank and Name');
+    } else {
+      console.log('[import] Auto-mapping successful');
+      handleMappingConfirm(autoMapping);
+      toast.info('Columns auto-mapped successfully');
+    }
+  }, [headers, parsedData]); // Trigger when state updates
 
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);

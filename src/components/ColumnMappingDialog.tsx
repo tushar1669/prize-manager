@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { HEADER_ALIASES, selectBestRatingColumn, normalizeHeaderForMatching } from "@/utils/importSchema";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
@@ -56,11 +56,20 @@ export function ColumnMappingDialog({
   detectedColumns, 
   onConfirm 
 }: ColumnMappingDialogProps) {
-  const [mapping, setMapping] = useState<Record<string, string>>(() => {
-    // Phase 2-4: Enhanced auto-detection with rating priority
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // Auto-mapping useEffect - runs when detectedColumns changes
+  useEffect(() => {
+    if (detectedColumns.length === 0) {
+      console.log('[ColumnMapping] No columns detected yet');
+      return;
+    }
+    
+    console.log('[ColumnMapping] Initializing auto-map for', detectedColumns.length, 'columns');
+    
     const autoMapping: Record<string, string> = {};
     
-    // Phase 3: Special handling for rating column priority (Rtg > IRtg)
+    // Rating priority (Phase 3)
     if (isFeatureEnabled('RATING_PRIORITY')) {
       const bestRating = selectBestRatingColumn(detectedColumns);
       if (bestRating) {
@@ -68,20 +77,17 @@ export function ColumnMappingDialog({
       }
     }
     
-    // Pre-normalize all aliases once for efficiency
+    // Pre-normalize aliases
     const normalizedAliases: Record<string, string[]> = {};
     Object.entries(mappingRules).forEach(([field, patterns]) => {
       normalizedAliases[field] = patterns.map(normalizeHeaderForMatching);
     });
     
-    // Standard field auto-mapping with unified normalization
+    // Standard field mapping
     detectedColumns.forEach(col => {
       const normalized = normalizeHeaderForMatching(col);
       Object.entries(normalizedAliases).forEach(([field, patterns]) => {
-        // Skip rating if already handled by priority logic
         if (field === 'rating' && autoMapping.rating) return;
-        
-        // Use exact matching after normalization
         if (!autoMapping[field] && patterns.includes(normalized)) {
           autoMapping[field] = col;
         }
@@ -91,8 +97,8 @@ export function ColumnMappingDialog({
     console.log('[ColumnMapping] Auto-mapped fields:', autoMapping);
     console.log('[ColumnMapping] Mapped field count:', Object.keys(autoMapping).length);
     
-    return autoMapping;
-  });
+    setMapping(autoMapping);
+  }, [detectedColumns]); // Re-run when columns change
 
   const handleConfirm = () => {
     // Validate required fields

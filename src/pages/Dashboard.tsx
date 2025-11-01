@@ -63,21 +63,29 @@ export default function Dashboard() {
   const { data: tournaments, isLoading, error } = useQuery({
     queryKey: ['tournaments', user?.id, role],
     queryFn: async () => {
+      console.log('[dashboard] Fetching tournaments for user:', user?.id, 'role:', role);
+      
       const ownerCol = await detectOwnerColumn();
+      console.log('[dashboard] Using owner column:', ownerCol);
       
       // Organizers see only their own; Masters see all
       const { data, error } = role !== 'master'
         ? await supabase
             .from('tournaments')
-            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at')
+            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at, is_published')
             .eq(ownerCol as 'owner_id', user!.id)
             .order('created_at', { ascending: false })
         : await supabase
             .from('tournaments')
-            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at')
+            .select('id, title, status, start_date, end_date, venue, city, owner_id, created_at, is_published')
             .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[dashboard] Query error:', error);
+        throw error;
+      }
+      
+      console.log('[dashboard] Fetched', data?.length || 0, 'tournaments');
       return data;
     },
     enabled: !!user && !roleLoading

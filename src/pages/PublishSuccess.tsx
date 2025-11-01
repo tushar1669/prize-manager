@@ -6,14 +6,43 @@ import { Input } from "@/components/ui/input";
 import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function PublishSuccess() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const version = location.state?.version || 1;
+  const slugFromState = location.state?.slug;
   const [isPublished, setIsPublished] = useState(true);
-  const publicUrl = `https://prize-manager.com/t/${id}/public`;
+
+  // Fetch publication if not passed in state
+  const { data: publication } = useQuery({
+    queryKey: ['publication', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('publications')
+        .select('slug, is_active, version')
+        .eq('tournament_id', id)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[publish] Failed to fetch publication:', error);
+        throw error;
+      }
+      return data;
+    },
+    enabled: !!id && !slugFromState
+  });
+
+  const slug = slugFromState || publication?.slug;
+  const publicUrl = slug 
+    ? `${window.location.origin}/p/${slug}` 
+    : `${window.location.origin}/t/${id}/public`;
+
+  console.log('[publish] Public URL:', publicUrl);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(publicUrl);
