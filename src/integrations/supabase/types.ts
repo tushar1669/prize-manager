@@ -303,28 +303,34 @@ export type Database = {
       }
       publications: {
         Row: {
+          created_at: string
           id: string
-          is_active: boolean | null
-          published_at: string | null
+          is_active: boolean
+          published_at: string
           published_by: string | null
+          request_id: string
           slug: string
           tournament_id: string
           version: number
         }
         Insert: {
+          created_at?: string
           id?: string
-          is_active?: boolean | null
-          published_at?: string | null
+          is_active?: boolean
+          published_at?: string
           published_by?: string | null
+          request_id?: string
           slug: string
           tournament_id: string
           version?: number
         }
         Update: {
+          created_at?: string
           id?: string
-          is_active?: boolean | null
-          published_at?: string | null
+          is_active?: boolean
+          published_at?: string
           published_by?: string | null
+          request_id?: string
           slug?: string
           tournament_id?: string
           version?: number
@@ -469,7 +475,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      published_tournaments: {
+        Row: {
+          brochure_url: string | null
+          chessresults_url: string | null
+          city: string | null
+          created_at: string | null
+          end_date: string
+          id: string
+          is_published: boolean | null
+          notes: string | null
+          public_results_url: string | null
+          public_slug: string | null
+          published_at: string
+          request_id: string
+          slug: string
+          start_date: string
+          title: string
+          venue: string | null
+          version: number
+        }
+        Relationships: []
+      }
     }
     Functions: {
       bootstrap_master: { Args: never; Returns: Json }

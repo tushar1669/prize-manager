@@ -13,13 +13,15 @@ export default function PublicResults() {
     queryKey: ['public-tournament', slug],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tournaments')
-        .select('id, title, is_published')
-        .eq('public_slug', slug)
-        .eq('is_published', true)
+        .from('published_tournaments')
+        .select('id, title, slug')
+        .eq('slug', slug)
         .maybeSingle();
-      
+
       if (error) throw error;
+      if (data) {
+        console.log(`[public] anon fetch ok slug=${slug}`);
+      }
       return data;
     },
     enabled: !!slug,

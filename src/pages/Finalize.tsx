@@ -3,12 +3,12 @@ import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { FileDown, ExternalLink, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
+import { PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 
@@ -182,55 +182,88 @@ export default function Finalize() {
 
   const publishMutation = useMutation({
     mutationFn: async () => {
+      if (!id) throw new Error('Tournament ID missing');
+
+      const requestId = crypto.randomUUID();
+      console.log(`[publish] request id=${requestId} tournament=${id}`);
+
+      if (PUBLISH_V2_ENABLED) {
+        const { data, error } = await supabase.rpc('publish_tournament', {
+          tournament_id: id,
+          requested_slug: null
+        });
+
+        if (error) {
+          console.error(`[publish] error id=${requestId} message=${error.message}`);
+          throw error;
+        }
+
+        const payload = Array.isArray(data) ? data?.[0] : data;
+
+        if (!payload?.slug) {
+          console.error(`[publish] error id=${requestId} message=missing slug from RPC`);
+          throw new Error('Publish RPC did not return a slug');
+        }
+
+        console.log(`[publish] ok id=${requestId} slug=${payload.slug}`);
+        return { slug: payload.slug };
+      }
+
       const { data: tournament, error: tournamentError } = await supabase
         .from('tournaments')
         .select('title, public_slug, id')
         .eq('id', id)
         .maybeSingle();
-      
-      if (tournamentError) throw tournamentError;
-      if (!tournament) throw new Error('Tournament not found');
-      
+
+      if (tournamentError) {
+        console.error(`[publish] error id=${requestId} message=${tournamentError.message}`);
+        throw tournamentError;
+      }
+      if (!tournament) {
+        console.error(`[publish] error id=${requestId} message=tournament not found`);
+        throw new Error('Tournament not found');
+      }
+
       const slug = tournament.public_slug || slugifyWithSuffix(tournament.title || 'tournament');
-      
-      // Update tournament status
+
       const { error: updateError } = await supabase
         .from('tournaments')
-        .update({ 
-          is_published: true, 
+        .update({
+          is_published: true,
           public_slug: slug,
           status: 'published'
         })
         .eq('id', id);
-      
-      if (updateError) throw updateError;
-      
-      // Insert/update publication record
+
+      if (updateError) {
+        console.error(`[publish] error id=${requestId} message=${updateError.message}`);
+        throw updateError;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       const { error: pubError } = await supabase
         .from('publications')
         .upsert({
           tournament_id: id,
-          slug: slug,
+          slug,
           version: nextVersion || 1,
           published_by: user?.id,
           is_active: true
         }, { onConflict: 'tournament_id,version' });
-      
+
       if (pubError) {
-        console.error('[publish] Failed to create publication:', pubError);
+        console.error(`[publish] error id=${requestId} message=${pubError.message}`);
         throw pubError;
       }
-      
-      console.log('[publish] Published tournament', id, 'with slug', slug);
-      return slug;
+
+      console.log(`[publish] ok id=${requestId} slug=${slug}`);
+      return { slug };
     },
-    onSuccess: (slug) => {
+    onSuccess: ({ slug }) => {
       toast.success(`Published — /p/${slug}`);
       navigate(`/t/${id}/publish`, { state: { slug } });
     },
     onError: (error: any) => {
-      console.error('[publish] Error:', error);
       toast.error(`Publish failed: ${error.message}`);
     }
   });

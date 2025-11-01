@@ -21,15 +21,13 @@ export default function PublishSuccess() {
     queryKey: ['publication', id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('publications')
-        .select('slug, is_active, version')
-        .eq('tournament_id', id)
-        .order('version', { ascending: false })
-        .limit(1)
+        .from('published_tournaments')
+        .select('slug')
+        .eq('id', id)
         .maybeSingle();
-      
+
       if (error) {
-        console.error('[publish] Failed to fetch publication:', error);
+        console.error('[publish] error fetching published_tournaments view', error);
         throw error;
       }
       return data;
@@ -38,11 +36,11 @@ export default function PublishSuccess() {
   });
 
   const slug = slugFromState || publication?.slug;
-  const publicUrl = slug 
-    ? `${window.location.origin}/p/${slug}` 
+  const publicUrl = slug
+    ? `${window.location.origin}/p/${slug}`
     : `${window.location.origin}/t/${id}/public`;
 
-  console.log('[publish] Public URL:', publicUrl);
+  console.log('[publish] resolved url=', publicUrl);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(publicUrl);
@@ -50,6 +48,10 @@ export default function PublishSuccess() {
   };
 
   const handleViewPublic = () => {
+    if (slug) {
+      navigate(`/p/${slug}`);
+      return;
+    }
     navigate(`/t/${id}/public`);
   };
 
