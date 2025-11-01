@@ -1,4 +1,5 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,12 @@ import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
-import { PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
+import { ENABLE_PDF_EXPORT, PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { downloadPlayersPdf } from "@/utils/pdf";
 
 interface Winner {
   prizeId: string;
@@ -30,6 +32,7 @@ export default function Finalize() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { role } = useUserRole();
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Block if no winners
   if (winners.length === 0) {
@@ -275,8 +278,22 @@ export default function Finalize() {
     }
   });
 
-  const handleExportPDF = () => {
-    toast.info("PDF export coming in Phase-3");
+  const handleExportPDF = async () => {
+    if (!id) {
+      toast.error("Tournament ID missing");
+      return;
+    }
+
+    try {
+      setIsExportingPdf(true);
+      await downloadPlayersPdf({ tournamentId: id });
+      toast.success("Players summary PDF exported");
+    } catch (error: any) {
+      console.error("[finalize] pdf export failed", error);
+      toast.error(error?.message || "Failed to export PDF");
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -409,18 +426,20 @@ export default function Finalize() {
               <CardTitle>Export Options</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button
-                onClick={handleExportPDF}
-                variant="outline"
-                className="w-full justify-between"
-                disabled
-              >
-                <span className="flex items-center gap-2">
-                  <FileDown className="h-4 w-4" />
-                  Download PDF Report
-                </span>
-                <ExternalLink className="h-4 w-4" />
-              </Button>
+              {ENABLE_PDF_EXPORT && (
+                <Button
+                  onClick={handleExportPDF}
+                  variant="outline"
+                  className="w-full justify-between"
+                  disabled={isExportingPdf || winners.length === 0}
+                >
+                  <span className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    {isExportingPdf ? "Exporting..." : "Export PDF (Players Summary)"}
+                  </span>
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 onClick={handleExportCSV}
                 variant="outline"
