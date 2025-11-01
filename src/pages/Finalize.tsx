@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDown, ExternalLink, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
 import { PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface Winner {
   prizeId: string;
@@ -25,6 +27,9 @@ export default function Finalize() {
   const location = useLocation();
   const winners = (location.state?.winners || []) as Winner[];
   const { error, showError, clearError } = useErrorPanel();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { role } = useUserRole();
 
   // Block if no winners
   if (winners.length === 0) {
@@ -261,6 +266,8 @@ export default function Finalize() {
     },
     onSuccess: ({ slug }) => {
       toast.success(`Published — /p/${slug}`);
+      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, role] });
+      console.log('[dashboard] query invalidated after mutation');
       navigate(`/t/${id}/publish`, { state: { slug } });
     },
     onError: (error: any) => {
