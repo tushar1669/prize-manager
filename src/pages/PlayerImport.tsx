@@ -54,7 +54,13 @@ import {
   normalizeRating,
   inferUnrated
 } from '@/utils/valueNormalizers';
-import { isFeatureEnabled, IMPORT_LOGS_ENABLED, SERVER_IMPORT_ENABLED } from '@/utils/featureFlags';
+import {
+  isFeatureEnabled,
+  IMPORT_DEDUP_ENABLED,
+  IMPORT_LOGS_ENABLED,
+  IMPORT_MERGE_POLICY_DEFAULTS,
+  SERVER_IMPORT_ENABLED,
+} from '@/utils/featureFlags';
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -215,7 +221,8 @@ export default function PlayerImport() {
     preferRtgOverIRtg: true,
     treatEmptyAsUnrated: false,
     inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE'),
-    preferServer: false
+    preferServer: false,
+    mergePolicy: { ...IMPORT_MERGE_POLICY_DEFAULTS },
   }));
 
   // Track dirty state when mapped players exist
@@ -266,13 +273,15 @@ export default function PlayerImport() {
       }
       return (data || []).map(p => ({ ...p, fide_id: p.fide_id ?? null }));
     },
-    enabled: !!id
+    enabled: IMPORT_DEDUP_ENABLED && !!id,
   });
 
   useEffect(() => {
-    if (existingPlayers) {
+    if (IMPORT_DEDUP_ENABLED && existingPlayers) {
       console.log('[import] Loaded', existingPlayers.length, 'existing players');
       setDbPlayers(existingPlayers);
+    } else if (!IMPORT_DEDUP_ENABLED) {
+      setDbPlayers([]);
     }
   }, [existingPlayers]);
 
@@ -668,7 +677,7 @@ export default function PlayerImport() {
       }
       
       // Check against DB players
-      if (dbPlayers.length > 0 && !existingRow) {
+      if (IMPORT_DEDUP_ENABLED && dbPlayers.length > 0 && !existingRow) {
         const dbMatch = dbPlayers.find(db => {
           // Match by FIDE ID first
           if (player.fide_id && db.fide_id) {
