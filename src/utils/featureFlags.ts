@@ -37,3 +37,11 @@ export const PUBLIC_DOB_MASKING = true;
 export function isFeatureEnabled(flag: keyof typeof IMPORT_V2_FLAGS): boolean {
   return IMPORT_V2_FLAGS[flag];
 }
+
+const serverImportFlag = import.meta.env?.VITE_SERVER_IMPORT_ENABLED;
+export const SERVER_IMPORT_ENABLED = serverImportFlag ? serverImportFlag === "true" : false;
+
+const thresholdMb = Number(import.meta.env?.VITE_IMPORT_SIZE_THRESHOLD_MB ?? "3");
+export const IMPORT_SIZE_THRESHOLD_MB = Number.isFinite(thresholdMb) ? thresholdMb : 3;
+
+export const IMPORT_BUCKET = import.meta.env?.VITE_IMPORT_BUCKET ?? "imports";
