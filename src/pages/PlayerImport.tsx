@@ -358,6 +358,370 @@ export default function PlayerImport() {
     onError: (err: any) => toast.error(`Failed: ${err.message}`)
   });
 
+  const importPlayersMutation = useMutation({
+    onMutate: () => {
+      importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
+    },
+    mutationFn: async ({ players, dedupe }: ImportMutationPayload) => {
+      console.time('[import] batch-insert');
+
+      const CHUNK_SIZE = 500;
+      const fields = [
+        'rank',
+        'sno',
+        'name',
+        'rating',
+        'dob',
+        'dob_raw',
+        'gender',
+        'state',
+        'city',
+        'club',
+        'disability',
+        'special_notes',
+        'fide_id',
+        'unrated',
+        'federation'
+      ];
+
+      const results = {
+        created: [] as ParsedPlayer[],
+        updated: [] as ParsedPlayer[],
+        skipped: [] as Array<{ player: ParsedPlayer; reason: string }>,
+        failed: [] as Array<{ player: ParsedPlayer; error: string }>,
+      };
+
+      const buildRows = (playerList: ParsedPlayer[]) =>
+        playerList.map(p => {
+          const picked = pick(p, fields);
+          const normalizedUnrated =
+            typeof picked.unrated === 'boolean'
+              ? picked.unrated
+              : picked.unrated == null
+                ? null
+                : Boolean(picked.unrated);
+          return {
+            rank: Number(p.rank),
+            sno: picked.sno != null ? Number(picked.sno) : null,
+            name: String(p.name || ''),
+            rating: picked.rating != null ? Number(picked.rating) : null,
+            dob: picked.dob || null,
+            dob_raw: picked.dob_raw || picked.dob || null,
+            gender: picked.gender || null,
+            state: picked.state || null,
+            city: picked.city || null,
+            club: picked.club || null,
+            disability: picked.disability || null,
+            special_notes: picked.special_notes || null,
+            fide_id: picked.fide_id ? String(picked.fide_id) : null,
+            unrated: normalizedUnrated,
+            federation: picked.federation || null,
+            tournament_id: id!,
+            tags_json: {},
+            warnings_json: {},
+          };
+        });
+
+      if (replaceExisting) {
+        console.log('[import] Deleting existing players');
+        const { error: deleteError } = await supabase
+          .from('players')
+          .delete()
+          .eq('tournament_id', id);
+
+        if (deleteError) {
+          throw new Error(`Failed to clear existing players: ${deleteError.message}`);
+        }
+
+        const chunks: ParsedPlayer[][] = [];
+        for (let i = 0; i < players.length; i += CHUNK_SIZE) {
+          chunks.push(players.slice(i, i + CHUNK_SIZE));
+        }
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
+          const payload = buildRows(chunk);
+          const { error } = await supabase.from('players').insert(payload).select('id');
+
+          if (!error) {
+            results.created.push(...chunk);
+          } else {
+            console.warn('[import] Chunk failed, trying individual inserts');
+            for (const player of chunk) {
+              const [singlePayload] = buildRows([player]);
+              const { error: singleError } = await supabase.from('players').insert([singlePayload]);
+
+              if (!singleError) {
+                results.created.push(player);
+              } else {
+                results.failed.push({ player, error: singleError.message });
+              }
+            }
+          }
+        }
+      } else if (IMPORT_DEDUP_ENABLED && dedupe) {
+        const playersByRow = new Map(players.map(p => [p._originalIndex, p]));
+
+        const createEntries = dedupe.decisions
+          .filter(decision => decision.action === 'create')
+          .flatMap(decision => {
+            const player = playersByRow.get(decision.row);
+            if (!player) return [];
+            const [payload] = buildRows([player]);
+            return [{ decision, player, payload }];
+          });
+
+        const updateEntriesAll = dedupe.decisions
+          .filter(decision => decision.action === 'update' && decision.existingId)
+          .flatMap(decision => {
+            const player = playersByRow.get(decision.row);
+            if (!player) return [];
+            const changes = decision.payload ?? {};
+            return [{ decision, player, changes }];
+          });
+
+        const actionableUpdates = updateEntriesAll.filter(entry => Object.keys(entry.changes).length > 0);
+        const noopUpdates = updateEntriesAll.filter(entry => Object.keys(entry.changes).length === 0);
+
+        noopUpdates.forEach(entry => {
+          results.skipped.push({ player: entry.player, reason: 'No changes from merge policy' });
+        });
+
+        const skipEntries = dedupe.decisions
+          .filter(decision => decision.action === 'skip')
+          .flatMap(decision => {
+            const player = playersByRow.get(decision.row);
+            if (!player) return [];
+            return [{ decision, player }];
+          });
+
+        skipEntries.forEach(entry => {
+          results.skipped.push({ player: entry.player, reason: 'User selected skip' });
+        });
+
+        const actionPayload = {
+          creates: createEntries.map(entry => ({ row: entry.decision.row, values: entry.payload })),
+          updates: actionableUpdates.map(entry => ({
+            row: entry.decision.row,
+            existing_id: entry.decision.existingId,
+            changes: entry.changes,
+          })),
+          skips: skipEntries.map(entry => ({
+            row: entry.decision.row,
+            existing_id: entry.decision.existingId ?? null,
+          })),
+        };
+
+        console.log('[dedup] plan', {
+          creates: actionPayload.creates.length,
+          updates: actionPayload.updates.length,
+          skips: results.skipped.length,
+        });
+
+        let appliedViaRpc = false;
+
+        if (actionPayload.creates.length > 0 || actionPayload.updates.length > 0) {
+          try {
+            const { data, error } = await supabase.rpc('import_apply_actions' as any, {
+              tournament_id: id,
+              actions: actionPayload,
+            });
+
+            if (error) {
+              console.warn('[dedup] apply RPC failed', error);
+            } else {
+              appliedViaRpc = true;
+              console.log('[dedup] RPC applied', data);
+              results.created.push(...createEntries.map(entry => entry.player));
+              results.updated.push(...actionableUpdates.map(entry => entry.player));
+            }
+          } catch (err) {
+            console.warn('[dedup] apply RPC threw', err);
+          }
+        } else {
+          appliedViaRpc = true;
+        }
+
+        if (!appliedViaRpc) {
+          if (createEntries.length > 0) {
+            const createChunks: (typeof createEntries)[] = [];
+            for (let i = 0; i < createEntries.length; i += CHUNK_SIZE) {
+              createChunks.push(createEntries.slice(i, i + CHUNK_SIZE));
+            }
+
+            for (let i = 0; i < createChunks.length; i++) {
+              const chunk = createChunks[i];
+              console.log(`[dedup] create chunk ${i + 1}/${createChunks.length} (${chunk.length})`);
+              const payload = chunk.map(entry => entry.payload);
+              const { error } = await supabase.from('players').insert(payload).select('id');
+
+              if (!error) {
+                results.created.push(...chunk.map(entry => entry.player));
+              } else {
+                console.warn('[dedup] chunk create failed, trying individually');
+                for (const entry of chunk) {
+                  const { error: singleError } = await supabase.from('players').insert([entry.payload]);
+                  if (!singleError) {
+                    results.created.push(entry.player);
+                  } else {
+                    results.failed.push({ player: entry.player, error: singleError.message });
+                  }
+                }
+              }
+            }
+          }
+
+          if (actionableUpdates.length > 0) {
+            for (const entry of actionableUpdates) {
+              const { error } = await supabase
+                .from('players')
+                .update(entry.changes)
+                .eq('id', entry.decision.existingId)
+                .eq('tournament_id', id);
+
+              if (!error) {
+                results.updated.push(entry.player);
+              } else {
+                results.failed.push({ player: entry.player, error: error.message });
+              }
+            }
+          }
+        }
+      } else {
+        const chunks: ParsedPlayer[][] = [];
+        for (let i = 0; i < players.length; i += CHUNK_SIZE) {
+          chunks.push(players.slice(i, i + CHUNK_SIZE));
+        }
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
+          const payload = buildRows(chunk);
+          const { error } = await supabase.from('players').insert(payload).select('id');
+
+          if (!error) {
+            results.created.push(...chunk);
+          } else {
+            console.warn('[import] Chunk failed, trying individual inserts');
+            for (const player of chunk) {
+              const [singlePayload] = buildRows([player]);
+              const { error: singleError } = await supabase.from('players').insert([singlePayload]);
+
+              if (!singleError) {
+                results.created.push(player);
+              } else {
+                results.failed.push({ player, error: singleError.message });
+              }
+            }
+          }
+        }
+      }
+
+      if (!replaceExisting && IMPORT_DEDUP_ENABLED && dedupe) {
+        console.log('[dedup] applied', {
+          created: results.created.length,
+          updated: results.updated.length,
+          skipped: results.skipped.length,
+          failed: results.failed.length,
+        });
+      }
+
+      console.timeEnd('[import] batch-insert');
+
+      const duration = importStartedAtRef.current != null
+        ? (typeof performance !== 'undefined' ? performance.now() : Date.now()) - importStartedAtRef.current
+        : null;
+      importStartedAtRef.current = null;
+
+      const skippedFromValidation = logContextRef.current?.skippedRows ?? 0;
+      const totalImported = results.created.length + results.updated.length;
+      const dedupeMeta = dedupe
+        ? {
+            plan: dedupe.summary,
+            executed: {
+              created: results.created.length,
+              updated: results.updated.length,
+              skipped: results.skipped.length,
+              failed: results.failed.length,
+            },
+          }
+        : null;
+
+      if (IMPORT_LOGS_ENABLED && id) {
+        const context = logContextRef.current;
+        const lastFile = lastFileInfoRef.current;
+        const payload: ImportLogInsert = {
+          tournament_id: id,
+          imported_by: user?.id ?? null,
+          filename: lastFile.name,
+          file_hash: lastFile.hash,
+          source: lastFile.source,
+          sheet_name: lastFile.sheetName,
+          header_row: lastFile.headerRow,
+          total_rows: context?.totalRows ?? players.length,
+          accepted_rows: totalImported,
+          skipped_rows: skippedFromValidation + results.failed.length + results.skipped.length,
+          top_reasons: context?.topReasons ?? [],
+          sample_errors: context?.sampleErrors ?? [],
+          duration_ms: duration != null ? Math.round(duration) : null,
+          meta: {
+            replace_existing: replaceExisting,
+            duplicate_count: duplicates.length,
+            failed_inserts: results.failed.length,
+            validation_skipped: skippedFromValidation,
+            import_config: { ...importConfig },
+            dedupe_summary: dedupeMeta,
+          } as any, // Cast complex nested JSON to avoid type mismatch
+        };
+
+        void persistImportLog(payload).then((insertedId) => {
+          if (insertedId) {
+            queryClient.invalidateQueries({ queryKey: ['import-logs', id] }).catch(() => {});
+          }
+        });
+      }
+
+      logContextRef.current = null;
+
+      clearDraft(importDraftKey);
+      resetDirty('import');
+
+      if (results.failed.length === 0) {
+        toast.success(
+          `Applied ${totalImported} player actions (${results.created.length} created, ${results.updated.length} updated)`,
+        );
+        navigate(`/t/${id}/review`);
+      } else {
+        toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
+
+        const errorRows = results.failed.map(f => ({
+          row: f.player._originalIndex,
+          error: f.error,
+          rank: f.player.rank,
+          name: f.player.name,
+          rating: f.player.rating,
+          dob: f.player.dob,
+          gender: f.player.gender,
+          state: f.player.state,
+          city: f.player.city,
+          club: f.player.club,
+          disability: f.player.disability,
+          special_notes: f.player.special_notes,
+          fide_id: f.player.fide_id,
+          federation: f.player.federation,
+        }));
+
+        downloadErrorXlsx(errorRows, tournamentSlug);
+        toast.info('Error Excel downloaded automatically');
+      }
+    },
+    onError: (err: any) => {
+      importStartedAtRef.current = null;
+      toast.error(err?.message || 'Import failed');
+    }
+  });
+
   const startImportFlow = useCallback(() => {
     if (importPlayersMutation.isPending || isRunningDedup) {
       return;
@@ -1015,371 +1379,6 @@ export default function PlayerImport() {
       setParseStatus('error');
     }
   };
-
-  const importPlayersMutation = useMutation({
-    onMutate: () => {
-      importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
-    },
-    mutationFn: async ({ players, dedupe }: ImportMutationPayload) => {
-      console.time('[import] batch-insert');
-
-      const CHUNK_SIZE = 500;
-      const fields = [
-        'rank',
-        'sno',
-        'name',
-        'rating',
-        'dob',
-        'dob_raw',
-        'gender',
-        'state',
-        'city',
-        'club',
-        'disability',
-        'special_notes',
-        'fide_id',
-        'unrated',
-        'federation'
-      ];
-
-      const results = {
-        created: [] as ParsedPlayer[],
-        updated: [] as ParsedPlayer[],
-        skipped: [] as Array<{ player: ParsedPlayer; reason: string }>,
-        failed: [] as Array<{ player: ParsedPlayer; error: string }>,
-      };
-
-      const buildRows = (playerList: ParsedPlayer[]) =>
-        playerList.map(p => {
-          const picked = pick(p, fields);
-          const normalizedUnrated =
-            typeof picked.unrated === 'boolean'
-              ? picked.unrated
-              : picked.unrated == null
-                ? null
-                : Boolean(picked.unrated);
-          return {
-            rank: Number(p.rank),
-            sno: picked.sno != null ? Number(picked.sno) : null,
-            name: String(p.name || ''),
-            rating: picked.rating != null ? Number(picked.rating) : null,
-            dob: picked.dob || null,
-            dob_raw: picked.dob_raw || picked.dob || null,
-            gender: picked.gender || null,
-            state: picked.state || null,
-            city: picked.city || null,
-            club: picked.club || null,
-            disability: picked.disability || null,
-            special_notes: picked.special_notes || null,
-            fide_id: picked.fide_id ? String(picked.fide_id) : null,
-            unrated: normalizedUnrated,
-            federation: picked.federation || null,
-            tournament_id: id!,
-            tags_json: {},
-            warnings_json: {},
-          };
-        });
-
-      if (replaceExisting) {
-        console.log('[import] Deleting existing players');
-        const { error: deleteError } = await supabase
-          .from('players')
-          .delete()
-          .eq('tournament_id', id);
-
-        if (deleteError) {
-          throw new Error(`Failed to clear existing players: ${deleteError.message}`);
-        }
-
-        const chunks: ParsedPlayer[][] = [];
-        for (let i = 0; i < players.length; i += CHUNK_SIZE) {
-          chunks.push(players.slice(i, i + CHUNK_SIZE));
-        }
-
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
-          const payload = buildRows(chunk);
-          const { error } = await supabase.from('players').insert(payload).select('id');
-
-          if (!error) {
-            results.created.push(...chunk);
-          } else {
-            console.warn('[import] Chunk failed, trying individual inserts');
-            for (const player of chunk) {
-              const [singlePayload] = buildRows([player]);
-              const { error: singleError } = await supabase.from('players').insert([singlePayload]);
-
-              if (!singleError) {
-                results.created.push(player);
-              } else {
-                results.failed.push({ player, error: singleError.message });
-              }
-            }
-          }
-        }
-      } else if (IMPORT_DEDUP_ENABLED && dedupe) {
-        const playersByRow = new Map(players.map(p => [p._originalIndex, p]));
-
-        const createEntries = dedupe.decisions
-          .filter(decision => decision.action === 'create')
-          .flatMap(decision => {
-            const player = playersByRow.get(decision.row);
-            if (!player) return [];
-            const [payload] = buildRows([player]);
-            return [{ decision, player, payload }];
-          });
-
-        const updateEntriesAll = dedupe.decisions
-          .filter(decision => decision.action === 'update' && decision.existingId)
-          .flatMap(decision => {
-            const player = playersByRow.get(decision.row);
-            if (!player) return [];
-            const changes = decision.payload ?? {};
-            return [{ decision, player, changes }];
-          });
-
-        const actionableUpdates = updateEntriesAll.filter(entry => Object.keys(entry.changes).length > 0);
-        const noopUpdates = updateEntriesAll.filter(entry => Object.keys(entry.changes).length === 0);
-
-        noopUpdates.forEach(entry => {
-          results.skipped.push({ player: entry.player, reason: 'No changes from merge policy' });
-        });
-
-        const skipEntries = dedupe.decisions
-          .filter(decision => decision.action === 'skip')
-          .flatMap(decision => {
-            const player = playersByRow.get(decision.row);
-            if (!player) return [];
-            return [{ decision, player }];
-          });
-
-        skipEntries.forEach(entry => {
-          results.skipped.push({ player: entry.player, reason: 'User selected skip' });
-        });
-
-        const actionPayload = {
-          creates: createEntries.map(entry => ({ row: entry.decision.row, values: entry.payload })),
-          updates: actionableUpdates.map(entry => ({
-            row: entry.decision.row,
-            existing_id: entry.decision.existingId,
-            changes: entry.changes,
-          })),
-          skips: skipEntries.map(entry => ({
-            row: entry.decision.row,
-            existing_id: entry.decision.existingId ?? null,
-          })),
-        };
-
-        console.log('[dedup] plan', {
-          creates: actionPayload.creates.length,
-          updates: actionPayload.updates.length,
-          skips: results.skipped.length,
-        });
-
-        let appliedViaRpc = false;
-
-        if (actionPayload.creates.length > 0 || actionPayload.updates.length > 0) {
-          try {
-            const { data, error } = await supabase.rpc('import_apply_actions' as any, {
-              tournament_id: id,
-              actions: actionPayload,
-            });
-
-            if (error) {
-              console.warn('[dedup] apply RPC failed', error);
-            } else {
-              appliedViaRpc = true;
-              console.log('[dedup] RPC applied', data);
-              results.created.push(...createEntries.map(entry => entry.player));
-              results.updated.push(...actionableUpdates.map(entry => entry.player));
-            }
-          } catch (err) {
-            console.warn('[dedup] apply RPC threw', err);
-          }
-        } else {
-          appliedViaRpc = true;
-        }
-
-        if (!appliedViaRpc) {
-          if (createEntries.length > 0) {
-            const createChunks: (typeof createEntries)[] = [];
-            for (let i = 0; i < createEntries.length; i += CHUNK_SIZE) {
-              createChunks.push(createEntries.slice(i, i + CHUNK_SIZE));
-            }
-
-            for (let i = 0; i < createChunks.length; i++) {
-              const chunk = createChunks[i];
-              console.log(`[dedup] create chunk ${i + 1}/${createChunks.length} (${chunk.length})`);
-              const payload = chunk.map(entry => entry.payload);
-              const { error } = await supabase.from('players').insert(payload).select('id');
-
-              if (!error) {
-                results.created.push(...chunk.map(entry => entry.player));
-              } else {
-                console.warn('[dedup] chunk create failed, trying individually');
-                for (const entry of chunk) {
-                  const { error: singleError } = await supabase.from('players').insert([entry.payload]);
-                  if (!singleError) {
-                    results.created.push(entry.player);
-                  } else {
-                    results.failed.push({ player: entry.player, error: singleError.message });
-                  }
-                }
-              }
-            }
-          }
-
-          if (actionableUpdates.length > 0) {
-            for (const entry of actionableUpdates) {
-              const { error } = await supabase
-                .from('players')
-                .update(entry.changes)
-                .eq('id', entry.decision.existingId)
-                .eq('tournament_id', id);
-
-              if (!error) {
-                results.updated.push(entry.player);
-              } else {
-                results.failed.push({ player: entry.player, error: error.message });
-              }
-            }
-          }
-        }
-      } else {
-        const chunks: ParsedPlayer[][] = [];
-        for (let i = 0; i < players.length; i += CHUNK_SIZE) {
-          chunks.push(players.slice(i, i + CHUNK_SIZE));
-        }
-
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
-          const payload = buildRows(chunk);
-          const { error } = await supabase.from('players').insert(payload).select('id');
-
-          if (!error) {
-            results.created.push(...chunk);
-          } else {
-            console.warn('[import] Chunk failed, trying individual inserts');
-            for (const player of chunk) {
-              const [singlePayload] = buildRows([player]);
-              const { error: singleError } = await supabase.from('players').insert([singlePayload]);
-
-              if (!singleError) {
-                results.created.push(player);
-              } else {
-                results.failed.push({ player, error: singleError.message });
-              }
-            }
-          }
-        }
-      }
-
-      if (!replaceExisting && IMPORT_DEDUP_ENABLED && dedupe) {
-        console.log('[dedup] applied', {
-          created: results.created.length,
-          updated: results.updated.length,
-          skipped: results.skipped.length,
-          failed: results.failed.length,
-        });
-      }
-
-      console.timeEnd('[import] batch-insert');
-
-      const duration = importStartedAtRef.current != null
-        ? (typeof performance !== 'undefined' ? performance.now() : Date.now()) - importStartedAtRef.current
-        : null;
-      importStartedAtRef.current = null;
-
-      const skippedFromValidation = logContextRef.current?.skippedRows ?? 0;
-      const totalImported = results.created.length + results.updated.length;
-      const dedupeMeta = dedupe
-        ? {
-            plan: dedupe.summary,
-            executed: {
-              created: results.created.length,
-              updated: results.updated.length,
-              skipped: results.skipped.length,
-              failed: results.failed.length,
-            },
-          }
-        : null;
-
-      if (IMPORT_LOGS_ENABLED && id) {
-        const context = logContextRef.current;
-        const lastFile = lastFileInfoRef.current;
-        const payload: ImportLogInsert = {
-          tournament_id: id,
-          imported_by: user?.id ?? null,
-          filename: lastFile.name,
-          file_hash: lastFile.hash,
-          source: lastFile.source,
-          sheet_name: lastFile.sheetName,
-          header_row: lastFile.headerRow,
-          total_rows: context?.totalRows ?? players.length,
-          accepted_rows: totalImported,
-          skipped_rows: skippedFromValidation + results.failed.length + results.skipped.length,
-          top_reasons: context?.topReasons ?? [],
-          sample_errors: context?.sampleErrors ?? [],
-          duration_ms: duration != null ? Math.round(duration) : null,
-          meta: {
-            replace_existing: replaceExisting,
-            duplicate_count: duplicates.length,
-            failed_inserts: results.failed.length,
-            validation_skipped: skippedFromValidation,
-            import_config: { ...importConfig },
-            dedupe_summary: dedupeMeta,
-          } as any, // Cast complex nested JSON to avoid type mismatch
-        };
-
-        void persistImportLog(payload).then((insertedId) => {
-          if (insertedId) {
-            queryClient.invalidateQueries({ queryKey: ['import-logs', id] }).catch(() => {});
-          }
-        });
-      }
-
-      logContextRef.current = null;
-
-      clearDraft(importDraftKey);
-      resetDirty('import');
-
-      if (results.failed.length === 0) {
-        toast.success(
-          `Applied ${totalImported} player actions (${results.created.length} created, ${results.updated.length} updated)`,
-        );
-        navigate(`/t/${id}/review`);
-      } else {
-        toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
-
-        const errorRows = results.failed.map(f => ({
-          row: f.player._originalIndex,
-          error: f.error,
-          rank: f.player.rank,
-          name: f.player.name,
-          rating: f.player.rating,
-          dob: f.player.dob,
-          gender: f.player.gender,
-          state: f.player.state,
-          city: f.player.city,
-          club: f.player.club,
-          disability: f.player.disability,
-          special_notes: f.player.special_notes,
-          fide_id: f.player.fide_id,
-          federation: f.player.federation,
-        }));
-
-        downloadErrorXlsx(errorRows, tournamentSlug);
-        toast.info('Error Excel downloaded automatically');
-      }
-    },
-    onError: (err: any) => {
-      importStartedAtRef.current = null;
-      toast.error(err?.message || 'Import failed');
-    }
-  });
-
 
   // Register Cmd/Ctrl+S
   const { registerOnSave } = useDirty();
