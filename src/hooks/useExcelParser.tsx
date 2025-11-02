@@ -1,127 +1,293 @@
 import { useCallback } from "react";
 import * as XLSX from "xlsx";
 import { detectHeaderRow } from "@/utils/sheetDetection";
-import { isFeatureEnabled } from "@/utils/featureFlags";
+import { isFeatureEnabled, SERVER_IMPORT_ENABLED, IMPORT_SIZE_THRESHOLD_MB } from "@/utils/featureFlags";
 import { computeSHA256Hex } from "@/utils/hash";
+import { inferImportSource } from "@/utils/importSchema";
+import { supabase } from "@/integrations/supabase/client";
 
-type Parsed = {
+const LOCAL_PARSE_TIMEOUT_MS = 3000;
+
+export type ParseResult = {
   data: any[];
   headers: string[];
   sheetName?: string;
   headerRow?: number;
   fileHash?: string | null;
+  mode: "local" | "server";
+  source?: "swiss-manager" | "organizer-template" | "unknown";
+  fallback?: "local-error" | "local-timeout" | "server-error";
+};
+
+export type ParseFileOptions = {
+  forceServer?: boolean;
+  tournamentId?: string;
 };
 
 function normalizeHeaders(headers: any[]): string[] {
   return (headers || [])
-    .map(h => String(h ?? '').trim())
-    .filter(h => h.length > 0);
+    .map((header) => String(header ?? "").trim())
+    .filter((header) => header.length > 0);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error("local parse timeout"));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
 }
 
 export function useExcelParser() {
-  const parseExcel = useCallback(async (file: File): Promise<Parsed> => {
-    try {
-      const ab = await file.arrayBuffer();
-      let fileHash: string | null = null;
+  const parseLocally = useCallback(async (file: File, buffer: ArrayBuffer, opts: { hash?: string | null } = {}): Promise<ParseResult> => {
+    let fileHash: string | null | undefined = opts.hash;
+    if (fileHash === undefined) {
       try {
-        fileHash = await computeSHA256Hex(ab);
+        fileHash = await computeSHA256Hex(buffer);
+        if (fileHash) {
+          console.log(`[import.hash] sha256=${fileHash}`);
+        }
       } catch (hashErr) {
-        console.warn('[parseExcel] hash failed', hashErr);
+        console.warn("[import.hash] compute failed", hashErr);
+        fileHash = null;
       }
-      const wb = XLSX.read(ab, { type: 'array' });
-      
-      console.log('[parseExcel] Available sheets:', wb.SheetNames);
-      
-      if (!wb.SheetNames || wb.SheetNames.length === 0) {
-        throw new Error('No sheets found in this workbook.');
+    }
+
+    console.log("[import.local] start");
+    const startedAt = performance.now();
+
+    try {
+      const workbook = XLSX.read(buffer, { type: "array" });
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        throw new Error("No sheets found in this workbook.");
       }
-      
-      // Phase 1: Multi-sheet header detection (feature flag controlled)
-      let wsName: string;
+
+      let sheetName: string;
       let headerRowIndex: number;
       let headers: string[];
-      
-      if (isFeatureEnabled('HEADER_DETECTION')) {
-        // V2: Auto-detect header row across all sheets (Swiss-Manager support)
+
+      if (isFeatureEnabled("HEADER_DETECTION")) {
         const allSheets: Record<string, any[][]> = {};
-        wb.SheetNames.forEach(name => {
-          allSheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { 
-            header: 1, 
-            defval: '', 
-            raw: false 
+        workbook.SheetNames.forEach((name) => {
+          allSheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], {
+            header: 1,
+            defval: "",
+            raw: false
           }) as any[][];
         });
-        
+
         const detected = detectHeaderRow(allSheets, 25);
-        wsName = detected.sheetName;
+        sheetName = detected.sheetName;
         headerRowIndex = detected.headerRowIndex;
         headers = detected.headers;
-        
-        console.log(`[detect] headerRow=${headerRowIndex + 1} sheet=${wsName}`);
-        console.log('[parseExcel] V2 Header detection:', {
-          sheet: wsName,
+
+        console.log(`[detect] headerRow=${headerRowIndex + 1} sheet=${sheetName}`);
+        console.log("[parseExcel] V2 Header detection:", {
+          sheet: sheetName,
           row: headerRowIndex,
           confidence: detected.confidence,
           headers: headers.slice(0, 10)
         });
       } else {
-        // V1: Legacy behavior (row 1 as header)
-        wsName = wb.SheetNames[0];
-        const ws = wb.Sheets[wsName];
-        const asRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-        
+        sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const asRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+          header: 1,
+          defval: ""
+        }) as any[][];
+
         if (!asRows.length || !asRows[0]) {
-          throw new Error('No header row found. Please use the provided template and ensure row 1 has headers.');
+          throw new Error("No header row found. Please use the provided template and ensure row 1 has headers.");
         }
-        
+
         headerRowIndex = 0;
         headers = normalizeHeaders(asRows[0]);
-        
-        console.log(`[detect] headerRow=1 sheet=${wsName} (legacy)`);
-        console.log('[parseExcel] V1 Legacy mode (row 1):', headers);
+
+        console.log(`[detect] headerRow=1 sheet=${sheetName} (legacy)`);
+        console.log("[parseExcel] V1 Legacy mode (row 1):", headers);
       }
-      
+
       if (!headers.length) {
-        throw new Error('Could not detect any headers. Please verify the template.');
+        throw new Error("Could not detect any headers. Please verify the template.");
       }
-      
-      const ws = wb.Sheets[wsName];
-      
-      // Parse data starting AFTER the detected header row
-      const data = XLSX.utils.sheet_to_json(ws, {
+
+      const worksheet = workbook.Sheets[sheetName];
+      if (!worksheet) {
+        throw new Error("Worksheet missing after detection.");
+      }
+
+      const data = XLSX.utils.sheet_to_json(worksheet, {
         header: headers,
-        range: headerRowIndex + 1, // Start after header row
-        defval: ''
+        range: headerRowIndex + 1,
+        defval: ""
       });
 
       if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('No data rows found under the header row. Please ensure your data follows the header.');
+        throw new Error("No data rows found under the header row. Please ensure your data follows the header.");
       }
-      
-      console.log('[parseExcel] Parsed', data.length, 'data rows');
-      console.log('[parseExcel] Sample row:', data[0]);
 
-      return { 
-        data, 
-        headers, 
-        sheetName: wsName,
+      const durationMs = Math.round(performance.now() - startedAt);
+      console.log(`[import.local] ok rows=${data.length} duration_ms=${durationMs}`);
+
+      return {
+        data,
+        headers,
+        sheetName,
         headerRow: headerRowIndex + 1,
-        fileHash
+        fileHash: fileHash ?? null,
+        mode: "local",
+        source: inferImportSource(headers)
       };
-    } catch (err) {
-      console.error('[parseExcel] Parse error:', err);
-      throw new Error(`Parse error: ${err instanceof Error ? err.message : 'Unknown error reading Excel file'}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[import.local] error message=${message}`);
+      throw error instanceof Error ? error : new Error(message);
     }
   }, []);
 
-  const parseFile = useCallback((file: File): Promise<Parsed> => {
-    const name = (file.name || '').toLowerCase();
-    if (name.endsWith('.csv')) {
-      return Promise.reject(new Error('Please upload Excel (.xlsx or .xls). CSV files are not supported.'));
+  const parseViaServer = useCallback(async (
+    file: File,
+    opts: { buffer?: ArrayBuffer; hash?: string | null; tournamentId?: string } = {}
+  ): Promise<ParseResult> => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Authentication required for server parsing");
     }
-    if (name.endsWith('.xls') || name.endsWith('.xlsx')) return parseExcel(file);
-    return Promise.reject(new Error('Unsupported file type. Please upload Excel (.xls or .xlsx).'));
-  }, [parseExcel]);
+
+    const body = opts.buffer ?? (await file.arrayBuffer());
+
+    const headers: Record<string, string> = {
+      "Content-Type": file.type || "application/octet-stream",
+      "x-tournament-id": opts.tournamentId ?? "",
+      "x-file-name": file.name || "upload.xlsx",
+      Authorization: `Bearer ${accessToken}`
+    };
+
+    if (opts.hash) {
+      headers["x-sha256"] = opts.hash;
+    }
+
+    const { data, error } = await supabase.functions.invoke("parseWorkbook", {
+      body,
+      headers
+    });
+
+    if (error) {
+      throw new Error(error.message ?? "Server parse failed");
+    }
+
+    const payload = data as any;
+    return {
+      data: payload?.rows ?? [],
+      headers: payload?.headers ?? [],
+      sheetName: payload?.sheetName ?? "Players",
+      headerRow: payload?.headerRow ?? 1,
+      fileHash: payload?.fileHash ?? opts.hash ?? null,
+      mode: "server",
+      source: payload?.source ?? "unknown"
+    };
+  }, []);
+
+  const parseFile = useCallback(async (file: File, options: ParseFileOptions = {}): Promise<ParseResult> => {
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".csv")) {
+      return Promise.reject(new Error("Please upload Excel (.xlsx or .xls). CSV files are not supported."));
+    }
+    if (!name.endsWith(".xls") && !name.endsWith(".xlsx")) {
+      return Promise.reject(new Error("Unsupported file type. Please upload Excel (.xls or .xlsx)."));
+    }
+
+    console.log(`[import.size] bytes=${file.size}`);
+
+    const thresholdBytes = IMPORT_SIZE_THRESHOLD_MB * 1024 * 1024;
+    const prefersServer = SERVER_IMPORT_ENABLED && (options.forceServer || file.size > thresholdBytes);
+
+    if (prefersServer) {
+      console.log("[import.source] chosen=server");
+      try {
+        return await parseViaServer(file, {
+          tournamentId: options.tournamentId
+        });
+      } catch (serverError) {
+        const message = serverError instanceof Error ? serverError.message : String(serverError);
+        console.error(`[import.srv] error message=${message}`);
+        if (!SERVER_IMPORT_ENABLED) {
+          throw serverError instanceof Error ? serverError : new Error(message);
+        }
+
+        const buffer = await file.arrayBuffer();
+        let hash: string | null = null;
+        try {
+          hash = await computeSHA256Hex(buffer);
+          if (hash) {
+            console.log(`[import.hash] sha256=${hash}`);
+          }
+        } catch (hashErr) {
+          console.warn("[import.hash] compute failed", hashErr);
+          hash = null;
+        }
+
+        console.log("[import.source] chosen=local");
+        const localResult = await parseLocally(file, buffer, { hash });
+        return { ...localResult, fallback: "server-error" };
+      }
+    }
+
+    console.log("[import.source] chosen=local");
+    const buffer = await file.arrayBuffer();
+    let hash: string | null = null;
+    try {
+      hash = await computeSHA256Hex(buffer);
+      if (hash) {
+        console.log(`[import.hash] sha256=${hash}`);
+      }
+    } catch (hashErr) {
+      console.warn("[import.hash] compute failed", hashErr);
+      hash = null;
+    }
+
+    try {
+      return await withTimeout(parseLocally(file, buffer, { hash }), LOCAL_PARSE_TIMEOUT_MS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "local parse timeout") {
+        console.warn("[import.local] error message=timeout");
+      }
+
+      if (!SERVER_IMPORT_ENABLED) {
+        throw error instanceof Error ? error : new Error(message);
+      }
+
+      try {
+        const serverResult = await parseViaServer(file, {
+          buffer,
+          hash,
+          tournamentId: options.tournamentId
+        });
+
+        return {
+          ...serverResult,
+          fallback: message === "local parse timeout" ? "local-timeout" : "local-error"
+        };
+      } catch (serverError) {
+        const serverMessage = serverError instanceof Error ? serverError.message : String(serverError);
+        console.error(`[import.srv] error message=${serverMessage}`);
+        throw error instanceof Error ? error : new Error(message);
+      }
+    }
+  }, [parseLocally, parseViaServer]);
 
   return { parseFile };
 }

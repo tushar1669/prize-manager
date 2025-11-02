@@ -54,7 +54,7 @@ import {
   normalizeRating,
   inferUnrated
 } from '@/utils/valueNormalizers';
-import { isFeatureEnabled, IMPORT_LOGS_ENABLED } from '@/utils/featureFlags';
+import { isFeatureEnabled, IMPORT_LOGS_ENABLED, SERVER_IMPORT_ENABLED } from '@/utils/featureFlags';
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -144,6 +144,7 @@ export default function PlayerImport() {
   const [isParsing, setIsParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
+  const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
@@ -213,7 +214,8 @@ export default function PlayerImport() {
     stripCommasFromRating: true,
     preferRtgOverIRtg: true,
     treatEmptyAsUnrated: false,
-    inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE')
+    inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE'),
+    preferServer: false
   }));
 
   // Track dirty state when mapped players exist
@@ -336,6 +338,7 @@ export default function PlayerImport() {
     setParseStatus('idle');
     setShowMappingDialog(false);
     setIsParsing(false);
+    setLastParseMode(null);
     setImportSource('unknown');
     hasMappedRef.current = false;
     resetDirty('import');
@@ -373,6 +376,7 @@ export default function PlayerImport() {
     setIsParsing(true);
     setImportSource('unknown');
     hasMappedRef.current = false;
+    setLastParseMode(null);
 
     try {
       logContextRef.current = null;
@@ -384,23 +388,45 @@ export default function PlayerImport() {
         source: 'unknown'
       };
 
+      const result = await parseFile(selectedFile, {
+        forceServer: importConfig.preferServer,
+        tournamentId: id ?? undefined
+      });
       const {
         data,
         headers: csvHeaders,
         sheetName,
         headerRow,
-        fileHash
-      } = await parseFile(selectedFile);
+        fileHash,
+        mode,
+        source,
+        fallback
+      } = result;
+      setLastParseMode(mode);
       setParsedData(data);
       setHeaders(csvHeaders);
       setParseError(null); // Clear any previous error
+      setParseStatus('ok');
+
+      if (fallback === 'server-error') {
+        toast.error('Server parsing failed. Local parser used instead.');
+      } else if (fallback === 'local-error') {
+        toast.info('Local parser failed. Parsed on server instead.');
+      } else if (fallback === 'local-timeout') {
+        toast.info('Local parsing timed out. Parsed on server instead.');
+      }
 
       lastFileInfoRef.current = {
         ...lastFileInfoRef.current,
         hash: fileHash ?? null,
         sheetName: sheetName ?? null,
-        headerRow: headerRow ?? null
+        headerRow: headerRow ?? null,
+        source: source ?? 'unknown'
       };
+
+      if (source) {
+        setImportSource(source === 'organizer-template' ? 'template' : source);
+      }
 
       console.log('[import] Detected headers:', csvHeaders);
       console.log('[import] Parsed', data.length, 'data rows');
@@ -411,6 +437,7 @@ export default function PlayerImport() {
       setParseError(errMsg);
       toast.error(errMsg);
       setParseStatus('error');
+      setLastParseMode(null);
     } finally {
       setIsParsing(false);
       // Reset file input to allow re-uploading same filename
@@ -1052,6 +1079,12 @@ export default function PlayerImport() {
           </div>
         )}
 
+        {lastParseMode === 'server' && parseStatus === 'ok' && (
+          <Alert className="mb-4 border-primary/30 bg-primary/10 text-primary">
+            <AlertDescription>Parsed on server for speed/reliability.</AlertDescription>
+          </Alert>
+        )}
+
         {!hasData ? (
           <Card>
             <CardHeader><CardTitle>Upload Excel File</CardTitle></CardHeader>
@@ -1071,9 +1104,19 @@ export default function PlayerImport() {
                     <CardTitle className="text-sm">Import Options</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
+                    {SERVER_IMPORT_ENABLED && (
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="prefer-server-pre" className="cursor-pointer">Parse on server when available</Label>
+                        <Switch
+                          id="prefer-server-pre"
+                          checked={importConfig.preferServer}
+                          onCheckedChange={(v) => setImportConfig(prev => ({ ...prev, preferServer: v }))}
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <Label htmlFor="strip-commas-pre" className="cursor-pointer">Strip commas from ratings</Label>
-                      <Switch id="strip-commas-pre" checked={importConfig.stripCommasFromRating} 
+                      <Switch id="strip-commas-pre" checked={importConfig.stripCommasFromRating}
                         onCheckedChange={(v) => setImportConfig(prev => ({ ...prev, stripCommasFromRating: v }))} />
                     </div>
                     <div className="flex items-center justify-between">
