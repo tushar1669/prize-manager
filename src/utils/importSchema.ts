@@ -53,6 +53,23 @@ export function normalizeHeaderForMatching(header: string): string {
     .replace(/\s+/g, '_');     // Collapse spaces to underscore
 }
 
+const SWISS_SIGNATURE_HEADERS = ['rank', 'sno', 'rtg', 'fs', 'fideno'];
+const TEMPLATE_SIGNATURE_HEADERS = ['rank', 'name', 'rating', 'dob'];
+
+export function inferImportSource(headers: string[]): 'swiss-manager' | 'organizer-template' | 'unknown' {
+  const normalized = headers.map((header) => normalizeHeaderForMatching(header));
+
+  if (SWISS_SIGNATURE_HEADERS.every((key) => normalized.includes(key))) {
+    return 'swiss-manager';
+  }
+
+  if (TEMPLATE_SIGNATURE_HEADERS.every((key) => normalized.includes(key))) {
+    return 'organizer-template';
+  }
+
+  return 'unknown';
+}
+
 /**
  * Select the best rating column when multiple are present
  * Returns the original column name (preserves case)

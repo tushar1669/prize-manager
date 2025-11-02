@@ -2,12 +2,14 @@ import { useCallback } from "react";
 import * as XLSX from "xlsx";
 import { detectHeaderRow } from "@/utils/sheetDetection";
 import { isFeatureEnabled } from "@/utils/featureFlags";
+import { computeSHA256Hex } from "@/utils/hash";
 
-type Parsed = { 
-  data: any[]; 
-  headers: string[]; 
-  sheetName?: string; 
-  headerRow?: number; 
+type Parsed = {
+  data: any[];
+  headers: string[];
+  sheetName?: string;
+  headerRow?: number;
+  fileHash?: string | null;
 };
 
 function normalizeHeaders(headers: any[]): string[] {
@@ -20,6 +22,12 @@ export function useExcelParser() {
   const parseExcel = useCallback(async (file: File): Promise<Parsed> => {
     try {
       const ab = await file.arrayBuffer();
+      let fileHash: string | null = null;
+      try {
+        fileHash = await computeSHA256Hex(ab);
+      } catch (hashErr) {
+        console.warn('[parseExcel] hash failed', hashErr);
+      }
       const wb = XLSX.read(ab, { type: 'array' });
       
       console.log('[parseExcel] Available sheets:', wb.SheetNames);
@@ -96,8 +104,9 @@ export function useExcelParser() {
       return { 
         data, 
         headers, 
-        sheetName: wsName, 
-        headerRow: headerRowIndex 
+        sheetName: wsName,
+        headerRow: headerRowIndex + 1,
+        fileHash
       };
     } catch (err) {
       console.error('[parseExcel] Parse error:', err);

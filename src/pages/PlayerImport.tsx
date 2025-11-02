@@ -5,7 +5,7 @@
  * (e.g., "Rank" vs "rank"), data must be in semantically correct columns.
  * Swapped columns (e.g., city data in disability column) will cause validation errors.
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useExcelParser } from "@/hooks/useExcelParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
@@ -46,14 +46,17 @@ import {
   normalizeHeaderForMatching,
   selectBestRatingColumn,
   ImportConflict,
-  ImportConflictType
+  ImportConflictType,
+  inferImportSource
 } from '@/utils/importSchema';
 import {
   normalizeGender,
   normalizeRating,
   inferUnrated
 } from '@/utils/valueNormalizers';
-import { isFeatureEnabled } from '@/utils/featureFlags';
+import { isFeatureEnabled, IMPORT_LOGS_ENABLED } from '@/utils/featureFlags';
+import { ImportLogsPanel } from "@/components/ImportLogsPanel";
+import type { Database } from "@/integrations/supabase/types";
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -63,6 +66,24 @@ interface ParsedPlayer extends PlayerImportRow {
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
 }
+
+type ImportLogInsert = Database["public"]["Tables"]["import_logs"]["Insert"];
+
+type ImportLogContext = {
+  totalRows: number;
+  acceptedRows: number;
+  skippedRows: number;
+  topReasons: Array<{ reason: string; count: number }>;
+  sampleErrors: Array<{ row: number; errors: string[] }>;
+};
+
+type LastFileInfo = {
+  name: string | null;
+  hash: string | null;
+  sheetName: string | null;
+  headerRow: number | null;
+  source: 'swiss-manager' | 'organizer-template' | 'unknown';
+};
 
 // Helper functions for smart retry
 const pick = (obj: Record<string, any>, keys: string[]) =>
@@ -112,6 +133,7 @@ export default function PlayerImport() {
   const { parseFile } = useExcelParser();
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty } = useDirty();
+  const queryClient = useQueryClient();
 
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -126,6 +148,39 @@ export default function PlayerImport() {
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
   const hasMappedRef = useRef(false);
+  const logContextRef = useRef<ImportLogContext | null>(null);
+  const lastFileInfoRef = useRef<LastFileInfo>({
+    name: null,
+    hash: null,
+    sheetName: null,
+    headerRow: null,
+    source: 'unknown'
+  });
+  const importStartedAtRef = useRef<number | null>(null);
+
+  const persistImportLog = useCallback(async (payload: ImportLogInsert) => {
+    if (!IMPORT_LOGS_ENABLED) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('import_logs')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      console.log(`[import.log] inserted id=${data.id}`);
+      return data.id as string;
+    } catch (err) {
+      console.warn('[import.log] insert failed', err);
+      return null;
+    }
+  }, []);
 
   // NEW: DB players for conflict detection
   const [dbPlayers, setDbPlayers] = useState<Array<{
@@ -226,12 +281,19 @@ export default function PlayerImport() {
   useEffect(() => {
     if (headers.length === 0) {
       setImportSource('unknown');
+      lastFileInfoRef.current = {
+        ...lastFileInfoRef.current,
+        source: 'unknown'
+      };
       return;
     }
 
-    const normalizedHeaders = headers.map(normalizeHeaderForMatching);
-    const hasSwissMarkers = normalizedHeaders.some(h => h === 'fs' || h === 'fideno');
-    setImportSource(hasSwissMarkers ? 'swiss-manager' : 'template');
+    const detectedSource = inferImportSource(headers);
+    lastFileInfoRef.current = {
+      ...lastFileInfoRef.current,
+      source: detectedSource
+    };
+    setImportSource(detectedSource === 'organizer-template' ? 'template' : detectedSource);
   }, [headers]);
 
   // NEW: Check for autosave draft on mount
@@ -313,11 +375,33 @@ export default function PlayerImport() {
     hasMappedRef.current = false;
 
     try {
-      const { data, headers: csvHeaders } = await parseFile(selectedFile);
+      logContextRef.current = null;
+      lastFileInfoRef.current = {
+        name: selectedFile.name ?? null,
+        hash: null,
+        sheetName: null,
+        headerRow: null,
+        source: 'unknown'
+      };
+
+      const {
+        data,
+        headers: csvHeaders,
+        sheetName,
+        headerRow,
+        fileHash
+      } = await parseFile(selectedFile);
       setParsedData(data);
       setHeaders(csvHeaders);
       setParseError(null); // Clear any previous error
-      
+
+      lastFileInfoRef.current = {
+        ...lastFileInfoRef.current,
+        hash: fileHash ?? null,
+        sheetName: sheetName ?? null,
+        headerRow: headerRow ?? null
+      };
+
       console.log('[import] Detected headers:', csvHeaders);
       console.log('[import] Parsed', data.length, 'data rows');
       // Auto-mapping will be handled by useEffect below
@@ -496,6 +580,20 @@ export default function PlayerImport() {
       console.log('[import] top reasons: none');
     }
 
+    logContextRef.current = {
+      totalRows: mapped.length,
+      acceptedRows: validPlayers.length,
+      skippedRows: errors.length,
+      topReasons: topReasons.map(([reason, data]) => ({
+        reason,
+        count: data.count
+      })),
+      sampleErrors: errors.slice(0, 10).map(err => ({
+        row: err.row,
+        errors: err.errors.slice(0, 3)
+      }))
+    };
+
     setValidationErrors(errors);
 
     // Phase 5: Show detailed error message if no valid rows
@@ -652,6 +750,9 @@ export default function PlayerImport() {
   };
 
   const importPlayersMutation = useMutation({
+    onMutate: () => {
+      importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
+    },
     mutationFn: async (players: ParsedPlayer[]) => {
       console.time('[import] batch-insert');
       
@@ -757,9 +858,52 @@ export default function PlayerImport() {
       return results;
     },
     onSuccess: (results) => {
+      const durationMs =
+        importStartedAtRef.current != null && typeof performance !== 'undefined'
+          ? Math.round(performance.now() - importStartedAtRef.current)
+          : null;
+      importStartedAtRef.current = null;
+
+      if (IMPORT_LOGS_ENABLED && id) {
+        const context = logContextRef.current;
+        const lastFile = lastFileInfoRef.current;
+        const skippedFromValidation = context?.skippedRows ?? 0;
+        const totalRows = context?.totalRows ?? results.success.length + results.failed.length;
+        const payload: ImportLogInsert = {
+          tournament_id: id,
+          imported_by: user?.id ?? null,
+          filename: lastFile.name,
+          file_hash: lastFile.hash,
+          source: lastFile.source,
+          sheet_name: lastFile.sheetName,
+          header_row: lastFile.headerRow,
+          total_rows: totalRows,
+          accepted_rows: results.success.length,
+          skipped_rows: skippedFromValidation + results.failed.length,
+          duration_ms: durationMs,
+          top_reasons: context?.topReasons ?? [],
+          sample_errors: context?.sampleErrors ?? [],
+          meta: {
+            replace_existing: replaceExisting,
+            duplicate_count: duplicates.length,
+            failed_inserts: results.failed.length,
+            validation_skipped: skippedFromValidation,
+            import_config: { ...importConfig }
+          }
+        };
+
+        void persistImportLog(payload).then((insertedId) => {
+          if (insertedId) {
+            queryClient.invalidateQueries({ queryKey: ['import-logs', id] }).catch(() => {});
+          }
+        });
+      }
+
+      logContextRef.current = null;
+
       clearDraft(importDraftKey);
       resetDirty('import');
-      
+
       if (results.failed.length === 0) {
         toast.success(`Imported all ${results.success.length} players`);
         navigate(`/t/${id}/review`);
@@ -788,6 +932,7 @@ export default function PlayerImport() {
       }
     },
     onError: (err: any) => {
+      importStartedAtRef.current = null;
       toast.error(err?.message || 'Import failed');
     }
   });
@@ -866,6 +1011,8 @@ export default function PlayerImport() {
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
           <p className="text-muted-foreground">Upload Excel (.xlsx or .xls) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, club, disability, special_notes, fide_id.</p>
         </div>
+
+        {id && isOrganizer && <ImportLogsPanel tournamentId={id} />}
 
         {/* Restore banner */}
         {importRestore && !hasData && (

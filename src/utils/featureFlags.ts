@@ -1,6 +1,9 @@
 // src/utils/featureFlags.ts
 // Feature flags for gradual rollout of import v2 enhancements
 
+const logsFlag = import.meta.env?.VITE_IMPORT_LOGS_ENABLED;
+export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : false;
+
 export const IMPORT_V2_FLAGS = {
   /**
    * Enable multi-sheet header detection (scans rows 1-25 instead of hardcoded row 1)
