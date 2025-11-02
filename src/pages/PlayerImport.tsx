@@ -69,6 +69,7 @@ import {
   type DedupSummary,
   type MergePolicy,
   type DedupAction,
+  type DedupIncomingPlayer,
 } from '@/utils/dedup';
 import { DuplicateReviewDialog } from "@/components/DuplicateReviewDialog";
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
@@ -77,6 +78,7 @@ import type { Database } from "@/integrations/supabase/types";
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
   fide_id?: string | null;
+  federation?: string | null;
   dob_raw?: string | null;
   _dobInferred?: boolean;
   _dobInferredReason?: string;
@@ -204,6 +206,38 @@ export default function PlayerImport() {
     }
   }, []);
 
+  // STATE DECLARATIONS - Must be before callbacks that use them
+  const [dbPlayers, setDbPlayers] = useState<Array<{
+    id: string;
+    name: string;
+    dob?: string | null;
+    rating?: number | null;
+    fide_id?: string | null;
+  }>>([]);
+
+  const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
+  
+  const importDraftKey = makeKey(`t:${id}:import`);
+  const [importRestore, setImportRestore] = useState<null | { 
+    data: { 
+      mappedPlayers: ParsedPlayer[]; 
+      conflicts: ImportConflict[];
+      replaceExisting: boolean;
+    }; 
+    ageMs: number 
+  }>(null);
+
+  const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
+
+  const [importConfig, setImportConfig] = useState(() => ({
+    stripCommasFromRating: true,
+    preferRtgOverIRtg: true,
+    treatEmptyAsUnrated: false,
+    inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE'),
+    preferServer: false,
+    mergePolicy: { ...IMPORT_MERGE_POLICY_DEFAULTS },
+  }));
+
   const runDedupe = useCallback(
     async (
       players: ParsedPlayer[],
@@ -232,7 +266,7 @@ export default function PlayerImport() {
         const result = await runDedupPass({
           client: supabase,
           tournamentId: id,
-          incomingPlayers: players,
+          incomingPlayers: players as DedupIncomingPlayer[],
           existingPlayers: dbPlayers,
           mergePolicy: policy,
         });
@@ -297,6 +331,32 @@ export default function PlayerImport() {
     },
     [],
   );
+
+  // TYPE & MUTATION DECLARATIONS - Must be before callbacks
+  type ImportMutationPayload = {
+    players: ParsedPlayer[];
+    dedupe?: { decisions: DedupDecision[]; summary: DedupSummary } | null;
+  };
+
+  const clearPlayersMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Tournament ID missing');
+      const { error } = await supabase.from('players').delete().eq('tournament_id', id);
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      toast.success('Cleared all players');
+      setParsedData([]);
+      setHeaders([]);
+      setMappedPlayers([]);
+      setValidationErrors([]);
+      setDuplicates([]);
+      setParseError(null);
+      setParseStatus('idle');
+    },
+    onError: (err: any) => toast.error(`Failed: ${err.message}`)
+  });
 
   const startImportFlow = useCallback(() => {
     if (importPlayersMutation.isPending || isRunningDedup) {
@@ -368,42 +428,6 @@ export default function PlayerImport() {
     }
   }, [mappedPlayers, replaceExisting, runDedupe]);
 
-  // NEW: DB players for conflict detection
-  const [dbPlayers, setDbPlayers] = useState<Array<{
-    id: string;
-    name: string;
-    dob?: string | null;
-    rating?: number | null;
-    fide_id?: string | null;
-  }>>([]);
-
-  // NEW: Conflicts (separate from duplicates)
-  const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
-
-  // NEW: Autosave
-  const importDraftKey = makeKey(`t:${id}:import`);
-  const [importRestore, setImportRestore] = useState<null | { 
-    data: { 
-      mappedPlayers: ParsedPlayer[]; 
-      conflicts: ImportConflict[];
-      replaceExisting: boolean;
-    }; 
-    ageMs: number 
-  }>(null);
-
-  // NEW: Conflict resolution tracking
-  const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
-
-  // Phase 6: Import configuration state
-  const [importConfig, setImportConfig] = useState(() => ({
-    stripCommasFromRating: true,
-    preferRtgOverIRtg: true,
-    treatEmptyAsUnrated: false,
-    inferUnratedFromMissingData: isFeatureEnabled('UNRATED_INFERENCE'),
-    preferServer: false,
-    mergePolicy: { ...IMPORT_MERGE_POLICY_DEFAULTS },
-  }));
-
   // Track dirty state when mapped players exist
   useEffect(() => {
     setDirty('import', mappedPlayers.length > 0);
@@ -436,21 +460,39 @@ export default function PlayerImport() {
   const { data: existingPlayers } = useQuery({
     queryKey: ['players', id],
     queryFn: async () => {
-      // Try to select fide_id, but handle gracefully if column doesn't exist
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, name, dob, rating, fide_id')
-        .eq('tournament_id', id);
-      if (error) {
-        console.warn('[import] FIDE ID column missing, falling back without it:', error.message);
-        const fallback = await supabase
+      try {
+        const { data, error } = await supabase
+          .from('players')
+          .select('id, name, dob, rating, fide_id, city, club, gender, state, federation')
+          .eq('tournament_id', id);
+        
+        if (!error && data) {
+          return data.map((p: any) => ({ 
+            id: p.id,
+            name: p.name,
+            dob: p.dob ?? null,
+            rating: p.rating ?? null,
+            fide_id: p.fide_id ?? null,
+            city: p.city ?? null,
+            club: p.club ?? null,
+            gender: p.gender ?? null,
+            state: p.state ?? null,
+            federation: p.federation ?? null,
+          }));
+        }
+        throw error || new Error('No data');
+      } catch (err) {
+        console.warn('[import] Fallback query');
+        const { data: fallbackData } = await supabase
           .from('players')
           .select('id, name, dob, rating')
           .eq('tournament_id', id);
-        if (fallback.error) throw fallback.error;
-        return (fallback.data || []).map(p => ({ ...p, fide_id: null }));
+        
+        return (fallbackData || []).map((p: any) => ({ 
+          id: p.id, name: p.name, dob: p.dob ?? null, rating: p.rating ?? null,
+          fide_id: null, city: null, club: null, gender: null, state: null, federation: null,
+        }));
       }
-      return (data || []).map(p => ({ ...p, fide_id: p.fide_id ?? null }));
     },
     enabled: IMPORT_DEDUP_ENABLED && !!id,
   });
@@ -532,17 +574,19 @@ export default function PlayerImport() {
     setIsParsing(false);
     setLastParseMode(null);
     setImportSource('unknown');
-    hasMappedRef.current = false;
     resetDirty('import');
 
     // Also clear file input so the same file can be picked again
     const input = document.getElementById('players-file-input') as HTMLInputElement | null;
     if (input) input.value = '';
     
+    hasMappedRef.current = false; // Reset at end
     toast.info('Import reset — you can choose a file again.');
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    hasMappedRef.current = false; // Reset at start of file select
+    
     if (isParsing) {
       toast.info('Already processing a file…');
       return;
@@ -571,7 +615,6 @@ export default function PlayerImport() {
 
     setIsParsing(true);
     setImportSource('unknown');
-    hasMappedRef.current = false;
     setLastParseMode(null);
 
     try {
@@ -973,11 +1016,6 @@ export default function PlayerImport() {
     }
   };
 
-  type ImportMutationPayload = {
-    players: ParsedPlayer[];
-    dedupe?: { decisions: DedupDecision[]; summary: DedupSummary } | null;
-  };
-
   const importPlayersMutation = useMutation({
     onMutate: () => {
       importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
@@ -1143,7 +1181,7 @@ export default function PlayerImport() {
 
         if (actionPayload.creates.length > 0 || actionPayload.updates.length > 0) {
           try {
-            const { data, error } = await supabase.rpc('import_apply_actions', {
+            const { data, error } = await supabase.rpc('import_apply_actions' as any, {
               tournament_id: id,
               actions: actionPayload,
             });
@@ -1292,7 +1330,7 @@ export default function PlayerImport() {
             validation_skipped: skippedFromValidation,
             import_config: { ...importConfig },
             dedupe_summary: dedupeMeta,
-          },
+          } as any, // Cast complex nested JSON to avoid type mismatch
         };
 
         void persistImportLog(payload).then((insertedId) => {
@@ -1356,7 +1394,7 @@ export default function PlayerImport() {
       !importPlayersMutation.isPending;
 
     if (ready) {
-      registerOnSave(() => {
+      registerOnSave(async () => {
         console.log('[shortcut] importing players');
         startImportFlow();
       });
@@ -1374,36 +1412,6 @@ export default function PlayerImport() {
     registerOnSave,
     startImportFlow,
   ]);
-
-  const clearPlayersMutation = useMutation({
-    mutationFn: async () => {
-      if (!id) throw new Error('Tournament ID missing');
-      
-      console.log('[import] Clearing all players for tournament', id);
-      const { error } = await supabase
-        .from('players')
-        .delete()
-        .eq('tournament_id', id);
-      
-      if (error) throw error;
-      return true;
-    },
-    onSuccess: () => {
-      toast.success('Cleared all players for this tournament');
-      // Reset UI state
-      setParsedData([]);
-      setHeaders([]);
-      setMappedPlayers([]);
-      setValidationErrors([]);
-      setDuplicates([]);
-      setParseError(null);
-      setParseStatus('idle');
-    },
-    onError: (err: any) => {
-      console.error('[import] Clear players error:', err);
-      toast.error(`Failed to clear players: ${err.message}`);
-    }
-  });
 
   const hasData = mappedPlayers.length > 0;
   const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrors.length === 0;

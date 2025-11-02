@@ -11,10 +11,10 @@ const dedupFlag = import.meta.env?.VITE_IMPORT_DEDUP_ENABLED;
 export const IMPORT_DEDUP_ENABLED = dedupFlag ? dedupFlag === "true" : true;
 
 export const IMPORT_MERGE_POLICY_DEFAULTS = {
-  fillBlanks: true,
-  preferNewerRating: true,
-  neverOverwriteDob: true,
-} as const;
+  fillBlanks: true as boolean,
+  preferNewerRating: true as boolean,
+  neverOverwriteDob: true as boolean,
+};
 
 export const IMPORT_V2_FLAGS = {
   /**

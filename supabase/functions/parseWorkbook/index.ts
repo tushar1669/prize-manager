@@ -95,7 +95,11 @@ function detectHeaders(workbook: XLSX.WorkBook): { sheetName: string; headerRowI
   if (!best) {
     throw new Error("No valid header row found. Please ensure the file contains Rank and Name columns.");
   }
-  return best;
+  return {
+    sheetName: best.sheetName,
+    headerRowIndex: best.rowIndex,
+    headers: best.headers
+  };
 }
 
 function inferSource(headers: string[]): "swiss-manager" | "organizer-template" | "unknown" {
@@ -108,8 +112,12 @@ function inferSource(headers: string[]): "swiss-manager" | "organizer-template" 
   return "unknown";
 }
 
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+async function sha256Hex(buffer: ArrayBuffer | SharedArrayBuffer): Promise<string> {
+  // Convert SharedArrayBuffer to ArrayBuffer for crypto.subtle
+  const ab = (buffer instanceof ArrayBuffer 
+    ? buffer 
+    : new Uint8Array(buffer).buffer) as ArrayBuffer;
+  const hashBuffer = await crypto.subtle.digest("SHA-256", ab);
   return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -169,6 +177,7 @@ Deno.serve(async (req) => {
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     console.log(`[import.srv] start bytes=${bytes.byteLength} name=${fileName}`);
 
+    // TODO: Lock CORS to app origin in PR-114
     const fileHash = await sha256Hex(bufferSlice);
     if (providedHash && providedHash !== fileHash) {
       console.warn(`[import.srv] hash mismatch header=${providedHash} computed=${fileHash}`);

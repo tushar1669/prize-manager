@@ -69,9 +69,9 @@ describe('applyMergePolicy', () => {
     const existing = makeExisting({ city: null, state: 'CA' });
 
     const result = applyMergePolicy(incoming, existing, {
-      fillBlanks: true,
-      preferNewerRating: true,
-      neverOverwriteDob: true,
+      fillBlanks: true as boolean,
+      preferNewerRating: true as boolean,
+      neverOverwriteDob: true as boolean,
     });
 
     expect(result.changedFields).toEqual(['city']);
@@ -83,9 +83,9 @@ describe('applyMergePolicy', () => {
     const existing = makeExisting({ city: 'Old City' });
 
     const result = applyMergePolicy(incoming, existing, {
-      fillBlanks: false,
-      preferNewerRating: true,
-      neverOverwriteDob: true,
+      fillBlanks: false as boolean,
+      preferNewerRating: true as boolean,
+      neverOverwriteDob: true as boolean,
     });
 
     expect(result.changedFields).toEqual(['city']);
@@ -97,25 +97,25 @@ describe('applyMergePolicy', () => {
     const existing = makeExisting({ rating: 1650, dob: '2001-02-03' });
 
     const result = applyMergePolicy(incoming, existing, {
-      fillBlanks: true,
-      preferNewerRating: false,
-      neverOverwriteDob: true,
+      fillBlanks: true as boolean,
+      preferNewerRating: false as boolean,
+      neverOverwriteDob: true as boolean,
     });
 
     expect(result.changedFields).toEqual([]);
 
     const withRating = applyMergePolicy(incoming, existing, {
-      fillBlanks: true,
-      preferNewerRating: true,
-      neverOverwriteDob: true,
+      fillBlanks: true as boolean,
+      preferNewerRating: true as boolean,
+      neverOverwriteDob: true as boolean,
     });
 
     expect(withRating.changedFields).toContain('rating');
 
     const allowDob = applyMergePolicy(incoming, existing, {
-      fillBlanks: true,
-      preferNewerRating: true,
-      neverOverwriteDob: false,
+      fillBlanks: true as boolean,
+      preferNewerRating: true as boolean,
+      neverOverwriteDob: false as boolean,
     });
 
     expect(allowDob.changedFields).toContain('dob');

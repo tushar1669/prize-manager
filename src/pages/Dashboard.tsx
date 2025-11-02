@@ -53,15 +53,15 @@ export default function Dashboard() {
       const includeAll = role === 'master';
       console.log('[dashboard] fetching via RPC include_all=', includeAll);
 
-      const { data, error } = await supabase.rpc('list_my_tournaments', { include_all: includeAll });
+      const { data, error } = await supabase.rpc('list_my_tournaments' as any, { include_all: includeAll });
 
       if (error) {
         console.error('[dashboard] rpc error', error);
         throw error;
       }
 
-      console.log('[dashboard] list_my_tournaments fetched=', data?.length ?? 0);
-      return data;
+      console.log('[dashboard] list_my_tournaments fetched=', Array.isArray(data) ? data.length : 0);
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!user && !roleLoading
   });
@@ -124,8 +124,8 @@ export default function Dashboard() {
     }
   });
 
-  const filteredTournaments = tournaments?.filter(t => 
-    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  const filteredTournaments = (tournaments || []).filter((t: any) => 
+    t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );

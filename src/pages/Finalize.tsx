@@ -202,7 +202,7 @@ export default function Finalize() {
       console.log(`[publish] request id=${requestId} tournament=${id}`);
 
       if (PUBLISH_V2_ENABLED) {
-        const { data, error } = await supabase.rpc('publish_tournament', {
+        const { data, error } = await supabase.rpc('publish_tournament' as any, {
           tournament_id: id,
           requested_slug: null
         });
