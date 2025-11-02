@@ -4,6 +4,9 @@
 const logsFlag = import.meta.env?.VITE_IMPORT_LOGS_ENABLED;
 export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : false;
 
+const reactPdfFlag = import.meta.env?.VITE_ENABLE_REACT_PDF;
+export const ENABLE_REACT_PDF = reactPdfFlag ? reactPdfFlag === 'true' : false;
+
 export const IMPORT_V2_FLAGS = {
   /**
    * Enable multi-sheet header detection (scans rows 1-25 instead of hardcoded row 1)
