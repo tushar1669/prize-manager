@@ -7,6 +7,15 @@ export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : false;
 const reactPdfFlag = import.meta.env?.VITE_ENABLE_REACT_PDF;
 export const ENABLE_REACT_PDF = reactPdfFlag ? reactPdfFlag === 'true' : false;
 
+const dedupFlag = import.meta.env?.VITE_IMPORT_DEDUP_ENABLED;
+export const IMPORT_DEDUP_ENABLED = dedupFlag ? dedupFlag === "true" : true;
+
+export const IMPORT_MERGE_POLICY_DEFAULTS = {
+  fillBlanks: true,
+  preferNewerRating: true,
+  neverOverwriteDob: true,
+} as const;
+
 export const IMPORT_V2_FLAGS = {
   /**
    * Enable multi-sheet header detection (scans rows 1-25 instead of hardcoded row 1)
