@@ -71,3 +71,10 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Environment configuration
+
+Add these flags to your local `.env` file as needed:
+
+- `PUBLIC_DOB_MASKING=true` keeps public exports masked to the `yyyy-mm` format.
+- `VITE_ENABLE_REACT_PDF=false` leaves the experimental React-PDF export disabled (recommended default). Set to `true` only when the `@react-pdf/renderer` package is installed locally and you want to try the beta export.

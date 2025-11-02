@@ -9,12 +9,17 @@ import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
-import { ENABLE_PDF_EXPORT, PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
+import {
+  ENABLE_PDF_EXPORT,
+  ENABLE_REACT_PDF,
+  PUBLIC_DOB_MASKING,
+  PUBLISH_V2_ENABLED
+} from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { downloadPlayersPdf } from "@/utils/pdf";
+import { exportPlayersViaPrint } from "@/utils/print";
 
 interface Winner {
   prizeId: string;
@@ -32,7 +37,8 @@ export default function Finalize() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { role } = useUserRole();
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingPrint, setIsExportingPrint] = useState(false);
+  const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
 
   // Block if no winners
   if (winners.length === 0) {
@@ -278,21 +284,40 @@ export default function Finalize() {
     }
   });
 
-  const handleExportPDF = async () => {
+  const handleExportPrint = async () => {
     if (!id) {
       toast.error("Tournament ID missing");
       return;
     }
 
     try {
-      setIsExportingPdf(true);
-      await downloadPlayersPdf({ tournamentId: id });
+      setIsExportingPrint(true);
+      await exportPlayersViaPrint({ tournamentId: id, maskDob: PUBLIC_DOB_MASKING });
+      toast.success("Opened print preview — use Save as PDF from your browser.");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to open print preview");
+    } finally {
+      setIsExportingPrint(false);
+    }
+  };
+
+  const handleExportPdfBeta = async () => {
+    if (!id) {
+      toast.error("Tournament ID missing");
+      return;
+    }
+
+    try {
+      setIsExportingPdfBeta(true);
+      const mod = await import(/* @vite-ignore */ "@/experimental/reactPdf");
+      await mod.downloadPlayersPdf({ tournamentId: id, maskDob: PUBLIC_DOB_MASKING });
       toast.success("Players summary PDF exported");
     } catch (error: any) {
-      console.error("[finalize] pdf export failed", error);
-      toast.error(error?.message || "Failed to export PDF");
+      console.error(`[export.pdf] error tournament=${id} message=${error?.message ?? error}`);
+      toast.error("React-PDF not available, using print export instead");
+      await handleExportPrint();
     } finally {
-      setIsExportingPdf(false);
+      setIsExportingPdfBeta(false);
     }
   };
 
@@ -427,18 +452,34 @@ export default function Finalize() {
             </CardHeader>
             <CardContent className="space-y-3">
               {ENABLE_PDF_EXPORT && (
-                <Button
-                  onClick={handleExportPDF}
-                  variant="outline"
-                  className="w-full justify-between"
-                  disabled={isExportingPdf || winners.length === 0}
-                >
-                  <span className="flex items-center gap-2">
-                    <FileDown className="h-4 w-4" />
-                    {isExportingPdf ? "Exporting..." : "Export PDF (Players Summary)"}
-                  </span>
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleExportPrint}
+                    variant="outline"
+                    className="w-full justify-between"
+                    disabled={isExportingPrint || winners.length === 0}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileDown className="h-4 w-4" />
+                      {isExportingPrint ? "Preparing Print…" : "Export PDF (Print)"}
+                    </span>
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  {ENABLE_REACT_PDF && (
+                    <Button
+                      onClick={handleExportPdfBeta}
+                      variant="secondary"
+                      className="w-full justify-between"
+                      disabled={isExportingPdfBeta || winners.length === 0}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileDown className="h-4 w-4" />
+                        {isExportingPdfBeta ? "Generating (Beta)…" : "Export PDF (React-PDF, beta)"}
+                      </span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               )}
               <Button
                 onClick={handleExportCSV}
