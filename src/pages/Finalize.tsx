@@ -20,6 +20,7 @@ import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { exportPlayersViaPrint } from "@/utils/print";
+import { Badge } from "@/components/ui/badge";
 
 interface Winner {
   prizeId: string;
@@ -28,11 +29,47 @@ interface Winner {
   isManual: boolean;
 }
 
+interface AllocationPreviewMeta {
+  playerCount?: number;
+  activePrizeCount?: number;
+  winnersCount?: number;
+  conflictCount?: number;
+  unfilledCount?: number;
+}
+
 export default function Finalize() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const winners = (location.state?.winners || []) as Winner[];
+  const locationState = location.state as {
+    winners?: Winner[];
+    previewMeta?: AllocationPreviewMeta;
+    meta?: AllocationPreviewMeta;
+    conflicts?: unknown[];
+    conflictsCount?: number;
+    conflictCount?: number;
+    unfilled?: unknown[];
+    unfilledCount?: number;
+  } | undefined;
+  const winners = (locationState?.winners || []) as Winner[];
+  const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
+  const fallbackConflicts = Array.isArray(locationState?.conflicts)
+    ? locationState.conflicts.length
+    : typeof locationState?.conflictsCount === 'number'
+      ? locationState.conflictsCount
+      : typeof locationState?.conflictCount === 'number'
+        ? locationState.conflictCount
+        : 0;
+  const fallbackUnfilled = Array.isArray(locationState?.unfilled)
+    ? locationState.unfilled.length
+    : typeof locationState?.unfilledCount === 'number'
+      ? locationState.unfilledCount
+      : 0;
+  const previewSummary = {
+    winners: previewMeta?.winnersCount ?? winners.length,
+    conflicts: previewMeta?.conflictCount ?? fallbackConflicts,
+    unfilled: previewMeta?.unfilledCount ?? fallbackUnfilled,
+  };
   const { error, showError, clearError } = useErrorPanel();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -409,6 +446,20 @@ export default function Finalize() {
               <CardTitle>Winners ({winners.length})</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <span className="font-medium text-foreground">Winners: {previewSummary.winners}</span>
+                  <span>·</span>
+                  <span className="font-medium text-foreground">Conflicts: {previewSummary.conflicts}</span>
+                  <span>·</span>
+                  <span className="font-medium text-foreground">Unfilled: {previewSummary.unfilled}</span>
+                </div>
+                {previewSummary.unfilled > 0 && (
+                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                    Some categories are unfilled — review before publishing
+                  </Badge>
+                )}
+              </div>
               <div className="rounded-md border overflow-auto max-h-96">
                 <table className="w-full text-sm">
                   <thead>
