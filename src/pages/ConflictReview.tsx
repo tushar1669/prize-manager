@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +16,7 @@ import { ALLOC_VERBOSE_LOGS } from "@/utils/featureFlags";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Winner {
   prizeId: string;
@@ -34,17 +34,82 @@ interface Conflict {
   suggested: { prizeId: string; playerId: string } | null;
 }
 
+interface Unfilled {
+  prizeId: string;
+  reasonCodes: string[];
+}
+
+type ManualDecisionReason = "manual_override" | "suggested_resolution";
+
+type ManualDecisionsMap = Record<string, { playerId: string; reason: ManualDecisionReason }>;
+
+const reasonLabels: Record<string, string> = {
+  auto: "Auto allocated",
+  rank: "Rank priority",
+  brochure_order: "Brochure order",
+  value_tier: "Value tier",
+  manual_override: "Manual override",
+  suggested_resolution: "Accepted suggestion",
+  gender_ok: "Gender eligible",
+  gender_open: "Open gender",
+  age_ok: "Age eligible",
+  rating_ok: "Rating eligible",
+  rating_unrated_allowed: "Unrated allowed",
+  disability_ok: "Disability eligible",
+  city_ok: "City eligible",
+  state_ok: "State eligible",
+  club_ok: "Club eligible",
+  gender_missing: "Gender missing",
+  gender_mismatch: "Gender mismatch",
+  dob_missing: "DOB missing",
+  age_above_max: "Above age limit",
+  age_below_min: "Below age limit",
+  unrated_excluded: "Unrated not allowed",
+  rating_below_min: "Rating below minimum",
+  rating_above_max: "Rating above maximum",
+  disability_excluded: "Disability not eligible",
+  city_excluded: "City not eligible",
+  state_excluded: "State not eligible",
+  club_excluded: "Club not eligible",
+  no_eligible_players: "No eligible players",
+};
+
+const formatReasonCode = (code: string): string => {
+  if (reasonLabels[code]) return reasonLabels[code];
+  return code
+    .split("_")
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
+const manualMapToOverrides = (map: ManualDecisionsMap) =>
+  Object.entries(map).map(([prizeId, decision]) => ({ prizeId, playerId: decision.playerId }));
+
 export default function ConflictReview() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { error, showError, clearError } = useErrorPanel();
+  const { error, clearError } = useErrorPanel();
 
   const [winners, setWinners] = useState<Winner[]>([]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [unfilled, setUnfilled] = useState<Unfilled[]>([]);
+  const [previewMeta, setPreviewMeta] = useState<{
+    playerCount?: number;
+    activePrizeCount?: number;
+    winnersCount?: number;
+    conflictCount?: number;
+    unfilledCount?: number;
+  } | null>(null);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
   const [overrideDrawerOpen, setOverrideDrawerOpen] = useState(false);
   const [selectedPrize, setSelectedPrize] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState("");
+  const [manualDecisions, setManualDecisions] = useState<ManualDecisionsMap>({});
+  const manualDecisionsRef = useRef<ManualDecisionsMap>({});
+
+  useEffect(() => {
+    manualDecisionsRef.current = manualDecisions;
+  }, [manualDecisions]);
 
   // Fetch scoped players and prizes for this tournament
   const { data: playersList } = useQuery({
@@ -105,37 +170,21 @@ export default function ConflictReview() {
     enabled: !!id
   });
 
-  const { data: players } = useQuery({
-    queryKey: ['players', id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('players').select('id, name, rank, rating, dob, gender, club, state, tournament_id').eq('tournament_id', id).order('rank');
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id
-  });
-
-  const { data: categories } = useQuery({
-    queryKey: ['categories-prizes', id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('categories').select('*, prizes(*)').eq('tournament_id', id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id
-  });
-
   const allocateMutation = useMutation({
-    mutationFn: async (ruleOverride?: any) => {
+    mutationFn: async (options?: { ruleOverride?: any; overrides?: { prizeId: string; playerId: string }[] }) => {
+      const { ruleOverride, overrides } = options || {};
       const { data: { session } } = await supabase.auth.getSession();
-      
+
+      const overridesPayload = overrides ?? manualMapToOverrides(manualDecisionsRef.current);
+
       console.log('[allocatePrizes] invoking with:', {
         tournamentId: id,
         playersCount: playersList?.length || 0,
         prizesCount: prizesList?.length || 0,
-        ruleConfigOverride: ruleOverride || null
+        ruleConfigOverride: ruleOverride || null,
+        overridesCount: overridesPayload.length
       });
-      
+
       const headers: Record<string, string> = {
         Authorization: `Bearer ${session?.access_token}`,
       };
@@ -145,19 +194,69 @@ export default function ConflictReview() {
       }
 
       const { data, error } = await supabase.functions.invoke('allocatePrizes', {
-        body: { tournamentId: id, ruleConfigOverride: ruleOverride || undefined },
+        body: {
+          tournamentId: id,
+          ruleConfigOverride: ruleOverride || undefined,
+          overrides: overridesPayload.length > 0 ? overridesPayload : undefined,
+        },
         headers,
       });
       if (error) throw error;
-      
+
       console.log('[allocatePrizes] result:', data);
-      return data as { winners: Winner[], conflicts: Conflict[], meta?: { playerCount?: number, prizeCount?: number, categoryCount?: number } };
+      return data as {
+        winners: Winner[];
+        conflicts: Conflict[];
+        unfilled?: Unfilled[];
+        meta?: {
+          playerCount?: number;
+          activePrizeCount?: number;
+          activeCategoryCount?: number;
+          winnersCount?: number;
+          conflictCount?: number;
+          unfilledCount?: number;
+        };
+      };
     },
     onSuccess: (data) => {
-      setWinners(data.winners);
+      const manualMap = manualDecisionsRef.current;
+      const winnersWithReasons = (data.winners || []).map(winner => {
+        const decision = manualMap[winner.prizeId];
+        if (decision && decision.playerId === winner.playerId) {
+          const reasonSet = new Set(winner.reasons);
+          reasonSet.add(decision.reason);
+          return { ...winner, reasons: Array.from(reasonSet), isManual: true };
+        }
+        return winner;
+      });
+
+      setWinners(winnersWithReasons);
       setConflicts(data.conflicts);
-      console.log('[review] players:', playersList?.length || 0, 'prizes:', prizesList?.length || 0, 'winners:', data.winners.length, 'conflicts:', data.conflicts.length);
-      toast.info(data.conflicts.length === 0 ? 'All clear!' : `${data.conflicts.length} conflicts found`);
+      setSelectedConflict(prev => (prev && !data.conflicts.find(conflict => conflict.id === prev.id) ? null : prev));
+      setUnfilled(data.unfilled || []);
+      setPreviewMeta(data.meta || null);
+
+      const nextManualMap: ManualDecisionsMap = {};
+      winnersWithReasons.forEach(winner => {
+        if (!winner.isManual) return;
+        const existing = manualMap[winner.prizeId];
+        if (existing && existing.playerId === winner.playerId) {
+          nextManualMap[winner.prizeId] = existing;
+        } else {
+          const derivedReason = (winner.reasons.includes('suggested_resolution')
+            ? 'suggested_resolution'
+            : 'manual_override') as ManualDecisionReason;
+          nextManualMap[winner.prizeId] = { playerId: winner.playerId, reason: derivedReason };
+        }
+      });
+
+      manualDecisionsRef.current = nextManualMap;
+      setManualDecisions(nextManualMap);
+
+      const conflictCount = data.conflicts.length;
+      const unfilledCount = data.unfilled?.length ?? 0;
+      console.log('[review] players:', playersList?.length || 0, 'prizes:', prizesList?.length || 0, 'winners:', winnersWithReasons.length, 'conflicts:', conflictCount, 'unfilled:', unfilledCount);
+      toast.info(conflictCount === 0 && unfilledCount === 0 ? 'All clear!' : `${conflictCount} conflicts · ${unfilledCount} unfilled`);
     },
     onError: (err: any) => {
       console.error('[allocatePrizes] error', err);
@@ -172,83 +271,120 @@ export default function ConflictReview() {
   });
 
   useEffect(() => {
-    if (id) allocateMutation.mutate(undefined);
+    if (id) {
+      allocateMutation.mutate({ overrides: manualMapToOverrides(manualDecisionsRef.current) });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleAccept = (conflictId: string) => {
+  const handleAccept = async (conflictId: string) => {
+    if (allocateMutation.isPending) return;
     const conflict = conflicts.find(c => c.id === conflictId);
     if (!conflict?.suggested) return;
 
-    setWinners(prev => [
-      ...prev.filter(w => w.prizeId !== conflict.suggested!.prizeId),
-      { prizeId: conflict.suggested!.prizeId, playerId: conflict.suggested!.playerId, reasons: ['suggested_resolution'], isManual: false }
-    ]);
-    setConflicts(prev => prev.filter(c => c.id !== conflictId));
-    toast.success('Conflict resolved');
+    const { prizeId, playerId } = conflict.suggested;
+    const prevManual = manualDecisionsRef.current;
+    const nextManual: ManualDecisionsMap = {
+      ...prevManual,
+      [prizeId]: { playerId, reason: 'suggested_resolution' }
+    };
+
+    manualDecisionsRef.current = nextManual;
+    setManualDecisions(nextManual);
+    setSelectedConflict(prev => (prev?.id === conflictId ? null : prev));
+
+    try {
+      await allocateMutation.mutateAsync({ overrides: manualMapToOverrides(nextManual) });
+      toast.success('Conflict resolved');
+    } catch (err) {
+      console.error('[conflicts] accept failed', err);
+      manualDecisionsRef.current = prevManual;
+      setManualDecisions(prevManual);
+      toast.error('Failed to resolve conflict');
+    }
   };
 
-  const handleAcceptAll = () => {
-    let resolved = 0;
-    const newWinners = [...winners];
-    const newConflicts = [...conflicts];
+  const handleAcceptAll = async () => {
+    if (allocateMutation.isPending) return;
 
-    // Greedy resolution: accept non-overlapping conflicts
+    const prevManual = manualDecisionsRef.current;
+    const nextManual: ManualDecisionsMap = { ...prevManual };
+    let resolved = 0;
+
     const processedPrizes = new Set<string>();
     const processedPlayers = new Set<string>();
 
     conflicts.forEach(conflict => {
-      if (conflict.suggested) {
-        const { prizeId, playerId } = conflict.suggested;
-        // Only accept if prize and player haven't been processed
-        if (!processedPrizes.has(prizeId) && !processedPlayers.has(playerId)) {
-          const idx = newWinners.findIndex(w => w.prizeId === prizeId);
-          if (idx !== -1) newWinners.splice(idx, 1);
-          newWinners.push({ prizeId, playerId, reasons: ['suggested_resolution'], isManual: false });
-          processedPrizes.add(prizeId);
-          processedPlayers.add(playerId);
-          resolved++;
-        }
-      }
+      if (!conflict.suggested) return;
+      const { prizeId, playerId } = conflict.suggested;
+      if (processedPrizes.has(prizeId) || processedPlayers.has(playerId)) return;
+      processedPrizes.add(prizeId);
+      processedPlayers.add(playerId);
+      nextManual[prizeId] = { playerId, reason: 'suggested_resolution' };
+      resolved++;
     });
 
-    // Remove resolved conflicts
-    const remainingConflicts = newConflicts.filter(c => 
-      !c.suggested || 
-      processedPrizes.has(c.suggested.prizeId) === false
-    );
+    if (resolved === 0) {
+      toast.info('No suggested resolutions available');
+      return;
+    }
 
-    setWinners(newWinners);
-    setConflicts(remainingConflicts);
-    toast.success(`Resolved ${resolved} conflicts automatically`);
+    manualDecisionsRef.current = nextManual;
+    setManualDecisions(nextManual);
+
+    try {
+      await allocateMutation.mutateAsync({ overrides: manualMapToOverrides(nextManual) });
+      toast.success(`Resolved ${resolved} conflicts automatically`);
+    } catch (err) {
+      console.error('[conflicts] resolve all failed', err);
+      manualDecisionsRef.current = prevManual;
+      setManualDecisions(prevManual);
+      toast.error('Failed to resolve conflicts');
+    }
   };
 
-  const handleOverride = () => {
+  const handleOverride = async () => {
     if (!selectedConflict || !selectedPrize || !selectedPlayer) {
       toast.error('Please select both a prize and a player');
       return;
     }
-    
-    // Remove conflicts that reference this prize or player
-    setConflicts(prev => prev.filter(c => 
-      !c.impacted_prizes.includes(selectedPrize) && 
-      !c.impacted_players.includes(selectedPlayer)
-    ));
-    
-    // Update winners
-    setWinners(prev => [
-      ...prev.filter(w => w.prizeId !== selectedPrize), 
-      { prizeId: selectedPrize, playerId: selectedPlayer, reasons: ['manual_override'], isManual: true }
-    ]);
-    
-    toast.success('Override applied');
-    setOverrideDrawerOpen(false);
-    setSelectedPrize("");
-    setSelectedPlayer("");
+
+    if (allocateMutation.isPending) return;
+
+    const prevManual = manualDecisionsRef.current;
+    const nextManual: ManualDecisionsMap = {
+      ...prevManual,
+      [selectedPrize]: { playerId: selectedPlayer, reason: 'manual_override' }
+    };
+
+    manualDecisionsRef.current = nextManual;
+    setManualDecisions(nextManual);
+
+    try {
+      await allocateMutation.mutateAsync({ overrides: manualMapToOverrides(nextManual) });
+      toast.success('Override applied');
+      setOverrideDrawerOpen(false);
+      setSelectedPrize("");
+      setSelectedPlayer("");
+      setSelectedConflict(null);
+    } catch (err) {
+      console.error('[conflicts] override failed', err);
+      manualDecisionsRef.current = prevManual;
+      setManualDecisions(prevManual);
+      toast.error('Failed to apply override');
+    }
   };
 
   const getPlayer = (playerId: string) => playersList?.find(p => p.id === playerId);
   const getPrize = (prizeId: string) => prizesList?.find(p => p.id === prizeId);
+
+  const summaryCounts = {
+    players: previewMeta?.playerCount ?? playersList?.length ?? 0,
+    activePrizes: previewMeta?.activePrizeCount ?? prizesList?.length ?? 0,
+    winners: previewMeta?.winnersCount ?? winners.length,
+    conflicts: previewMeta?.conflictCount ?? conflicts.length,
+    unfilled: previewMeta?.unfilledCount ?? unfilled.length,
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -260,12 +396,24 @@ export default function ConflictReview() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Review Allocations</h1>
           <div className="flex items-center gap-3 flex-wrap">
-            {conflicts.length > 0 && <Badge variant="destructive">{conflicts.length} Conflicts</Badge>}
-            <div className="text-sm text-muted-foreground">
-              Players: {playersList?.length || 0} · Active prizes: {prizesList?.length || 0} · Winners: {winners.length} · Conflicts: {conflicts.length}
-            </div>
+            {summaryCounts.conflicts > 0 && <Badge variant="destructive">{summaryCounts.conflicts} Conflicts</Badge>}
+            {summaryCounts.unfilled > 0 && <Badge variant="secondary">{summaryCounts.unfilled} Unfilled</Badge>}
           </div>
         </div>
+
+        <Alert className="mb-6 border-primary/30 bg-primary/10 text-primary">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Allocation preview</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <div><span className="font-medium">Players:</span> {summaryCounts.players}</div>
+              <div><span className="font-medium">Active prizes:</span> {summaryCounts.activePrizes}</div>
+              <div><span className="font-medium">Winners:</span> {summaryCounts.winners}</div>
+              <div><span className="font-medium">Conflicts:</span> {summaryCounts.conflicts}</div>
+              <div><span className="font-medium">Unfilled:</span> {summaryCounts.unfilled}</div>
+            </div>
+          </AlertDescription>
+        </Alert>
 
         {allocateMutation.isPending ? (
           <Card><CardContent className="py-12 text-center"><RefreshCw className="h-12 w-12 animate-spin mx-auto mb-4" /></CardContent></Card>
@@ -279,7 +427,7 @@ export default function ConflictReview() {
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
                     {conflicts.some(c => c.suggested) && (
-                      <Button size="sm" onClick={handleAcceptAll}>
+                      <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
                         Resolve All
                       </Button>
                     )}
@@ -317,8 +465,8 @@ export default function ConflictReview() {
                                 }
                               </p>
                               <div className="flex gap-2 mt-3">
-                                {conflict.suggested && <Button size="sm" onClick={(e) => { e.stopPropagation(); handleAccept(conflict.id); }}>Accept</Button>}
-                                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
+                                {conflict.suggested && <Button size="sm" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); void handleAccept(conflict.id); }}>Accept</Button>}
+                                <Button size="sm" variant="outline" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
                               </div>
                             </CardContent>
                           </Card>
@@ -329,24 +477,88 @@ export default function ConflictReview() {
                 </div>
               )}
             </div>
-            <div>
+            <div className="space-y-4">
               <Card>
                 <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-sm">
-                    <strong>Players:</strong> {playersList?.length || 0}
-                  </div>
-                  <div className="text-sm">
-                    <strong>Prizes:</strong> {prizesList?.length || 0}
-                  </div>
-                  <div className="text-sm">
-                    <strong>Winners:</strong> {winners.length}
-                  </div>
-                  <div className="text-sm">
-                    <strong>Conflicts:</strong> {conflicts.length}
-                  </div>
+                <CardContent className="space-y-2 text-sm">
+                  <div><strong>Players:</strong> {summaryCounts.players}</div>
+                  <div><strong>Active prizes:</strong> {summaryCounts.activePrizes}</div>
+                  <div><strong>Winners:</strong> {summaryCounts.winners}</div>
+                  <div><strong>Conflicts:</strong> {summaryCounts.conflicts}</div>
+                  <div><strong>Unfilled:</strong> {summaryCounts.unfilled}</div>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Winners ({winners.length})</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  {winners.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">No winners allocated yet.</div>
+                  ) : (
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-3 p-4">
+                        {winners.map(winner => {
+                          const prize = getPrize(winner.prizeId);
+                          const player = getPlayer(winner.playerId);
+                          return (
+                            <div key={`${winner.prizeId}-${winner.playerId}`} className="rounded-lg border border-border bg-background p-3">
+                              <div className="text-sm font-semibold">
+                                {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${winner.prizeId}`}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {player ? player.name : `Player ${winner.playerId}`}
+                              </div>
+                              {winner.reasons.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {winner.reasons.map(reason => (
+                                    <Badge
+                                      key={`${winner.prizeId}-${winner.playerId}-${reason}`}
+                                      variant={reason === 'manual_override' || reason === 'suggested_resolution' ? 'default' : 'outline'}
+                                    >
+                                      {formatReasonCode(reason)}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
+
+              {summaryCounts.unfilled > 0 && (
+                <Card>
+                  <CardHeader><CardTitle>Unfilled Prizes ({summaryCounts.unfilled})</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <ScrollArea className="h-[250px]">
+                      <div className="space-y-3 p-4">
+                        {unfilled.map(entry => {
+                          const prize = getPrize(entry.prizeId);
+                          return (
+                            <div key={entry.prizeId} className="rounded-lg border border-dashed border-muted-foreground/50 bg-muted/40 p-3">
+                              <div className="text-sm font-semibold">
+                                {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${entry.prizeId}`}
+                              </div>
+                              {entry.reasonCodes.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {entry.reasonCodes.map(code => (
+                                    <Badge key={`${entry.prizeId}-${code}`} variant="outline">
+                                      {formatReasonCode(code)}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         )}
@@ -423,7 +635,11 @@ export default function ConflictReview() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full" onClick={handleOverride} disabled={!selectedPrize || !selectedPlayer}>
+            <Button
+              className="w-full"
+              onClick={() => { void handleOverride(); }}
+              disabled={!selectedPrize || !selectedPlayer || allocateMutation.isPending}
+            >
               Apply Override
             </Button>
           </div>}
