@@ -99,15 +99,35 @@ Deno.serve(async (req) => {
       .eq('tournament_id', tournamentId)
       .maybeSingle();
 
-    const rules = ruleConfigOverride || ruleConfig || {
+    const verboseLogsEnv = (Deno.env.get('ALLOC_VERBOSE_LOGS') ?? '').toLowerCase();
+    const envVerbose = ['1', 'true', 'yes', 'y', 'on'].includes(verboseLogsEnv);
+    const coerceBool = (value: any, fallback: boolean) => {
+      if (value == null) return fallback;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        return ['1', 'true', 'yes', 'y', 'on'].includes(value.toLowerCase());
+      }
+      return Boolean(value);
+    };
+
+    const defaultRules = {
       strict_age: true,
       allow_unrated_in_rating: false,
       prefer_category_rank_on_tie: false,
       prefer_main_on_equal_value: true,
-      category_priority_order: ['main', 'others']
+      category_priority_order: ['main', 'others'],
+      verbose_logs: envVerbose,
     };
 
-    console.log('[alloc] tId', tournamentId, 'players', players?.length || 0, 'cats', activeCategories.length, 'prizes', activePrizes.length);
+    const rules = {
+      ...defaultRules,
+      ...(ruleConfig || {}),
+      ...(ruleConfigOverride || {}),
+    };
+
+    rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
+
+    console.log(`[alloc] tid=${tournamentId} players=${players?.length || 0} categories=${activeCategories.length} prizes=${activePrizes.length}`);
 
     // 5) Build prize queue sorted by brochure order
     const prizeQueue = activeCategories.flatMap(cat => 
@@ -117,7 +137,10 @@ Deno.serve(async (req) => {
     prizeQueue.sort(cmpPrize);
 
     if (prizeQueue.length > 0) {
-      console.log('[alloc] queue', prizeQueue.length, 'firstKey', prizeKey(prizeQueue[0].cat, prizeQueue[0].p));
+      const first = prizeKey(prizeQueue[0].cat, prizeQueue[0].p);
+      console.log(`[alloc.queue] size=${prizeQueue.length} first=${JSON.stringify(first)}`);
+    } else {
+      console.log('[alloc.queue] size=0 first=none');
     }
 
     // 6) Greedy allocation: rank-first, filtered prize queue
@@ -128,6 +151,7 @@ Deno.serve(async (req) => {
       isManual: boolean;
     }> = [];
     const assignedPlayers = new Set<string>();
+    const unfilled: Array<{ prizeId: string; reasonCodes: string[] }> = [];
 
     // Apply manual overrides first
     for (const override of overrides) {
@@ -138,6 +162,7 @@ Deno.serve(async (req) => {
         reasons: ['manual_override'],
         isManual: true
       });
+      console.log(`[alloc.win] prize=${override.prizeId} player=${override.playerId} rank=manual reasons=manual_override`);
     }
 
     // Allocate prizes in brochure priority order
@@ -145,30 +170,44 @@ Deno.serve(async (req) => {
       // Skip if manually overridden
       if (overrides.find(o => o.prizeId === p.id)) continue;
 
-      // Find eligible unassigned players
-      const eligible = (players || [])
-        .filter(player => 
-          isEligible(player, cat, rules, tournamentStartDate) && 
-          !assignedPlayers.has(player.id)
-        )
-        .sort((a: any, b: any) => a.rank - b.rank);
+      const eligible: Array<{ player: any; passCodes: string[] }> = [];
+      const failCodes = new Set<string>();
+
+      for (const player of players || []) {
+        if (assignedPlayers.has(player.id)) continue;
+        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
+        if (rules.verbose_logs) {
+          const status = evaluation.eligible ? 'eligible' : 'ineligible';
+          const codes = evaluation.eligible ? evaluation.passCodes : evaluation.reasonCodes;
+          console.log(`[alloc.check] prize=${p.id} player=${player.id} status=${status} codes=${codes.join(',') || 'none'}`);
+        }
+        if (evaluation.eligible) {
+          eligible.push({ player, passCodes: evaluation.passCodes });
+        } else {
+          evaluation.reasonCodes.forEach(code => failCodes.add(code));
+        }
+      }
 
       if (eligible.length === 0) {
-        // No eligible players left for this prize
+        const reasonList = failCodes.size > 0 ? Array.from(failCodes).sort() : ['no_eligible_players'];
+        unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
+        console.log(`[alloc.unfilled] prize=${p.id} reason=${reasonList.join(',')}`);
         continue;
       }
 
-      // Pick first (lowest rank)
+      eligible.sort((a, b) => (a.player.rank ?? 999999) - (b.player.rank ?? 999999));
       const winner = eligible[0];
-      assignedPlayers.add(winner.id);
+      assignedPlayers.add(winner.player.id);
+      const reasonSet = new Set<string>(['auto', 'rank', 'brochure_order', 'value_tier', ...winner.passCodes]);
+      const reasonList = Array.from(reasonSet);
       winners.push({
         prizeId: p.id,
-        playerId: winner.id,
-        reasons: ['auto', 'rank', 'brochure_order', 'value_tier'],
+        playerId: winner.player.id,
+        reasons: reasonList,
         isManual: false
       });
 
-      console.log('[alloc] win', { prizeId: p.id, cat: cat.name, place: p.place, player: winner.name, rank: winner.rank });
+      console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} reasons=${reasonList.join(',')}`);
     }
 
     // 7) Minimal conflict detection: only for identical prizeKey ties
@@ -186,7 +225,8 @@ Deno.serve(async (req) => {
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
     for (const { cat, p } of prizeQueue) {
       for (const player of players || []) {
-        if (isEligible(player, cat, rules, tournamentStartDate)) {
+        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
+        if (evaluation.eligible) {
           if (!playerEligiblePrizes.has(player.id)) {
             playerEligiblePrizes.set(player.id, []);
           }
@@ -225,18 +265,20 @@ Deno.serve(async (req) => {
       });
     });
 
-    console.log('[alloc] done', { winners: winners.length, conflicts: conflicts.length });
+    console.log(`[alloc.done] winners=${winners.length} conflicts=${conflicts.length} unfilled=${unfilled.length}`);
 
     return new Response(
-      JSON.stringify({ 
-        winners, 
+      JSON.stringify({
+        winners,
         conflicts,
+        unfilled,
         meta: {
           playerCount: players?.length || 0,
           activeCategoryCount: activeCategories.length,
           activePrizeCount: activePrizes.length,
           winnersCount: winners.length,
-          conflictCount: conflicts.length
+          conflictCount: conflicts.length,
+          unfilledCount: unfilled.length
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -276,24 +318,62 @@ const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null
 const isRatingCategory = (criteria: any): boolean =>
   criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number');
 
-const isEligible = (player: any, cat: CategoryRow, rules: any, onDate: Date): boolean => {
+type EligibilityResult = {
+  eligible: boolean;
+  reasonCodes: string[];
+  passCodes: string[];
+};
+
+const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
   const c = cat.criteria_json || {};
-  
+  const failCodes = new Set<string>();
+  const passCodes = new Set<string>();
+
   // Gender check
   const reqG = c.gender?.toUpperCase?.() || null; // 'M' | 'F' | 'OPEN' | undefined
   const pg = normGender(player.gender);
-  if (reqG === 'M' && pg !== 'M') return false;
-  if (reqG === 'F' && pg !== 'F') return false;
-  // OPEN allows both (no check)
+  if (reqG === 'M') {
+    if (!pg) {
+      failCodes.add('gender_missing');
+    } else if (pg !== 'M') {
+      failCodes.add('gender_mismatch');
+    } else {
+      passCodes.add('gender_ok');
+    }
+  } else if (reqG === 'F') {
+    if (!pg) {
+      failCodes.add('gender_missing');
+    } else if (pg !== 'F') {
+      failCodes.add('gender_mismatch');
+    } else {
+      passCodes.add('gender_ok');
+    }
+  } else {
+    passCodes.add('gender_open');
+  }
 
   // Age (strict ON by default)
   const strict = rules?.strict_age !== false;
   const age = yearsOn(player.dob ?? null, onDate);
-  if (c.max_age != null && strict) {
-    if (age == null || age > Number(c.max_age)) return false;  // U13 => age <= 13
-  }
-  if (c.min_age != null && strict) {
-    if (age == null || age < Number(c.min_age)) return false;  // Veteran 40+ => age >= 40
+  const hasAgeRule = strict && (c.max_age != null || c.min_age != null);
+  let ageOk = true;
+  if (hasAgeRule) {
+    if (age == null) {
+      failCodes.add('dob_missing');
+      ageOk = false;
+    } else {
+      if (c.max_age != null && age > Number(c.max_age)) {
+        failCodes.add('age_above_max');
+        ageOk = false;
+      }
+      if (c.min_age != null && age < Number(c.min_age)) {
+        failCodes.add('age_below_min');
+        ageOk = false;
+      }
+    }
+    if (ageOk) {
+      passCodes.add('age_ok');
+    }
   }
 
   // Rating category handling
@@ -301,29 +381,71 @@ const isEligible = (player: any, cat: CategoryRow, rules: any, onDate: Date): bo
   const allowUnrated = !!rules?.allow_unrated_in_rating;
   const rating = (player.rating == null ? null : Number(player.rating));
   if (ratingCat) {
-    if ((rating == null || rating === 0) && !allowUnrated) return false;
-    if (c.min_rating != null && rating != null && rating < Number(c.min_rating)) return false;
-    if (c.max_rating != null && rating != null && rating > Number(c.max_rating)) return false;
+    let ratingOk = true;
+    if ((rating == null || rating === 0)) {
+      if (!allowUnrated) {
+        failCodes.add('unrated_excluded');
+        ratingOk = false;
+      } else {
+        passCodes.add('rating_unrated_allowed');
+      }
+    }
+
+    if (rating != null) {
+      if (c.min_rating != null && rating < Number(c.min_rating)) {
+        failCodes.add('rating_below_min');
+        ratingOk = false;
+      }
+      if (c.max_rating != null && rating > Number(c.max_rating)) {
+        failCodes.add('rating_above_max');
+        ratingOk = false;
+      }
+    }
+
+    if (ratingOk && !(rating == null && allowUnrated)) {
+      passCodes.add('rating_ok');
+    }
   }
 
   // Optional filters (disability/city/state/club lists)
-  const inList = (val: any, arr?: any[]) => 
+  const inList = (val: any, arr?: any[]) =>
     !arr || arr.length === 0 || arr.map(x => String(x).toLowerCase()).includes(String(val ?? '').toLowerCase());
-  
+
   if (Array.isArray(c.allowed_disabilities) && c.allowed_disabilities.length > 0) {
-    if (!inList(player.disability, c.allowed_disabilities)) return false;
+    if (!inList(player.disability, c.allowed_disabilities)) {
+      failCodes.add('disability_excluded');
+    } else {
+      passCodes.add('disability_ok');
+    }
   }
   if (Array.isArray(c.allowed_cities) && c.allowed_cities.length > 0) {
-    if (!inList(player.city, c.allowed_cities)) return false;
+    if (!inList(player.city, c.allowed_cities)) {
+      failCodes.add('city_excluded');
+    } else {
+      passCodes.add('city_ok');
+    }
   }
   if (Array.isArray(c.allowed_states) && c.allowed_states.length > 0) {
-    if (!inList(player.state, c.allowed_states)) return false;
+    if (!inList(player.state, c.allowed_states)) {
+      failCodes.add('state_excluded');
+    } else {
+      passCodes.add('state_ok');
+    }
   }
   if (Array.isArray(c.allowed_clubs) && c.allowed_clubs.length > 0) {
-    if (!inList(player.club, c.allowed_clubs)) return false;
+    if (!inList(player.club, c.allowed_clubs)) {
+      failCodes.add('club_excluded');
+    } else {
+      passCodes.add('club_ok');
+    }
   }
 
-  return true;
+  const eligible = failCodes.size === 0;
+  return {
+    eligible,
+    reasonCodes: Array.from(failCodes),
+    passCodes: Array.from(passCodes),
+  };
 };
 
 // Value tier: Cash+Trophy > Cash+Medal > Cash > Trophy > Medal > None
