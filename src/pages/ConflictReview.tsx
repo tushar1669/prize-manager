@@ -13,6 +13,7 @@ import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ALLOC_VERBOSE_LOGS } from "@/utils/featureFlags";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
@@ -135,9 +136,17 @@ export default function ConflictReview() {
         ruleConfigOverride: ruleOverride || null
       });
       
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${session?.access_token}`,
+      };
+
+      if (ALLOC_VERBOSE_LOGS) {
+        headers['x-alloc-verbose'] = 'true';
+      }
+
       const { data, error } = await supabase.functions.invoke('allocatePrizes', {
         body: { tournamentId: id, ruleConfigOverride: ruleOverride || undefined },
-        headers: { Authorization: `Bearer ${session?.access_token}` }
+        headers,
       });
       if (error) throw error;
       
