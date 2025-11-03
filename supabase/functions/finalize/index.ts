@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, sql } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://prize-manager.lovable.app',
@@ -31,6 +31,14 @@ Deno.serve(async (req) => {
     const payload: FinalizeRequest = await req.json();
     const { tournamentId, winners } = payload;
 
+    if (!winners || winners.length === 0) {
+      console.error('[finalize] error no_winners');
+      return new Response(
+        '[finalize] error no_winners',
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } }
+      );
+    }
+
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -47,22 +55,24 @@ Deno.serve(async (req) => {
 
     console.log(`[finalize] Finalizing tournament ${tournamentId} by user ${user.id}`);
 
-    // 1) Get current max version
-    const { data: existingAllocations, error: versionError } = await supabaseClient
+    const { data: nextVersionRow, error: nextVersionError } = await supabaseClient
       .from('allocations')
-      .select('version')
+      .select({ next_version: sql`coalesce(max(version), 0) + 1` })
       .eq('tournament_id', tournamentId)
-      .order('version', { ascending: false })
-      .limit(1);
+      .maybeSingle();
 
-    const newVersion = (existingAllocations && existingAllocations.length > 0) 
-      ? existingAllocations[0].version + 1 
-      : 1;
+    if (nextVersionError) {
+      throw new Error(`Failed to fetch next version: ${nextVersionError.message}`);
+    }
 
-    // 2) Insert new allocations
+    const nextVersion = nextVersionRow?.next_version ?? 1;
+
+    console.log(`[finalize] start tId=${tournamentId} winners=${winners.length}`);
+
+    // Insert new allocations
     const allocationsToInsert = winners.map(w => ({
       tournament_id: tournamentId,
-      version: newVersion,
+      version: nextVersion,
       prize_id: w.prizeId,
       player_id: w.playerId,
       reason_codes: w.reasons,
@@ -79,7 +89,7 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to insert allocations: ${insertError.message}`);
     }
 
-    // 3) Update tournament status to 'finalized'
+    // Update tournament status to 'finalized'
     const { error: updateError } = await supabaseClient
       .from('tournaments')
       .update({ 
@@ -92,7 +102,7 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update tournament: ${updateError.message}`);
     }
 
-    // 4) Clear any open conflicts
+    // Clear any open conflicts
     const { error: conflictError } = await supabaseClient
       .from('conflicts')
       .update({ status: 'resolved' })
@@ -103,13 +113,14 @@ Deno.serve(async (req) => {
       console.warn(`Failed to update conflicts: ${conflictError.message}`);
     }
 
-    console.log(`[finalize] Tournament ${tournamentId} finalized as version ${newVersion}`);
+    const allocationsCount = winners.length;
+
+    console.log(`[finalize] ok version=${nextVersion} count=${allocationsCount}`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        version: newVersion,
-        allocationsCount: winners.length 
+      JSON.stringify({
+        version: nextVersion,
+        allocationsCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
