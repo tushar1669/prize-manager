@@ -195,71 +195,6 @@ export type Database = {
           },
         ]
       }
-      import_logs: {
-        Row: {
-          accepted_rows: number
-          duration_ms: number | null
-          file_hash: string | null
-          filename: string | null
-          header_row: number | null
-          id: string
-          imported_at: string
-          imported_by: string | null
-          meta: Json
-          sample_errors: Json
-          sheet_name: string | null
-          skipped_rows: number
-          source: 'swiss-manager' | 'organizer-template' | 'unknown' | null
-          top_reasons: Json
-          total_rows: number
-          tournament_id: string
-        }
-        Insert: {
-          accepted_rows?: number
-          duration_ms?: number | null
-          file_hash?: string | null
-          filename?: string | null
-          header_row?: number | null
-          id?: string
-          imported_at?: string
-          imported_by?: string | null
-          meta?: Json
-          sample_errors?: Json
-          sheet_name?: string | null
-          skipped_rows?: number
-          source?: 'swiss-manager' | 'organizer-template' | 'unknown' | null
-          top_reasons?: Json
-          total_rows?: number
-          tournament_id: string
-        }
-        Update: {
-          accepted_rows?: number
-          duration_ms?: number | null
-          file_hash?: string | null
-          filename?: string | null
-          header_row?: number | null
-          id?: string
-          imported_at?: string
-          imported_by?: string | null
-          meta?: Json
-          sample_errors?: Json
-          sheet_name?: string | null
-          skipped_rows?: number
-          source?: 'swiss-manager' | 'organizer-template' | 'unknown' | null
-          top_reasons?: Json
-          total_rows?: number
-          tournament_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "import_logs_tournament_id_fkey"
-            columns: ["tournament_id"]
-            isOneToOne: false
-            referencedRelation: "tournaments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       players: {
         Row: {
           city: string | null
@@ -368,34 +303,28 @@ export type Database = {
       }
       publications: {
         Row: {
-          created_at: string
           id: string
-          is_active: boolean
-          published_at: string
+          is_active: boolean | null
+          published_at: string | null
           published_by: string | null
-          request_id: string
           slug: string
           tournament_id: string
           version: number
         }
         Insert: {
-          created_at?: string
           id?: string
-          is_active?: boolean
-          published_at?: string
+          is_active?: boolean | null
+          published_at?: string | null
           published_by?: string | null
-          request_id?: string
           slug: string
           tournament_id: string
           version?: number
         }
         Update: {
-          created_at?: string
           id?: string
-          is_active?: boolean
-          published_at?: string
+          is_active?: boolean | null
+          published_at?: string | null
           published_by?: string | null
-          request_id?: string
           slug?: string
           tournament_id?: string
           version?: number
@@ -540,28 +469,7 @@ export type Database = {
       }
     }
     Views: {
-      published_tournaments: {
-        Row: {
-          brochure_url: string | null
-          chessresults_url: string | null
-          city: string | null
-          created_at: string | null
-          end_date: string
-          id: string
-          is_published: boolean | null
-          notes: string | null
-          public_results_url: string | null
-          public_slug: string | null
-          published_at: string
-          request_id: string
-          slug: string
-          start_date: string
-          title: string
-          venue: string | null
-          version: number
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       bootstrap_master: { Args: never; Returns: Json }
@@ -571,6 +479,35 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      list_my_tournaments: {
+        Args: { include_all?: boolean }
+        Returns: {
+          brochure_url: string | null
+          chessresults_url: string | null
+          city: string | null
+          created_at: string | null
+          end_date: string
+          event_code: string | null
+          id: string
+          is_published: boolean
+          notes: string | null
+          owner_id: string
+          public_results_url: string | null
+          public_slug: string | null
+          slug: string | null
+          start_date: string
+          status: string
+          title: string
+          updated_at: string | null
+          venue: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournaments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       normalize_dob_input: { Args: { in_raw: string }; Returns: string }
     }
