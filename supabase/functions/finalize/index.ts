@@ -1,4 +1,4 @@
-import { createClient, sql } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://prize-manager.lovable.app',
@@ -55,17 +55,19 @@ Deno.serve(async (req) => {
 
     console.log(`[finalize] Finalizing tournament ${tournamentId} by user ${user.id}`);
 
-    const { data: nextVersionRow, error: nextVersionError } = await supabaseClient
+    const { data: existingAllocations, error: nextVersionError } = await supabaseClient
       .from('allocations')
-      .select({ next_version: sql`coalesce(max(version), 0) + 1` })
+      .select('version')
       .eq('tournament_id', tournamentId)
+      .order('version', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (nextVersionError) {
       throw new Error(`Failed to fetch next version: ${nextVersionError.message}`);
     }
 
-    const nextVersion = nextVersionRow?.next_version ?? 1;
+    const nextVersion = (existingAllocations?.version ?? 0) + 1;
 
     console.log(`[finalize] start tId=${tournamentId} winners=${winners.length}`);
 
