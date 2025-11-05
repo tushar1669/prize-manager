@@ -56,19 +56,31 @@ export default function Dashboard() {
       try {
         const { data, error } = await supabase.rpc('list_my_tournaments' as any, { include_all: includeAll });
 
-        if (error?.code === 'PGRST202' || (error && /schema cache|not found/i.test(error.message))) {
-          console.warn('[dashboard] rpc missing; falling back to SELECT');
-          const { data: fb, error: fbErr } = await supabase
-            .from('tournaments')
-            .select('*')
-            .order('start_date', { ascending: false, nullsFirst: false })
-            .limit(includeAll ? 1000 : 100);
-          if (fbErr) throw fbErr;
-          console.log('[dashboard] fallback fetched=', fb?.length ?? 0);
-          return fb ?? [];
-        }
-
         if (error) {
+          const msg = `${error.code ?? ''} ${error.message ?? ''}`.toLowerCase();
+          const rpcMissing =
+            error.code === 'PGRST202' ||
+            error.code === '404' ||
+            /could not find function|no function matches|schema cache/i.test(msg);
+
+          if (rpcMissing) {
+            console.warn('[dashboard] RPC missing; falling back to SELECT');
+
+            const { data: fbData, error: fbError } = await supabase
+              .from('tournaments')
+              .select('*')
+              .order('start_date', { ascending: false, nullsFirst: false })
+              .limit(includeAll ? 1000 : 100);
+
+            if (fbError) {
+              console.error('[dashboard] fallback error', fbError);
+              throw fbError;
+            }
+
+            console.log('[dashboard] fallback fetched=', Array.isArray(fbData) ? fbData.length : 0);
+            return Array.isArray(fbData) ? fbData : [];
+          }
+
           console.error('[dashboard] rpc error', error);
           throw error;
         }
