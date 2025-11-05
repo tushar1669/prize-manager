@@ -70,6 +70,7 @@ export default function Dashboard() {
               .from('tournaments')
               .select('*')
               .order('start_date', { ascending: false, nullsFirst: false })
+              .order('created_at', { ascending: false })
               .limit(includeAll ? 1000 : 100);
 
             if (fbError) {
