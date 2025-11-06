@@ -216,6 +216,78 @@ export type Database = {
           },
         ]
       }
+      import_logs: {
+        Row: {
+          accepted_rows: number
+          duration_ms: number | null
+          file_hash: string | null
+          filename: string | null
+          header_row: number | null
+          id: string
+          imported_at: string
+          imported_by: string | null
+          meta: Json
+          sample_errors: Json
+          sheet_name: string | null
+          skipped_rows: number
+          source: string | null
+          top_reasons: Json
+          total_rows: number
+          tournament_id: string
+        }
+        Insert: {
+          accepted_rows?: number
+          duration_ms?: number | null
+          file_hash?: string | null
+          filename?: string | null
+          header_row?: number | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          meta?: Json
+          sample_errors?: Json
+          sheet_name?: string | null
+          skipped_rows?: number
+          source?: string | null
+          top_reasons?: Json
+          total_rows?: number
+          tournament_id: string
+        }
+        Update: {
+          accepted_rows?: number
+          duration_ms?: number | null
+          file_hash?: string | null
+          filename?: string | null
+          header_row?: number | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          meta?: Json
+          sample_errors?: Json
+          sheet_name?: string | null
+          skipped_rows?: number
+          source?: string | null
+          top_reasons?: Json
+          total_rows?: number
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_logs_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_logs_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           city: string | null

@@ -195,8 +195,24 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      eligible.sort((a, b) => (a.player.rank ?? 999999) - (b.player.rank ?? 999999));
+      // Deterministic tie-breaking: rank ASC → rating DESC → name ASC
+      eligible.sort(compareEligibleByRankRatingName);
       const winner = eligible[0];
+
+      // Compute tie-break reason for logging
+      let tieBreak: 'none' | 'rating' | 'name' = 'none';
+      if (eligible.length > 1) {
+        const r0 = eligible[0].player.rank ?? Number.MAX_SAFE_INTEGER;
+        const r1 = eligible[1].player.rank ?? Number.MAX_SAFE_INTEGER;
+        
+        if (r0 === r1) {
+          // Ranks are equal, determine if tie was broken by rating or name
+          const rt0 = eligible[0].player.rating ?? 0;
+          const rt1 = eligible[1].player.rating ?? 0;
+          tieBreak = (rt0 !== rt1) ? 'rating' : 'name';
+        }
+      }
+
       assignedPlayers.add(winner.player.id);
       const reasonSet = new Set<string>(['auto', 'rank', 'brochure_order', 'value_tier', ...winner.passCodes]);
       const reasonList = Array.from(reasonSet);
@@ -207,7 +223,7 @@ Deno.serve(async (req) => {
         isManual: false
       });
 
-      console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} reasons=${reasonList.join(',')}`);
+      console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
     }
 
     // 7) Minimal conflict detection: only for identical prizeKey ties
@@ -480,3 +496,28 @@ const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p
   if (ak.place !== bk.place) return ak.place - bk.place;
   return String(ak.pid).localeCompare(String(bk.pid));
 };
+
+/**
+ * Deterministic comparator for eligible players.
+ * Sort order: rank ASC → rating DESC → name ASC
+ * Exported for testing.
+ */
+export function compareEligibleByRankRatingName(
+  a: { player: { rank?: number | null; rating?: number | null; name?: string | null } },
+  b: { player: { rank?: number | null; rating?: number | null; name?: string | null } }
+): number {
+  // Primary: rank ascending (lower rank = better)
+  const rankA = a.player.rank ?? Number.MAX_SAFE_INTEGER;
+  const rankB = b.player.rank ?? Number.MAX_SAFE_INTEGER;
+  if (rankA !== rankB) return rankA - rankB;
+
+  // Secondary: rating descending (higher rating = better)
+  const ratingA = a.player.rating ?? 0;
+  const ratingB = b.player.rating ?? 0;
+  if (ratingA !== ratingB) return ratingB - ratingA;
+
+  // Tertiary: name ascending (alphabetical)
+  const nameA = (a.player.name ?? '').toString();
+  const nameB = (b.player.name ?? '').toString();
+  return nameA.localeCompare(nameB);
+}
