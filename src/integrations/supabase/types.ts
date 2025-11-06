@@ -70,6 +70,13 @@ export type Database = {
             foreignKeyName: "allocations_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -107,6 +114,13 @@ export type Database = {
           tournament_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "categories_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "categories_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -190,6 +204,13 @@ export type Database = {
             foreignKeyName: "conflicts_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conflicts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -251,6 +272,13 @@ export type Database = {
           warnings_json?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "players_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "players_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -334,6 +362,13 @@ export type Database = {
             foreignKeyName: "publications_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publications_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -371,6 +406,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rule_config_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rule_config_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -469,7 +511,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      published_tournaments: {
+        Row: {
+          brochure_url: string | null
+          chessresults_url: string | null
+          city: string | null
+          created_at: string | null
+          end_date: string | null
+          id: string | null
+          is_published: boolean | null
+          notes: string | null
+          public_results_url: string | null
+          public_slug: string | null
+          published_at: string | null
+          slug: string | null
+          start_date: string | null
+          title: string | null
+          venue: string | null
+          version: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       bootstrap_master: { Args: never; Returns: Json }
