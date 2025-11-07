@@ -87,3 +87,34 @@ export function inferUnrated(
   
   return false;
 }
+
+/** Swiss-Manager: blank gender column means Male; 'F' means Female */
+export function genderBlankToMF(raw: any): 'M' | 'F' | null {
+  if (raw == null || String(raw).trim() === '') return 'M';
+  const s = String(raw).trim().toUpperCase();
+  if (s === 'F') return 'F';
+  return null;
+}
+
+/** Swiss-Manager: rating 0 means 'unrated' → store as null */
+export function ratingZeroToNull(raw: any): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(String(raw).replace(/[,\s]/g, ''));
+  if (!isFinite(n) || n <= 0) return null;
+  return Math.round(n);
+}
+
+/** Merge optional title prefix with name (e.g., 'IM' + 'A. Player' → 'IM A. Player') */
+export function mergeTitleAndName(title: any, name: any): string {
+  const t = String(title ?? '').trim();
+  const n = String(name ?? '').trim();
+  if (t && n) return `${t} ${n}`.trim();
+  return n || t || '';
+}
+
+/** Keep only digits from FIDE-No. cells (e.g., '12345678.' → '12345678') */
+export function digitsOnly(raw: any): string | null {
+  if (raw == null) return null;
+  const s = String(raw).replace(/\D+/g, '');
+  return s || null;
+}

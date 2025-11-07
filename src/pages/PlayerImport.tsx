@@ -54,6 +54,7 @@ import {
   normalizeRating,
   inferUnrated
 } from '@/utils/valueNormalizers';
+import { selectPresetBySource } from '@/utils/importPresets';
 import {
   isFeatureEnabled,
   IMPORT_DEDUP_ENABLED,
@@ -1100,8 +1101,17 @@ export default function PlayerImport() {
     }
   }, [headers, parsedData]);
 
+  // Helper: Consider footer rows as non-data when both rank and name are missing/empty
+  const isFooterRow = (p: any) => {
+    const r = p?.rank;
+    const n = (p?.name ?? '').toString().trim();
+    return (r == null || r === '' || Number.isNaN(Number(r))) && n.length === 0;
+  };
+
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
+
+    const preset = selectPresetBySource(importSource as any);
 
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
@@ -1142,6 +1152,15 @@ export default function PlayerImport() {
         player[fieldKey] = value;
       });
 
+      // Apply preset field-specific normalizers (if any)
+      if (preset?.normalizers?.length) {
+        for (const n of preset.normalizers) {
+          if (n.field in player) {
+            player[n.field] = n.normalize(player[n.field], player);
+          }
+        }
+      }
+
       // Phase 6: Infer unrated flag after all fields mapped
       player.unrated = inferUnrated(
         { 
@@ -1156,7 +1175,9 @@ export default function PlayerImport() {
       );
 
       return player as ParsedPlayer;
-    });
+    })
+    // Filter out footer rows (no rank & no name)
+    .filter(p => !isFooterRow(p));
 
     // Phase 5: Validate with detailed breakdown
     const errors: { row: number; errors: string[] }[] = [];
