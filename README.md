@@ -4,6 +4,11 @@
 
 **URL**: https://lovable.dev/projects/ee2c255e-4041-44cb-8cca-2353ed6c5c8d
 
+## Documentation
+
+- [Prize Allocation Algorithm Specification](./docs/allocator/README.md) — Technical specification for the prize allocation engine
+- [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md) — Plain-English guide for tournament organizers
+
 ## How can I edit this code?
 
 There are several ways of editing your application.
