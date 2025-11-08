@@ -224,7 +224,6 @@ export async function fetchDedupCandidates(
   const payload = players.map(player => ({
     row: player._originalIndex,
     name: player.name,
-    normalized_name: normalizeCandidateName(player.name),
     dob: player.dob ?? null,
     fide_id: player.fide_id ?? null,
   }));
@@ -245,9 +244,42 @@ export async function fetchDedupCandidates(
       return [];
     }
 
-    console.log(`[dedup] RPC matched ${data.length} candidates`);
+    const grouped = new Map<number, DedupExistingPlayer[]>();
 
-    return data as RpcCandidateMatch[];
+    data.forEach((entry: any) => {
+      const candidateRow = Number(entry?.cand_idx ?? entry?.row);
+      const playerId = entry?.player_id;
+
+      if (!Number.isFinite(candidateRow) || !playerId) {
+        return;
+      }
+
+      const matches = grouped.get(candidateRow) ?? [];
+
+      matches.push({
+        id: playerId,
+        name: entry?.name ?? "",
+        dob: entry?.dob ?? null,
+        rating: entry?.rating ?? null,
+        fide_id: entry?.fide_id ?? null,
+        city: entry?.city ?? null,
+        state: entry?.state ?? null,
+        club: entry?.club ?? null,
+        gender: entry?.gender ?? null,
+        disability: entry?.disability ?? null,
+        special_notes: entry?.special_notes ?? null,
+        federation: entry?.federation ?? null,
+      });
+
+      grouped.set(candidateRow, matches);
+    });
+
+    console.log(`[dedup] RPC matched ${grouped.size} candidates`);
+
+    return Array.from(grouped.entries()).map(([row, matches]) => ({
+      row,
+      matches,
+    }));
   } catch (err) {
     console.warn("[dedup] RPC call threw", err);
     return [];
