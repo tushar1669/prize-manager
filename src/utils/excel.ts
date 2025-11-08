@@ -5,7 +5,17 @@ import * as XLSX from 'xlsx';
 
 type ImportSource = 'swiss-manager' | 'template' | 'unknown';
 
+export type ErrorRow = {
+  rowIndex: number;
+  reason: string;
+  original?: Record<string, any>;
+};
+
 const IST_TIME_ZONE = 'Asia/Kolkata';
+
+function sanitizeFilename(name: string) {
+  return name.replace(/[^\w\-.]+/g, '_').slice(0, 80);
+}
 
 function sanitizeSlug(slug?: string | null): string {
   if (!slug) return 'tournament';
@@ -380,44 +390,44 @@ export function downloadSwissManagerReferenceXlsx() {
 /**
  * Download errors as Excel workbook
  */
-export function downloadErrorXlsx(
-  rows: Array<{
-    row: number;
-    error: string;
-  } & Record<string, any>>,
-  tournamentSlug?: string | null
-) {
-  if (rows.length === 0) return;
+export async function downloadErrorXlsx(
+  errors: ErrorRow[],
+  originalRows: Record<string, any>[],
+  filename?: string
+): Promise<boolean> {
+  try {
+    const count = errors?.length ?? 0;
+    console.log('[import] error-xlsx rows=', count);
+    if (count === 0) {
+      return false;
+    }
 
-  // Collect all unique columns from error rows
-  const allKeys = new Set<string>(['row', 'error']);
-  rows.forEach(r => {
-    Object.keys(r).forEach(k => allKeys.add(k));
-  });
+    const rows = errors.map(error => {
+      const source = error.original ?? originalRows?.[error.rowIndex - 1] ?? {};
+      return {
+        Row: error.rowIndex,
+        Reason: error.reason,
+        Name: source?.Name ?? source?.name ?? '',
+        Rank: source?.Rank ?? source?.rank ?? '',
+        Rtg: source?.Rtg ?? source?.rating ?? '',
+        'Fide-No.': source?.['Fide-No.'] ?? source?.fide_id ?? '',
+        SNo: source?.['SNo.'] ?? source?.sno ?? '',
+      };
+    });
 
-  const headers = Array.from(allKeys);
-  const data = [
-    headers,
-    ...rows.map(r => headers.map(h => r[h] ?? ''))
-  ];
+    const worksheet = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Errors');
 
-  const ws = XLSX.utils.aoa_to_sheet(data);
+    const today = new Date().toISOString().slice(0, 10);
+    const fallback = `import_errors_${today}.xlsx`;
+    const safeFilename = sanitizeFilename(filename || fallback);
 
-  // Auto-size columns
-  const maxWidths = headers.map((h, idx) => {
-    const colData = data.map(row => String(row[idx] || ''));
-    const maxLen = Math.max(...colData.map(s => s.length));
-    return { wch: Math.min(maxLen + 2, 50) }; // Cap at 50 chars
-  });
-  (ws as any)['!cols'] = maxWidths;
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Errors');
-  const now = new Date();
-  const slug = sanitizeSlug(tournamentSlug);
-  const timestamp = formatIstTimestampForFile(now);
-  const filename = `players_errors_${slug}_${timestamp}.xlsx`;
-  XLSX.writeFile(wb, filename);
-
-  console.log('[import] Error Excel downloaded:', filename, rows.length, 'rows');
+    XLSX.writeFile(workbook, safeFilename, { bookType: 'xlsx' });
+    console.log('[import] error-xlsx download triggered', { filename: safeFilename, rows: count });
+    return true;
+  } catch (error) {
+    console.error('[import] error-xlsx failed', error);
+    return false;
+  }
 }

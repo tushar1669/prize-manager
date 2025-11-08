@@ -37,7 +37,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
-import { downloadPlayersTemplateXlsx, downloadErrorXlsx, downloadPlayersXlsx } from '@/utils/excel';
+import { downloadPlayersTemplateXlsx, downloadErrorXlsx, downloadPlayersXlsx, type ErrorRow } from '@/utils/excel';
 import {
   HEADER_ALIASES,
   generatePlayerKey,
@@ -777,25 +777,42 @@ export default function PlayerImport() {
       } else {
         toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
 
-        const errorRows = results.failed.map(f => ({
-          row: f.player._originalIndex,
-          error: f.error,
-          rank: f.player.rank,
-          name: f.player.name,
-          rating: f.player.rating,
-          dob: f.player.dob,
-          gender: f.player.gender,
-          state: f.player.state,
-          city: f.player.city,
-          club: f.player.club,
-          disability: f.player.disability,
-          special_notes: f.player.special_notes,
-          fide_id: f.player.fide_id,
-          federation: f.player.federation,
+        const errorRows: ErrorRow[] = results.failed.map(f => ({
+          rowIndex: f.player._originalIndex,
+          reason: f.error,
+          original: {
+            rank: f.player.rank,
+            name: f.player.name,
+            rating: f.player.rating,
+            dob: f.player.dob,
+            gender: f.player.gender,
+            state: f.player.state,
+            city: f.player.city,
+            club: f.player.club,
+            disability: f.player.disability,
+            special_notes: f.player.special_notes,
+            fide_id: f.player.fide_id,
+            federation: f.player.federation,
+          }
         }));
 
-        downloadErrorXlsx(errorRows, tournamentSlug);
-        toast.info('Error Excel downloaded automatically');
+        console.log('[import] error-xlsx requested', { errors: errorRows.length });
+
+        const originals = parsedData as Record<string, any>[];
+        const today = new Date().toISOString().slice(0, 10);
+        const filename = `${tournamentSlug}_errors_${today}.xlsx`;
+
+        try {
+          const ok = await downloadErrorXlsx(errorRows, originals, filename);
+          if (ok) {
+            toast.info(`Error Excel downloaded automatically (${errorRows.length})`);
+          } else {
+            toast.info('No errors to download — all rows valid.');
+          }
+        } catch (err) {
+          console.error('[import] error-xlsx auto-download failed', err);
+          toast.error('Failed to generate error file');
+        }
       }
     },
     onError: (err: any) => {
@@ -1542,7 +1559,9 @@ export default function PlayerImport() {
   ]);
 
   const hasData = mappedPlayers.length > 0;
-  const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrors.length === 0;
+  const validationErrorCount = validationErrors.length;
+  const hasValidationErrors = validationErrorCount > 0;
+  const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -1964,17 +1983,30 @@ export default function PlayerImport() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const errorRows = validationErrors.map(err => ({
-                      row: err.row,
-                      error: err.errors.join('; '),
-                      ...mappedPlayers.find(p => p._originalIndex === err.row)
+                  disabled={!hasValidationErrors}
+                  onClick={async () => {
+                    console.log('[import] error-xlsx requested', { errors: validationErrorCount });
+                    const errorRows: ErrorRow[] = validationErrors.map(err => ({
+                      rowIndex: err.row,
+                      reason: err.errors.join('; '),
                     }));
-                    downloadErrorXlsx(errorRows, tournamentSlug);
-                    toast.success('Error Excel downloaded');
+                    const originals = parsedData as Record<string, any>[];
+                    const today = new Date().toISOString().slice(0, 10);
+                    const filename = `${tournamentSlug}_errors_${today}.xlsx`;
+                    try {
+                      const ok = await downloadErrorXlsx(errorRows, originals, filename);
+                      if (ok) {
+                        toast.success(`Error Excel downloaded (${validationErrorCount})`);
+                      } else {
+                        toast.info('No errors to download — all rows valid.');
+                      }
+                    } catch (err) {
+                      console.error('[import] error-xlsx click failed', err);
+                      toast.error('Failed to generate error file');
+                    }
                   }}
                 >
-                  Download Error Excel
+                  {hasValidationErrors ? `Download Error Excel (${validationErrorCount})` : 'No Errors'}
                 </Button>
               </div>
             )}
