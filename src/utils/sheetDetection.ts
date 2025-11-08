@@ -39,7 +39,7 @@ export function scoreHeaderRow(row: any[]): number {
   score += coreHits.length * 10;
   
   // Secondary fields - 3 points each
-  const secondaryFields = ['fide', 'gender', 'fed', 'fs', 'club', 'state', 'city'];
+  const secondaryFields = ['fide', 'gender', 'fed', 'club', 'state', 'city'];
   const secondaryHits = secondaryFields.filter(field =>
     normalized.some(cell => cell.includes(field))
   );

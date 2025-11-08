@@ -47,7 +47,8 @@ import {
   selectBestRatingColumn,
   ImportConflict,
   ImportConflictType,
-  inferImportSource
+  inferImportSource,
+  findHeaderlessGenderColumn
 } from '@/utils/importSchema';
 import {
   normalizeGender,
@@ -105,6 +106,8 @@ type LastFileInfo = {
   headerRow: number | null;
   source: 'swiss-manager' | 'organizer-template' | 'unknown';
 };
+
+const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
 
 // Helper functions for smart retry
 const pick = (obj: Record<string, any>, keys: string[]) =>
@@ -971,13 +974,16 @@ export default function PlayerImport() {
       return;
     }
 
-    const detectedSource = inferImportSource(headers);
+    const detectedSource = inferImportSource(
+      headers,
+      parsedData as Record<string, any>[]
+    );
     lastFileInfoRef.current = {
       ...lastFileInfoRef.current,
       source: detectedSource
     };
     setImportSource(detectedSource === 'organizer-template' ? 'template' : detectedSource);
-  }, [headers]);
+  }, [headers, parsedData]);
 
   // NEW: Check for autosave draft on mount
   useEffect(() => {
@@ -1150,6 +1156,12 @@ export default function PlayerImport() {
 
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
+
+    const headerlessGender = findHeaderlessGenderColumn(headers, parsedData as Record<string, any>[]);
+    if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
+      autoMapping.gender = headerlessGender;
+      console.log("[import] gender source: headerless column after Name (not 'fs')");
+    }
 
     if (isFeatureEnabled('RATING_PRIORITY')) {
       const bestRating = selectBestRatingColumn(headers);
@@ -2057,6 +2069,7 @@ export default function PlayerImport() {
         open={showMappingDialog}
         onOpenChange={setShowMappingDialog}
         detectedColumns={headers}
+        sampleRows={parsedData as Record<string, any>[]}
         onConfirm={handleMappingConfirm}
       />
       <DuplicateReviewDialog

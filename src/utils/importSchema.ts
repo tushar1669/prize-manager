@@ -53,13 +53,157 @@ export function normalizeHeaderForMatching(header: string): string {
     .replace(/\s+/g, '_');     // Collapse spaces to underscore
 }
 
-const SWISS_SIGNATURE_HEADERS = ['rank', 'sno', 'rtg', 'fs', 'fideno'];
+const SWISS_SIGNATURE_HEADERS = ['rank', 'sno', 'rtg', 'fideno'];
 const TEMPLATE_SIGNATURE_HEADERS = ['rank', 'name', 'rating', 'dob'];
 
-export function inferImportSource(headers: string[]): 'swiss-manager' | 'organizer-template' | 'unknown' {
+const HEADERLESS_KEY_PATTERN = /^__empty/i;
+const GENDER_VALUE_TOKENS = new Set([
+  'm',
+  'f',
+  'male',
+  'female',
+  'boy',
+  'girl',
+  'boys',
+  'girls',
+  'men',
+  'women',
+  'other',
+  'w',
+  'g',
+  'b',
+  'o'
+]);
+
+function isHeaderlessKey(key: string | undefined): key is string {
+  if (key === undefined) return false;
+  if (key.trim().length === 0) return true;
+  return HEADERLESS_KEY_PATTERN.test(key);
+}
+
+function looksLikeGenderValue(value: unknown): boolean {
+  if (value == null) return false;
+  const normalized = String(value)
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+
+  const alphaOnly = normalized.replace(/[^a-z]/g, '');
+  if (GENDER_VALUE_TOKENS.has(alphaOnly)) return true;
+  if (alphaOnly === 'mf' || alphaOnly === 'fm') return true;
+
+  return false;
+}
+
+const NORMALIZED_NAME_HEADERS = new Set(
+  HEADER_ALIASES.name.map(normalizeHeaderForMatching)
+);
+
+export function findHeaderlessGenderColumn(
+  headers: string[],
+  sampleRows: Array<Record<string, any>> = []
+): string | null {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return null;
+  }
+
+  if (!Array.isArray(sampleRows) || sampleRows.length === 0) {
+    return null;
+  }
+
+  const normalizedHeaders = headers.map(normalizeHeaderForMatching);
+  let nameIndex = -1;
+  for (let i = 0; i < normalizedHeaders.length; i += 1) {
+    if (NORMALIZED_NAME_HEADERS.has(normalizedHeaders[i])) {
+      nameIndex = i;
+      break;
+    }
+  }
+
+  if (nameIndex === -1) {
+    return null;
+  }
+
+  const nameHeader = headers[nameIndex];
+  const normalizedNameHeader = normalizeHeaderForMatching(nameHeader);
+  const candidateStats = new Map<string, { total: number; matches: number }>();
+
+  const registerCandidate = (key: string | undefined) => {
+    if (!isHeaderlessKey(key)) return;
+    if (!candidateStats.has(key)) {
+      candidateStats.set(key, { total: 0, matches: 0 });
+    }
+  };
+
+  registerCandidate(headers[nameIndex + 1]);
+
+  const sampleLimit = Math.min(sampleRows.length, 25);
+  for (let i = 0; i < sampleLimit; i += 1) {
+    const row = sampleRows[i];
+    if (!row || typeof row !== 'object') continue;
+
+    const keys = Object.keys(row);
+    if (keys.length === 0) continue;
+
+    const nameKeyIndex = keys.findIndex(
+      (key) => normalizeHeaderForMatching(key) === normalizedNameHeader
+    );
+    if (nameKeyIndex === -1) continue;
+
+    registerCandidate(keys[nameKeyIndex + 1]);
+  }
+
+  if (candidateStats.size === 0) {
+    return null;
+  }
+
+  for (let i = 0; i < sampleLimit; i += 1) {
+    const row = sampleRows[i];
+    if (!row || typeof row !== 'object') continue;
+
+    for (const [key, stats] of candidateStats.entries()) {
+      const value = (row as Record<string, any>)[key];
+      if (value === undefined || value === null) continue;
+      const str = String(value).trim();
+      if (!str) continue;
+
+      stats.total += 1;
+      if (looksLikeGenderValue(str)) {
+        stats.matches += 1;
+      }
+    }
+  }
+
+  let bestKey: string | null = null;
+  let bestRatio = 0;
+  for (const [key, stats] of candidateStats.entries()) {
+    if (stats.matches === 0) continue;
+    if (stats.total === 0) continue;
+
+    const ratio = stats.matches / stats.total;
+    if (
+      stats.matches >= 3 ||
+      (stats.total <= 3 && stats.matches === stats.total && stats.total >= 2)
+    ) {
+      if (ratio > bestRatio) {
+        bestKey = key;
+        bestRatio = ratio;
+      }
+    }
+  }
+
+  return bestKey;
+}
+
+export function inferImportSource(
+  headers: string[],
+  sampleRows: Array<Record<string, any>> = []
+): 'swiss-manager' | 'organizer-template' | 'unknown' {
   const normalized = headers.map((header) => normalizeHeaderForMatching(header));
 
-  if (SWISS_SIGNATURE_HEADERS.every((key) => normalized.includes(key))) {
+  const headerlessGender = findHeaderlessGenderColumn(headers, sampleRows);
+
+  if (SWISS_SIGNATURE_HEADERS.every((key) => normalized.includes(key)) && headerlessGender) {
     return 'swiss-manager';
   }
 

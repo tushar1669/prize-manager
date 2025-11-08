@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { HEADER_ALIASES, selectBestRatingColumn, normalizeHeaderForMatching } from "@/utils/importSchema";
+import {
+  HEADER_ALIASES,
+  selectBestRatingColumn,
+  normalizeHeaderForMatching,
+  findHeaderlessGenderColumn
+} from "@/utils/importSchema";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
   Dialog,
@@ -26,6 +31,7 @@ interface ColumnMappingDialogProps {
   onOpenChange: (open: boolean) => void;
   detectedColumns: string[];
   onConfirm: (mapping: Record<string, string>) => void;
+  sampleRows: Record<string, any>[];
 }
 
 const requiredFields = [
@@ -49,12 +55,14 @@ const optionalFields = [
 
 // Use centralized aliases from importSchema
 const mappingRules = HEADER_ALIASES;
+const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
 
-export function ColumnMappingDialog({ 
-  open, 
-  onOpenChange, 
-  detectedColumns, 
-  onConfirm 
+export function ColumnMappingDialog({
+  open,
+  onOpenChange,
+  detectedColumns,
+  onConfirm,
+  sampleRows
 }: ColumnMappingDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
 
@@ -68,7 +76,7 @@ export function ColumnMappingDialog({
     console.log('[ColumnMapping] Initializing auto-map for', detectedColumns.length, 'columns');
     
     const autoMapping: Record<string, string> = {};
-    
+
     // Rating priority (Phase 3)
     if (isFeatureEnabled('RATING_PRIORITY')) {
       const bestRating = selectBestRatingColumn(detectedColumns);
@@ -76,7 +84,12 @@ export function ColumnMappingDialog({
         autoMapping.rating = bestRating;
       }
     }
-    
+
+    const headerlessGender = findHeaderlessGenderColumn(detectedColumns, sampleRows);
+    if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
+      autoMapping.gender = headerlessGender;
+    }
+
     // Pre-normalize aliases
     const normalizedAliases: Record<string, string[]> = {};
     Object.entries(mappingRules).forEach(([field, patterns]) => {
@@ -98,7 +111,7 @@ export function ColumnMappingDialog({
     console.log('[ColumnMapping] Mapped field count:', Object.keys(autoMapping).length);
     
     setMapping(autoMapping);
-  }, [detectedColumns]); // Re-run when columns change
+  }, [detectedColumns, sampleRows]); // Re-run when columns change
 
   const handleConfirm = () => {
     // Validate required fields
