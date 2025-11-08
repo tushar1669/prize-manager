@@ -296,6 +296,7 @@ export type Database = {
           disability: string | null
           dob: string | null
           dob_raw: string | null
+          fide_id: string | null
           gender: string | null
           id: string
           name: string
@@ -314,6 +315,7 @@ export type Database = {
           disability?: string | null
           dob?: string | null
           dob_raw?: string | null
+          fide_id?: string | null
           gender?: string | null
           id?: string
           name: string
@@ -332,6 +334,7 @@ export type Database = {
           disability?: string | null
           dob?: string | null
           dob_raw?: string | null
+          fide_id?: string | null
           gender?: string | null
           id?: string
           name?: string
@@ -644,6 +647,14 @@ export type Database = {
         }
       }
       normalize_dob_input: { Args: { in_raw: string }; Returns: string }
+      publish_tournament: {
+        Args: { requested_slug?: string; tournament_id: string }
+        Returns: {
+          published_at: string
+          slug: string
+          version: number
+        }[]
+      }
     }
     Enums: {
       app_role: "master" | "organizer" | "user"
