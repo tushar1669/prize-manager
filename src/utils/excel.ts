@@ -17,6 +17,13 @@ function sanitizeFilename(name: string) {
   return name.replace(/[^\w\-.]+/g, '_').slice(0, 80);
 }
 
+function sanitizeSheetName(name: string): string {
+  // Excel sheet names: max 31 chars, no []:*?/\
+  return name
+    .replace(/[\[\]:*?/\\]/g, '')
+    .slice(0, 31);
+}
+
 function sanitizeSlug(slug?: string | null): string {
   if (!slug) return 'tournament';
   return slug
@@ -388,6 +395,34 @@ export function downloadSwissManagerReferenceXlsx() {
 }
 
 /**
+ * Generic multi-sheet Excel downloader (base utility)
+ */
+export function downloadWorkbookXlsx(
+  filename: string,
+  sheets: Record<string, any[]>
+): boolean {
+  try {
+    const wb = XLSX.utils.book_new();
+    for (const [sheetName, rows] of Object.entries(sheets)) {
+      const ws = XLSX.utils.json_to_sheet(rows ?? []);
+      const safeName = sanitizeSheetName(sheetName || 'Sheet1');
+      XLSX.utils.book_append_sheet(wb, ws, safeName);
+    }
+    // Force .xlsx extension
+    let safeFilename = filename;
+    if (!/\.xlsx$/i.test(safeFilename)) {
+      safeFilename = safeFilename.replace(/\.[^.]+$/, '') + '.xlsx';
+    }
+    XLSX.writeFile(wb, safeFilename, { bookType: 'xlsx' });
+    console.log('[excel] downloadWorkbookXlsx:', safeFilename);
+    return true;
+  } catch (e) {
+    console.error('[excel] downloadWorkbookXlsx failed', e);
+    return false;
+  }
+}
+
+/**
  * Download errors as Excel workbook
  */
 export async function downloadErrorXlsx(
@@ -412,22 +447,58 @@ export async function downloadErrorXlsx(
         Rtg: source?.Rtg ?? source?.rating ?? '',
         'Fide-No.': source?.['Fide-No.'] ?? source?.fide_id ?? '',
         SNo: source?.['SNo.'] ?? source?.sno ?? '',
+        DOB: source?.Birth ?? source?.dob ?? '',
+        Gender: source?.Gender ?? source?.gender ?? '',
       };
     });
-
-    const worksheet = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Errors');
 
     const today = new Date().toISOString().slice(0, 10);
     const fallback = `import_errors_${today}.xlsx`;
     const safeFilename = sanitizeFilename(filename || fallback);
 
-    XLSX.writeFile(workbook, safeFilename, { bookType: 'xlsx' });
-    console.log('[import] error-xlsx download triggered', { filename: safeFilename, rows: count });
-    return true;
+    return downloadWorkbookXlsx(safeFilename, { Errors: rows });
   } catch (error) {
     console.error('[import] error-xlsx failed', error);
     return false;
   }
+}
+
+/**
+ * Download conflicts as Excel workbook
+ */
+export function downloadConflictsXlsx(
+  conflicts: Array<{
+    keyKind: string;
+    key: string;
+    reason: string;
+    a?: any;
+    b?: any;
+  }>,
+  filename?: string
+): boolean {
+  if (!conflicts?.length) return false;
+  
+  const rows = conflicts.map(c => ({
+    KeyKind: c.keyKind,
+    Key: c.key,
+    Reason: c.reason,
+    NameA: c.a?.name ?? '',
+    DobA: c.a?.dob ?? '',
+    FideA: c.a?.fide_id ?? '',
+    SNoA: c.a?.sno ?? '',
+    RankA: c.a?.rank ?? '',
+    RatingA: c.a?.rating ?? '',
+    NameB: c.b?.name ?? '',
+    DobB: c.b?.dob ?? '',
+    FideB: c.b?.fide_id ?? '',
+    SNoB: c.b?.sno ?? '',
+    RankB: c.b?.rank ?? '',
+    RatingB: c.b?.rating ?? '',
+  }));
+
+  const today = new Date().toISOString().slice(0, 10);
+  const fallback = `conflicts_${today}.xlsx`;
+  const safeFilename = sanitizeFilename(filename || fallback);
+
+  return downloadWorkbookXlsx(safeFilename, { Conflicts: rows });
 }

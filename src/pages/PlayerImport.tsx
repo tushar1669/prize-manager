@@ -1109,7 +1109,7 @@ export default function PlayerImport() {
       });
       const {
         data,
-        headers: csvHeaders,
+        headers: detectedHeaders,
         sheetName,
         headerRow,
         fileHash,
@@ -1119,7 +1119,7 @@ export default function PlayerImport() {
       } = result;
       setLastParseMode(mode);
       setParsedData(data);
-      setHeaders(csvHeaders);
+      setHeaders(detectedHeaders);
       setParseError(null); // Clear any previous error
       setParseStatus('ok');
 
@@ -1143,8 +1143,10 @@ export default function PlayerImport() {
         setImportSource(source === 'organizer-template' ? 'template' : source);
       }
 
-      console.log('[import] Detected headers:', csvHeaders);
-      console.log('[import] Parsed', data.length, 'data rows');
+      if (data?.length) {
+        console.log('[import] Detected headers:', detectedHeaders);
+        console.log('[import] Parsed', data.length, 'data rows');
+      }
       // Auto-mapping will be handled by useEffect below
     } catch (error) {
       console.error('[parseFile]', error);

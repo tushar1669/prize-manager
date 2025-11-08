@@ -54,25 +54,22 @@ Deno.serve(async (req) => {
     // 3) Generate HTML report
     const htmlContent = generateHtmlReport(tournament, allocations, version);
 
-    // 4) Generate CSV
-    const csvContent = generateCsvReport(tournament, allocations);
-
-    // 5) For now, return the HTML/CSV as data URLs
-    // In production, you'd use a PDF generation library and upload to storage
+    // 4) Return allocation data as JSON for client-side Excel generation
+    // (per guardrail: avoid edge function bloat with xlsx bundling)
     const pdfDataUrl = `data:text/html;base64,${btoa(htmlContent)}`;
-    const csvDataUrl = `data:text/csv;base64,${btoa(csvContent)}`;
 
     // TODO: Upload to storage/exports bucket and return signed URLs
     // const { data: pdfUpload } = await supabaseClient.storage
     //   .from('exports')
     //   .upload(`${tournamentId}/v${version}/report.pdf`, pdfBlob);
 
-    console.log(`[generatePdf] PDF generated successfully for tournament ${tournamentId}`);
+    console.log(`[generatePdf] Report generated successfully for tournament ${tournamentId}`);
 
     return new Response(
       JSON.stringify({ 
         pdfUrlSigned: pdfDataUrl,
-        csvUrlSigned: csvDataUrl,
+        allocations,
+        tournament,
         version 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -144,11 +141,3 @@ function generateHtmlReport(tournament: any, allocations: any[], version: number
   `;
 }
 
-function generateCsvReport(tournament: any, allocations: any[]): string {
-  const headers = 'Rank,Player,Category,Prize Place,Cash Amount,Trophy,Medal\n';
-  const rows = allocations.map(a => 
-    `${a.players?.rank || ''},${a.players?.name || ''},${a.prizes?.categories?.name || ''},${a.prizes?.place || ''},${a.prizes?.cash_amount || 0},${a.prizes?.has_trophy ? 'Yes' : 'No'},${a.prizes?.has_medal ? 'Yes' : 'No'}`
-  ).join('\n');
-  
-  return headers + rows;
-}

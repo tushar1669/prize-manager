@@ -83,3 +83,29 @@ Add these flags to your local `.env` file as needed:
 
 - `PUBLIC_DOB_MASKING=true` keeps public exports masked to the `yyyy-mm` format.
 - `VITE_ENABLE_REACT_PDF=false` leaves the experimental React-PDF export disabled (recommended default). Set to `true` only when the `@react-pdf/renderer` package is installed locally and you want to try the beta export.
+
+## Code Quality & Verification
+
+### CSV Purge Verification
+
+This project enforces **Excel-only** (`.xlsx` and `.xls`) for all imports and exports. CSV is completely banned.
+
+**Run verification:**
+```bash
+node scripts/assert-no-csv.js
+```
+
+**Expected output:**
+```
+✅ CSV purge verification PASSED. No CSV references found.
+```
+
+**To integrate into build pipeline** (optional), manually add to `package.json`:
+```json
+"scripts": {
+  "verify:no-csv": "node scripts/assert-no-csv.js",
+  "build": "npm run verify:no-csv && vite build"
+}
+```
+
+See [CSV Purge Verification Report](./docs/csv-purge-verification.md) for complete details.

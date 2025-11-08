@@ -362,10 +362,6 @@ export default function Finalize() {
     }
   };
 
-  const handleExportCSV = () => {
-    toast.info("CSV export coming in Phase-3");
-  };
-
   const handlePublish = () => {
     if (winners.length === 0) {
       toast.error("No allocations to finalize");
@@ -536,21 +532,6 @@ export default function Finalize() {
                   )}
                 </div>
               )}
-              <Button
-                onClick={handleExportCSV}
-                variant="outline"
-                className="w-full justify-between"
-                disabled
-              >
-                <span className="flex items-center gap-2">
-                  <FileDown className="h-4 w-4" />
-                  Download CSV Export
-                </span>
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                Export features coming in Phase-3
-              </p>
             </CardContent>
           </Card>
 
