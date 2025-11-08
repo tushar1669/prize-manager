@@ -179,14 +179,22 @@ export default function ConflictReview() {
       const { data: { session } } = await supabase.auth.getSession();
 
       const overridesPayload = overrides ?? manualMapToOverrides(manualDecisionsRef.current);
+      
+      const playersCount = playersList?.length || 0;
 
       console.log('[allocatePrizes] invoking with:', {
         tournamentId: id,
-        playersCount: playersList?.length || 0,
+        playersCount,
         prizesCount: prizesList?.length || 0,
         ruleConfigOverride: ruleOverride || null,
         overridesCount: overridesPayload.length
       });
+      
+      // Gate: skip allocate if no players
+      if (playersCount === 0) {
+        console.info('[review] skip allocate: 0 players');
+        return { winners: [], conflicts: [], unfilled: [], meta: {} };
+      }
 
       const headers: Record<string, string> = {
         Authorization: `Bearer ${session?.access_token}`,

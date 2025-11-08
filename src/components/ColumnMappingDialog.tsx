@@ -69,7 +69,7 @@ export function ColumnMappingDialog({
   // Auto-mapping useEffect - runs when detectedColumns changes
   useEffect(() => {
     if (detectedColumns.length === 0) {
-      console.log('[ColumnMapping] No columns detected yet');
+      // Silent until file is uploaded
       return;
     }
     
@@ -88,6 +88,7 @@ export function ColumnMappingDialog({
     const headerlessGender = findHeaderlessGenderColumn(detectedColumns, sampleRows);
     if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
       autoMapping.gender = headerlessGender;
+      console.log('[import] gender source: headerless column after 2nd Name');
     }
 
     // Pre-normalize aliases

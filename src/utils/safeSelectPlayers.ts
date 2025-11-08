@@ -1,6 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
+ * Schema sniff helper: try a star-select to detect available columns
+ * Returns column names if at least one row exists, null otherwise
+ */
+async function sniffPlayerColumns(tournament_id?: string): Promise<string[] | null> {
+  let q = supabase.from('players').select('*').limit(1);
+  if (tournament_id) q = q.eq('tournament_id', tournament_id);
+  const { data, error } = await q;
+  if (error) return null;
+  const sample = (data && data[0]) || null;
+  if (!sample) return null; // no rows → cannot sniff; fall back to retry loop
+  return Object.keys(sample);
+}
+
+/**
  * Safely select columns from players table with automatic fallback.
  * 
  * Strategy:
@@ -21,6 +35,26 @@ export async function safeSelectPlayers(
   orderBy?: { column: string; ascending: boolean; nullsFirst?: boolean }
 ): Promise<{ data: any[]; count: number; usedColumns: string[] }> {
   
+  // FAST PATH: if we can sniff columns, intersect instead of provoking 400s
+  const sniffed = await sniffPlayerColumns(filters.tournament_id);
+  if (sniffed && sniffed.length) {
+    const lower = new Set(sniffed.map(s => s.toLowerCase()));
+    const intersect = preferredCols.filter(c => lower.has(c.toLowerCase()));
+    const selectStr = intersect.length ? intersect.join(',') : 'id';
+
+    let q = supabase.from('players').select(selectStr, { count: 'exact', head: false });
+    if (filters.tournament_id) q = q.eq('tournament_id', filters.tournament_id);
+    if (filters.ids?.length)   q = q.in('id', filters.ids);
+    if (orderBy) q = q.order(orderBy.column, { ascending: orderBy.ascending, nullsFirst: orderBy.nullsFirst });
+
+    const { data, error, count } = await q;
+    if (!error) {
+      console.log('[import] ✓ players safe-select (sniff fast path)', { usedColumns: intersect, count });
+      return { data: data ?? [], count: count ?? (data?.length ?? 0), usedColumns: intersect };
+    }
+    // fall through to retry path if something odd happens
+  }
+
   let cols = [...preferredCols];
   const tried: string[][] = [];
   const maxAttempts = 8;
@@ -73,7 +107,7 @@ export async function safeSelectPlayers(
     
     if (error.code === '42703' && columnMatch && columnMatch[1]) {
       const missingCol = columnMatch[1];
-      console.warn(`[import] ⚠️  players safe-select retry ${attempt + 1}/${maxAttempts} (dropping missing column)`, { 
+      console.info(`[import] ℹ️  players safe-select retry ${attempt + 1}/${maxAttempts} (dropping missing column)`, { 
         missingColumn: missingCol, 
         previousColumns: cols 
       });

@@ -1611,8 +1611,11 @@ export default function PlayerImport() {
                 <>
               <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
                 <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Upload Player Data</h3>
-                <p className="text-sm text-muted-foreground mb-4">
+                <h3 className="text-lg font-semibold mb-2">Upload your Swiss-Manager XLS</h3>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Header row auto-detects ~18; gender is the <strong>blank column after the second Name</strong>.
+                </p>
+                <p className="text-xs text-muted-foreground mb-6">
                   Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
                 
