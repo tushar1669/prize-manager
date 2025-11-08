@@ -141,6 +141,29 @@ const RICHNESS_FIELDS = [
   'federation',
 ] as const;
 
+const isEmptyConflictValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (typeof value === 'number') return !Number.isFinite(value);
+  return false;
+};
+
+const mergeConflictRows = (
+  target: ParsedPlayer | undefined,
+  source: Record<string, unknown> | undefined
+) => {
+  if (!target || !source) return;
+  const targetRecord = target as Record<string, unknown>;
+  const sourceRecord = source as Record<string, unknown>;
+  for (const field of RICHNESS_FIELDS as readonly string[]) {
+    const current = targetRecord[field];
+    const candidate = sourceRecord[field];
+    if (isEmptyConflictValue(current) && !isEmptyConflictValue(candidate)) {
+      targetRecord[field] = candidate;
+    }
+  }
+};
+
 const CONFLICT_ORDER: ConflictKeyKind[] = ['fide', 'nameDob', 'sno'];
 const CONFLICT_LABELS: Record<ConflictKeyKind, string> = {
   fide: 'FIDE ID',
@@ -434,7 +457,16 @@ export default function PlayerImport() {
         return players;
       }
 
+      const nextPlayers = players.map(player => ({ ...player }));
+      const playersByOriginalIndex = new Map<number, ParsedPlayer>();
+      nextPlayers.forEach(player => {
+        playersByOriginalIndex.set(player._originalIndex, player);
+      });
+      const getPlayerByIndex = (index: number | null) =>
+        index != null ? playersByOriginalIndex.get(index) : undefined;
+
       const indexesToRemove = new Set<number>();
+      let mergeApplied = false;
 
       const extractIndex = (row: Record<string, unknown>): number | null => {
         const idx = (row as ParsedPlayer)._originalIndex;
@@ -464,21 +496,29 @@ export default function PlayerImport() {
           return;
         }
 
+        const aIndex = extractIndex(pair.a);
+        const bIndex = extractIndex(pair.b);
         const winner = pickMergeWinner(pair);
+        console.log('[conflict.merge] applying merge', { keyKind: pair.keyKind, key: pair.key });
         if (winner === 'a') {
-          const bIndex = extractIndex(pair.b);
+          mergeConflictRows(getPlayerByIndex(aIndex), pair.b);
           if (bIndex != null) {
             indexesToRemove.add(bIndex);
           }
         } else {
-          const aIndex = extractIndex(pair.a);
+          mergeConflictRows(getPlayerByIndex(bIndex), pair.a);
           if (aIndex != null) {
             indexesToRemove.add(aIndex);
           }
         }
+        mergeApplied = true;
       });
 
-      return players.filter(player => !indexesToRemove.has(player._originalIndex));
+      const result = nextPlayers.filter(player => !indexesToRemove.has(player._originalIndex));
+      if (mergeApplied) {
+        console.log('[conflict.merge]', { mergedKept: result.length, removed: indexesToRemove.size });
+      }
+      return result;
     },
     [conflictResolutions, conflicts, pickMergeWinner],
   );
