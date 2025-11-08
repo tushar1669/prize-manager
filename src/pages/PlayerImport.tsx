@@ -87,6 +87,7 @@ interface ParsedPlayer extends PlayerImportRow {
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
   _rank_autofilled?: boolean;
+  [key: string]: unknown; // Index signature for rank autofill
 }
 
 type ImportLogInsert = Database["public"]["Tables"]["import_logs"]["Insert"];
@@ -909,17 +910,42 @@ export default function PlayerImport() {
   const { data: existingPlayers } = useQuery({
     queryKey: ['players', id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const SELECT_WITH_FIDE = 'id,name,dob,rating,fide_id,gender,sno,rank';
+      const SELECT_NO_FIDE = 'id,name,dob,rating,gender,sno,rank';
+
+      // Try with fide_id first
+      let result: any = await supabase
         .from('players')
-        .select('id,name,dob,rating,fide_id,gender,sno,rank')
+        .select(SELECT_WITH_FIDE)
         .eq('tournament_id', id);
 
-      if (error) {
-        console.warn('[import] existing players fetch failed', error);
+      // Fallback if fide_id column doesn't exist yet
+      if (result.error && (result.error.code === '42703' || /column.*fide_id.*does not exist/i.test(result.error.message))) {
+        console.warn('[import] players.fide_id column missing; retrying without it', { 
+          code: result.error.code, 
+          message: result.error.message 
+        });
+        
+        result = await supabase
+          .from('players')
+          .select(SELECT_NO_FIDE)
+          .eq('tournament_id', id);
+        
+        if (!result.error) {
+          console.info('[import] ℹ️  This database schema has no players.fide_id; importer will work without it.');
+        }
+      }
+
+      if (result.error) {
+        console.error('[import] existing players fetch failed', { 
+          code: result.error.code, 
+          message: result.error.message, 
+          hint: (result.error as any)?.hint 
+        });
         return [];
       }
 
-      return (data ?? []).map((p: any) => ({
+      return (result.data ?? []).map((p: any) => ({
         id: p.id,
         name: p.name,
         dob: p.dob ?? null,

@@ -120,7 +120,7 @@ export function digitsOnly(raw: any): string | null {
 }
 
 export function fillSingleGapRanksInPlace(
-  players: Array<{ rank: number | null; [key: string]: unknown }>,
+  players: Array<{ rank?: number | null; [key: string]: unknown }>,
 ): void {
   for (let i = 1; i < players.length - 1; i++) {
     const prev = players[i - 1]?.rank;
