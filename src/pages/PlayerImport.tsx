@@ -805,13 +805,13 @@ export default function PlayerImport() {
         try {
           const ok = await downloadErrorXlsx(errorRows, originals, filename);
           if (ok) {
-            toast.info(`Error Excel downloaded automatically (${errorRows.length})`);
+            toast.success(`Downloaded error workbook (${errorRows.length} rows)`);
           } else {
-            toast.info('No errors to download — all rows valid.');
+            toast.info('No validation errors to download — all rows valid.');
           }
         } catch (err) {
           console.error('[import] error-xlsx auto-download failed', err);
-          toast.error('Failed to generate error file');
+          toast.error('Failed to generate error workbook.');
         }
       }
     },
