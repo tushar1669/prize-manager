@@ -147,7 +147,7 @@ export function useExcelParser() {
         headerRow: headerRowIndex + 1,
         fileHash: fileHash ?? null,
         mode: "local",
-        source: inferImportSource(headers)
+        source: inferImportSource(headers, data as Record<string, any>[])
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

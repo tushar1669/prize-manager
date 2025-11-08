@@ -32,6 +32,145 @@ function normalizeCell(cell: unknown): string {
     .toLowerCase();
 }
 
+const HEADERLESS_KEY_PATTERN = /^__empty/i;
+const GENDER_VALUE_TOKENS = new Set([
+  "m",
+  "f",
+  "male",
+  "female",
+  "boy",
+  "girl",
+  "boys",
+  "girls",
+  "men",
+  "women",
+  "other",
+  "w",
+  "g",
+  "b",
+  "o"
+]);
+
+const NAME_ALIASES = ["name", "player_name", "full_name", "player", "playername", "participant"];
+const NORMALIZED_NAME_HEADERS = new Set(NAME_ALIASES.map((alias) => normalizeForMatching(alias)));
+
+function isHeaderlessKey(key: string | undefined): key is string {
+  if (key === undefined) return false;
+  if (key.trim().length === 0) return true;
+  return HEADERLESS_KEY_PATTERN.test(key);
+}
+
+function looksLikeGenderValue(value: unknown): boolean {
+  if (value == null) return false;
+  const normalized = String(value)
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+
+  const alphaOnly = normalized.replace(/[^a-z]/g, "");
+  if (GENDER_VALUE_TOKENS.has(alphaOnly)) return true;
+  if (alphaOnly === "mf" || alphaOnly === "fm") return true;
+
+  return false;
+}
+
+function findHeaderlessGenderColumn(
+  headers: string[],
+  sampleRows: Array<Record<string, unknown>> = []
+): string | null {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    return null;
+  }
+
+  if (!Array.isArray(sampleRows) || sampleRows.length === 0) {
+    return null;
+  }
+
+  const normalizedHeaders = headers.map((header) => normalizeForMatching(header));
+  let nameIndex = -1;
+  for (let i = 0; i < normalizedHeaders.length; i += 1) {
+    if (NORMALIZED_NAME_HEADERS.has(normalizedHeaders[i])) {
+      nameIndex = i;
+      break;
+    }
+  }
+
+  if (nameIndex === -1) {
+    return null;
+  }
+
+  const nameHeader = headers[nameIndex];
+  const normalizedNameHeader = normalizeForMatching(nameHeader);
+  const candidateStats = new Map<string, { total: number; matches: number }>();
+
+  const registerCandidate = (key: string | undefined) => {
+    if (!isHeaderlessKey(key)) return;
+    if (!candidateStats.has(key)) {
+      candidateStats.set(key, { total: 0, matches: 0 });
+    }
+  };
+
+  registerCandidate(headers[nameIndex + 1]);
+
+  const sampleLimit = Math.min(sampleRows.length, 25);
+  for (let i = 0; i < sampleLimit; i += 1) {
+    const row = sampleRows[i];
+    if (!row || typeof row !== "object") continue;
+
+    const keys = Object.keys(row);
+    if (keys.length === 0) continue;
+
+    const nameKeyIndex = keys.findIndex(
+      (key) => normalizeForMatching(key) === normalizedNameHeader
+    );
+    if (nameKeyIndex === -1) continue;
+
+    registerCandidate(keys[nameKeyIndex + 1]);
+  }
+
+  if (candidateStats.size === 0) {
+    return null;
+  }
+
+  for (let i = 0; i < sampleLimit; i += 1) {
+    const row = sampleRows[i];
+    if (!row || typeof row !== "object") continue;
+
+    const typedRow = row as Record<string, unknown>;
+    for (const [key, stats] of candidateStats.entries()) {
+      const value = typedRow[key];
+      if (value === undefined || value === null) continue;
+      const str = String(value).trim();
+      if (!str) continue;
+
+      stats.total += 1;
+      if (looksLikeGenderValue(str)) {
+        stats.matches += 1;
+      }
+    }
+  }
+
+  let bestKey: string | null = null;
+  let bestRatio = 0;
+  for (const [key, stats] of candidateStats.entries()) {
+    if (stats.matches === 0) continue;
+    if (stats.total === 0) continue;
+
+    const ratio = stats.matches / stats.total;
+    if (
+      stats.matches >= 3 ||
+      (stats.total <= 3 && stats.matches === stats.total && stats.total >= 2)
+    ) {
+      if (ratio > bestRatio) {
+        bestKey = key;
+        bestRatio = ratio;
+      }
+    }
+  }
+
+  return bestKey;
+}
+
 function scoreRow(row: unknown[]): number {
   const normalized = row.map(normalizeCell);
   let score = 0;
@@ -40,7 +179,7 @@ function scoreRow(row: unknown[]): number {
   const coreHits = coreFields.filter((field) => normalized.some((cell) => cell.includes(field)));
   score += coreHits.length * 10;
 
-  const secondaryFields = ["fide", "gender", "fed", "fs", "club", "state", "city"];
+  const secondaryFields = ["fide", "gender", "fed", "club", "state", "city"];
   const secondaryHits = secondaryFields.filter((field) => normalized.some((cell) => cell.includes(field)));
   score += secondaryHits.length * 3;
 
@@ -102,12 +241,19 @@ function detectHeaders(workbook: XLSX.WorkBook): { sheetName: string; headerRowI
   };
 }
 
-function inferSource(headers: string[]): "swiss-manager" | "organizer-template" | "unknown" {
+function inferSource(
+  headers: string[],
+  sampleRows: Array<Record<string, unknown>>
+): "swiss-manager" | "organizer-template" | "unknown" {
   const normalized = headers.map((header) => normalizeForMatching(header));
-  const swiss = ["rank", "sno", "rtg", "fs", "fideno"];
+  const swiss = ["rank", "sno", "rtg", "fideno"];
   const template = ["rank", "name", "rating", "dob"];
 
-  if (swiss.every((key) => normalized.includes(key))) return "swiss-manager";
+  const headerlessGender = findHeaderlessGenderColumn(headers, sampleRows);
+
+  if (swiss.every((key) => normalized.includes(key)) && headerlessGender) {
+    return "swiss-manager";
+  }
   if (template.every((key) => normalized.includes(key))) return "organizer-template";
   return "unknown";
 }
@@ -202,7 +348,7 @@ Deno.serve(async (req) => {
       defval: ""
     }) as Record<string, unknown>[];
 
-    const source = inferSource(trimmedHeaders);
+    const source = inferSource(trimmedHeaders, dataRows as Record<string, unknown>[]);
     const durationMs = Math.round(performance.now() - start);
     const rowCount = dataRows.length;
 
