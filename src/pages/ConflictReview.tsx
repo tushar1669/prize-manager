@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ALLOC_VERBOSE_LOGS } from "@/utils/featureFlags";
+import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
@@ -115,16 +116,18 @@ export default function ConflictReview() {
   const { data: playersList } = useQuery({
     queryKey: ['players-list', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, name, dob, dob_raw, rating')
-        .eq('tournament_id', id)
-        .order('rank', { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      console.log('[review] players:', data?.length || 0);
-      return data || [];
+      if (!id) return [];
+      
+      const { data, count, usedColumns } = await safeSelectPlayersByTournament(
+        id,
+        ['id', 'name', 'dob', 'dob_raw', 'rating'],
+        { column: 'rank', ascending: true, nullsFirst: false }
+      );
+      
+      console.log('[review] Loaded players', { count, usedColumns });
+      return data;
     },
-    enabled: !!id
+    enabled: !!id,
   });
 
   const { data: prizesList } = useQuery({

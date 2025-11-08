@@ -77,6 +77,8 @@ import {
 import { DuplicateReviewDialog } from "@/components/DuplicateReviewDialog";
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
+import { maskDobForPublic } from "@/utils/print";
+import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -910,57 +912,29 @@ export default function PlayerImport() {
   const { data: existingPlayers } = useQuery({
     queryKey: ['players', id],
     queryFn: async () => {
-      const SELECT_WITH_FIDE = 'id,name,dob,rating,fide_id,gender,sno,rank';
-      const SELECT_NO_FIDE = 'id,name,dob,rating,gender,sno,rank';
-
-      // Try with fide_id first
-      let result: any = await supabase
-        .from('players')
-        .select(SELECT_WITH_FIDE)
-        .eq('tournament_id', id);
-
-      // Fallback if fide_id column doesn't exist yet
-      if (result.error && (result.error.code === '42703' || /column.*fide_id.*does not exist/i.test(result.error.message))) {
-        console.warn('[import] players.fide_id column missing; retrying without it', { 
-          code: result.error.code, 
-          message: result.error.message 
-        });
-        
-        result = await supabase
-          .from('players')
-          .select(SELECT_NO_FIDE)
-          .eq('tournament_id', id);
-        
-        if (!result.error) {
-          console.info('[import] ℹ️  This database schema has no players.fide_id; importer will work without it.');
-        }
+      if (!id) return [];
+      
+      const { data, count, usedColumns } = await safeSelectPlayersByTournament(
+        id,
+        ['id', 'name', 'dob', 'rating', 'fide_id', 'gender', 'sno', 'rank']
+      );
+      
+      console.log('[import] Loaded existing players for dedup/replace', { 
+        count, 
+        usedColumns,
+        hasFideId: usedColumns.includes('fide_id'),
+        hasSno: usedColumns.includes('sno')
+      });
+      
+      // Non-blocking info if schema is missing columns
+      if (!usedColumns.includes('fide_id') || !usedColumns.includes('sno')) {
+        const missing = [];
+        if (!usedColumns.includes('fide_id')) missing.push('fide_id');
+        if (!usedColumns.includes('sno')) missing.push('sno');
+        console.info(`[import] ℹ️  Legacy schema detected (missing: ${missing.join(', ')}). Import will work without these columns.`);
       }
-
-      if (result.error) {
-        console.error('[import] existing players fetch failed', { 
-          code: result.error.code, 
-          message: result.error.message, 
-          hint: (result.error as any)?.hint 
-        });
-        return [];
-      }
-
-      return (result.data ?? []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        dob: p.dob ?? null,
-        rating: p.rating ?? null,
-        fide_id: p.fide_id ?? null,
-        gender: p.gender ?? null,
-        sno: p.sno ?? null,
-        rank: p.rank ?? null,
-        city: null,
-        club: null,
-        state: null,
-        federation: null,
-        disability: null,
-        special_notes: null,
-      }));
+      
+      return data;
     },
     enabled: IMPORT_DEDUP_ENABLED && !!id,
   });

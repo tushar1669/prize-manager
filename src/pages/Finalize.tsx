@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { exportPlayersViaPrint } from "@/utils/print";
 import { Badge } from "@/components/ui/badge";
+import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 
 interface Winner {
   prizeId: string;
@@ -87,12 +88,15 @@ export default function Finalize() {
   const { data: playersList } = useQuery({
     queryKey: ['players-finalize', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('id, name, rating, dob')
-        .eq('tournament_id', id);
-      if (error) throw error;
-      return data || [];
+      if (!id) return [];
+      
+      const { data, count, usedColumns } = await safeSelectPlayersByTournament(
+        id,
+        ['id', 'name', 'rating', 'dob']
+      );
+      
+      console.log('[finalize] Loaded players', { count, usedColumns });
+      return data;
     },
     enabled: !!id && winners.length > 0
   });

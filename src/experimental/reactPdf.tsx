@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { PUBLIC_DOB_MASKING } from "@/utils/featureFlags";
 import { maskDobForPublic } from "@/utils/print";
+import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 
 const LOG_PREFIX = "[export.pdf]";
 
@@ -52,15 +53,17 @@ export async function downloadPlayersPdf({
     throw tournamentError;
   }
 
-  const { data: players, error: playersError } = await db
-    .from("players")
-    .select("rank, name, rating, dob, gender, state, city, club")
-    .eq("tournament_id", tournamentId)
-    .order("rank", { ascending: true });
-  if (playersError) {
-    console.error(`${LOG_PREFIX} error tournament=${tournamentId} message=${playersError.message}`);
-    throw playersError;
+  const { data: players, count, usedColumns } = await safeSelectPlayersByTournament(
+    tournamentId,
+    ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club'],
+    { column: 'rank', ascending: true }
+  );
+
+  if (!players) {
+    throw new Error('No players found for tournament');
   }
+
+  console.log('[reactPdf] Loaded players', { count, usedColumns });
 
   const { Document, Page, Text, View, StyleSheet, pdf } = renderer;
 

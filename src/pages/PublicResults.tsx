@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { safeSelectPlayersByIds } from "@/utils/safeSelectPlayers";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trophy, Medal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,12 +44,16 @@ export default function PublicResults() {
 
       // Fetch players
       const playerIds = allocations.map(a => a.player_id);
-      const { data: players, error: playerError } = await supabase
-        .from('players')
-        .select('id, name, rank, rating, state')
-        .in('id', playerIds);
-      
-      if (playerError) throw playerError;
+      const { data: players, count, usedColumns } = await safeSelectPlayersByIds(
+        playerIds,
+        ['id', 'name', 'rank', 'rating', 'state']
+      );
+
+      if (players.length === 0 && playerIds.length > 0) {
+        console.warn('[public-results] No players found for allocations', { playerIds });
+      }
+
+      console.log('[public-results] Loaded players', { count, usedColumns });
 
       // Fetch prizes with categories
       const prizeIds = allocations.map(a => a.prize_id);

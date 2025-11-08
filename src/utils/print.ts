@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { PUBLIC_DOB_MASKING } from "@/utils/featureFlags";
+import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 
 const LOG_PREFIX = "[export.print]";
 
@@ -230,15 +231,17 @@ export async function exportPlayersViaPrint({
       throw tournamentError;
     }
 
-    const { data: players, error: playersError } = await supabase
-      .from("players")
-      .select("rank, name, rating, dob, gender, state, city, club")
-      .eq("tournament_id", tournamentId)
-      .order("rank", { ascending: true });
+    const { data: players, count, usedColumns } = await safeSelectPlayersByTournament(
+      tournamentId,
+      ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club'],
+      { column: 'rank', ascending: true }
+    );
 
-    if (playersError) {
-      throw playersError;
+    if (!players || players.length === 0) {
+      throw new Error('No players found for this tournament');
     }
+
+    console.log('[print] Loaded players for print', { count, usedColumns });
 
     const html = buildPlayersPrintHtml(tournament ?? null, players ?? [], { maskDob });
     const opened = openPrintWindow(html, `players-${tournamentId}`);
