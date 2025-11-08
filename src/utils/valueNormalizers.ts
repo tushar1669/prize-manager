@@ -118,3 +118,20 @@ export function digitsOnly(raw: any): string | null {
   const s = String(raw).replace(/\D+/g, '');
   return s || null;
 }
+
+export function fillSingleGapRanksInPlace(
+  players: Array<{ rank: number | null; [key: string]: unknown }>,
+): void {
+  for (let i = 1; i < players.length - 1; i++) {
+    const prev = players[i - 1]?.rank;
+    const cur = players[i]?.rank;
+    const next = players[i + 1]?.rank;
+
+    if ((cur == null || cur === 0) && Number.isFinite(prev) && Number.isFinite(next)) {
+      if ((next as number) - (prev as number) === 2) {
+        players[i].rank = (prev as number) + 1;
+        players[i]._rank_autofilled = true;
+      }
+    }
+  }
+}

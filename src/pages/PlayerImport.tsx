@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useExcelParser } from "@/hooks/useExcelParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
 import { playerImportSchema, PlayerImportRow } from "@/lib/validations";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import * as XLSX from "xlsx";
@@ -52,7 +52,8 @@ import {
 import {
   normalizeGender,
   normalizeRating,
-  inferUnrated
+  inferUnrated,
+  fillSingleGapRanksInPlace,
 } from '@/utils/valueNormalizers';
 import { selectPresetBySource } from '@/utils/importPresets';
 import {
@@ -84,6 +85,7 @@ interface ParsedPlayer extends PlayerImportRow {
   _dobInferred?: boolean;
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
+  _rank_autofilled?: boolean;
 }
 
 type ImportLogInsert = Database["public"]["Tables"]["import_logs"]["Insert"];
@@ -163,9 +165,14 @@ export default function PlayerImport() {
   const [isParsing, setIsParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
+  const [autoFilledRankCount, setAutoFilledRankCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
+  const [replaceBanner, setReplaceBanner] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
   const [dedupeState, setDedupeState] = useState<DedupPassResult | null>(null);
   const [dedupeDecisions, setDedupeDecisions] = useState<DedupDecision[]>([]);
@@ -214,6 +221,15 @@ export default function PlayerImport() {
     dob?: string | null;
     rating?: number | null;
     fide_id?: string | null;
+    gender?: string | null;
+    sno?: number | null;
+    rank?: number | null;
+    city?: string | null;
+    state?: string | null;
+    club?: string | null;
+    federation?: string | null;
+    disability?: string | null;
+    special_notes?: string | null;
   }>>([]);
 
   const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
@@ -244,7 +260,7 @@ export default function PlayerImport() {
       players: ParsedPlayer[],
       options: { autoOpen?: boolean; policy?: MergePolicy } = {},
     ) => {
-      if (!IMPORT_DEDUP_ENABLED || !id || replaceExisting || players.length === 0) {
+      const applyFallback = () => {
         const fallbackDecisions = players.map(player => ({ row: player._originalIndex, action: 'create' as const }));
         setDedupeState(null);
         setDedupeDecisions(fallbackDecisions);
@@ -252,6 +268,16 @@ export default function PlayerImport() {
         if (options.autoOpen) {
           setShowDuplicateDialog(false);
         }
+      };
+
+      if (!IMPORT_DEDUP_ENABLED || !id || players.length === 0) {
+        applyFallback();
+        return;
+      }
+
+      if (replaceExisting) {
+        console.info('[dedup] skipped (replace mode)');
+        applyFallback();
         return;
       }
 
@@ -333,6 +359,30 @@ export default function PlayerImport() {
     [],
   );
 
+  const handleReplaceExistingChange = useCallback(
+    (checked: boolean) => {
+      if (checked && !replaceExisting) {
+        const confirmed = confirm(
+          'This will delete all players in this tournament before importing the new file. Continue?',
+        );
+
+        if (!confirmed) {
+          toast.info('Replace mode remains off. Existing players will be preserved.');
+          return;
+        }
+
+        toast.warning('Replace mode enabled. Existing players will be deleted before import.');
+      }
+
+      setReplaceExisting(checked);
+
+      if (!checked) {
+        setReplaceBanner(null);
+      }
+    },
+    [replaceExisting],
+  );
+
   // TYPE & MUTATION DECLARATIONS - Must be before callbacks
   type ImportMutationPayload = {
     players: ParsedPlayer[];
@@ -362,6 +412,7 @@ export default function PlayerImport() {
   const importPlayersMutation = useMutation({
     onMutate: () => {
       importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
+      setReplaceBanner(null);
     },
     mutationFn: async ({ players, dedupe }: ImportMutationPayload) => {
       console.time('[import] batch-insert');
@@ -425,14 +476,38 @@ export default function PlayerImport() {
 
       if (replaceExisting) {
         console.log('[import] Deleting existing players');
-        const { error: deleteError } = await supabase
+        const { error: deleteError, count: deletedCount } = await supabase
           .from('players')
-          .delete()
+          .delete({ count: 'exact' })
           .eq('tournament_id', id);
 
         if (deleteError) {
-          throw new Error(`Failed to clear existing players: ${deleteError.message}`);
+          const message = `Failed to clear existing players: ${deleteError.message}`;
+          setReplaceBanner({ type: 'error', message });
+          throw new Error(message);
         }
+
+        const { count: verifyCount, error: verifyError } = await supabase
+          .from('players')
+          .select('id', { count: 'exact', head: true })
+          .eq('tournament_id', id);
+
+        if (verifyError) {
+          const message = `Unable to verify deletion: ${verifyError.message}`;
+          setReplaceBanner({ type: 'error', message });
+          throw new Error(message);
+        }
+
+        if ((verifyCount ?? 0) > 0) {
+          const message = `Delete verification failed: ${verifyCount} player${verifyCount === 1 ? '' : 's'} remain.`;
+          setReplaceBanner({ type: 'error', message });
+          throw new Error('Delete verification failed; aborting import.');
+        }
+
+        const clearedMessage = `Cleared ${deletedCount ?? 0} existing player${(deletedCount ?? 0) === 1 ? '' : 's'} before import.`;
+        setReplaceBanner({ type: 'success', message: clearedMessage });
+        console.log('[import] delete verification passed');
+        toast.success('Existing players deleted. Proceeding with import.');
 
         const chunks: ParsedPlayer[][] = [];
         for (let i = 0; i < players.length; i += CHUNK_SIZE) {
@@ -720,6 +795,12 @@ export default function PlayerImport() {
     onError: (err: any) => {
       importStartedAtRef.current = null;
       toast.error(err?.message || 'Import failed');
+      if (replaceExisting) {
+        setReplaceBanner({
+          type: 'error',
+          message: err?.message || 'Import failed',
+        });
+      }
     }
   });
 
@@ -825,39 +906,32 @@ export default function PlayerImport() {
   const { data: existingPlayers } = useQuery({
     queryKey: ['players', id],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('players')
-          .select('id, name, dob, rating, fide_id, city, club, gender, state, federation')
-          .eq('tournament_id', id);
-        
-        if (!error && data) {
-          return data.map((p: any) => ({ 
-            id: p.id,
-            name: p.name,
-            dob: p.dob ?? null,
-            rating: p.rating ?? null,
-            fide_id: p.fide_id ?? null,
-            city: p.city ?? null,
-            club: p.club ?? null,
-            gender: p.gender ?? null,
-            state: p.state ?? null,
-            federation: p.federation ?? null,
-          }));
-        }
-        throw error || new Error('No data');
-      } catch (err) {
-        console.warn('[import] Fallback query');
-        const { data: fallbackData } = await supabase
-          .from('players')
-          .select('id, name, dob, rating')
-          .eq('tournament_id', id);
-        
-        return (fallbackData || []).map((p: any) => ({ 
-          id: p.id, name: p.name, dob: p.dob ?? null, rating: p.rating ?? null,
-          fide_id: null, city: null, club: null, gender: null, state: null, federation: null,
-        }));
+      const { data, error } = await supabase
+        .from('players')
+        .select('id,name,dob,rating,fide_id,gender,sno,rank')
+        .eq('tournament_id', id);
+
+      if (error) {
+        console.warn('[import] existing players fetch failed', error);
+        return [];
       }
+
+      return (data ?? []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        dob: p.dob ?? null,
+        rating: p.rating ?? null,
+        fide_id: p.fide_id ?? null,
+        gender: p.gender ?? null,
+        sno: p.sno ?? null,
+        rank: p.rank ?? null,
+        city: null,
+        club: null,
+        state: null,
+        federation: null,
+        disability: null,
+        special_notes: null,
+      }));
     },
     enabled: IMPORT_DEDUP_ENABLED && !!id,
   });
@@ -874,6 +948,18 @@ export default function PlayerImport() {
   useEffect(() => {
     hasMappedRef.current = false;
   }, [headers, parsedData]);
+
+  useEffect(() => {
+    if (mappedPlayers.length === 0) {
+      setAutoFilledRankCount(0);
+    }
+  }, [mappedPlayers.length]);
+
+  useEffect(() => {
+    if (!replaceExisting) {
+      setReplaceBanner(null);
+    }
+  }, [replaceExisting]);
 
   useEffect(() => {
     if (headers.length === 0) {
@@ -935,6 +1021,7 @@ export default function PlayerImport() {
     setDedupeReviewed(false);
     setParseError(null);
     setParseStatus('idle');
+    setReplaceBanner(null);
     setShowMappingDialog(false);
     setIsParsing(false);
     setLastParseMode(null);
@@ -975,6 +1062,7 @@ export default function PlayerImport() {
     setDedupeDecisions([]);
     setShowDuplicateDialog(false);
     setDedupeReviewed(false);
+    setReplaceBanner(null);
 
     toast.info(`Uploading ${selectedFile.name}...`);
 
@@ -1178,6 +1266,14 @@ export default function PlayerImport() {
     })
     // Filter out footer rows (no rank & no name)
     .filter(p => !isFooterRow(p));
+
+    fillSingleGapRanksInPlace(mapped);
+    const autofilledCount = mapped.filter(player => player._rank_autofilled).length;
+    setAutoFilledRankCount(autofilledCount);
+    if (autofilledCount > 0) {
+      console.info(`[import] auto-filled ${autofilledCount} rank gaps`);
+      toast.info(`${autofilledCount} ranks auto-filled based on neighbors`);
+    }
 
     // Phase 5: Validate with detailed breakdown
     const errors: { row: number; errors: string[] }[] = [];
@@ -1607,8 +1703,8 @@ export default function PlayerImport() {
                 </CardHeader>
                 <CardContent className="space-y-2 max-h-64 overflow-y-auto">
                   {conflicts.filter(c => !resolvedConflicts.has(c.row)).map((conflict, idx) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className="flex items-start justify-between gap-3 p-3 bg-white border rounded-md"
                     >
                       <div className="flex-1 min-w-0">
@@ -1681,6 +1777,15 @@ export default function PlayerImport() {
                   ))}
                 </CardContent>
               </Card>
+            )}
+            {autoFilledRankCount > 0 && mappedPlayers.length > 0 && (
+              <Alert className="border-blue-200 bg-blue-50/80">
+                <AlertTitle>Ranks auto-filled</AlertTitle>
+                <AlertDescription>
+                  {autoFilledRankCount} rank{autoFilledRankCount === 1 ? '' : 's'} were auto-filled based on
+                  neighboring values. Please double-check before importing.
+                </AlertDescription>
+              </Alert>
             )}
 
             {validationErrors.length > 0 && (
@@ -1867,7 +1972,7 @@ export default function PlayerImport() {
                     type="checkbox"
                     id="replace-existing"
                     checked={replaceExisting}
-                    onChange={(e) => setReplaceExisting(e.target.checked)}
+                    onChange={(e) => handleReplaceExistingChange(e.target.checked)}
                     className="h-4 w-4"
                   />
                   <label htmlFor="replace-existing" className="text-sm cursor-pointer">
@@ -1877,6 +1982,25 @@ export default function PlayerImport() {
                     </span>
                   </label>
                 </div>
+                {replaceExisting && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertTitle>Replace mode enabled</AlertTitle>
+                    <AlertDescription>
+                      This will delete all players for this tournament before inserting the new file.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {replaceBanner && (
+                  <Alert
+                    variant={replaceBanner.type === 'success' ? 'default' : 'destructive'}
+                    className="mt-4"
+                  >
+                    <AlertTitle>
+                      {replaceBanner.type === 'success' ? 'Players cleared' : 'Delete failed'}
+                    </AlertTitle>
+                    <AlertDescription>{replaceBanner.message}</AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
