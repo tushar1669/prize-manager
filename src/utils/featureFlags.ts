@@ -56,3 +56,6 @@ const thresholdMb = Number(import.meta.env?.VITE_IMPORT_SIZE_THRESHOLD_MB ?? "3"
 export const IMPORT_SIZE_THRESHOLD_MB = Number.isFinite(thresholdMb) ? thresholdMb : 3;
 
 export const IMPORT_BUCKET = import.meta.env?.VITE_IMPORT_BUCKET ?? "imports";
+
+export const CONFLICT_REVIEW_ENABLED =
+  (import.meta.env?.VITE_CONFLICT_REVIEW_ENABLED ?? 'true') !== 'false';

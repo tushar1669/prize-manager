@@ -5,7 +5,7 @@
  * (e.g., "Rank" vs "rank"), data must be in semantically correct columns.
  * Swapped columns (e.g., city data in disability column) will cause validation errors.
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
@@ -37,16 +37,18 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
-import { downloadPlayersTemplateXlsx, downloadErrorXlsx, downloadPlayersXlsx, type ErrorRow } from '@/utils/excel';
+import {
+  downloadPlayersTemplateXlsx,
+  downloadErrorXlsx,
+  downloadPlayersXlsx,
+  downloadConflictsXlsx,
+  type ErrorRow
+} from '@/utils/excel';
 import {
   HEADER_ALIASES,
-  generatePlayerKey,
-  normalizeName,
   normalizeDobForImport,
   normalizeHeaderForMatching,
   selectBestRatingColumn,
-  ImportConflict,
-  ImportConflictType,
   inferImportSource,
   findHeaderlessGenderColumn
 } from '@/utils/importSchema';
@@ -63,7 +65,17 @@ import {
   IMPORT_LOGS_ENABLED,
   IMPORT_MERGE_POLICY_DEFAULTS,
   SERVER_IMPORT_ENABLED,
+  CONFLICT_REVIEW_ENABLED,
 } from '@/utils/featureFlags';
+import {
+  ConflictPair,
+  type ConflictKeyKind,
+  detectConflictsInDraft,
+  buildFideKey,
+  buildNameDobKey,
+  buildSnoKey,
+  isRankOnlyCollision,
+} from '@/utils/conflictUtils';
 import {
   runDedupPass,
   type DedupPassResult,
@@ -111,6 +123,138 @@ type LastFileInfo = {
 };
 
 const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
+
+const RICHNESS_FIELDS = [
+  'name',
+  'dob',
+  'dob_raw',
+  'rating',
+  'fide_id',
+  'sno',
+  'rank',
+  'gender',
+  'state',
+  'city',
+  'club',
+  'disability',
+  'special_notes',
+  'federation',
+] as const;
+
+const CONFLICT_ORDER: ConflictKeyKind[] = ['fide', 'nameDob', 'sno'];
+const CONFLICT_LABELS: Record<ConflictKeyKind, string> = {
+  fide: 'FIDE ID',
+  nameDob: 'Name + DOB',
+  sno: 'SNo',
+};
+
+const CONFLICT_FIELD_DEFS = [
+  { key: 'name', label: 'Name' },
+  { key: 'dob', label: 'DOB' },
+  { key: 'fide_id', label: 'FIDE ID' },
+  { key: 'sno', label: 'SNo' },
+  { key: 'rank', label: 'Rank' },
+  { key: 'rating', label: 'Rating' },
+] as const;
+
+type ExistingPlayerRow = {
+  id?: string;
+  name?: string | null;
+  dob?: string | null;
+  rating?: number | null;
+  fide_id?: string | null;
+  sno?: number | null;
+  rank?: number | null;
+  [key: string]: unknown;
+};
+
+async function detectAppendModeConflicts(
+  draft: ParsedPlayer[],
+  tournamentId: string
+): Promise<ConflictPair[]> {
+  const { data: existing = [] } = await safeSelectPlayersByTournament(tournamentId, [
+    'id',
+    'name',
+    'dob',
+    'rating',
+    'fide_id',
+    'sno',
+    'rank'
+  ]);
+
+  const seenByFide = new Map<string, ExistingPlayerRow>();
+  const seenByNameDob = new Map<string, ExistingPlayerRow>();
+  const seenBySno = new Map<string, ExistingPlayerRow>();
+
+  for (const row of existing as ExistingPlayerRow[]) {
+    const fideKey = buildFideKey(row);
+    if (fideKey && !seenByFide.has(fideKey)) {
+      seenByFide.set(fideKey, row);
+    }
+
+    const nameDobKey = buildNameDobKey(row);
+    if (nameDobKey && !seenByNameDob.has(nameDobKey)) {
+      seenByNameDob.set(nameDobKey, row);
+    }
+
+    const snoKey = buildSnoKey(row);
+    if (snoKey && !seenBySno.has(snoKey)) {
+      seenBySno.set(snoKey, row);
+    }
+  }
+
+  const conflicts: ConflictPair[] = [];
+
+  for (const draftRow of draft) {
+    const fideKey = buildFideKey(draftRow);
+    if (fideKey) {
+      const existingRow = seenByFide.get(fideKey);
+      if (existingRow && !isRankOnlyCollision(existingRow, draftRow)) {
+        conflicts.push({
+          keyKind: 'fide',
+          key: fideKey,
+          reason: 'Same FIDE id',
+          a: existingRow,
+          b: draftRow,
+        });
+        continue;
+      }
+    }
+
+    const nameDobKey = buildNameDobKey(draftRow);
+    if (nameDobKey) {
+      const existingRow = seenByNameDob.get(nameDobKey);
+      if (existingRow && !isRankOnlyCollision(existingRow, draftRow)) {
+        conflicts.push({
+          keyKind: 'nameDob',
+          key: nameDobKey,
+          reason: 'Same name+dob',
+          a: existingRow,
+          b: draftRow,
+        });
+        continue;
+      }
+    }
+
+    const snoKey = buildSnoKey(draftRow);
+    if (snoKey) {
+      const existingRow = seenBySno.get(snoKey);
+      if (existingRow && !isRankOnlyCollision(existingRow, draftRow)) {
+        conflicts.push({
+          keyKind: 'sno',
+          key: snoKey,
+          reason: 'Duplicate SNo',
+          a: existingRow,
+          b: draftRow,
+        });
+      }
+    }
+  }
+
+  return conflicts;
+}
+
+const conflictKeyForIndex = (pair: ConflictPair, index: number) => `${pair.keyKind}:${pair.key}:${index}`;
 
 // Helper functions for smart retry
 const pick = (obj: Record<string, any>, keys: string[]) =>
@@ -238,19 +382,179 @@ export default function PlayerImport() {
     special_notes?: string | null;
   }>>([]);
 
-  const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
+  const [conflicts, setConflicts] = useState<ConflictPair[]>([]);
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'keepA' | 'keepB' | 'merge'>>({});
+  const [fileHash, setFileHash] = useState<string | null>(null);
   
   const importDraftKey = makeKey(`t:${id}:import`);
-  const [importRestore, setImportRestore] = useState<null | { 
-    data: { 
-      mappedPlayers: ParsedPlayer[]; 
-      conflicts: ImportConflict[];
+  const [importRestore, setImportRestore] = useState<null | {
+    data: {
+      mappedPlayers: ParsedPlayer[];
+      conflicts: ConflictPair[];
       replaceExisting: boolean;
-    }; 
-    ageMs: number 
+    };
+    ageMs: number
   }>(null);
+  const conflictStorageKey = useMemo(() => {
+    if (!id || !fileHash) return null;
+    return `${id}:${fileHash}:conflictResolutions`;
+  }, [fileHash, id]);
 
-  const [resolvedConflicts, setResolvedConflicts] = useState<Set<number>>(new Set());
+  const countFilledFields = useCallback((row: Record<string, unknown>) => {
+    return RICHNESS_FIELDS.reduce((acc, field) => {
+      const value = row[field];
+      if (value === null || value === undefined) return acc;
+      if (typeof value === 'string' && value.trim().length === 0) return acc;
+      return acc + 1;
+    }, 0);
+  }, []);
+
+  const pickMergeWinner = useCallback(
+    (pair: ConflictPair): 'a' | 'b' => {
+      const countA = countFilledFields(pair.a);
+      const countB = countFilledFields(pair.b);
+      if (countA > countB) return 'a';
+      if (countB > countA) return 'b';
+
+      const ratingA = Number((pair.a as Record<string, unknown>)?.['rating'] ?? 0);
+      const ratingB = Number((pair.b as Record<string, unknown>)?.['rating'] ?? 0);
+      if (Number.isFinite(ratingA) && Number.isFinite(ratingB)) {
+        if (ratingA > ratingB) return 'a';
+        if (ratingB > ratingA) return 'b';
+      }
+
+      return 'a';
+    },
+    [countFilledFields],
+  );
+
+  const applyConflictResolutions = useCallback(
+    (players: ParsedPlayer[]): ParsedPlayer[] => {
+      if (conflicts.length === 0) {
+        return players;
+      }
+
+      const indexesToRemove = new Set<number>();
+
+      const extractIndex = (row: Record<string, unknown>): number | null => {
+        const idx = (row as ParsedPlayer)._originalIndex;
+        return typeof idx === 'number' ? idx : null;
+      };
+
+      conflicts.forEach((pair, index) => {
+        const key = conflictKeyForIndex(pair, index);
+        const resolution = conflictResolutions[key];
+        if (!resolution) {
+          return;
+        }
+
+        if (resolution === 'keepA') {
+          const bIndex = extractIndex(pair.b);
+          if (bIndex != null) {
+            indexesToRemove.add(bIndex);
+          }
+          return;
+        }
+
+        if (resolution === 'keepB') {
+          const aIndex = extractIndex(pair.a);
+          if (aIndex != null) {
+            indexesToRemove.add(aIndex);
+          }
+          return;
+        }
+
+        const winner = pickMergeWinner(pair);
+        if (winner === 'a') {
+          const bIndex = extractIndex(pair.b);
+          if (bIndex != null) {
+            indexesToRemove.add(bIndex);
+          }
+        } else {
+          const aIndex = extractIndex(pair.a);
+          if (aIndex != null) {
+            indexesToRemove.add(aIndex);
+          }
+        }
+      });
+
+      return players.filter(player => !indexesToRemove.has(player._originalIndex));
+    },
+    [conflictResolutions, conflicts, pickMergeWinner],
+  );
+
+  const unresolvedCount = useMemo(() => {
+    if (conflicts.length === 0) return 0;
+    return conflicts.reduce((count, pair, index) => {
+      const key = conflictKeyForIndex(pair, index);
+      return count + (conflictResolutions[key] ? 0 : 1);
+    }, 0);
+  }, [conflictResolutions, conflicts]);
+
+  const conflictIndexMap = useMemo(() => {
+    const map = new Map<ConflictPair, number>();
+    conflicts.forEach((pair, index) => {
+      map.set(pair, index);
+    });
+    return map;
+  }, [conflicts]);
+
+  const conflictGroups = useMemo(() => {
+    return conflicts.reduce<Record<ConflictKeyKind, ConflictPair[]>>((acc, pair) => {
+      acc[pair.keyKind].push(pair);
+      return acc;
+    }, { fide: [], nameDob: [], sno: [] });
+  }, [conflicts]);
+
+  const updateResolution = useCallback((key: string, value: 'keepA' | 'keepB' | 'merge') => {
+    setConflictResolutions(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleAcceptFirstOccurrence = useCallback(() => {
+    setConflictResolutions(() => {
+      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      conflicts.forEach((pair, index) => {
+        next[conflictKeyForIndex(pair, index)] = 'keepA';
+      });
+      return next;
+    });
+  }, [conflicts]);
+
+  const handlePreferRichestRow = useCallback(() => {
+    setConflictResolutions(() => {
+      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      conflicts.forEach((pair, index) => {
+        next[conflictKeyForIndex(pair, index)] = 'merge';
+      });
+      return next;
+    });
+  }, [conflicts]);
+
+  const formatFieldValue = useCallback((value: unknown): string => {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : '—';
+    }
+    return String(value);
+  }, []);
+
+  const renderConflictDetails = useCallback(
+    (row: Record<string, unknown>) => (
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        {CONFLICT_FIELD_DEFS.map(field => (
+          <div key={field.key}>
+            <dt className="font-semibold text-muted-foreground">{field.label}</dt>
+            <dd className="text-sm text-foreground">
+              {formatFieldValue(row[field.key] as unknown)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    ),
+    [formatFieldValue],
+  );
 
   const [importConfig, setImportConfig] = useState(() => ({
     stripCommasFromRating: true,
@@ -843,6 +1147,15 @@ export default function PlayerImport() {
       return;
     }
 
+    if (conflicts.length > 0 && unresolvedCount > 0) {
+      toast.error('Resolve all conflicts before importing');
+      return;
+    }
+
+    const playersToImport = conflicts.length > 0
+      ? applyConflictResolutions(mappedPlayers)
+      : mappedPlayers;
+
     const dedupePlan = !replaceExisting && IMPORT_DEDUP_ENABLED ? dedupeState : null;
 
     if (dedupePlan && dedupePlan.candidates.some(candidate => candidate.bestMatch) && !dedupeReviewed) {
@@ -851,22 +1164,25 @@ export default function PlayerImport() {
     }
 
     importPlayersMutation.mutate({
-      players: mappedPlayers,
+      players: playersToImport,
       dedupe: dedupePlan
         ? { decisions: dedupeDecisions, summary: dedupePlan.summary }
         : null,
     });
   }, [
-    mappedPlayers,
-    id,
-    replaceExisting,
-    dedupeState,
+    applyConflictResolutions,
+    conflicts,
     dedupeDecisions,
     dedupeReviewed,
+    dedupeState,
+    id,
     importPlayersMutation,
-    navigate,
     importPlayersMutation.isPending,
     isRunningDedup,
+    mappedPlayers,
+    navigate,
+    replaceExisting,
+    unresolvedCount,
   ]);
 
   const handleConfirmDuplicates = useCallback(() => {
@@ -924,6 +1240,27 @@ export default function PlayerImport() {
 
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
   const tournamentSlug = (tournament as { slug?: string } | null | undefined)?.slug ?? 'tournament';
+
+  const handleDownloadConflicts = useCallback(() => {
+    if (conflicts.length === 0) {
+      toast.info('No conflicts to export');
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = `${tournamentSlug}_conflicts_${today}.xlsx`;
+    console.log('[conflict.export]', { rows: conflicts.length, filename });
+    try {
+      const ok = downloadConflictsXlsx(conflicts, filename);
+      if (ok) {
+        toast.success(`Conflicts workbook downloaded (${conflicts.length} rows)`);
+      } else {
+        toast.info('Conflicts workbook not generated');
+      }
+    } catch (error) {
+      console.error('[conflict.export] failed', error);
+      toast.error('Failed to export conflicts workbook');
+    }
+  }, [conflicts, tournamentSlug]);
 
   // NEW: Fetch existing players for duplicate/conflict detection
   const { data: existingPlayers } = useQuery({
@@ -1005,9 +1342,9 @@ export default function PlayerImport() {
   // NEW: Check for autosave draft on mount
   useEffect(() => {
     if (mappedPlayers.length > 0) return; // Don't overwrite existing work
-    const draft = getDraft<{ 
-      mappedPlayers: ParsedPlayer[]; 
-      conflicts: ImportConflict[];
+    const draft = getDraft<{
+      mappedPlayers: ParsedPlayer[];
+      conflicts: ConflictPair[];
       replaceExisting: boolean;
     }>(importDraftKey, 1);
     
@@ -1026,6 +1363,40 @@ export default function PlayerImport() {
     version: 1
   });
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conflictStorageKey) return;
+    try {
+      const raw = window.localStorage.getItem(conflictStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, 'keepA' | 'keepB' | 'merge'>;
+      setConflictResolutions(prev => {
+        const keys = Object.keys(parsed);
+        if (
+          keys.length === Object.keys(prev).length &&
+          keys.every(key => prev[key] === parsed[key as keyof typeof parsed])
+        ) {
+          return prev;
+        }
+        return parsed;
+      });
+    } catch (err) {
+      console.warn('[conflict.review] failed to load stored resolutions', err);
+    }
+  }, [conflictStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conflictStorageKey) return;
+    if (conflicts.length === 0) {
+      window.localStorage.removeItem(conflictStorageKey);
+      return;
+    }
+    try {
+      window.localStorage.setItem(conflictStorageKey, JSON.stringify(conflictResolutions));
+    } catch (err) {
+      console.warn('[conflict.review] failed to persist resolutions', err);
+    }
+  }, [conflictResolutions, conflictStorageKey, conflicts.length]);
+
   const downloadTemplate = () => {
     downloadPlayersTemplateXlsx();
     toast.success('Excel template downloaded');
@@ -1038,6 +1409,9 @@ export default function PlayerImport() {
     setMappedPlayers([]);
     setValidationErrors([]);
     setDuplicates([]);
+    setConflicts([]);
+    setConflictResolutions({});
+    setFileHash(null);
     setDedupeState(null);
     setDedupeDecisions([]);
     setShowDuplicateDialog(false);
@@ -1080,6 +1454,8 @@ export default function PlayerImport() {
     setValidationErrors([]);
     setDuplicates([]);
     setMappedPlayers([]);
+    setConflicts([]);
+    setConflictResolutions({});
     setParseStatus('idle');
     setDedupeState(null);
     setDedupeDecisions([]);
@@ -1138,6 +1514,7 @@ export default function PlayerImport() {
         headerRow: headerRow ?? null,
         source: source ?? 'unknown'
       };
+      setFileHash(fileHash ?? null);
 
       if (source) {
         setImportSource(source === 'organizer-template' ? 'template' : source);
@@ -1155,6 +1532,7 @@ export default function PlayerImport() {
       toast.error(errMsg);
       setParseStatus('error');
       setLastParseMode(null);
+      setFileHash(null);
     } finally {
       setIsParsing(false);
       // Reset file input to allow re-uploading same filename
@@ -1392,85 +1770,52 @@ export default function PlayerImport() {
       return;
     }
 
-    // NEW: Enhanced duplicate detection (within file + DB conflicts)
-    const newDupes: { row: number; duplicate: string }[] = [];
-    const newConflicts: ImportConflict[] = [];
-    const seenInFile = new Map<string, number>();
-
-    validPlayers.forEach(player => {
-      if (!player.name) return; // Skip if no name
-      
-      const key = generatePlayerKey(player as { name: string; dob?: string | null; fide_id?: string | null });
-      
-      // Check within file
-      const existingRow = seenInFile.get(key);
-      if (existingRow) {
-        newDupes.push({ 
-          row: player._originalIndex, 
-          duplicate: `Duplicate of row ${existingRow}` 
-        });
-        newConflicts.push({
-          row: player._originalIndex,
-          type: 'duplicate_in_file',
-          message: `Duplicate of row ${existingRow} (same ${player.fide_id ? 'FIDE ID' : 'name+DOB'})`
-        });
-      } else {
-        seenInFile.set(key, player._originalIndex);
-      }
-      
-      // Check against DB players
-      if (IMPORT_DEDUP_ENABLED && dbPlayers.length > 0 && !existingRow) {
-        const dbMatch = dbPlayers.find(db => {
-          // Match by FIDE ID first
-          if (player.fide_id && db.fide_id) {
-            return player.fide_id === db.fide_id;
-          }
-          // Fallback to name+DOB
-          if (player.name && player.dob && db.name && db.dob) {
-            return normalizeName(player.name) === normalizeName(db.name) && 
-                   player.dob === db.dob;
-          }
-          return false;
-        });
-        
-        if (dbMatch) {
-          const dobMismatch = player.dob && dbMatch.dob && player.dob !== dbMatch.dob;
-          const ratingMismatch = player.rating != null && dbMatch.rating != null && 
-                                Math.abs(player.rating - dbMatch.rating) > 100;
-          
-          if (dobMismatch) {
-            newConflicts.push({
-              row: player._originalIndex,
-              playerId: dbMatch.id,
-              type: 'conflict_different_dob',
-              message: `Player exists with different DOB: existing ${dbMatch.dob}, new ${player.dob}`,
-              existingPlayer: dbMatch
-            });
-          } else if (ratingMismatch) {
-            newConflicts.push({
-              row: player._originalIndex,
-              playerId: dbMatch.id,
-              type: 'conflict_different_rating',
-              message: `Player exists with different rating: existing ${dbMatch.rating}, new ${player.rating}`,
-              existingPlayer: dbMatch
-            });
-          } else {
-            newConflicts.push({
-              row: player._originalIndex,
-              playerId: dbMatch.id,
-              type: 'already_exists',
-              message: 'Player already exists in tournament',
-              existingPlayer: dbMatch
-            });
-          }
-        }
-      }
+    console.log('[conflict.input]', {
+      draftRows: validPlayers.length,
+      dbRows: replaceExisting ? 0 : (existingPlayers?.length ?? 0),
+      replaceMode: replaceExisting === true
     });
 
-    setDuplicates(newDupes);
-    setConflicts(newConflicts);
-    
-    console.log('[import] Conflicts detected:', newConflicts.length);
+    console.log('[conflict.policy]', {
+      keys: ['fide', 'nameDob', 'sno'],
+      ignoreRankOnly: true
+    });
+
+    const intraConflicts = detectConflictsInDraft(validPlayers);
+    let detectedConflicts: ConflictPair[] = [];
+
+    if (replaceExisting) {
+      console.log('[conflict.scope] replace-mode → intra-file only');
+      detectedConflicts = intraConflicts;
+    } else if (id) {
+      console.log('[conflict.scope] append-mode → draft + DB');
+      const appendConflicts = await detectAppendModeConflicts(validPlayers, id);
+      detectedConflicts = [...intraConflicts, ...appendConflicts];
+    } else {
+      detectedConflicts = intraConflicts;
+    }
+
+    console.log('[conflict.counts]', {
+      total: detectedConflicts.length,
+      byFide: detectedConflicts.filter(c => c.keyKind === 'fide').length,
+      byNameDob: detectedConflicts.filter(c => c.keyKind === 'nameDob').length,
+      bySno: detectedConflicts.filter(c => c.keyKind === 'sno').length
+    });
+
+    console.log('[conflict.samples]', detectedConflicts.slice(0, 3));
+
+    setConflicts(detectedConflicts);
+    setConflictResolutions(prev => {
+      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      detectedConflicts.forEach((pair, index) => {
+        const key = conflictKeyForIndex(pair, index);
+        if (prev[key]) {
+          next[key] = prev[key];
+        }
+      });
+      return next;
+    });
+    setDuplicates([]);
     
     // Filter out invalid rows before setting
     const valid = validPlayers.filter(p => Number(p.rank) > 0 && String(p.name || '').trim().length > 0);
@@ -1515,12 +1860,12 @@ export default function PlayerImport() {
       toast.error('No valid rows found. Check that Rank and Name columns exist.');
       return;
     }
-    
+
     setMappedPlayers(valid);
     await runDedupe(valid, { autoOpen: true });
 
     // Set parseStatus
-    if (errors.length === 0 && newDupes.length === 0) {
+    if (errors.length === 0 && detectedConflicts.length === 0) {
       toast.success(`${valid.length} players ready to import`);
       setParseStatus('ok');
     } else {
@@ -1532,12 +1877,10 @@ export default function PlayerImport() {
   const { registerOnSave } = useDirty();
 
   useEffect(() => {
-    const unresolved = conflicts.filter(c => !resolvedConflicts.has(c.row)).length;
-
     const ready =
       mappedPlayers.length > 0 &&
       validationErrors.length === 0 &&
-      unresolved === 0 &&
+      unresolvedCount === 0 &&
       !importPlayersMutation.isPending;
 
     if (ready) {
@@ -1553,8 +1896,7 @@ export default function PlayerImport() {
   }, [
     mappedPlayers,
     validationErrors,
-    conflicts,
-    resolvedConflicts,
+    unresolvedCount,
     importPlayersMutation.isPending,
     registerOnSave,
     startImportFlow,
@@ -1728,89 +2070,108 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Conflict resolution UI */}
-            {conflicts.length > 0 && (
-              <Card className="border-amber-300 bg-amber-50/50">
+            {CONFLICT_REVIEW_ENABLED && conflicts.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/80">
                 <CardHeader>
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    Conflicts Detected ({conflicts.filter(c => !resolvedConflicts.has(c.row)).length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-64 overflow-y-auto">
-                  {conflicts.filter(c => !resolvedConflicts.has(c.row)).map((conflict, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-start justify-between gap-3 p-3 bg-white border rounded-md"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">Row {conflict.row}</span>
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            conflict.type === 'duplicate_in_file' ? 'bg-red-100 text-red-700' :
-                            conflict.type === 'already_exists' ? 'bg-blue-100 text-blue-700' :
-                            'bg-amber-100 text-amber-700'
-                          }`}>
-                            {conflict.type.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{conflict.message}</p>
-                        {conflict.existingPlayer && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Existing: {conflict.existingPlayer.name} 
-                            {conflict.existingPlayer.dob && ` (${conflict.existingPlayer.dob})`}
-                            {conflict.existingPlayer.rating && ` • Rating: ${conflict.existingPlayer.rating}`}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs"
-                          aria-label={`Keep new player from row ${conflict.row}`}
-                          onClick={() => {
-                            setResolvedConflicts(prev => new Set(prev).add(conflict.row));
-                            toast.info(`Row ${conflict.row}: keeping new player`);
-                          }}
-                        >
-                          Keep New
-                        </Button>
-                        {conflict.existingPlayer && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-xs"
-                            aria-label={`Use existing player for row ${conflict.row}`}
-                            onClick={() => {
-                              setMappedPlayers(prev => 
-                                prev.filter(p => p._originalIndex !== conflict.row)
-                              );
-                              setResolvedConflicts(prev => new Set(prev).add(conflict.row));
-                              toast.info(`Row ${conflict.row}: using existing player`);
-                            }}
-                          >
-                            Use Existing
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          aria-label={`Skip row ${conflict.row}`}
-                          onClick={() => {
-                            setMappedPlayers(prev => 
-                              prev.filter(p => p._originalIndex !== conflict.row)
-                            );
-                            setResolvedConflicts(prev => new Set(prev).add(conflict.row));
-                            toast.info(`Row ${conflict.row}: skipped`);
-                          }}
-                        >
-                          Skip
-                        </Button>
-                      </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="text-lg font-semibold text-foreground">
+                        Conflict Review ({conflicts.length})
+                      </CardTitle>
+                      <span className={`text-sm font-medium ${unresolvedCount > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        {unresolvedCount > 0 ? `${unresolvedCount} unresolved` : 'All conflicts resolved'}
+                      </span>
                     </div>
-                  ))}
+                    <p className="text-sm text-muted-foreground">
+                      Resolve each conflict before importing. Keep A keeps the first occurrence, Keep B keeps the incoming row, and Merge selects the richer record.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={handleAcceptFirstOccurrence}>
+                        Accept all first occurrence
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handlePreferRichestRow}>
+                        Prefer richest row
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={handleDownloadConflicts}>
+                        Download Conflicts Excel (.xlsx)
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {CONFLICT_ORDER.map(kind => {
+                    const items = conflictGroups[kind];
+                    if (!items || items.length === 0) return null;
+                    return (
+                      <div key={kind} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {CONFLICT_LABELS[kind]} Conflicts ({items.length})
+                          </h3>
+                        </div>
+                        <div className="space-y-4">
+                          {items.map(pair => {
+                            const globalIndex = conflictIndexMap.get(pair) ?? 0;
+                            const resolutionKey = conflictKeyForIndex(pair, globalIndex);
+                            const selected = conflictResolutions[resolutionKey] ?? '';
+                            return (
+                              <div key={resolutionKey} className="rounded-md border bg-white p-4 shadow-sm">
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                    <div className="flex-1 space-y-3">
+                                      <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Existing / A</p>
+                                        {renderConflictDetails(pair.a)}
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incoming / B</p>
+                                        {renderConflictDetails(pair.b)}
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2 text-sm md:w-44">
+                                      <label className="inline-flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`conflict-${resolutionKey}`}
+                                          value="keepA"
+                                          checked={selected === 'keepA'}
+                                          onChange={() => updateResolution(resolutionKey, 'keepA')}
+                                        />
+                                        Keep A
+                                      </label>
+                                      <label className="inline-flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`conflict-${resolutionKey}`}
+                                          value="keepB"
+                                          checked={selected === 'keepB'}
+                                          onChange={() => updateResolution(resolutionKey, 'keepB')}
+                                        />
+                                        Keep B
+                                      </label>
+                                      <label className="inline-flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`conflict-${resolutionKey}`}
+                                          value="merge"
+                                          checked={selected === 'merge'}
+                                          onChange={() => updateResolution(resolutionKey, 'merge')}
+                                        />
+                                        Merge (richest)
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Reason: {pair.reason} • Key: {pair.key}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
             )}
