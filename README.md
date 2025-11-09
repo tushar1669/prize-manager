@@ -138,6 +138,11 @@ Add these flags to your local `.env` file as needed:
 - `PUBLIC_DOB_MASKING=true` keeps public exports masked to the `yyyy-mm` format.
 - `VITE_ENABLE_REACT_PDF=false` leaves the experimental React-PDF export disabled (recommended default). Set to `true` only when the `@react-pdf/renderer` package is installed locally and you want to try the beta export.
 
+## Dev/CI Setup
+
+- Run `bash scripts/bootstrap.sh` to install dependencies in both local and CI environments. The script uses `pnpm install --frozen-lockfile` first and automatically falls back to `npm ci` on registry/network issues.
+- To target a private registry, export `NPM_CONFIG_REGISTRY=https://your-registry.example.com/` (or configure the variable in CI) before invoking the bootstrap script. The `.npmrc` file will echo the resolved registry so you can confirm the value in logs.
+
 ## Code Quality & Verification
 
 ### CSV Purge Verification

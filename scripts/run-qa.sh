@@ -15,14 +15,20 @@ fi
 echo "📦 Package Manager: $PKG_MGR"
 echo ""
 
-# Step 1: Build
-echo "🏗️  Step 1/4: Building project..."
+# Step 1: Guardrail check
+echo "🛡️  Step 1/5: Verifying Excel-only guardrail..."
+$PKG_MGR run assert:no-csv
+echo "✅ Guardrail check passed"
+echo ""
+
+# Step 2: Build
+echo "🏗️  Step 2/5: Building project..."
 $PKG_MGR run build
 echo "✅ Build complete"
 echo ""
 
-# Step 2: Import tests
-echo "📥 Step 2/4: Running Swiss-Manager import tests..."
+# Step 3: Import tests
+echo "📥 Step 3/5: Running Swiss-Manager import tests..."
 $PKG_MGR test tests/import-swiss-manager.spec.ts || {
   echo "❌ Import tests failed"
   exit 1
@@ -30,8 +36,8 @@ $PKG_MGR test tests/import-swiss-manager.spec.ts || {
 echo "✅ Import tests complete"
 echo ""
 
-# Step 3: Allocator null-safety tests
-echo "🔒 Step 3/4: Running allocator null-safety tests..."
+# Step 4: Allocator null-safety tests
+echo "🔒 Step 4/5: Running allocator null-safety tests..."
 $PKG_MGR test tests/allocator-null-safety.spec.ts || {
   echo "❌ Allocator tests failed"
   exit 1
@@ -39,8 +45,8 @@ $PKG_MGR test tests/allocator-null-safety.spec.ts || {
 echo "✅ Allocator tests complete"
 echo ""
 
-# Step 4: Generate report reminder
-echo "📊 Step 4/4: SQL verification"
+# Step 5: Generate report reminder
+echo "📊 Step 5/5: SQL verification"
 echo "Please run the SQL queries in QA_REPORT.md manually in Supabase SQL Editor"
 echo ""
 
