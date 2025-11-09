@@ -50,7 +50,8 @@ import {
   normalizeHeaderForMatching,
   selectBestRatingColumn,
   inferImportSource,
-  findHeaderlessGenderColumn
+  findHeaderlessGenderColumn,
+  extractStateFromIdent
 } from '@/utils/importSchema';
 import {
   normalizeGender,
@@ -1698,6 +1699,33 @@ export default function PlayerImport() {
         }
       }
 
+      // Phase 6.5: Auto-extract state from Ident column if state is missing
+      // Swiss-Manager often has Ident format: IND/KA/10203 where KA is the state code
+      if (!player.state || player.state === '') {
+        // Check if we have an 'ident' field mapped or can find it in raw data
+        let identValue = player.ident;
+        if (!identValue) {
+          // Try to find Ident column from original row data
+          const identColCandidates = ['Ident', 'ident', 'IDENT', 'Player-ID', 'ID'];
+          for (const col of identColCandidates) {
+            if (row[col] != null && row[col] !== '') {
+              identValue = row[col];
+              player.ident = identValue; // Store for reference
+              break;
+            }
+          }
+        }
+        
+        if (identValue) {
+          const extractedState = extractStateFromIdent(identValue);
+          if (extractedState) {
+            player.state = extractedState;
+            player._stateAutoExtracted = true;
+            console.log(`[import.state] Auto-extracted state '${extractedState}' from Ident: ${identValue}`);
+          }
+        }
+      }
+
       // Phase 6: Infer unrated flag after all fields mapped
       player.unrated = inferUnrated(
         { 
@@ -1722,6 +1750,13 @@ export default function PlayerImport() {
     if (autofilledCount > 0) {
       console.info(`[import] auto-filled ${autofilledCount} rank gaps`);
       toast.info(`${autofilledCount} ranks auto-filled based on neighbors`);
+    }
+
+    // Count auto-extracted states
+    const autoExtractedStateCount = mapped.filter(player => player._stateAutoExtracted).length;
+    if (autoExtractedStateCount > 0) {
+      console.info(`[import.state] Auto-extracted ${autoExtractedStateCount} state codes from Ident column`);
+      toast.info(`${autoExtractedStateCount} state codes auto-extracted from Ident column`);
     }
 
     // Phase 5: Validate with detailed breakdown

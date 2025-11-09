@@ -8,6 +8,7 @@
 
 - [Prize Allocation Algorithm Specification](./docs/allocator/README.md) — Technical specification for the prize allocation engine
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md) — Plain-English guide for tournament organizers
+- [State Code Auto-Extraction](./docs/import-state-extraction.md) — Automatic extraction of state codes from Swiss-Manager Ident column
 
 ## How can I edit this code?
 

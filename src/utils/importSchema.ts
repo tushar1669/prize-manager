@@ -24,6 +24,9 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   // Swiss-Manager uses "Fide-No." (with period and hyphen)
   fide_id: ['fide-no.', 'fide_no', 'fide-no', 'fideno', 'fide_id', 'fideid', 'fide', 'id'],
   
+  // Swiss-Manager Ident column (contains state codes, e.g., IND/KA/10203)
+  ident: ['ident', 'player-id', 'player_id', 'pid', 'id_no'],
+  
   // Additional Swiss-Manager fields (distinguish 3-letter code vs full name)
   federation: ['federation', 'country', 'nat', 'nationality', 'fide_fed'], // Full federation name
   fed_code: ['fed', 'fed.', 'fid'], // 3-letter FIDE federation code
