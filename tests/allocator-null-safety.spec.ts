@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { writeXlsxTmp } from './utils/xlsx';
 
 /**
  * Allocator Null-Safety Integration Tests
@@ -52,18 +53,20 @@ test.describe('Allocator Null-Safety', () => {
     await page.goto(`/t/${tournamentId}/import`);
     
     // Mock file upload with players missing gender field
-    const fileContent = `Rank,Name,Rtg,Fide-No.,Birth
-1,Alice,2100,12345,1990-05-12
-2,Bob,2050,12346,1989-11-23
-3,Carol,2000,,1995-03-15`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-no-gender.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-no-gender',
+      ['Rank', 'Name', 'Rtg', 'Fide-No.', 'Birth', 'Gender'],
+      [
+        [1, 'Alice', 2100, '12345', '1990-05-12', null],
+        [2, 'Bob', 2050, '12346', '1989-11-23', null],
+        [3, 'Carol', 2000, null, '1995-03-15', null],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     // Wait for mapping dialog and confirm
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
@@ -110,18 +113,20 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing DOB
     await page.goto(`/t/${tournamentId}/import`);
     
-    const fileContent = `Rank,Name,Gender,Rtg
-1,David,M,1800
-2,Emma,F,1750
-3,Frank,M,1700`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-no-dob.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-no-dob',
+      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth'],
+      [
+        [1, 'David', 'M', 1800, null],
+        [2, 'Emma', 'F', 1750, null],
+        [3, 'Frank', 'M', 1700, null],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: /confirm mapping/i }).click();
@@ -162,18 +167,20 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing rating
     await page.goto(`/t/${tournamentId}/import`);
     
-    const fileContent = `Rank,Name,Gender,Birth
-1,George,M,1990-01-01
-2,Hannah,F,1992-05-15
-3,Ian,M,1988-12-25`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-no-rating.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-no-rating',
+      ['Rank', 'Name', 'Gender', 'Birth', 'Rtg'],
+      [
+        [1, 'George', 'M', '1990-01-01', null],
+        [2, 'Hannah', 'F', '1992-05-15', null],
+        [3, 'Ian', 'M', '1988-12-25', null],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: /confirm mapping/i }).click();
@@ -216,18 +223,20 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing state
     await page.goto(`/t/${tournamentId}/import`);
     
-    const fileContent = `Rank,Name,Gender,Rtg,Birth
-1,Jack,M,1900,1990-01-01
-2,Kate,F,1850,1992-05-15
-3,Liam,M,1800,1988-12-25`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-no-state.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-no-state',
+      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+      [
+        [1, 'Jack', 'M', 1900, '1990-01-01', null],
+        [2, 'Kate', 'F', 1850, '1992-05-15', null],
+        [3, 'Liam', 'M', 1800, '1988-12-25', null],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: /confirm mapping/i }).click();
@@ -272,18 +281,20 @@ test.describe('Allocator Null-Safety', () => {
     // Import minimal player data (many missing fields)
     await page.goto(`/t/${tournamentId}/import`);
     
-    const fileContent = `Rank,Name
-1,Mike
-2,Nina
-3,Oscar`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-minimal.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-minimal',
+      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+      [
+        [1, 'Mike', null, null, null, null],
+        [2, 'Nina', null, null, null, null],
+        [3, 'Oscar', null, null, null, null],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: /confirm mapping/i }).click();
@@ -330,18 +341,20 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with various empty representations
     await page.goto(`/t/${tournamentId}/import`);
     
-    const fileContent = `Rank,Name,Gender,Rtg,Birth,State
-1,Paula,F,1900,1990-01-01,TN
-2,Quinn,"",1850,1992-05-15,
-3,Ryan,M,,1988-12-25,KA`;
-    
-    const blob = new Blob([fileContent], { type: 'text/csv' });
-    const file = new File([blob], 'players-empty-values.csv', { type: 'text/csv' });
-    
+    const filePath = writeXlsxTmp(
+      'players-empty-values',
+      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+      [
+        [1, 'Paula', 'F', 1900, '1990-01-01', 'TN'],
+        [2, 'Quinn', '', 1850, '1992-05-15', null],
+        [3, 'Ryan', 'M', null, '1988-12-25', 'KA'],
+      ],
+    );
+
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /select excel file/i }).click();
     const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles([file]);
+    await fileChooser.setFiles(filePath);
 
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: /confirm mapping/i }).click();

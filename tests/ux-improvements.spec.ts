@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -61,6 +62,28 @@ test.describe('@ux UX Improvements Suite', () => {
       throw error;
     } finally {
       await page.close();
+    }
+  });
+
+  test('0. File input enforces Excel-only guardrail @ux', async ({ page }) => {
+    test.skip(!tournamentId, 'Tournament creation failed in beforeAll');
+
+    await page.goto(`/t/${tournamentId}/import`);
+
+    const fileInput = page.locator('input[type="file"]').first();
+    const acceptAttr = await fileInput.getAttribute('accept');
+    expect(acceptAttr, 'File input must declare accepted Excel types').toBeTruthy();
+    expect(acceptAttr).toContain('.xls');
+    expect(acceptAttr).toContain('.xlsx');
+
+    const tmpCsvPath = path.join(os.tmpdir(), `invalid-${Date.now()}.csv`);
+    fs.writeFileSync(tmpCsvPath, '');
+
+    try {
+      await fileInput.setInputFiles(tmpCsvPath);
+      await expect(page.getByText('Only Excel files are accepted (.xls, .xlsx).')).toBeVisible({ timeout: 5000 });
+    } finally {
+      fs.unlinkSync(tmpCsvPath);
     }
   });
 

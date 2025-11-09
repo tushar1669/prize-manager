@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/assert-no-csv.js && vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "assert:no-csv": "node scripts/assert-no-csv.js",
+    "test": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -12,11 +12,14 @@
 **Command:** `pnpm build`
 
 ```
-[Build output will be inserted here]
+✅ CSV purge assertion passed. No CSV references found.
+sh: 1: vite: not found
+ ELIFECYCLE  Command failed.
+ WARN   Local package.json exists, but node_modules missing, did you mean to install?
 ```
 
-**Status:** ✅ PASS / ❌ FAIL  
-**TypeScript Errors:** 0
+**Status:** ❌ FAIL (Playwright/Vite binaries unavailable without dependencies)
+**TypeScript Errors:** N/A (build blocked)
 
 ---
 
@@ -27,17 +30,17 @@
 
 | File | Players | Schema Errors | State Extracted | Gender Detected | Status |
 |------|---------|--------------|-----------------|-----------------|--------|
-| sm_01.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_02.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_03.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_04.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_05.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_06.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_07.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_08.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_09.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| sm_10.xls | [TBD] | [TBD] | [TBD] | [TBD] | ⏳ |
-| **TOTAL** | **[TBD]** | **0** | **[TBD]** | **100%** | **[TBD]** |
+| sm_01.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_02.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_03.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_04.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_05.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_06.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_07.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_08.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_09.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_10.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| **TOTAL** | **0** | **0** | **0** | **0** | **0/10 PASS (blocked)** |
 
 **Console Logs (Sample):**
 ```
@@ -46,7 +49,7 @@
 ...
 ```
 
-**Failures:** None / [Details below]
+**Failures:** Blocked – dependencies unavailable (Playwright binary missing)
 
 ---
 
@@ -57,14 +60,14 @@
 
 | Test Case | Status |
 |-----------|--------|
-| handles missing gender gracefully when category requires it | ⏳ |
-| handles missing DOB when category has age rules | ⏳ |
-| handles missing rating in rating categories | ⏳ |
-| handles missing state/city/club filters gracefully | ⏳ |
-| handles multiple missing fields without crashing | ⏳ |
-| distinguishes between null, undefined, and empty string | ⏳ |
+| handles missing gender gracefully when category requires it | ❌ Blocked (playwright CLI missing) |
+| handles missing DOB when category has age rules | ❌ Blocked (playwright CLI missing) |
+| handles missing rating in rating categories | ❌ Blocked (playwright CLI missing) |
+| handles missing state/city/club filters gracefully | ❌ Blocked (playwright CLI missing) |
+| handles multiple missing fields without crashing | ❌ Blocked (playwright CLI missing) |
+| distinguishes between null, undefined, and empty string | ❌ Blocked (playwright CLI missing) |
 
-**Summary:** [6/6 PASS] / [X/6 FAIL]
+**Summary:** 0/6 PASS (blocked)
 
 ---
 
@@ -73,10 +76,10 @@
 **Tournament:** QA – Swiss Imports  
 **Action:** Allocated prizes after importing all 10 files
 
-**Result:** ✅ SUCCESS / ❌ FAILURE  
-**Reason Codes Observed:** [None] / [List codes: gender_missing, dob_missing, etc.]  
-**Crash/500 Errors:** No  
-**Allocations Completed:** [Yes/No]
+**Result:** ❌ FAILURE (import flow untested – upstream test run blocked)
+**Reason Codes Observed:** N/A
+**Crash/500 Errors:** N/A
+**Allocations Completed:** N/A
 
 ---
 
@@ -196,7 +199,8 @@ WHERE tournament_id = (SELECT id FROM t);
 
 ## 🚨 Failures & Blockers
 
-**[None]** / **[Details below]:**
+**Details:**
+- Dependency install blocked (`pnpm install --frozen-lockfile` requires pnpm-lock.yaml; `npm ci` fails because package-lock.json lacks dev dependencies; network access to registry also forbidden). Playwright CLI unavailable, so all suites remain unexecuted.
 
 ### Failure 1: [File/Test Name]
 - **Stage:** detect | map | validate | persist | review | allocate

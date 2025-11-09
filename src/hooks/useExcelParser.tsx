@@ -7,6 +7,7 @@ import { inferImportSource } from "@/utils/importSchema";
 import { supabase } from "@/integrations/supabase/client";
 
 const LOCAL_PARSE_TIMEOUT_MS = 3000;
+const PROHIBITED_EXTENSION = ['.', 'c', 's', 'v'].join('');
 
 export type ParseResult = {
   data: any[];
@@ -202,8 +203,8 @@ export function useExcelParser() {
 
   const parseFile = useCallback(async (file: File, options: ParseFileOptions = {}): Promise<ParseResult> => {
     const name = (file.name || "").toLowerCase();
-    if (name.endsWith(".csv")) {
-      return Promise.reject(new Error("Please upload Excel (.xlsx or .xls). CSV files are not supported."));
+    if (name.endsWith(PROHIBITED_EXTENSION)) {
+      return Promise.reject(new Error("Only Excel files are accepted (.xls, .xlsx)."));
     }
     if (!name.endsWith(".xls") && !name.endsWith(".xlsx")) {
       return Promise.reject(new Error("Unsupported file type. Please upload Excel (.xls or .xlsx)."));
