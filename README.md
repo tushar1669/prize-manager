@@ -77,6 +77,59 @@ To connect a domain, navigate to Project > Settings > Domains and click Connect 
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
 
+## Testing
+
+This project includes comprehensive Playwright integration tests to ensure reliability.
+
+### Running Tests
+
+```bash
+# Run all tests
+npm run test
+
+# Run specific test suite
+npm run test tests/allocator-null-safety.spec.ts
+
+# Run tests in UI mode (interactive)
+npm run test:ui
+
+# Run tests in headed mode (see browser)
+npm run test -- --headed
+```
+
+### Test Suites
+
+**Import & Data Quality:**
+- `import-swiss-manager.spec.ts` - Swiss-Manager Excel import validation
+- `import-dedup.spec.ts` - Duplicate detection and fuzzy matching
+- `import-conflicts.spec.ts` - Conflict review and resolution
+- `import-error-xlsx.spec.ts` - Error export validation
+- `import-logs.spec.ts` - Import history tracking
+- `import-server-fallback.spec.ts` - Large file server-side parsing
+
+**Allocator Engine:**
+- `allocate-flow.spec.ts` - End-to-end allocation workflow
+- `allocator-tie-break.spec.ts` - Deterministic tie-breaking rules
+- `allocator-null-safety.spec.ts` - **Missing optional field handling**
+- `category-rules.spec.ts` - Category eligibility rules
+- `main-prizes.spec.ts` - Main prize priority logic
+
+**Export & Publish:**
+- `export-print.spec.ts` - PDF/Excel generation and printing
+
+### Null-Safety Tests
+
+The `allocator-null-safety.spec.ts` suite verifies graceful handling of missing data:
+
+- ✅ Missing gender when category requires it → `gender_missing` reason code
+- ✅ Missing DOB when category has age rules → `dob_missing` reason code
+- ✅ Missing rating in rating categories → `unrated_excluded` reason code
+- ✅ Missing state/city/club filters → `state_excluded`, `city_excluded`, `club_excluded`
+- ✅ Multiple missing fields → multiple reason codes, no crashes
+- ✅ Null vs empty string vs undefined handling
+
+**Critical guarantee:** The allocator never crashes on missing optional fields. It gracefully excludes ineligible players and provides actionable reason codes.
+
 ## Environment configuration
 
 Add these flags to your local `.env` file as needed:
