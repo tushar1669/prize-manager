@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { writeXlsxTmp } from './utils/xlsx';
+import { makeXlsxTmp } from './utils/xlsx';
 
 /**
  * Allocator Null-Safety Integration Tests
@@ -53,14 +53,15 @@ test.describe('Allocator Null-Safety', () => {
     await page.goto(`/t/${tournamentId}/import`);
     
     // Mock file upload with players missing gender field
-    const filePath = writeXlsxTmp(
-      'players-no-gender',
-      ['Rank', 'Name', 'Rtg', 'Fide-No.', 'Birth', 'Gender'],
+    const filePath = makeXlsxTmp(
       [
-        [1, 'Alice', 2100, '12345', '1990-05-12', null],
-        [2, 'Bob', 2050, '12346', '1989-11-23', null],
-        [3, 'Carol', 2000, null, '1995-03-15', null],
+        ['Rank', 'Name', 'Rtg', 'Fide-No.', 'Birth', 'Gender'],
+        [1, 'Alice', 2100, 12345, '1990-05-12', null],
+        [2, 'Bob', 2050, 12346, '1989-11-23', null],
+        [3, 'Carol', 2000, '', '1995-03-15', null],
       ],
+      'Players',
+      'players-no-gender.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -113,14 +114,15 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing DOB
     await page.goto(`/t/${tournamentId}/import`);
     
-    const filePath = writeXlsxTmp(
-      'players-no-dob',
-      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth'],
+    const filePath = makeXlsxTmp(
       [
+        ['Rank', 'Name', 'Gender', 'Rtg', 'Birth'],
         [1, 'David', 'M', 1800, null],
         [2, 'Emma', 'F', 1750, null],
         [3, 'Frank', 'M', 1700, null],
       ],
+      'Players',
+      'players-no-dob.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -167,14 +169,15 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing rating
     await page.goto(`/t/${tournamentId}/import`);
     
-    const filePath = writeXlsxTmp(
-      'players-no-rating',
-      ['Rank', 'Name', 'Gender', 'Birth', 'Rtg'],
+    const filePath = makeXlsxTmp(
       [
+        ['Rank', 'Name', 'Gender', 'Birth', 'Rtg'],
         [1, 'George', 'M', '1990-01-01', null],
         [2, 'Hannah', 'F', '1992-05-15', null],
         [3, 'Ian', 'M', '1988-12-25', null],
       ],
+      'Players',
+      'players-no-rating.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -223,14 +226,15 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with missing state
     await page.goto(`/t/${tournamentId}/import`);
     
-    const filePath = writeXlsxTmp(
-      'players-no-state',
-      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+    const filePath = makeXlsxTmp(
       [
+        ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
         [1, 'Jack', 'M', 1900, '1990-01-01', null],
         [2, 'Kate', 'F', 1850, '1992-05-15', null],
         [3, 'Liam', 'M', 1800, '1988-12-25', null],
       ],
+      'Players',
+      'players-no-state.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -281,14 +285,15 @@ test.describe('Allocator Null-Safety', () => {
     // Import minimal player data (many missing fields)
     await page.goto(`/t/${tournamentId}/import`);
     
-    const filePath = writeXlsxTmp(
-      'players-minimal',
-      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+    const filePath = makeXlsxTmp(
       [
+        ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
         [1, 'Mike', null, null, null, null],
         [2, 'Nina', null, null, null, null],
         [3, 'Oscar', null, null, null, null],
       ],
+      'Players',
+      'players-minimal.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -341,14 +346,15 @@ test.describe('Allocator Null-Safety', () => {
     // Import players with various empty representations
     await page.goto(`/t/${tournamentId}/import`);
     
-    const filePath = writeXlsxTmp(
-      'players-empty-values',
-      ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
+    const filePath = makeXlsxTmp(
       [
+        ['Rank', 'Name', 'Gender', 'Rtg', 'Birth', 'State'],
         [1, 'Paula', 'F', 1900, '1990-01-01', 'TN'],
         [2, 'Quinn', '', 1850, '1992-05-15', null],
         [3, 'Ryan', 'M', null, '1988-12-25', 'KA'],
       ],
+      'Players',
+      'players-empty-values.xlsx',
     );
 
     const fileChooserPromise = page.waitForEvent('filechooser');

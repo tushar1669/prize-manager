@@ -140,7 +140,7 @@ Add these flags to your local `.env` file as needed:
 
 ## Dev/CI Setup
 
-- Run `bash scripts/bootstrap.sh` to install dependencies in both local and CI environments. The script uses `pnpm install --frozen-lockfile` first and automatically falls back to `npm ci` on registry/network issues.
+- Run `bash scripts/bootstrap.sh` to install dependencies in both local and CI environments. The script runs `npm ci` against the configured registry and prints actionable guidance if authentication or connectivity fails.
 - To target a private registry, export `NPM_CONFIG_REGISTRY=https://your-registry.example.com/` (or configure the variable in CI) before invoking the bootstrap script. The `.npmrc` file will echo the resolved registry so you can confirm the value in logs.
 
 ## Code Quality & Verification
