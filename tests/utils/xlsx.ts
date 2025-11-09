@@ -1,20 +1,17 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { utils, write } from 'xlsx';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as XLSX from 'xlsx';
 
-export function writeXlsxTmp(
-  name: string,
-  headers: string[],
-  rows: (string | number | null)[][],
-): string {
-  const workbook = utils.book_new();
-  const worksheet = utils.aoa_to_sheet([headers, ...rows]);
-  utils.book_append_sheet(workbook, worksheet, 'Players');
+/** Create a temporary .xlsx file from a 2D array; returns absolute path. */
+export function makeXlsxTmp(rows: (string|number|null)[][], sheetName = 'Players', filename = 'fixture.xlsx'): string {
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 
-  const buffer = write(workbook, { type: 'buffer', bookType: 'xlsx' });
-  const filename = `${name}-${Date.now()}.xlsx`;
-  const filePath = path.join(os.tmpdir(), filename);
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'xlsx-'));
+  const fp = path.join(tmpDir, filename);
+  fs.writeFileSync(fp, buf);
+  return fp;
 }

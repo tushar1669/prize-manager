@@ -76,14 +76,14 @@ test.describe('@ux UX Improvements Suite', () => {
     expect(acceptAttr).toContain('.xls');
     expect(acceptAttr).toContain('.xlsx');
 
-    const tmpCsvPath = path.join(os.tmpdir(), `invalid-${Date.now()}.csv`);
-    fs.writeFileSync(tmpCsvPath, '');
+    const tmpTxtPath = path.join(os.tmpdir(), `invalid-${Date.now()}.txt`);
+    fs.writeFileSync(tmpTxtPath, '');
 
     try {
-      await fileInput.setInputFiles(tmpCsvPath);
+      await fileInput.setInputFiles(tmpTxtPath);
       await expect(page.getByText('Only Excel files are accepted (.xls, .xlsx).')).toBeVisible({ timeout: 5000 });
     } finally {
-      fs.unlinkSync(tmpCsvPath);
+      fs.unlinkSync(tmpTxtPath);
     }
   });
 

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CI: '1'
+      # Set this to 1 if your CI can download Playwright browsers; otherwise leave 0 to skip.
+      PLAYWRIGHT_INSTALL: '0'
+      # Override if you need a private mirror:
+      # NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Bootstrap
+        run: |
+          bash scripts/bootstrap.sh
+
+      - name: CSV Guard
+        run: npm run assert:no-csv
+
+      - name: Build
+        run: npm run build
+
+      - name: Playwright Browsers (optional)
+        if: env.PLAYWRIGHT_INSTALL == '1'
+        run: npx playwright install --with-deps
+
+      - name: Test - Swiss Imports
+        run: npm run test:swiss
+      - name: Test - Allocator Null-Safety
+        run: npm run test:alloc
+      - name: Test - UX Improvements
+        run: npm run test:ux
+
+      - name: Upload Playwright Report (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore

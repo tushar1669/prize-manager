@@ -1,43 +1,22 @@
 #!/usr/bin/env bash
-set -o pipefail
+set -u
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+echo "🔧 Bootstrap starting..."
+REG="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
+echo "📦 Using npm registry: $REG"
+export NPM_CONFIG_REGISTRY="$REG"
 
-REGISTRY_DEFAULT="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
-export NPM_CONFIG_REGISTRY="$REGISTRY_DEFAULT"
-echo "Resolved npm registry: $NPM_CONFIG_REGISTRY"
-
-printf '\n==> Installing dependencies with pnpm --frozen-lockfile...\n'
-if command -v pnpm >/dev/null 2>&1; then
-  if pnpm install --frozen-lockfile; then
-    echo '✅ pnpm install completed successfully.'
-    exit 0
-  else
-    status=$?
-    echo "⚠️  pnpm install failed (exit ${status}). Checking for registry/network issues and falling back to npm ci..."
-  fi
-else
-  echo '⚠️  pnpm is not installed. Falling back to npm ci...'
-fi
-
-if command -v npm >/dev/null 2>&1; then
-  if npm ci; then
-    echo '✅ npm ci completed successfully.'
-    exit 0
-  else
-    status=$?
-    cat <<'MSG'
-❌ npm ci failed.
-Please verify network access to the configured registry or your authentication token.
-See the logs above for the specific error (common causes: 403 Forbidden or network timeouts).
-MSG
-    exit "$status"
-  fi
-else
-  cat <<'MSG'
-❌ Neither pnpm nor npm is available on PATH.
-Install pnpm (preferred) or npm, then rerun scripts/bootstrap.sh.
-MSG
+echo "📥 Installing dependencies with npm ci..."
+npm ci
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "❌ npm ci failed (rc=$rc)."
+  echo "   Common causes:"
+  echo "   - HTTP 403/ENOTFOUND to registry ($REG)"
+  echo "   - Corporate proxy/mirror not configured"
+  echo "   Try: export NPM_CONFIG_REGISTRY=<your mirror> then re-run:"
+  echo "        NPM_CONFIG_REGISTRY='<mirror>' bash scripts/bootstrap.sh"
   exit 1
 fi
+
+echo "✅ Bootstrap complete."
