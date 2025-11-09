@@ -19,7 +19,7 @@
     "qa": "npm run assert:no-csv && npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux"
   },
   "engines": {
-    "node": ">=20 <21"
+    "node": "20.x"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
