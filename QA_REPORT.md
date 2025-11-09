@@ -1,73 +1,109 @@
 # QA Report: Swiss-Manager Import & Allocator Hardening
 
-**Report Generated:** [TIMESTAMP]  
+**Report Generated:** 2025-11-09 09:51 UTC
 **Tournament:** QA – Swiss Imports (auto-created)  
 **Fixtures:** 10 Swiss-Manager XLS files  
 **Suites:** Import validation + Allocator null-safety
 
 ---
 
+## ✅ CSV Guardrail
+
+**Command:** `node scripts/assert-no-csv.js`
+
+```
+✅ CSV purge assertion passed. No CSV references found.
+```
+
+---
+
 ## 🏗️ Build Status
 
-**Command:** `pnpm build`
+**Command:** `npm run build`
 
 ```
 ✅ CSV purge assertion passed. No CSV references found.
 sh: 1: vite: not found
- ELIFECYCLE  Command failed.
- WARN   Local package.json exists, but node_modules missing, did you mean to install?
 ```
 
-**Status:** ❌ FAIL (Playwright/Vite binaries unavailable without dependencies)
+**Status:** ❌ FAIL (`vite` binary missing — dependency install blocked by 403 from registry)
 **TypeScript Errors:** N/A (build blocked)
+
+---
+
+## 📦 Dependency Bootstrap
+
+**Command:** `./scripts/bootstrap.sh`
+
+```
+Resolved npm registry: https://registry.npmmirror.com/
+==> Installing dependencies with pnpm --frozen-lockfile...
+⚠️  pnpm install failed (exit 1). Checking for registry/network issues and falling back to npm ci...
+npm error 403 403 Forbidden - GET https://registry.npmmirror.com/vitest
+❌ npm ci failed.
+```
+
+**Status:** ❌ FAIL (registry returned HTTP 403; dependencies never installed)
 
 ---
 
 ## 📥 Swiss-Manager Import Test Results
 
 **Suite:** `tests/import-swiss-manager.spec.ts`  
-**Command:** `pnpm test tests/import-swiss-manager.spec.ts`
+**Command:** `npm run test -- tests/import-swiss-manager.spec.ts`
 
 | File | Players | Schema Errors | State Extracted | Gender Detected | Status |
 |------|---------|--------------|-----------------|-----------------|--------|
-| sm_01.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_02.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_03.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_04.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_05.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_06.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_07.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_08.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_09.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
-| sm_10.xls | — | — | — | — | ❌ Blocked (playwright CLI missing) |
+| sm_01.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_02.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_03.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_04.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_05.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_06.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_07.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_08.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_09.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| sm_10.xls | — | — | — | — | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
 | **TOTAL** | **0** | **0** | **0** | **0** | **0/10 PASS (blocked)** |
 
-**Console Logs (Sample):**
+**Console Logs:**
 ```
-[test] sm_01.xls: [N] players, 0 errors
-[test] sm_02.xls: [N] players, 0 errors
-...
+sh: 1: playwright: not found
 ```
 
-**Failures:** Blocked – dependencies unavailable (Playwright binary missing)
+**Failures:** Blocked – dependencies unavailable (Playwright binary missing; registry responded 403 during bootstrap)
 
 ---
 
 ## 🔒 Allocator Null-Safety Test Results
 
 **Suite:** `tests/allocator-null-safety.spec.ts`  
-**Command:** `pnpm test tests/allocator-null-safety.spec.ts`
+**Command:** `npm run test -- tests/allocator-null-safety.spec.ts`
 
 | Test Case | Status |
 |-----------|--------|
-| handles missing gender gracefully when category requires it | ❌ Blocked (playwright CLI missing) |
-| handles missing DOB when category has age rules | ❌ Blocked (playwright CLI missing) |
-| handles missing rating in rating categories | ❌ Blocked (playwright CLI missing) |
-| handles missing state/city/club filters gracefully | ❌ Blocked (playwright CLI missing) |
-| handles multiple missing fields without crashing | ❌ Blocked (playwright CLI missing) |
-| distinguishes between null, undefined, and empty string | ❌ Blocked (playwright CLI missing) |
+| handles missing gender gracefully when category requires it | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| handles missing DOB when category has age rules | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| handles missing rating in rating categories | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| handles missing state/city/club filters gracefully | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| handles multiple missing fields without crashing | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
+| distinguishes between null, undefined, and empty string | ❌ Blocked (`playwright` CLI missing — npm install denied with 403) |
 
 **Summary:** 0/6 PASS (blocked)
+
+---
+
+## 🧪 UX Regression Checks
+
+**Suite:** `tests/ux-improvements.spec.ts`
+**Command:** `npm run test -- tests/ux-improvements.spec.ts`
+
+**Result:** ❌ Blocked (`playwright` CLI missing — npm install denied with 403)
+
+**Console Logs:**
+```
+sh: 1: playwright: not found
+```
 
 ---
 
