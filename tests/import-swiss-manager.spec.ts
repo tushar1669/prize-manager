@@ -31,10 +31,18 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
   for (const fixture of swissFixtures) {
     const currentTest = fixture.exists ? test : test.skip;
 
-    currentTest(`imports ${fixture.label} @swiss`, async ({ page }) => {
+    currentTest(`imports ${fixture.label} with 0 schema errors @swiss`, async ({ page }) => {
       const consoleMessages: string[] = [];
+      const consoleErrors: string[] = [];
+      
       page.on('console', (msg) => {
-        consoleMessages.push(msg.text());
+        const text = msg.text();
+        consoleMessages.push(text);
+        
+        // Capture validation errors
+        if (text.includes('[validate]') && text.includes('errors=')) {
+          consoleErrors.push(text);
+        }
       });
 
       await page.goto(`/t/${TOURNAMENT_ID}/import`);
@@ -44,13 +52,51 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
 
       await fileInput.setInputFiles(fixture.path);
 
+      // Wait for import to complete
       await expect(page.getByText(/players ready to import/i)).toBeVisible({ timeout: 60000 });
 
+      // Verify validation log exists
+      const validateLog = consoleMessages.find((msg) => msg.startsWith('[validate] total='));
+      expect(validateLog, `No validation log found for ${fixture.label}`).toBeTruthy();
+
+      // Extract validation counts
+      const validMatch = validateLog?.match(/valid=(\d+)/);
+      const errorMatch = validateLog?.match(/errors=(\d+)/);
+      const validCount = validMatch ? parseInt(validMatch[1], 10) : 0;
+      const errorCount = errorMatch ? parseInt(errorMatch[1], 10) : 0;
+
+      // CRITICAL: Verify 0 schema errors
+      expect(errorCount, `${fixture.label} has ${errorCount} validation errors`).toBe(0);
+      expect(validCount, `${fixture.label} has 0 valid players`).toBeGreaterThan(0);
+
+      // Verify required fields are mapped
+      const detectLog = consoleMessages.find((msg) => msg.includes('[detect]'));
+      expect(detectLog, `No detection log found for ${fixture.label}`).toBeTruthy();
+
+      // Verify state extraction (if Ident column present)
+      const stateExtractLog = consoleMessages.find((msg) => msg.includes('auto-extracted') && msg.includes('state'));
+      if (stateExtractLog) {
+        console.log(`[test] ${fixture.label}: ${stateExtractLog}`);
+      }
+
+      // Verify import log persisted
+      const importLogMsg = consoleMessages.find((msg) => msg.startsWith('[import.log] inserted id='));
+      expect(importLogMsg, `No import log persisted for ${fixture.label}`).toBeTruthy();
+
+      // Navigate to review and verify no error panels
       await page.getByRole('button', { name: /next: review/i }).click();
       await expect(page).toHaveURL(/\/review/);
 
-      expect(consoleMessages.some((msg) => msg.startsWith('[validate] total='))).toBeTruthy();
-      expect(consoleMessages.some((msg) => msg.startsWith('[import.log] inserted id='))).toBeTruthy();
+      // Verify no critical error panels displayed
+      const errorPanel = page.locator('[role="alert"]').filter({ hasText: /error|failed/i });
+      await expect(errorPanel).toHaveCount(0);
+
+      // Verify player table loaded
+      const playerTable = page.locator('table').first();
+      await expect(playerTable).toBeVisible();
+
+      // Log summary
+      console.log(`[test] ✓ ${fixture.label}: ${validCount} players, 0 errors`);
     });
   }
 });
