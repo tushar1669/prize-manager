@@ -42,6 +42,7 @@ import {
   downloadErrorXlsx,
   downloadPlayersXlsx,
   downloadConflictsXlsx,
+  downloadCleanedPlayersXlsx,
   type ErrorRow
 } from '@/utils/excel';
 import {
@@ -92,6 +93,8 @@ import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
+import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
@@ -340,6 +343,7 @@ export default function PlayerImport() {
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
   const [autoFilledRankCount, setAutoFilledRankCount] = useState(0);
+  const [statesExtractedCount, setStatesExtractedCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
@@ -1754,6 +1758,7 @@ export default function PlayerImport() {
 
     // Count auto-extracted states
     const autoExtractedStateCount = mapped.filter(player => player._stateAutoExtracted).length;
+    setStatesExtractedCount(autoExtractedStateCount);
     if (autoExtractedStateCount > 0) {
       console.info(`[import.state] Auto-extracted ${autoExtractedStateCount} state codes from Ident column`);
       toast.info(`${autoExtractedStateCount} state codes auto-extracted from Ident column`);
@@ -2280,25 +2285,45 @@ export default function PlayerImport() {
                   <CardTitle>Preview ({mappedPlayers.length} players)</CardTitle>
                   <div className="flex items-center gap-3">
                     {canProceed && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          try {
-                            downloadPlayersXlsx(mappedPlayers, {
-                              tournamentSlug,
-                              importSource
-                            });
-                            toast.success('Players XLSX downloaded');
-                          } catch (err) {
-                            const error = err as Error;
-                            console.error('[import] Players export failed:', error);
-                            toast.error('Failed to download players XLSX');
-                          }
-                        }}
-                      >
-                        Export Players (XLSX)
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            try {
+                              const ok = downloadCleanedPlayersXlsx(mappedPlayers, tournamentSlug);
+                              if (ok) {
+                                toast.success('Cleaned Excel (.xlsx) downloaded');
+                              }
+                            } catch (err) {
+                              const error = err as Error;
+                              console.error('[export.xlsx] Cleaned export failed:', error);
+                              toast.error('Failed to download cleaned Excel');
+                            }
+                          }}
+                        >
+                          Download Cleaned Excel (.xlsx)
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            try {
+                              downloadPlayersXlsx(mappedPlayers, {
+                                tournamentSlug,
+                                importSource
+                              });
+                              toast.success('Players Excel (.xlsx) downloaded');
+                            } catch (err) {
+                              const error = err as Error;
+                              console.error('[import] Players export failed:', error);
+                              toast.error('Failed to download players Excel');
+                            }
+                          }}
+                        >
+                          Export Players (XLSX)
+                        </Button>
+                      </>
                     )}
                     {mappedPlayers.length > 10 && (
                       <button
@@ -2346,11 +2371,18 @@ export default function PlayerImport() {
                             >
                               <TableCell>{player.rank ?? ''}</TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {player.name ?? ''}
-                                  {hasConflict && (
-                                    <span className="text-xs text-amber-600" title="Conflict detected">⚠️</span>
-                                  )}
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    {player.name ?? ''}
+                                    {hasConflict && (
+                                      <span className="text-xs text-amber-600" title="Conflict detected">⚠️</span>
+                                    )}
+                                  </div>
+                                  <PlayerRowBadges
+                                    stateAutoExtracted={Boolean(player._stateAutoExtracted)}
+                                    extractedState={player.state}
+                                    rankAutofilled={Boolean(player._rank_autofilled)}
+                                  />
                                 </div>
                               </TableCell>
                               <TableCell>{player.rating ?? ''}</TableCell>

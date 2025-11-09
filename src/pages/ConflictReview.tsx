@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 
 interface Winner {
   prizeId: string;
@@ -550,8 +552,11 @@ export default function ConflictReview() {
                           const prize = getPrize(entry.prizeId);
                           return (
                             <div key={entry.prizeId} className="rounded-lg border border-dashed border-muted-foreground/50 bg-muted/40 p-3">
-                              <div className="text-sm font-semibold">
-                                {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${entry.prizeId}`}
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-semibold">
+                                  {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${entry.prizeId}`}
+                                </div>
+                                <IneligibilityTooltip reasonCodes={entry.reasonCodes} />
                               </div>
                               {entry.reasonCodes.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">

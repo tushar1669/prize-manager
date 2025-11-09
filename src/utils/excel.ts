@@ -499,6 +499,107 @@ export function downloadConflictsXlsx(
   const today = new Date().toISOString().slice(0, 10);
   const fallback = `conflicts_${today}.xlsx`;
   const safeFilename = sanitizeFilename(filename || fallback);
-
+  
   return downloadWorkbookXlsx(safeFilename, { Conflicts: rows });
 }
+
+/**
+ * Download cleaned/normalized player data as Excel (.xlsx)
+ * Exports post-mapping, normalized rows (state extracted, DOB normalized, rank gaps filled)
+ */
+export function downloadCleanedPlayersXlsx(
+  players: Array<Record<string, any>>,
+  tournamentSlug?: string | null
+): boolean {
+  if (!players || players.length === 0) {
+    console.warn('[excel] No players to export');
+    return false;
+  }
+
+  const now = new Date();
+  const slug = sanitizeSlug(tournamentSlug);
+  const timestamp = formatIstTimestampForFile(now);
+
+  // Friendly column headers matching DB field names
+  const headers = [
+    'rank',
+    'sno',
+    'name',
+    'rating',
+    'unrated',
+    'dob',
+    'dob_raw',
+    'gender',
+    'fide_id',
+    'federation',
+    'state',
+    'city',
+    'club',
+    'disability',
+    'special_notes'
+  ];
+
+  const rows = players.map(player => {
+    const dobDate = toExcelDate(player.dob);
+    
+    return [
+      player.rank != null ? Number(player.rank) : null,
+      player.sno != null && player.sno !== '' ? Number(player.sno) : null,
+      player.name ?? '',
+      player.rating != null && player.rating !== '' ? Number(player.rating) : null,
+      player.unrated != null ? Boolean(player.unrated) : null,
+      dobDate,
+      player.dob_raw ?? player.dob ?? null,
+      player.gender ?? null,
+      player.fide_id ?? null,
+      player.federation ?? null,
+      player.state ?? null,
+      player.city ?? null,
+      player.club ?? null,
+      player.disability ?? null,
+      player.special_notes ?? null
+    ];
+  });
+
+  const worksheetData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  // Apply date format for DOB column (column F)
+  for (let r = 1; r < worksheetData.length; r++) {
+    const cellAddress = XLSX.utils.encode_cell({ c: 5, r });
+    const cell = ws[cellAddress];
+    if (cell && cell.v instanceof Date) {
+      cell.z = 'yyyy-mm-dd';
+    }
+  }
+
+  // Set column widths
+  (ws as any)['!cols'] = [
+    { wch: 6 },  // rank
+    { wch: 6 },  // sno
+    { wch: 28 }, // name
+    { wch: 8 },  // rating
+    { wch: 9 },  // unrated
+    { wch: 12 }, // dob
+    { wch: 14 }, // dob_raw
+    { wch: 8 },  // gender
+    { wch: 14 }, // fide_id
+    { wch: 11 }, // federation
+    { wch: 10 }, // state
+    { wch: 16 }, // city
+    { wch: 20 }, // club
+    { wch: 14 }, // disability
+    { wch: 30 }  // special_notes
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Players');
+
+  const filename = `${slug}-cleaned_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, filename);
+
+  console.log(`[export.xlsx] rows=${players.length} columns=${headers.length}`);
+  console.log('[excel] Cleaned players workbook downloaded:', filename);
+  return true;
+}
+

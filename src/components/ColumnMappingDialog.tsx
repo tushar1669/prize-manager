@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   HEADER_ALIASES,
   selectBestRatingColumn,
@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import { Info, RotateCcw } from "lucide-react";
+import { GenderDetectionChip } from "@/components/import/GenderDetectionChip";
 
 interface ColumnMappingDialogProps {
   open: boolean;
@@ -65,12 +66,12 @@ export function ColumnMappingDialog({
   sampleRows
 }: ColumnMappingDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [headerlessGenderDetected, setHeaderlessGenderDetected] = useState<{ column: string; sample?: string } | null>(null);
 
-  // Auto-mapping useEffect - runs when detectedColumns changes
-  useEffect(() => {
+  // Auto-mapping logic extracted as useCallback
+  const performAutoMapping = useCallback(() => {
     if (detectedColumns.length === 0) {
-      // Silent until file is uploaded
-      return;
+      return {};
     }
     
     console.log('[ColumnMapping] Initializing auto-map for', detectedColumns.length, 'columns');
@@ -89,6 +90,14 @@ export function ColumnMappingDialog({
     if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
       autoMapping.gender = headerlessGender;
       console.log('[import] gender source: headerless column after 2nd Name');
+      console.log('[ui.badge] gender_headerless_shown=true');
+      
+      // Extract sample value for display
+      const sampleValue = sampleRows?.[0]?.[headerlessGender];
+      setHeaderlessGenderDetected({ 
+        column: headerlessGender, 
+        sample: sampleValue ? String(sampleValue) : undefined 
+      });
     }
 
     // Pre-normalize aliases
@@ -111,8 +120,14 @@ export function ColumnMappingDialog({
     console.log('[ColumnMapping] Auto-mapped fields:', autoMapping);
     console.log('[ColumnMapping] Mapped field count:', Object.keys(autoMapping).length);
     
+    return autoMapping;
+  }, [detectedColumns, sampleRows]);
+
+  // Auto-mapping useEffect - runs when detectedColumns changes
+  useEffect(() => {
+    const autoMapping = performAutoMapping();
     setMapping(autoMapping);
-  }, [detectedColumns, sampleRows]); // Re-run when columns change
+  }, [performAutoMapping]);
 
   const handleConfirm = () => {
     // Validate required fields
@@ -122,19 +137,45 @@ export function ColumnMappingDialog({
     onConfirm(mapping);
   };
 
+  const handleReset = () => {
+    console.log('[ColumnMapping] Resetting to defaults');
+    const autoMapping = performAutoMapping();
+    setMapping(autoMapping);
+  };
+
   const isValid = !!mapping.rank && !!mapping.name;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Map File Columns</DialogTitle>
-          <DialogDescription>
-            Match your file columns to the required fields. Required fields must be mapped.
-          </DialogDescription>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <DialogTitle>Map File Columns</DialogTitle>
+              <DialogDescription>
+                Match your file columns to the required fields. Required fields must be mapped.
+              </DialogDescription>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleReset}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset to defaults
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Gender detection chip */}
+          {headerlessGenderDetected && mapping.gender === headerlessGenderDetected.column && (
+            <GenderDetectionChip 
+              columnName={headerlessGenderDetected.column}
+              sampleValue={headerlessGenderDetected.sample}
+            />
+          )}
           {/* Phase 3: Rating priority notice */}
           {isFeatureEnabled('RATING_PRIORITY') && mapping.rating && (
             <Alert>

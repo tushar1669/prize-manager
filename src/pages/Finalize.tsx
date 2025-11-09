@@ -22,6 +22,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { exportPlayersViaPrint } from "@/utils/print";
 import { Badge } from "@/components/ui/badge";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 
 interface Winner {
   prizeId: string;
