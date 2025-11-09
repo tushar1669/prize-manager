@@ -2299,7 +2299,9 @@ export default function PlayerImport() {
                       {(() => {
                         const rowsToShow = showAllRows ? mappedPlayers : mappedPlayers.slice(0, 10);
                         return rowsToShow.map((player, idx) => {
-                          const hasConflict = conflicts.some(c => c.row === player._originalIndex);
+                          const hasConflict = conflicts.some(c => 
+                            c.a?.rank === player.rank || c.b?.rank === player.rank
+                          );
                           return (
                             <TableRow 
                               key={idx}

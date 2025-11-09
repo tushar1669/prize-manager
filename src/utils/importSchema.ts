@@ -24,8 +24,9 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   // Swiss-Manager uses "Fide-No." (with period and hyphen)
   fide_id: ['fide-no.', 'fide_no', 'fide-no', 'fideno', 'fide_id', 'fideid', 'fide', 'id'],
   
-  // Additional Swiss-Manager fields
-  federation: ['fed', 'fed.', 'federation', 'country', 'nat', 'fide_fed'],
+  // Additional Swiss-Manager fields (distinguish 3-letter code vs full name)
+  federation: ['federation', 'country', 'nat', 'nationality', 'fide_fed'], // Full federation name
+  fed_code: ['fed', 'fed.', 'fid'], // 3-letter FIDE federation code
   
   disability: ['disability', 'disability_type', 'pwd', 'ph', 'physically_handicapped', 'special_category'],
   special_notes: ['special_notes', 'notes', 'remarks', 'special_needs', 'accommodations', 'comments'],
@@ -232,7 +233,30 @@ export function selectBestRatingColumn(detectedColumns: string[]): string | null
   return null;
 }
 
-export type ImportConflictType = 
+/**
+ * Extract 2-letter state code from Swiss-Manager Ident column
+ * Ident format: IND/STATE/NNNN or similar patterns
+ * Examples: "IND/KA/10203" → "KA", "IND/MH/1234" → "MH"
+ */
+export function extractStateFromIdent(ident?: string | null): string | null {
+  if (!ident) return null;
+  
+  const str = String(ident).trim();
+  const parts = str.split('/');
+  
+  // Expect format like: IND/KA/NNNN or IND/MH/CODE
+  if (parts.length >= 2) {
+    const stateCandidate = parts[1].trim().toUpperCase();
+    // Valid if 2 uppercase letters
+    if (/^[A-Z]{2}$/.test(stateCandidate)) {
+      return stateCandidate;
+    }
+  }
+  
+  return null;
+}
+
+export type ImportConflictType =
   | 'duplicate_in_file' 
   | 'already_exists' 
   | 'conflict_different_dob'
