@@ -1,0 +1,7 @@
+# Swiss-Manager Test Fixtures
+
+This directory contains 10 Swiss-Manager Excel files used for comprehensive import testing.
+
+Files: sm_01.xls through sm_10.xls
+
+See: tests/import-swiss-manager.spec.ts

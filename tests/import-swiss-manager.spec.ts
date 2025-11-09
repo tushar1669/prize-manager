@@ -7,7 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const SWISS_DIR = path.resolve(__dirname, 'fixtures', 'swiss');
-const TOURNAMENT_ID = process.env.PLAYWRIGHT_IMPORT_TOURNAMENT_ID;
+
+// Test account credentials (used for auto-creating QA tournament)
+const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL || 'test@example.com';
+const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD || 'testpassword123';
 
 const swissFixtures = Array.from({ length: 10 }, (_, idx) => {
   const baseName = `sm_${String(idx + 1).padStart(2, '0')}`;
@@ -26,7 +29,69 @@ const swissFixtures = Array.from({ length: 10 }, (_, idx) => {
 });
 
 test.describe('@swiss Swiss-Manager staging suite', () => {
-  test.skip(!TOURNAMENT_ID, 'PLAYWRIGHT_IMPORT_TOURNAMENT_ID not configured');
+  let tournamentId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    const timestamp = Date.now();
+    const tournamentTitle = `QA – Swiss Imports (${timestamp})`;
+
+    try {
+      // Navigate to auth page
+      await page.goto('/auth');
+      
+      // Try to sign in (assume account exists, or sign up flow will handle it)
+      const emailInput = page.locator('input[type="email"]').first();
+      const passwordInput = page.locator('input[type="password"]').first();
+      
+      await emailInput.fill(TEST_EMAIL);
+      await passwordInput.fill(TEST_PASSWORD);
+      
+      // Try sign in first
+      const signInButton = page.getByRole('button', { name: /sign in/i });
+      if (await signInButton.isVisible()) {
+        await signInButton.click();
+        await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 }).catch(async () => {
+          // If sign in fails, try sign up
+          const signUpButton = page.getByRole('button', { name: /sign up/i });
+          if (await signUpButton.isVisible()) {
+            await signUpButton.click();
+            await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
+          }
+        });
+      }
+
+      // Wait for dashboard to load
+      await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
+
+      // Navigate to tournament setup
+      await page.goto('/tournament-setup');
+      await page.waitForLoadState('networkidle');
+
+      // Fill tournament form
+      await page.fill('input[name="title"]', tournamentTitle);
+      await page.fill('input[name="startDate"]', '2025-01-15');
+      await page.fill('input[name="endDate"]', '2025-01-16');
+
+      // Submit and capture tournament ID from URL
+      await page.getByRole('button', { name: /create|save/i }).click();
+      await page.waitForURL(/\/t\/[a-f0-9-]+/, { timeout: 10000 });
+
+      const url = page.url();
+      const match = url.match(/\/t\/([a-f0-9-]+)/);
+      if (!match) {
+        throw new Error(`Could not extract tournament ID from URL: ${url}`);
+      }
+
+      tournamentId = match[1];
+      console.log(`[QA] Created tournament: ${tournamentTitle} (ID: ${tournamentId})`);
+    } catch (error) {
+      console.error('[QA] Failed to create tournament:', error);
+      throw error;
+    } finally {
+      await page.close();
+    }
+  });
 
   for (const fixture of swissFixtures) {
     const currentTest = fixture.exists ? test : test.skip;
@@ -45,7 +110,9 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
         }
       });
 
-      await page.goto(`/t/${TOURNAMENT_ID}/import`);
+      test.skip(!tournamentId, 'Tournament creation failed in beforeAll');
+
+      await page.goto(`/t/${tournamentId}/import`);
 
       const fileInput = page.locator('input[type="file"]').first();
       await expect(fileInput).toBeVisible();
