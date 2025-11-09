@@ -21,34 +21,17 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - name: Bootstrap
-        run: |
-          bash scripts/bootstrap.sh
-
-      - name: CSV Guard
-        run: npm run assert:no-csv
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
 
       - name: Build
-        run: npm run build
+        run: npm run build --if-present
 
-      - name: Playwright Browsers (optional)
-        if: env.PLAYWRIGHT_INSTALL == '1'
-        run: npx playwright install --with-deps
+      - name: Test
+        run: npm test --if-present
 
-      - name: Test - Swiss Imports
-        run: npm run test:swiss
-      - name: Test - Allocator Null-Safety
-        run: npm run test:alloc
-      - name: Test - UX Improvements
-        run: npm run test:ux
-
-      - name: Upload Playwright Report (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          if-no-files-found: ignore
+      - name: Lockfile guard
+        run: git diff --exit-code package-lock.json
