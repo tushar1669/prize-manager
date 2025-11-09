@@ -1,32 +1,138 @@
 import { test, expect } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const SWISS_DIR = path.resolve(__dirname, 'fixtures', 'swiss');
+import { makeXlsxTmp } from './utils/xlsx';
 
 // Test account credentials (used for auto-creating QA tournament)
 const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD || 'testpassword123';
 
-const swissFixtures = Array.from({ length: 10 }, (_, idx) => {
-  const baseName = `sm_${String(idx + 1).padStart(2, '0')}`;
-  const xlsPath = path.join(SWISS_DIR, `${baseName}.xls`);
-  const xlsxPath = path.join(SWISS_DIR, `${baseName}.xlsx`);
+const SWISS_HEADERS = [
+  'Rank',
+  'SNo.',
+  'Name',
+  'Rtg',
+  'IRtg',
+  'Birth',
+  'fs',
+  'Fide-No.',
+  'Federation',
+  'State',
+  'City',
+  'Club'
+];
 
-  if (fs.existsSync(xlsPath)) {
-    return { label: `${baseName}.xls`, path: xlsPath, exists: true } as const;
+type SwissPlayer = {
+  rank: number;
+  sno: number;
+  name: string;
+  rating: number;
+  initialRating: number;
+  birth: string;
+  gender: string;
+  fideId: string;
+  federation: string;
+  state: string;
+  city: string;
+  club: string;
+};
+
+const BASE_PLAYERS: SwissPlayer[] = [
+  {
+    rank: 1,
+    sno: 57,
+    name: 'Aditi Sharma',
+    rating: 1850,
+    initialRating: 1780,
+    birth: '2007/00/00',
+    gender: 'F',
+    fideId: '35012345',
+    federation: 'IND',
+    state: 'MH',
+    city: 'Pune',
+    club: 'XYZ Chess'
+  },
+  {
+    rank: 12,
+    sno: 101,
+    name: 'Rohan Iyer',
+    rating: 1720,
+    initialRating: 0,
+    birth: '2005/05/14',
+    gender: '',
+    fideId: '',
+    federation: 'IND',
+    state: 'KA',
+    city: 'Bengaluru',
+    club: ''
+  },
+  {
+    rank: 28,
+    sno: 64,
+    name: 'Sia Verma',
+    rating: 1500,
+    initialRating: 1450,
+    birth: '2010/09/03',
+    gender: 'F',
+    fideId: '',
+    federation: 'IND',
+    state: 'DL',
+    city: 'New Delhi',
+    club: ''
   }
+];
 
-  if (fs.existsSync(xlsxPath)) {
-    return { label: `${baseName}.xlsx`, path: xlsxPath, exists: true } as const;
-  }
+function buildSwissRows(players: SwissPlayer[]) {
+  const metadata = [
+    ['Swiss-Manager Interim Ranking List'],
+    ['Generated via Playwright QA Harness'],
+    [''],
+    ['Tournament', 'QA Automation Open'],
+    ['Round', players.length + 3],
+    [''],
+    [''],
+    SWISS_HEADERS
+  ];
 
-  return { label: `${baseName}.xls`, path: xlsPath, exists: false } as const;
-});
+  const dataRows = players.map(player => [
+    player.rank,
+    player.sno,
+    player.name,
+    player.rating,
+    player.initialRating,
+    player.birth,
+    player.gender,
+    player.fideId,
+    player.federation,
+    player.state,
+    player.city,
+    player.club
+  ]);
+
+  return [...metadata, ...dataRows];
+}
+
+function generateSwissFixture(index: number) {
+  const offset = index * 2;
+  const players = BASE_PLAYERS.map((player, playerIdx) => ({
+    ...player,
+    rank: player.rank + offset + playerIdx,
+    sno: player.sno + offset * 3 + playerIdx,
+    name: `${player.name} ${index + 1}`,
+    rating: Math.max(0, player.rating - offset),
+    initialRating: Math.max(0, player.initialRating - offset),
+    fideId: player.fideId ? `${player.fideId}${index}` : '',
+    state: player.state || ['MH', 'KA', 'DL', 'GJ'][index % 4],
+    city: player.city || ['Pune', 'Bengaluru', 'New Delhi', 'Ahmedabad'][index % 4],
+    club: player.club || (index % 2 === 0 ? 'City Chess Club' : '')
+  }));
+
+  const label = `sm_${String(index + 1).padStart(2, '0')}.xlsx`;
+  const rows = buildSwissRows(players);
+  const path = makeXlsxTmp(rows, 'SwissManager', label);
+
+  return { label, path } as const;
+}
+
+const swissFixtures = Array.from({ length: 10 }, (_, index) => generateSwissFixture(index));
 
 test.describe('@swiss Swiss-Manager staging suite', () => {
   let tournamentId: string;
@@ -94,9 +200,7 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
   });
 
   for (const fixture of swissFixtures) {
-    const currentTest = fixture.exists ? test : test.skip;
-
-    currentTest(`imports ${fixture.label} with 0 schema errors @swiss`, async ({ page }) => {
+    test(`imports ${fixture.label} with 0 schema errors @swiss`, async ({ page }) => {
       const consoleMessages: string[] = [];
       const consoleErrors: string[] = [];
       
