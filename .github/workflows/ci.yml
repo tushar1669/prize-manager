@@ -13,20 +13,22 @@ jobs:
       CI: '1'
       # Set this to 1 if your CI can download Playwright browsers; otherwise leave 0 to skip.
       PLAYWRIGHT_INSTALL: '0'
-      # Override if you need a private mirror:
-      # NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Bootstrap
+      - name: Configure npm registry
+        run: npm config set registry https://registry.npmjs.org/
+
+      - name: Install deps (ci fallback)
         run: |
-          bash scripts/bootstrap.sh
+          npm ci --no-audit --fund=false || npm install --no-audit --fund=false
 
       - name: CSV Guard
         run: npm run assert:no-csv
