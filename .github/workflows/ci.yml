@@ -11,22 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: '1'
-      # Set this to 1 if your CI can download Playwright browsers; otherwise leave 0 to skip.
-      PLAYWRIGHT_INSTALL: '0'
-      # Override if you need a private mirror:
-      # NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Bootstrap
+      - name: Harden npm registry
         run: |
-          bash scripts/bootstrap.sh
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 2000
+          npm config set fetch-retry-maxtimeout 60000
+
+      - name: Install dependencies (with fallback)
+        run: npm ci --no-audit --fund=false || npm install --no-audit --fund=false
 
       - name: CSV Guard
         run: npm run assert:no-csv
@@ -34,15 +37,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Playwright Browsers (optional)
-        if: env.PLAYWRIGHT_INSTALL == '1'
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Test - Swiss Imports
+      - name: Test - Swiss imports
         run: npm run test:swiss
       - name: Test - Allocator Null-Safety
         run: npm run test:alloc
-      - name: Test - UX Improvements
+      - name: Test - UX improvements
         run: npm run test:ux
 
       - name: Upload Playwright Report (always)
