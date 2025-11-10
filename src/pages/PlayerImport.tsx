@@ -798,46 +798,31 @@ export default function PlayerImport() {
         failed: [] as Array<{ player: ParsedPlayer; error: string }>,
       };
 
-      // helper: bulk upsert via PostgREST with precise conflict handling
-      async function bulkUpsertPlayers(payload: any[]) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-        const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token ?? publishableKey;
+// helper: bulk upsert via PostgREST with precise conflict handling
+async function bulkUpsertPlayers(payload: any[]) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token ?? publishableKey;
 
-        const resp = await fetch(
-          `${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': publishableKey,
-              'Authorization': `Bearer ${token}`,
-              'Prefer': 'resolution=merge-duplicates,return=minimal'
-            },
-            body: JSON.stringify(payload),
-          }
-        );
+  const resp = await fetch(`${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': publishableKey,
+      'Authorization': `Bearer ${token}`,
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify(payload),
+  });
 
-        if (!resp.ok) {
-          const text = await resp.text(); // PostgREST error text
-          const is409 = resp.status === 409;
-          // Only treat as "non-fatal" if the conflict is for our SNo key
-          // Typical text contains either: (tournament_id, sno) or (tournament_id, fide_id)
-          const isSnoConflict = is409 && /\(tournament_id,\s*sno\)/i.test(text);
-          const isFideConflict = is409 && /\(tournament_id,\s*fide_id\)/i.test(text);
-
-          throw {
-            status: resp.status,
-            message: text,
-            isConflict: is409,
-            isSnoConflict,
-            isFideConflict,
-          };
-        }
-
-        return { ok: true };
-      }
+  if (!resp.ok) {
+    const text = await resp.text(); // PostgREST error body
+    const is409 = resp.status === 409;
+    const isSnoConflict = is409 && /\(tournament_id,\s*sno\)/i.test(text);
+    throw { status: resp.status, message: text, isConflict: is409, isSnoConflict };
+  }
+}
 
       const buildRows = (playerList: ParsedPlayer[]) =>
         playerList.map(p => {
@@ -2674,5 +2659,4 @@ export default function PlayerImport() {
     </div>
   );
 }
-
 
