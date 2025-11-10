@@ -96,6 +96,44 @@ import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 
+/**
+ * Bulk upsert players via PostgREST with precise conflict handling.
+ * Uses on_conflict=tournament_id,sno to merge duplicates at DB level.
+ * Only (tournament_id, sno) conflicts are treated as success.
+ * Other conflicts (e.g., fide_id) trigger row-by-row fallback.
+ */
+async function bulkUpsertPlayers(payload: any[]) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token ?? publishableKey;
+
+  const resp = await fetch(`${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': publishableKey,
+      'Authorization': `Bearer ${token}`,
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    const is409 = resp.status === 409;
+    const isSnoConflict = is409 && /\(tournament_id,\s*sno\)/i.test(text);
+    throw {
+      status: resp.status,
+      message: text,
+      isConflict: is409,
+      isSnoConflict,
+    };
+  }
+
+  return { ok: true };
+}
+
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
   fide_id?: string | null;
@@ -797,32 +835,6 @@ export default function PlayerImport() {
         skipped: [] as Array<{ player: ParsedPlayer; reason: string }>,
         failed: [] as Array<{ player: ParsedPlayer; error: string }>,
       };
-
-// helper: bulk upsert via PostgREST with precise conflict handling
-async function bulkUpsertPlayers(payload: any[]) {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-  const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
-  const session = await supabase.auth.getSession();
-  const token = session.data.session?.access_token ?? publishableKey;
-
-  const resp = await fetch(`${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': publishableKey,
-      'Authorization': `Bearer ${token}`,
-      'Prefer': 'resolution=merge-duplicates,return=minimal'
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text(); // PostgREST error body
-    const is409 = resp.status === 409;
-    const isSnoConflict = is409 && /\(tournament_id,\s*sno\)/i.test(text);
-    throw { status: resp.status, message: text, isConflict: is409, isSnoConflict };
-  }
-}
 
       const buildRows = (playerList: ParsedPlayer[]) =>
         playerList.map(p => {
