@@ -798,6 +798,47 @@ export default function PlayerImport() {
         failed: [] as Array<{ player: ParsedPlayer; error: string }>,
       };
 
+      // helper: bulk upsert via PostgREST with precise conflict handling
+      async function bulkUpsertPlayers(payload: any[]) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+        const anon = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token ?? anon;
+
+        const resp = await fetch(
+          `${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': anon,
+              'Authorization': `Bearer ${token}`,
+              'Prefer': 'resolution=merge-duplicates,return=minimal'
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!resp.ok) {
+          const text = await resp.text(); // PostgREST error text
+          const is409 = resp.status === 409;
+          // Only treat as "non-fatal" if the conflict is for our SNo key
+          // Typical text contains either: (tournament_id, sno) or (tournament_id, fide_id)
+          const isSnoConflict = is409 && /\(tournament_id,\s*sno\)/i.test(text);
+          const isFideConflict = is409 && /\(tournament_id,\s*fide_id\)/i.test(text);
+
+          throw {
+            status: resp.status,
+            message: text,
+            isConflict: is409,
+            isSnoConflict,
+            isFideConflict,
+          };
+        }
+
+        return { ok: true };
+      }
+
       const buildRows = (playerList: ParsedPlayer[]) =>
         playerList.map(p => {
           const picked = pick(p, fields);
@@ -873,12 +914,22 @@ export default function PlayerImport() {
           const chunk = chunks[i];
           console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
           const payload = buildRows(chunk);
-          const { error } = await supabase.from('players').insert(payload).select('id');
+          
+          let bulkError: any = null;
+          try {
+            await bulkUpsertPlayers(payload);
+          } catch (err: any) {
+            bulkError = err;
+          }
 
-          if (!error) {
+          if (!bulkError) {
+            results.created.push(...chunk);
+          } else if (bulkError.isSnoConflict) {
+            // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
             results.created.push(...chunk);
           } else {
-            console.warn('[import] Chunk failed, trying individual inserts');
+            // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
+            console.warn('[import] Chunk failed (non-SNo conflict), trying individual inserts', bulkError?.message);
             for (const player of chunk) {
               const [singlePayload] = buildRows([player]);
               const { error: singleError } = await supabase.from('players').insert([singlePayload]);
@@ -985,12 +1036,22 @@ export default function PlayerImport() {
               const chunk = createChunks[i];
               console.log(`[dedup] create chunk ${i + 1}/${createChunks.length} (${chunk.length})`);
               const payload = chunk.map(entry => entry.payload);
-              const { error } = await supabase.from('players').insert(payload).select('id');
+              
+              let bulkError: any = null;
+              try {
+                await bulkUpsertPlayers(payload);
+              } catch (err: any) {
+                bulkError = err;
+              }
 
-              if (!error) {
+              if (!bulkError) {
+                results.created.push(...chunk.map(entry => entry.player));
+              } else if (bulkError.isSnoConflict) {
+                // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
                 results.created.push(...chunk.map(entry => entry.player));
               } else {
-                console.warn('[dedup] chunk create failed, trying individually');
+                // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
+                console.warn('[dedup] chunk create failed (non-SNo conflict), trying individually', bulkError?.message);
                 for (const entry of chunk) {
                   const { error: singleError } = await supabase.from('players').insert([entry.payload]);
                   if (!singleError) {
@@ -1029,12 +1090,22 @@ export default function PlayerImport() {
           const chunk = chunks[i];
           console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
           const payload = buildRows(chunk);
-          const { error } = await supabase.from('players').insert(payload).select('id');
+          
+          let bulkError: any = null;
+          try {
+            await bulkUpsertPlayers(payload);
+          } catch (err: any) {
+            bulkError = err;
+          }
 
-          if (!error) {
+          if (!bulkError) {
+            results.created.push(...chunk);
+          } else if (bulkError.isSnoConflict) {
+            // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
             results.created.push(...chunk);
           } else {
-            console.warn('[import] Chunk failed, trying individual inserts');
+            // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
+            console.warn('[import] Chunk failed (non-SNo conflict), trying individual inserts', bulkError?.message);
             for (const player of chunk) {
               const [singlePayload] = buildRows([player]);
               const { error: singleError } = await supabase.from('players').insert([singlePayload]);
