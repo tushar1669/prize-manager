@@ -801,9 +801,9 @@ export default function PlayerImport() {
       // helper: bulk upsert via PostgREST with precise conflict handling
       async function bulkUpsertPlayers(payload: any[]) {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-        const anon = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+        const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
         const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token ?? anon;
+        const token = session.data.session?.access_token ?? publishableKey;
 
         const resp = await fetch(
           `${supabaseUrl}/rest/v1/players?on_conflict=tournament_id,sno`,
@@ -811,7 +811,7 @@ export default function PlayerImport() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': anon,
+              'apikey': publishableKey,
               'Authorization': `Bearer ${token}`,
               'Prefer': 'resolution=merge-duplicates,return=minimal'
             },
@@ -2674,3 +2674,5 @@ export default function PlayerImport() {
     </div>
   );
 }
+
+
