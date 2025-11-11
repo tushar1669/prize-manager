@@ -109,6 +109,7 @@ export default function ConflictReview() {
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const [manualDecisions, setManualDecisions] = useState<ManualDecisionsMap>({});
   const manualDecisionsRef = useRef<ManualDecisionsMap>({});
+  const allocTriggeredRef = useRef(false);
 
   useEffect(() => {
     manualDecisionsRef.current = manualDecisions;
@@ -273,6 +274,7 @@ export default function ConflictReview() {
     },
     onError: (err: any) => {
       console.error('[allocatePrizes] error', err);
+      allocTriggeredRef.current = false;
       // Check if it's a network-level failure
       if (err?.message?.includes('net::ERR_FAILED') || err?.message?.includes('Failed to fetch')) {
         toast.error('Allocation failed: Network error. Check your connection or try again.');
@@ -284,11 +286,45 @@ export default function ConflictReview() {
   });
 
   useEffect(() => {
-    if (id) {
+    if (!id) return;
+
+    const playersLoaded = playersList !== undefined;
+    const prizesLoaded = prizesList !== undefined;
+    const playersCount = playersList?.length ?? 0;
+    const prizesCount = prizesList?.length ?? 0;
+    const winnersCount = winners.length;
+    const ready = playersLoaded && prizesLoaded;
+    const hasCounts = playersCount > 0 && prizesCount > 0;
+    const alreadyTriggered = allocTriggeredRef.current;
+    const shouldAllocate =
+      ready &&
+      hasCounts &&
+      winnersCount === 0 &&
+      !allocateMutation.isPending &&
+      !alreadyTriggered;
+
+    const loaded = { players: playersLoaded, prizes: prizesLoaded };
+
+    console.log('[review.gate]', {
+      playersCount,
+      prizesCount,
+      winnersCount,
+      loaded,
+      ready,
+      alreadyTriggered,
+      shouldAllocate,
+    });
+
+    if (shouldAllocate) {
+      allocTriggeredRef.current = true;
       allocateMutation.mutate({ overrides: manualMapToOverrides(manualDecisionsRef.current) });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+
+    if (!hasCounts) {
+      allocTriggeredRef.current = false;
+    }
+  }, [allocateMutation.isPending, id, playersList, prizesList, winners]);
 
   const handleAccept = async (conflictId: string) => {
     if (allocateMutation.isPending) return;

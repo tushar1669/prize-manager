@@ -1198,6 +1198,12 @@ export default function PlayerImport() {
         toast.success(
           `Applied ${totalImported} player actions (${results.created.length} created, ${results.updated.length} updated)`,
         );
+        if (id) {
+          await queryClient.invalidateQueries({ queryKey: ['players', id] }).catch(() => {});
+          await queryClient.invalidateQueries({ queryKey: ['players-list', id] }).catch(() => {});
+          await queryClient.invalidateQueries({ queryKey: ['prizes', id] }).catch(() => {});
+          await queryClient.invalidateQueries({ queryKey: ['prizes-list', id] }).catch(() => {});
+        }
         navigate(`/t/${id}/review`);
       } else {
         toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
