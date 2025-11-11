@@ -134,6 +134,14 @@ async function bulkUpsertPlayers(payload: any[]) {
   return { ok: true };
 }
 
+/**
+ * Enforce numeric-only FIDE IDs (6-10 digits).
+ */
+const toNumericFideOrNull = (v: unknown): string | null => {
+  const s = String(v ?? '').replace(/\D/g, '').trim();
+  return s && /^[0-9]{6,10}$/.test(s) ? s : null;
+};
+
 interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
   fide_id?: string | null;
@@ -858,7 +866,7 @@ export default function PlayerImport() {
             club: picked.club || null,
             disability: picked.disability || null,
             special_notes: picked.special_notes || null,
-            fide_id: picked.fide_id ? String(picked.fide_id) : null,
+            fide_id: toNumericFideOrNull(picked.fide_id),
             unrated: normalizedUnrated,
             federation: picked.federation || null,
             tournament_id: id!,
@@ -1750,7 +1758,7 @@ export default function PlayerImport() {
           player._dobInferredReason = result.inferredReason;
           return; // Skip setting value below since we handled it
         } else if (fieldKey === 'fide_id' && value != null) {
-          value = String(value).trim() || null;
+          value = toNumericFideOrNull(value);
         } else if (fieldKey === 'unrated') {
           // Store raw unrated value for inference
           player._rawUnrated = value;

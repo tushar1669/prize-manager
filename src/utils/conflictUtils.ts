@@ -72,13 +72,13 @@ const getString = (row: MaybeRow, key: string): string | undefined => {
 };
 
 /**
- * Extract digits-only FIDE identifier when length >= 6.
+ * Extract digits-only FIDE identifier when length is 6-10 digits.
  */
 export function buildFideKey(row: MaybeRow): string {
   const raw = getString(row, 'fide_id') ?? getString(row, 'fideId');
   if (!raw) return '';
   const digits = raw.replace(/\D+/g, '');
-  return digits.length >= 6 ? digits : '';
+  return digits && /^[0-9]{6,10}$/.test(digits) ? digits : '';
 }
 
 /**
