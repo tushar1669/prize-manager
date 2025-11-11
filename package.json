@@ -9,7 +9,6 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postinstall": "node scripts/postinstall.js",
     "bootstrap": "bash scripts/bootstrap.sh",
     "assert:no-csv": "node scripts/assert-no-csv.js",
     "test": "playwright test",
