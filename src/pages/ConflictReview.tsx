@@ -110,6 +110,20 @@ export default function ConflictReview() {
   const [manualDecisions, setManualDecisions] = useState<ManualDecisionsMap>({});
   const manualDecisionsRef = useRef<ManualDecisionsMap>({});
   const allocTriggeredRef = useRef(false);
+  
+  // Preview mode state
+  const [isPreviewMode, setIsPreviewMode] = useState(true);
+  const [coverageData, setCoverageData] = useState<Array<{
+    categoryId: string;
+    categoryName: string;
+    prizeId: string;
+    place: number;
+    eligibleCount: number;
+    pickedCount: number;
+    winnerId?: string;
+    reasonCodes: string[];
+  }>>([]);
+  const [previewCompleted, setPreviewCompleted] = useState(false);
 
   useEffect(() => {
     manualDecisionsRef.current = manualDecisions;
@@ -177,8 +191,8 @@ export default function ConflictReview() {
   });
 
   const allocateMutation = useMutation({
-    mutationFn: async (options?: { ruleOverride?: any; overrides?: { prizeId: string; playerId: string }[] }) => {
-      const { ruleOverride, overrides } = options || {};
+    mutationFn: async (options?: { ruleOverride?: any; overrides?: { prizeId: string; playerId: string }[]; dryRun?: boolean }) => {
+      const { ruleOverride, overrides, dryRun = false } = options || {};
       const { data: { session } } = await supabase.auth.getSession();
 
       const overridesPayload = overrides ?? manualMapToOverrides(manualDecisionsRef.current);
@@ -212,6 +226,7 @@ export default function ConflictReview() {
           tournamentId: id,
           ruleConfigOverride: ruleOverride || undefined,
           overrides: overridesPayload.length > 0 ? overridesPayload : undefined,
+          dryRun,
         },
         headers,
       });
@@ -222,6 +237,16 @@ export default function ConflictReview() {
         winners: Winner[];
         conflicts: Conflict[];
         unfilled?: Unfilled[];
+        coverage?: Array<{
+          categoryId: string;
+          categoryName: string;
+          prizeId: string;
+          place: number;
+          eligibleCount: number;
+          pickedCount: number;
+          winnerId?: string;
+          reasonCodes: string[];
+        }>;
         meta?: {
           playerCount?: number;
           activePrizeCount?: number;
@@ -229,6 +254,7 @@ export default function ConflictReview() {
           winnersCount?: number;
           conflictCount?: number;
           unfilledCount?: number;
+          dryRun?: boolean;
         };
       };
     },
@@ -249,6 +275,25 @@ export default function ConflictReview() {
       setSelectedConflict(prev => (prev && !data.conflicts.find(conflict => conflict.id === prev.id) ? null : prev));
       setUnfilled(data.unfilled || []);
       setPreviewMeta(data.meta || null);
+      
+      // Handle coverage data from preview
+      if (data.coverage) {
+        setCoverageData(data.coverage);
+        setPreviewCompleted(true);
+        console.log('[review] Preview completed, coverage:', data.coverage);
+        
+        const zeroEligibleCount = data.coverage.filter(c => c.eligibleCount === 0).length;
+        if (zeroEligibleCount > 0) {
+          toast.warning(`Preview shows ${zeroEligibleCount} prize(s) with no eligible players. Review coverage before committing.`);
+        } else {
+          toast.success('Preview looks good! You can now commit the allocation.');
+        }
+      }
+      
+      // Mark preview as complete when committing
+      if (data.meta?.dryRun === false) {
+        setIsPreviewMode(false);
+      }
 
       const nextManualMap: ManualDecisionsMap = {};
       winnersWithReasons.forEach(winner => {
@@ -295,13 +340,6 @@ export default function ConflictReview() {
     const winnersCount = winners.length;
     const ready = playersLoaded && prizesLoaded;
     const hasCounts = playersCount > 0 && prizesCount > 0;
-    const alreadyTriggered = allocTriggeredRef.current;
-    const shouldAllocate =
-      ready &&
-      hasCounts &&
-      winnersCount === 0 &&
-      !allocateMutation.isPending &&
-      !alreadyTriggered;
 
     const loaded = { players: playersLoaded, prizes: prizesLoaded };
 
@@ -311,20 +349,14 @@ export default function ConflictReview() {
       winnersCount,
       loaded,
       ready,
-      alreadyTriggered,
-      shouldAllocate,
+      message: 'Auto-allocation disabled. Use Preview/Commit buttons.',
     });
 
-    if (shouldAllocate) {
-      allocTriggeredRef.current = true;
-      allocateMutation.mutate({ overrides: manualMapToOverrides(manualDecisionsRef.current) });
-      return;
-    }
-
+    // Reset trigger when counts change
     if (!hasCounts) {
       allocTriggeredRef.current = false;
     }
-  }, [allocateMutation.isPending, id, playersList, prizesList, winners]);
+  }, [id, playersList, prizesList, winners]);
 
   const handleAccept = async (conflictId: string) => {
     if (allocateMutation.isPending) return;
@@ -450,9 +482,47 @@ export default function ConflictReview() {
           </div>
         </div>
 
+        <div className="mb-6 flex gap-4">
+          <Button
+            onClick={() => {
+              setIsPreviewMode(true);
+              allocTriggeredRef.current = false;
+              allocateMutation.mutate({ 
+                overrides: manualMapToOverrides(manualDecisionsRef.current),
+                dryRun: true 
+              });
+            }}
+            disabled={allocateMutation.isPending || (playersList?.length || 0) === 0}
+            variant="outline"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${allocateMutation.isPending ? 'animate-spin' : ''}`} />
+            Preview Allocation
+          </Button>
+          
+          <Button
+            onClick={() => {
+              setIsPreviewMode(false);
+              allocTriggeredRef.current = false;
+              allocateMutation.mutate({ 
+                overrides: manualMapToOverrides(manualDecisionsRef.current),
+                dryRun: false 
+              });
+            }}
+            disabled={
+              !previewCompleted || 
+              allocateMutation.isPending ||
+              coverageData.some(c => c.eligibleCount === 0 && !c.reasonCodes.includes('already_assigned'))
+            }
+            variant="default"
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            Commit Allocation
+          </Button>
+        </div>
+
         <Alert className="mb-6 border-primary/30 bg-primary/10 text-primary">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Allocation preview</AlertTitle>
+          <AlertTitle>Allocation {isPreviewMode ? 'Preview' : 'Summary'}</AlertTitle>
           <AlertDescription>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <div><span className="font-medium">Players:</span> {summaryCounts.players}</div>
@@ -463,6 +533,80 @@ export default function ConflictReview() {
             </div>
           </AlertDescription>
         </Alert>
+
+        {previewCompleted && coverageData.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Allocation Coverage
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-96">
+                <table className="w-full text-sm">
+                  <thead className="border-b sticky top-0 bg-background">
+                    <tr>
+                      <th className="text-left py-2 px-3">Category</th>
+                      <th className="text-left py-2 px-3">Place</th>
+                      <th className="text-right py-2 px-3">Eligible</th>
+                      <th className="text-right py-2 px-3">Picked</th>
+                      <th className="text-left py-2 px-3">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coverageData.map((item, idx) => {
+                      const isZeroEligible = item.eligibleCount === 0;
+                      const winner = item.winnerId ? getPlayer(item.winnerId) : null;
+                      
+                      return (
+                        <tr 
+                          key={`${item.prizeId}-${idx}`}
+                          className={`border-b ${isZeroEligible ? 'bg-destructive/10' : ''}`}
+                        >
+                          <td className="py-2 px-3 font-medium">{item.categoryName}</td>
+                          <td className="py-2 px-3">{item.place}</td>
+                          <td className="py-2 px-3 text-right">
+                            {isZeroEligible ? (
+                              <Badge variant="destructive">{item.eligibleCount}</Badge>
+                            ) : (
+                              <span>{item.eligibleCount}</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right">{item.pickedCount}</td>
+                          <td className="py-2 px-3">
+                            {item.pickedCount === 1 && winner ? (
+                              <span className="text-xs text-muted-foreground">
+                                {winner.name} (Rank {winner.rank || 'N/A'})
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {item.reasonCodes[0] ? formatReasonCode(item.reasonCodes[0]) : 'No reasons'}
+                                </Badge>
+                                <IneligibilityTooltip reasonCodes={item.reasonCodes} />
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </ScrollArea>
+              
+              {coverageData.some(c => c.eligibleCount === 0) && (
+                <Alert className="mt-4 border-destructive/50 bg-destructive/10">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Warning</AlertTitle>
+                  <AlertDescription>
+                    Some prize categories have zero eligible players. Review the coverage table to identify missing fields or restrictive criteria.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {allocateMutation.isPending ? (
           <Card><CardContent className="py-12 text-center"><RefreshCw className="h-12 w-12 animate-spin mx-auto mb-4" /></CardContent></Card>
@@ -624,14 +768,28 @@ export default function ConflictReview() {
             }
             navigate(`/t/${id}/import`);
           }}>Back</Button>
-          <Button onClick={() => {
-            if (!id) {
-              toast.error('Tournament ID missing');
-              navigate('/dashboard');
-              return;
+          <Button 
+            onClick={() => {
+              if (!id) {
+                toast.error('Tournament ID missing');
+                navigate('/dashboard');
+                return;
+              }
+              navigate(`/t/${id}/finalize`, { state: { winners } });
+            }} 
+            disabled={
+              isPreviewMode ||
+              !previewCompleted ||
+              winners.length === 0 ||
+              conflicts.length > 0
+            } 
+            title={
+              isPreviewMode ? 'Commit allocation first' :
+              !previewCompleted ? 'Run preview first' :
+              conflicts.length > 0 ? 'Resolve all conflicts before finalizing' : 
+              winners.length === 0 ? 'No winners to finalize' : ''
             }
-            navigate(`/t/${id}/finalize`, { state: { winners } });
-          }} disabled={conflicts.length > 0 || winners.length === 0} title={conflicts.length > 0 ? 'Resolve all conflicts before finalizing' : winners.length === 0 ? 'No winners to finalize' : ''}>
+          >
             Finalize <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>

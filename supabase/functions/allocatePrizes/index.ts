@@ -11,6 +11,18 @@ interface AllocatePrizesRequest {
   tournamentId: string;
   overrides?: Array<{ prizeId: string; playerId: string }>;
   ruleConfigOverride?: any;
+  dryRun?: boolean;
+}
+
+interface CoverageItem {
+  categoryId: string;
+  categoryName: string;
+  prizeId: string;
+  place: number;
+  eligibleCount: number;
+  pickedCount: number;
+  winnerId?: string;
+  reasonCodes: string[];
 }
 
 type PrizeRow = {
@@ -45,7 +57,7 @@ Deno.serve(async (req) => {
     );
 
     const payload: AllocatePrizesRequest = await req.json();
-    const { tournamentId, overrides = [], ruleConfigOverride } = payload;
+    const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false } = payload;
 
     console.log(`[allocatePrizes] Starting allocation for tournament ${tournamentId}`);
 
@@ -192,6 +204,7 @@ Deno.serve(async (req) => {
     }> = [];
     const assignedPlayers = new Set<string>();
     const unfilled: Array<{ prizeId: string; reasonCodes: string[] }> = [];
+    const coverageData: CoverageItem[] = [];
 
     // Apply manual overrides first
     for (const override of overrides) {
@@ -248,6 +261,17 @@ Deno.serve(async (req) => {
           console.warn(`[allocation.coverage] "${categoryName}" place ${prizePlace} unfilled due to missing/excluded fields: ${fieldMissingReasons.join(', ')}`);
         }
         
+        // Track coverage
+        coverageData.push({
+          categoryId: cat.id,
+          categoryName: cat.name,
+          prizeId: p.id,
+          place: p.place,
+          eligibleCount: 0,
+          pickedCount: 0,
+          reasonCodes: reasonList
+        });
+        
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
         console.log(`[alloc.unfilled] prize=${p.id} reason=${reasonList.join(',')}`);
         continue;
@@ -279,6 +303,18 @@ Deno.serve(async (req) => {
         playerId: winner.player.id,
         reasons: reasonList,
         isManual: false
+      });
+
+      // Track coverage
+      coverageData.push({
+        categoryId: cat.id,
+        categoryName: cat.name,
+        prizeId: p.id,
+        place: p.place,
+        eligibleCount: eligible.length,
+        pickedCount: 1,
+        winnerId: winner.player.id,
+        reasonCodes: reasonList
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
@@ -363,20 +399,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[alloc.done] winners=${winners.length} conflicts=${conflicts.length} unfilled=${unfilled.length}`);
+    console.log(`[alloc.done] winners=${winners.length} conflicts=${conflicts.length} unfilled=${unfilled.length} dryRun=${dryRun}`);
+
+    if (dryRun) {
+      console.log(`[alloc] DRY-RUN mode: skipping DB writes`);
+    }
 
     return new Response(
       JSON.stringify({
         winners,
         conflicts,
         unfilled,
+        coverage: dryRun ? coverageData : undefined,
         meta: {
           playerCount: players?.length || 0,
           activeCategoryCount: activeCategories.length,
           activePrizeCount: activePrizes.length,
           winnersCount: winners.length,
           conflictCount: conflicts.length,
-          unfilledCount: unfilled.length
+          unfilledCount: unfilled.length,
+          dryRun
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
