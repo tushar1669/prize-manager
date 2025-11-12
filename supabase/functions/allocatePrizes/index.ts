@@ -83,14 +83,33 @@ Deno.serve(async (req) => {
 
     const activePrizes = activeCategories.flatMap(cat => cat.prizes || []);
 
-    // 3) Fetch players
+    // 3) Fetch players with FULL projection for allocation
+    const REQUIRED_COLUMNS = [
+      'id', 'rank', 'name', 'rating', 'dob', 'gender', 
+      'state', 'city', 'club', 'fide_id', 'disability', 'unrated',
+      'federation', 'sno'
+    ];
+
+    console.log(`[allocation.input] Fetching players with columns=${REQUIRED_COLUMNS.join(',')}`);
+
     const { data: players, error: playersError } = await supabaseClient
       .from('players')
-      .select('*')
+      .select(REQUIRED_COLUMNS.join(','))
       .eq('tournament_id', tournamentId)
       .order('rank', { ascending: true });
 
     if (playersError) throw new Error(`Failed to fetch players: ${playersError.message}`);
+
+    // Log actual column availability for diagnostics
+    const samplePlayer = players && players[0];
+    const availableColumns = samplePlayer ? Object.keys(samplePlayer) : [];
+    const missingColumns = REQUIRED_COLUMNS.filter(c => !availableColumns.includes(c));
+
+    if (missingColumns.length > 0) {
+      console.warn(`[allocation.input] Missing columns in player data: ${missingColumns.join(',')}. Categories requiring these fields may have unfilled prizes.`);
+    }
+
+    console.log(`[allocation.input] columns=${availableColumns.join(',')} count=${players?.length || 0} missing=${missingColumns.join(',') || 'none'}`);
 
     // 4) Fetch rule config
     const { data: ruleConfig, error: ruleConfigError } = await supabaseClient
@@ -128,6 +147,27 @@ Deno.serve(async (req) => {
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
 
     console.log(`[alloc] tid=${tournamentId} players=${players?.length || 0} categories=${activeCategories.length} prizes=${activePrizes.length}`);
+
+    // Pre-flight field coverage check
+    if (players && players.length > 0) {
+      const sample = players[0] as any;
+      const criticalFields = ['id', 'rank', 'dob', 'gender', 'rating'];
+      const missingCritical = criticalFields.filter(f => sample[f] === undefined);
+      
+      if (missingCritical.length > 0) {
+        console.error(`[alloc.preflight] CRITICAL: Missing essential player fields: ${missingCritical.join(', ')}. Allocation will likely fail.`);
+      }
+      
+      // Count how many players have each important field populated
+      const fieldCoverage: Record<string, number> = {};
+      const fieldsToCheck = ['dob', 'gender', 'rating', 'state', 'city', 'club', 'disability', 'fide_id'];
+      
+      for (const field of fieldsToCheck) {
+        fieldCoverage[field] = players.filter((p: any) => p[field] != null && p[field] !== '').length;
+      }
+      
+      console.log(`[alloc.preflight] Field coverage (non-null):`, fieldCoverage);
+    }
 
     // 5) Build prize queue sorted by brochure order
     const prizeQueue = activeCategories.flatMap(cat => 
@@ -173,7 +213,7 @@ Deno.serve(async (req) => {
       const eligible: Array<{ player: any; passCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
-      for (const player of players || []) {
+      for (const player of (players || []) as any[]) {
         if (assignedPlayers.has(player.id)) continue;
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (rules.verbose_logs) {
@@ -190,6 +230,24 @@ Deno.serve(async (req) => {
 
       if (eligible.length === 0) {
         const reasonList = failCodes.size > 0 ? Array.from(failCodes).sort() : ['no_eligible_players'];
+        
+        // Detailed coverage diagnostic
+        const categoryName = cat.name;
+        const prizePlace = p.place;
+        const totalPlayers = (players || []).length;
+        const alreadyAssigned = assignedPlayers.size;
+        const availablePool = totalPlayers - alreadyAssigned;
+        
+        console.log(`[allocation.coverage] category="${categoryName}" place=${prizePlace} eligible=0 picked=0 availablePool=${availablePool} reasons=${reasonList.join(',')}`);
+        
+        // Check if missing fields are the issue
+        const fieldMissingReasons = reasonList.filter(r => 
+          r.includes('missing') || r.includes('_excluded')
+        );
+        if (fieldMissingReasons.length > 0) {
+          console.warn(`[allocation.coverage] "${categoryName}" place ${prizePlace} unfilled due to missing/excluded fields: ${fieldMissingReasons.join(', ')}`);
+        }
+        
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
         console.log(`[alloc.unfilled] prize=${p.id} reason=${reasonList.join(',')}`);
         continue;
@@ -224,6 +282,7 @@ Deno.serve(async (req) => {
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
+      console.log(`[allocation.coverage] category="${cat.name}" place=${p.place} eligible=${eligible.length} picked=1 winner=${winner.player.id}`);
     }
 
     // 7) Minimal conflict detection: only for identical prizeKey ties
@@ -240,7 +299,7 @@ Deno.serve(async (req) => {
     // Build eligibility map: player -> prizes they're eligible for
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
     for (const { cat, p } of prizeQueue) {
-      for (const player of players || []) {
+      for (const player of (players || []) as any[]) {
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (evaluation.eligible) {
           if (!playerEligiblePrizes.has(player.id)) {
@@ -280,6 +339,29 @@ Deno.serve(async (req) => {
         }
       });
     });
+
+    // Unfilled prizes summary
+    if (unfilled.length > 0) {
+      const unfilledCategories = new Set<string>();
+      const unfilledReasons = new Set<string>();
+      
+      for (const uf of unfilled) {
+        // Find the category for this prize
+        const prizeMatch = prizeQueue.find(pq => pq.p.id === uf.prizeId);
+        if (prizeMatch) {
+          unfilledCategories.add(prizeMatch.cat.name);
+        }
+        uf.reasonCodes.forEach(r => unfilledReasons.add(r));
+      }
+      
+      console.warn(`[allocation.unfilled] count=${unfilled.length} categories=[${Array.from(unfilledCategories).join(', ')}] commonReasons=[${Array.from(unfilledReasons).join(', ')}]`);
+      
+      // Check for systemic missing fields
+      const missingFieldReasons = Array.from(unfilledReasons).filter(r => r.includes('missing'));
+      if (missingFieldReasons.length > 0) {
+        console.error(`[allocation.unfilled] CRITICAL: Missing player fields causing unfilled prizes: ${missingFieldReasons.join(', ')}`);
+      }
+    }
 
     console.log(`[alloc.done] winners=${winners.length} conflicts=${conflicts.length} unfilled=${unfilled.length}`);
 

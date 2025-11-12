@@ -31,7 +31,12 @@ async function sniffPlayerColumns(tournament_id?: string): Promise<string[] | nu
  */
 export async function safeSelectPlayers(
   filters: { tournament_id?: string; ids?: string[] },
-  preferredCols: string[] = ['id', 'name', 'dob', 'rating', 'fide_id', 'gender', 'sno', 'rank'],
+  preferredCols: string[] = [
+    'id', 'name', 'rank', 'sno', 
+    'rating', 'dob', 'gender', 'fide_id', 
+    'state', 'city', 'club', 'disability', 'unrated',
+    'federation', 'dob_raw'
+  ],
   orderBy?: { column: string; ascending: boolean; nullsFirst?: boolean }
 ): Promise<{ data: any[]; count: number; usedColumns: string[] }> {
   
