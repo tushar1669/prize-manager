@@ -296,16 +296,20 @@ export type Database = {
           disability: string | null
           dob: string | null
           dob_raw: string | null
+          federation: string | null
           fide_id: string | null
           gender: string | null
           id: string
           name: string
           rank: number
           rating: number | null
+          sno: string | null
           special_notes: string | null
           state: string | null
           tags_json: Json | null
           tournament_id: string
+          unrated: boolean
+          updated_at: string | null
           warnings_json: Json | null
         }
         Insert: {
@@ -315,16 +319,20 @@ export type Database = {
           disability?: string | null
           dob?: string | null
           dob_raw?: string | null
+          federation?: string | null
           fide_id?: string | null
           gender?: string | null
           id?: string
           name: string
           rank: number
           rating?: number | null
+          sno?: string | null
           special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
           tournament_id: string
+          unrated?: boolean
+          updated_at?: string | null
           warnings_json?: Json | null
         }
         Update: {
@@ -334,16 +342,20 @@ export type Database = {
           disability?: string | null
           dob?: string | null
           dob_raw?: string | null
+          federation?: string | null
           fide_id?: string | null
           gender?: string | null
           id?: string
           name?: string
           rank?: number
           rating?: number | null
+          sno?: string | null
           special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
           tournament_id?: string
+          unrated?: boolean
+          updated_at?: string | null
           warnings_json?: Json | null
         }
         Relationships: [
@@ -616,6 +628,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      import_dedup_candidates: {
+        Args: { candidates: Json; tournament_id: string }
+        Returns: Json
       }
       list_my_tournaments: {
         Args: { include_all?: boolean }
