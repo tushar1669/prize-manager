@@ -542,14 +542,24 @@ export default function Finalize() {
                 By publishing, you create an immutable version (v{nextVersion ?? 1}) of these allocations.
                 The tournament will be available at a public URL that can be shared with participants.
               </p>
-              <Button 
-                onClick={() => publishMutation.mutate()}
-                disabled={publishMutation.isPending}
-                variant="outline"
-                className="w-full"
-              >
-                {publishMutation.isPending ? 'Publishing...' : 'Make Public'}
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  onClick={() => publishMutation.mutate()}
+                  disabled={publishMutation.isPending}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {publishMutation.isPending ? 'Publishing...' : 'Make Public'}
+                </Button>
+                <Button
+                  onClick={() => navigate(`/t/${id}/public`)}
+                  disabled={!winners || winners.length === 0}
+                  variant="secondary"
+                  className="w-full"
+                >
+                  View Public Page
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

@@ -94,6 +94,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
+import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 
 /**
@@ -403,6 +404,13 @@ export default function PlayerImport() {
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [isRunningDedup, setIsRunningDedup] = useState(false);
   const [dedupeReviewed, setDedupeReviewed] = useState(false);
+  const [dataCoverage, setDataCoverage] = useState<{
+    dob: number;
+    gender: number;
+    state: number;
+    city: number;
+    federation: number;
+  } | null>(null);
   const hasMappedRef = useRef(false);
   const logContextRef = useRef<ImportLogContext | null>(null);
   const lastFileInfoRef = useRef<LastFileInfo>({
@@ -1756,6 +1764,10 @@ export default function PlayerImport() {
         } else if (fieldKey === 'gender') {
           // Apply gender normalizer
           value = normalizeGender(value);
+        } else if (fieldKey === 'federation' || fieldKey === 'fed_code') {
+          // Map both federation and fed_code to the federation field
+          player.federation = value ? String(value).trim() || null : null;
+          return; // Skip default assignment below
         } else if (fieldKey === 'dob' && value != null && value !== '') {
           const result = toISODate(value);
           player.dob = result.dob;
@@ -1787,7 +1799,8 @@ export default function PlayerImport() {
 
       // Phase 6.5: Auto-extract state from Ident column if state is missing
       // Swiss-Manager often has Ident format: IND/KA/10203 where KA is the state code
-      if (!player.state || player.state === '') {
+      // IMPORTANT: Never use federation as fallback for state
+      if ((!player.state || player.state === '') && player.federation !== 'IND') {
         // Check if we have an 'ident' field mapped or can find it in raw data
         let identValue = player.ident;
         if (!identValue) {
@@ -1911,6 +1924,38 @@ export default function PlayerImport() {
         errors: err.errors.slice(0, 3)
       }))
     };
+
+    // Calculate data coverage for quality checks
+    const totalValid = validPlayers.length;
+    if (totalValid > 0) {
+      const coverage = {
+        dob: validPlayers.filter(p => p.dob).length / totalValid,
+        gender: validPlayers.filter(p => p.gender).length / totalValid,
+        state: validPlayers.filter(p => p.state).length / totalValid,
+        city: validPlayers.filter(p => p.city).length / totalValid,
+        federation: validPlayers.filter(p => p.federation).length / totalValid,
+      };
+      setDataCoverage(coverage);
+
+      // Check if state looks like federation (IND, IN, INDIA)
+      const stateIndCount = validPlayers.filter(p => 
+        p.state && ['IND', 'IN', 'INDIA'].includes(String(p.state).toUpperCase())
+      ).length;
+      const stateIndPct = stateIndCount / totalValid;
+
+      if (stateIndPct >= 0.8) {
+        toast.warning(
+          "Heads up: 'State' looks like Federation (IND) for most rows. " +
+          "Check your mapping: use 'Fed.' for Federation and 'Ident/State' for State.",
+          { duration: 8000 }
+        );
+        console.warn('[import.coverage] State appears to contain federation codes', {
+          stateIndCount,
+          totalValid,
+          percentage: (stateIndPct * 100).toFixed(1) + '%'
+        });
+      }
+    }
 
     setValidationErrors(errors);
 
@@ -2361,6 +2406,11 @@ export default function PlayerImport() {
                 <AlertDescription>All {mappedPlayers.length} players validated</AlertDescription>
               </Alert>
             )}
+            
+            {dataCoverage && (
+              <DataCoverageBar coverage={dataCoverage} />
+            )}
+            
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
