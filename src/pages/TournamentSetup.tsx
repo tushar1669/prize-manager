@@ -401,8 +401,64 @@ export default function TournamentSetup() {
       setHasHydratedPrizes(true);
     } else if (mainCat) {
       setHasHydratedPrizes(true);
+    } else {
+      // No Main category exists → auto-create with default prizes
+      console.log('[prizes] no Main category found, auto-creating with defaults');
+      
+      const defaultPrizes = [
+        { place: 1, cash_amount: 10000, has_trophy: true, has_medal: false },
+        { place: 2, cash_amount: 7000, has_trophy: false, has_medal: true },
+        { place: 3, cash_amount: 5000, has_trophy: false, has_medal: true },
+      ];
+      
+      setPrizes(defaultPrizes);
+      setInitialPrizes(defaultPrizes);
+      setHasHydratedPrizes(true);
+      
+      // Auto-save to DB (non-blocking)
+      (async () => {
+        try {
+          console.log('[prizes] creating Main category + default prizes in DB');
+          const { data: newMainCat, error: createError } = await supabase
+            .from('categories')
+            .insert({
+              tournament_id: id,
+              name: 'Main (Open)',
+              is_main: true,
+              criteria_json: {},
+              order_idx: 0,
+              is_active: true
+            })
+            .select('id')
+            .single();
+          
+          if (createError) throw createError;
+          
+          const prizesToInsert = defaultPrizes.map(p => ({
+            category_id: newMainCat.id,
+            place: p.place,
+            cash_amount: p.cash_amount,
+            has_trophy: p.has_trophy,
+            has_medal: p.has_medal,
+            is_active: true
+          }));
+          
+          const { error: insertError } = await supabase
+            .from('prizes')
+            .insert(prizesToInsert);
+          
+          if (insertError) throw insertError;
+          
+          console.log('[prizes] Main category + prizes auto-created successfully');
+          queryClient.invalidateQueries({ queryKey: ['categories', id] });
+          toast.success('Main prizes initialized with defaults');
+        } catch (err: any) {
+          console.error('[prizes] auto-create failed', err);
+          toast.error('Failed to initialize Main prizes. Please save manually.');
+        }
+      })();
     }
-  }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft]);
+  }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft, id, queryClient]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
