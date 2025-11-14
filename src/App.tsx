@@ -27,6 +27,7 @@ import MasterDashboard from "./pages/MasterDashboard";
 import SpecialLanding from "./pages/SpecialLanding";
 import Account from "./pages/Account";
 import CategoryOrderReview from "./pages/CategoryOrderReview";
+import PublicWinnersPage from "./pages/PublicWinnersPage";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => {
               <Route path="/p/:slug" element={<PublicTournament />} />
               <Route path="/p/:slug/results" element={<PublicResults />} />
               <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
+              <Route path="/t/:id/public" element={<PublicWinnersPage />} />
 
               {/* Auth routes */}
               <Route path="/auth" element={<Auth />} />

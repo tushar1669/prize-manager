@@ -37,7 +37,9 @@ type TournamentMeta = Pick<
 type PlayerRow = Pick<
   Database["public"]["Tables"]["players"]["Row"],
   "rank" | "name" | "rating" | "dob" | "gender" | "state" | "city" | "club"
->;
+> & {
+  federation?: string | null;
+};
 
 function formatDateRange(meta: Partial<TournamentMeta>): string {
   const range = [meta.start_date, meta.end_date].filter(Boolean).join(" – ");
@@ -63,9 +65,10 @@ function buildTableRows(rows: PlayerRow[], maskDob: boolean): string {
         row.rating,
         maskDobForPublic(row.dob, maskDob),
         row.gender,
-        row.state,
-        row.city,
-        row.club
+        row.state || "—",
+        row.city || "—",
+        row.club || "—",
+        row.federation || "—"
       ];
 
       return `<tr>${cells
@@ -173,6 +176,7 @@ export function buildPlayersPrintHtml(
             <th>State</th>
             <th>City</th>
             <th>Club</th>
+            <th>Federation</th>
           </tr>
         </thead>
         <tbody>
@@ -233,7 +237,7 @@ export async function exportPlayersViaPrint({
 
     const { data: players, count, usedColumns } = await safeSelectPlayersByTournament(
       tournamentId,
-      ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club'],
+      ['rank', 'name', 'rating', 'dob', 'gender', 'state', 'city', 'club', 'federation'],
       { column: 'rank', ascending: true }
     );
 
