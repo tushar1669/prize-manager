@@ -15,6 +15,7 @@ import TournamentSetup from "./pages/TournamentSetup";
 import PlayerImport from "./pages/PlayerImport";
 import ConflictReview from "./pages/ConflictReview";
 import Finalize from "./pages/Finalize";
+import FinalPrizeView from "./pages/FinalPrizeView";
 import PublishSuccess from "./pages/PublishSuccess";
 import PublicTournament from "./pages/PublicTournament";
 import PublicHome from "./pages/PublicHome";
@@ -67,6 +68,7 @@ const App = () => {
               <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
               <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />
               <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
+              <Route path="/t/:id/final/:view" element={<ProtectedRoute><FinalPrizeView /></ProtectedRoute>} />
               <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
               <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
