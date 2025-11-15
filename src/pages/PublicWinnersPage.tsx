@@ -35,8 +35,6 @@ export default function PublicWinnersPage() {
     queryKey: ['public-winners', tournament?.id],
     queryFn: async () => {
       if (!tournament?.id) return [];
-      
-      // Gate: only fetch if published
       if (tournament.is_published === false) {
         console.log('[public-winners] gated (unpublished)');
         return [];
@@ -133,7 +131,7 @@ export default function PublicWinnersPage() {
 
       return sorted;
     },
-    enabled: !!(tournament?.id && tournament?.is_published),
+    enabled: !!tournament?.id,
   });
 
   if (tournamentLoading || resultsLoading) {
