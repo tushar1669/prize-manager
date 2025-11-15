@@ -1,4 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+
+type PlayerRow = Database["public"]["Tables"]["players"]["Row"];
 
 /**
  * Schema sniff helper: try a star-select to detect available columns
@@ -32,13 +35,13 @@ async function sniffPlayerColumns(tournament_id?: string): Promise<string[] | nu
 export async function safeSelectPlayers(
   filters: { tournament_id?: string; ids?: string[] },
   preferredCols: string[] = [
-    'id', 'name', 'rank', 'sno', 
-    'rating', 'dob', 'gender', 'fide_id', 
+    'id', 'name', 'rank', 'sno',
+    'rating', 'dob', 'gender', 'fide_id',
     'state', 'city', 'club', 'disability', 'unrated',
     'federation', 'dob_raw'
   ],
   orderBy?: { column: string; ascending: boolean; nullsFirst?: boolean }
-): Promise<{ data: any[]; count: number; usedColumns: string[] }> {
+): Promise<{ data: Array<Partial<PlayerRow>>; count: number; usedColumns: string[] }> {
   
   // FAST PATH: if we can sniff columns, intersect instead of provoking 400s
   const sniffed = await sniffPlayerColumns(filters.tournament_id);
@@ -55,7 +58,11 @@ export async function safeSelectPlayers(
     const { data, error, count } = await q;
     if (!error) {
       console.log('[import] ✓ players safe-select (sniff fast path)', { usedColumns: intersect, count });
-      return { data: data ?? [], count: count ?? (data?.length ?? 0), usedColumns: intersect };
+      return {
+        data: (data ?? []) as Array<Partial<PlayerRow>>,
+        count: count ?? (data?.length ?? 0),
+        usedColumns: intersect
+      };
     }
     // fall through to retry path if something odd happens
   }
@@ -103,7 +110,11 @@ export async function safeSelectPlayers(
       } else {
         console.log('[import] ✓ players safe-select OK', { usedColumns: cols, count });
       }
-      return { data: data ?? [], count: count ?? (data?.length ?? 0), usedColumns: cols };
+      return {
+        data: (data ?? []) as Array<Partial<PlayerRow>>,
+        count: count ?? (data?.length ?? 0),
+        usedColumns: cols
+      };
     }
 
     // Parse error for missing column
@@ -122,7 +133,7 @@ export async function safeSelectPlayers(
       
       if (cols.length === 0) {
         console.error('[import] ❌ players safe-select exhausted: no columns left');
-        return { data: [], count: 0, usedColumns: [] };
+        return { data: [] as Array<Partial<PlayerRow>>, count: 0, usedColumns: [] };
       }
       
       continue;
@@ -136,12 +147,12 @@ export async function safeSelectPlayers(
       errorMessage: error.message,
       errorHint: (error as any)?.hint 
     });
-    return { data: [], count: 0, usedColumns: [] };
+    return { data: [] as Array<Partial<PlayerRow>>, count: 0, usedColumns: [] };
   }
 
   // Exhausted all attempts
   console.error('[import] ❌ players safe-select exhausted retries', { tried, maxAttempts });
-  return { data: [], count: 0, usedColumns: [] };
+  return { data: [] as Array<Partial<PlayerRow>>, count: 0, usedColumns: [] };
 }
 
 /**
@@ -151,7 +162,7 @@ export async function safeSelectPlayersByTournament(
   tournamentId: string,
   preferredCols?: string[],
   orderBy?: { column: string; ascending: boolean; nullsFirst?: boolean }
-) {
+): Promise<{ data: Array<Partial<PlayerRow>>; count: number; usedColumns: string[] }> {
   return safeSelectPlayers({ tournament_id: tournamentId }, preferredCols, orderBy);
 }
 
@@ -161,6 +172,6 @@ export async function safeSelectPlayersByTournament(
 export async function safeSelectPlayersByIds(
   playerIds: string[],
   preferredCols?: string[]
-) {
+): Promise<{ data: Array<Partial<PlayerRow>>; count: number; usedColumns: string[] }> {
   return safeSelectPlayers({ ids: playerIds }, preferredCols);
 }
