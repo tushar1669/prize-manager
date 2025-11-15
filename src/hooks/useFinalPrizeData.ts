@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { safeSelectPlayersByIds } from '@/utils/safeSelectPlayers';
+import { byMainOrderPlace } from '@/utils/sortWinners';
 
 export interface FinalPrizeWinnerRow {
   prizeId: string;
@@ -164,22 +165,11 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
   });
 
   const deduped = Array.from(unique.values()).sort((a, b) => {
-    // is_main DESC (main categories first)
-    if (a.isMain !== b.isMain) {
-      return a.isMain ? -1 : 1;
-    }
-
-    // order_idx ASC (brochure order)
-    const orderA = typeof a.categoryOrder === 'number' ? a.categoryOrder : 999;
-    const orderB = typeof b.categoryOrder === 'number' ? b.categoryOrder : 999;
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
-
-    // place ASC
-    if (a.place !== b.place) {
-      return (a.place || 0) - (b.place || 0);
-    }
+    // Use shared comparator: Main → brochure order → place
+    const mappedA = { isMain: a.isMain, orderIdx: a.categoryOrder, place: a.place };
+    const mappedB = { isMain: b.isMain, orderIdx: b.categoryOrder, place: b.place };
+    const mainSort = byMainOrderPlace(mappedA, mappedB);
+    if (mainSort !== 0) return mainSort;
 
     // fallback: player name alphabetical
     return a.playerName.localeCompare(b.playerName);

@@ -8,6 +8,7 @@ import { Trophy, Medal, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { byMainOrderPlace } from "@/utils/sortWinners";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
@@ -112,13 +113,8 @@ export default function PublicWinnersPage() {
 
       const deduplicated = uniqueByPrize(combined);
       
-      const sorted = deduplicated.sort((a, b) => {
-        if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;         // Main first
-        const oa = Number.isFinite(a.orderIdx) ? a.orderIdx : 999;   // brochure order
-        const ob = Number.isFinite(b.orderIdx) ? b.orderIdx : 999;
-        if (oa !== ob) return oa - ob;
-        return (a.place || 0) - (b.place || 0);                      // then place
-      });
+      console.log('[public-winners] comparator: main→order_idx→place');
+      const sorted = deduplicated.sort(byMainOrderPlace);
 
       console.log('[public-winners] sorted main-first, order_idx, place', { count: sorted.length });
 
