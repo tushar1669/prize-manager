@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
 
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
@@ -20,8 +20,15 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
     return publicUrl;
   }, [publicUrl]);
 
+  const gridLayout = posterSize === 'a3'
+    ? 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3'
+    : 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2';
+
   return (
-    <div className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12" data-poster-size={posterSize}>
+    <div
+      className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12"
+      data-poster-size={posterSize}
+    >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold text-[#2D1B69]">Champions Board</h2>
@@ -37,6 +44,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               type="button"
               size="sm"
               variant={posterSize === 'a4' ? 'default' : 'ghost'}
+              aria-pressed={posterSize === 'a4'}
               className={`rounded-full ${posterSize === 'a4' ? 'bg-[#6B46C1] text-white hover:bg-[#553399]' : ''}`}
               onClick={() => setPosterSize('a4')}
             >
@@ -46,6 +54,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               type="button"
               size="sm"
               variant={posterSize === 'a3' ? 'default' : 'ghost'}
+              aria-pressed={posterSize === 'a3'}
               className={`rounded-full ${posterSize === 'a3' ? 'bg-[#6B46C1] text-white hover:bg-[#553399]' : ''}`}
               onClick={() => setPosterSize('a3')}
             >
@@ -54,7 +63,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           </div>
         </div>
       </div>
-      <div className="grid gap-4 print:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
+      <div className={`grid gap-4 ${gridLayout}`}>
         {winners.map(winner => (
           <div
             key={winner.prizeId}
@@ -79,14 +88,19 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           </div>
         ))}
       </div>
-      <div className="mt-8 flex items-center gap-3 rounded-2xl border border-dashed border-[#6B46C1]/40 bg-[#6B46C1]/5 p-4 text-sm text-[#2D1B69]">
-        <span className="font-semibold">QR / Link</span>
-        <Link
-          to={publicUrl}
-          className="underline decoration-[#6B46C1] decoration-2 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]"
-        >
-          {shareLink}
-        </Link>
+      <div className="mt-8 grid gap-4 rounded-2xl border border-dashed border-[#6B46C1]/40 bg-[#6B46C1]/5 p-4 text-sm text-[#2D1B69] sm:grid-cols-[minmax(5rem,7rem)_1fr]">
+        <div className="flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-[#6B46C1]/60 bg-white text-xs font-semibold uppercase tracking-wide text-[#6B46C1]">
+          QR Code
+        </div>
+        <div className="flex flex-col justify-center gap-1">
+          <span className="text-sm font-semibold">Scan for live updates</span>
+          <Link
+            to={publicUrl}
+            className="break-all text-xs underline decoration-[#6B46C1] decoration-2 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]"
+          >
+            {shareLink}
+          </Link>
+        </div>
       </div>
     </div>
   );

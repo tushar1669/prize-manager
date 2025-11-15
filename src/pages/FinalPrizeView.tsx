@@ -110,7 +110,7 @@ export default function FinalPrizeView() {
                   <PosterGridView winners={data.winners} tournamentId={id as string} />
                 </TabsContent>
                 <TabsContent value="v4" className="m-0">
-                  <ArbiterSheetView winners={data.winners} />
+                  <ArbiterSheetView winners={data.winners} tournamentId={id as string} />
                 </TabsContent>
               </>
             )}
