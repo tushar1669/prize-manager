@@ -77,6 +77,11 @@ All colors MUST be HSL.
     color: #111827 !important;
   }
 
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
   .poster-grid[data-poster-size='a4'] {
     width: 210mm !important;
   }

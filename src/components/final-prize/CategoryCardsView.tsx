@@ -3,16 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Trophy, Medal } from 'lucide-react';
-import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
+import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 
 interface CategoryCardsViewProps {
-  categories: {
-    id: string;
-    name: string;
-    is_main: boolean;
-  }[];
-  byCategory: Map<string, FinalPrizeWinnerRow[]>;
+  groups: FinalPrizeCategoryGroup[];
 }
 
 const glyphByPlace = (place: number) => {
@@ -22,11 +17,10 @@ const glyphByPlace = (place: number) => {
   return null;
 };
 
-export function CategoryCardsView({ categories, byCategory }: CategoryCardsViewProps) {
+export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
   return (
     <div className="mx-auto mt-8 grid max-w-7xl gap-6 px-6 pb-12 sm:grid-cols-2 xl:grid-cols-3 print:grid-cols-2">
-      {categories.map(category => {
-        const winners = byCategory.get(category.id) || [];
+      {groups.map(({ category, winners }) => {
         if (winners.length === 0) return null;
 
         return (

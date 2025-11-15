@@ -21,6 +21,16 @@ export interface FinalPrizeWinnerRow {
   state?: string | null;
 }
 
+export interface FinalPrizeCategoryGroup {
+  category: {
+    id: string;
+    name: string;
+    is_main: boolean;
+    order_idx: number | null;
+  };
+  winners: FinalPrizeWinnerRow[];
+}
+
 export interface FinalPrizeData {
   tournament: {
     id: string;
@@ -79,7 +89,9 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     };
   }
 
-  const prizeIds = allocations.map(a => a.prize_id).filter(Boolean) as string[];
+  const prizeIds = Array.from(
+    new Set(allocations.map(a => a.prize_id).filter(Boolean) as string[])
+  );
 
   const { data: prizes, error: prizeError } = await supabase
     .from('prizes')
@@ -90,7 +102,9 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     throw prizeError;
   }
 
-  const categoryIds = prizes?.map(p => p.category_id).filter(Boolean) as string[];
+  const categoryIds = Array.from(
+    new Set(prizes?.map(p => p.category_id).filter(Boolean) as string[])
+  );
 
   const { data: categories, error: categoryError } = await supabase
     .from('categories')
@@ -101,7 +115,9 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     throw categoryError;
   }
 
-  const playerIds = allocations.map(a => a.player_id).filter(Boolean) as string[];
+  const playerIds = Array.from(
+    new Set(allocations.map(a => a.player_id).filter(Boolean) as string[])
+  );
 
   const { data: players } = await safeSelectPlayersByIds(playerIds, [
     'id',
@@ -112,11 +128,13 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     'state',
   ]);
 
+  const categoryLookup = new Map((categories || []).map(category => [category.id, category]));
+
   const winners = (allocations || [])
     .map(alloc => {
       const prize = prizes?.find(p => p.id === alloc.prize_id);
       const player = players?.find(p => p.id === alloc.player_id);
-      const category = categories?.find(c => c.id === prize?.category_id);
+      const category = prize?.category_id ? categoryLookup.get(prize.category_id) : undefined;
       if (!prize || !player || !category) return null;
 
       return {
@@ -135,7 +153,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
         rank: player.rank,
         club: player.club,
         state: player.state,
-      } as FinalPrizeWinnerRow;
+      } satisfies FinalPrizeWinnerRow;
     })
     .filter(Boolean) as FinalPrizeWinnerRow[];
 
@@ -150,13 +168,22 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     if (a.isMain !== b.isMain) {
       return a.isMain ? -1 : 1;
     }
-    if (a.categoryOrder !== b.categoryOrder) {
-      return (a.categoryOrder ?? 999) - (b.categoryOrder ?? 999);
+
+    const orderA = typeof a.categoryOrder === 'number' ? a.categoryOrder : 999;
+    const orderB = typeof b.categoryOrder === 'number' ? b.categoryOrder : 999;
+    if (orderA !== orderB) {
+      return orderA - orderB;
     }
+
     if (a.categoryName !== b.categoryName) {
       return a.categoryName.localeCompare(b.categoryName);
     }
-    return (a.place || 0) - (b.place || 0);
+
+    if (a.place !== b.place) {
+      return (a.place || 0) - (b.place || 0);
+    }
+
+    return a.playerName.localeCompare(b.playerName);
   });
 
   const totals = deduped.reduce(
@@ -203,7 +230,10 @@ export function useFinalPrizeData(tournamentId?: string) {
   const grouped = useMemo(() => {
     const data = query.data;
     if (!data) {
-      return { byCategory: new Map<string, FinalPrizeWinnerRow[]>() };
+      return {
+        byCategory: new Map<string, FinalPrizeWinnerRow[]>(),
+        groups: [] as FinalPrizeCategoryGroup[],
+      };
     }
 
     const byCategory = new Map<string, FinalPrizeWinnerRow[]>();
@@ -211,14 +241,19 @@ export function useFinalPrizeData(tournamentId?: string) {
       if (!byCategory.has(winner.categoryId)) {
         byCategory.set(winner.categoryId, []);
       }
-      byCategory.get(winner.categoryId)?.push(winner);
+      byCategory.get(winner.categoryId)!.push(winner);
     });
 
     byCategory.forEach(list => {
-      list.sort((a, b) => a.place - b.place);
+      list.sort((a, b) => a.place - b.place || a.playerName.localeCompare(b.playerName));
     });
 
-    return { byCategory };
+    const groups: FinalPrizeCategoryGroup[] = data.categories.map(category => ({
+      category,
+      winners: byCategory.get(category.id) ?? [],
+    }));
+
+    return { byCategory, groups };
   }, [query.data]);
 
   return { ...query, grouped };
