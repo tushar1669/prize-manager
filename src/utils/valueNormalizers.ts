@@ -21,6 +21,7 @@ export function normalizeGender(raw: any): 'M' | 'F' | 'Other' | null {
 /**
  * Normalize rating values, optionally stripping commas/spaces
  * Returns null for invalid values
+ * Coerces 0/"0" to null (treating as unrated)
  */
 export function normalizeRating(raw: any, stripCommas: boolean = true): number | null {
   if (raw == null || raw === '') return null;
@@ -34,8 +35,8 @@ export function normalizeRating(raw: any, stripCommas: boolean = true): number |
   
   const num = parseFloat(str);
   
-  // Validate: must be non-negative number
-  if (isNaN(num) || num < 0) return null;
+  // Validate: must be positive number (coerce 0 to null)
+  if (isNaN(num) || num <= 0) return null;
   
   return Math.round(num);
 }
@@ -51,6 +52,7 @@ export interface UnratedInferenceConfig {
 /**
  * Infer whether a player should be marked as unrated
  * Handles explicit flags + configurable inference from missing data
+ * Rule: if rating is null, unrated=true (unless explicit flag says otherwise)
  */
 export function inferUnrated(
   player: { 
@@ -60,7 +62,12 @@ export function inferUnrated(
   },
   config: UnratedInferenceConfig
 ): boolean {
-  // Check explicit unrated field first
+  // If rating > 0, force unrated=false (override inference)
+  if (player.rating != null && player.rating > 0) {
+    return false;
+  }
+  
+  // Check explicit unrated field
   if (player.unrated != null) {
     const s = String(player.unrated).trim().toLowerCase();
     
@@ -69,10 +76,20 @@ export function inferUnrated(
       return true;
     }
     
+    // Explicit falsy values (when rating is null, this overrides default behavior)
+    if (['n', 'no', 'false', '0', 'r', 'rated'].includes(s)) {
+      return false;
+    }
+    
     // Configurable: treat empty/dash/NA as unrated
     if (config.treatEmptyAsUnrated && ['', '-', 'na', 'n/a', 'n.a.'].includes(s)) {
       return true;
     }
+  }
+  
+  // Default: if rating is null, unrated=true
+  if (player.rating == null) {
+    return true;
   }
   
   // Configurable: infer from missing rating + missing FIDE ID
