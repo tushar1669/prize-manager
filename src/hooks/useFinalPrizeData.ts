@@ -38,7 +38,6 @@ export interface FinalPrizeData {
     city?: string | null;
     start_date?: string | null;
     end_date?: string | null;
-    code?: string | null;
   } | null;
   winners: FinalPrizeWinnerRow[];
   totals: {
@@ -58,7 +57,7 @@ export interface FinalPrizeData {
 async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData> {
   const { data: tournament, error: tournamentError } = await supabase
     .from('tournaments')
-    .select('id, title, city, start_date, end_date, code')
+    .select('id, title, city, start_date, end_date')
     .eq('id', tournamentId)
     .maybeSingle();
 
@@ -165,24 +164,24 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
   });
 
   const deduped = Array.from(unique.values()).sort((a, b) => {
+    // is_main DESC (main categories first)
     if (a.isMain !== b.isMain) {
       return a.isMain ? -1 : 1;
     }
 
+    // order_idx ASC (brochure order)
     const orderA = typeof a.categoryOrder === 'number' ? a.categoryOrder : 999;
     const orderB = typeof b.categoryOrder === 'number' ? b.categoryOrder : 999;
     if (orderA !== orderB) {
       return orderA - orderB;
     }
 
-    if (a.categoryName !== b.categoryName) {
-      return a.categoryName.localeCompare(b.categoryName);
-    }
-
+    // place ASC
     if (a.place !== b.place) {
       return (a.place || 0) - (b.place || 0);
     }
 
+    // fallback: player name alphabetical
     return a.playerName.localeCompare(b.playerName);
   });
 
@@ -209,12 +208,15 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
       categoryCount: distinctCategoryCount,
     },
     categories: (categories || []).sort((a, b) => {
+      // is_main DESC (main categories first)
       if (a.is_main !== b.is_main) {
         return a.is_main ? -1 : 1;
       }
+      // order_idx ASC (brochure order)
       const aIdx = typeof a.order_idx === 'number' ? a.order_idx : 999;
       const bIdx = typeof b.order_idx === 'number' ? b.order_idx : 999;
       if (aIdx !== bIdx) return aIdx - bIdx;
+      // fallback: name alphabetical
       return a.name.localeCompare(b.name);
     }),
   };
