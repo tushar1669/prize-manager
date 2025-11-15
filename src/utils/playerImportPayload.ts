@@ -1,4 +1,5 @@
 import type { PlayerImportRow } from '@/lib/validations';
+import type { Json } from '@/integrations/supabase/types';
 
 export const SUPABASE_PLAYER_FIELDS = [
   'rank',
@@ -35,8 +36,8 @@ export type SupabasePlayerPayload = {
   unrated: boolean;
   federation: string | null;
   tournament_id: string;
-  tags_json: Record<string, unknown>;
-  warnings_json: Record<string, unknown>;
+  tags_json: Json;
+  warnings_json: Json;
 };
 
 export interface ParsedPlayer extends PlayerImportRow {
