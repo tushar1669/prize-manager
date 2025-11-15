@@ -39,6 +39,11 @@ export default function PublicWinnersPage() {
       // Gate: only fetch if published
       if (tournament.is_published === false) {
         console.log('[public-winners] gated (unpublished)');
+        toast({
+          variant: 'destructive',
+          title: 'Tournament unpublished',
+          description: 'This tournament is not yet published. Winners cannot be shown.',
+        });
         return [];
       }
 
@@ -133,7 +138,7 @@ export default function PublicWinnersPage() {
 
       return sorted;
     },
-    enabled: !!(tournament?.id && tournament?.is_published),
+    enabled: !!tournament?.id,
   });
 
   if (tournamentLoading || resultsLoading) {
