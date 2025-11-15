@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
@@ -25,18 +23,11 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
   const gridLayout = posterSize === 'a3'
     ? 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3'
     : 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2';
-  const posterStyle = useMemo(
-    () => ({
-      '--poster-page-width': posterSize === 'a3' ? '297mm' : '210mm',
-    }) as CSSProperties,
-    [posterSize]
-  );
 
   return (
     <div
       className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12"
       data-poster-size={posterSize}
-      style={posterStyle}
     >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
@@ -54,10 +45,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               size="sm"
               variant={posterSize === 'a4' ? 'default' : 'ghost'}
               aria-pressed={posterSize === 'a4'}
-              className={cn(
-                'rounded-full',
-                posterSize === 'a4' && 'bg-[#6B46C1] text-white hover:bg-[#553399]'
-              )}
+              className={`rounded-full ${posterSize === 'a4' ? 'bg-[#6B46C1] text-white hover:bg-[#553399]' : ''}`}
               onClick={() => setPosterSize('a4')}
             >
               A4
@@ -67,10 +55,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               size="sm"
               variant={posterSize === 'a3' ? 'default' : 'ghost'}
               aria-pressed={posterSize === 'a3'}
-              className={cn(
-                'rounded-full',
-                posterSize === 'a3' && 'bg-[#6B46C1] text-white hover:bg-[#553399]'
-              )}
+              className={`rounded-full ${posterSize === 'a3' ? 'bg-[#6B46C1] text-white hover:bg-[#553399]' : ''}`}
               onClick={() => setPosterSize('a3')}
             >
               A3
@@ -78,7 +63,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           </div>
         </div>
       </div>
-      <div className={cn('grid gap-4', gridLayout)}>
+      <div className={`grid gap-4 ${gridLayout}`}>
         {winners.map(winner => (
           <div
             key={winner.prizeId}
