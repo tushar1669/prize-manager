@@ -45,21 +45,6 @@ export const categorySchema = z.object({
 
 export type CategoryForm = z.infer<typeof categorySchema>;
 
-// Prize schema
-export const prizeSchema = z.object({
-  place: z.number().min(1, "Place must be at least 1"),
-  cash_amount: z.number().min(0, "Cash amount cannot be negative"),
-  has_trophy: z.boolean(),
-  has_medal: z.boolean()
-}).refine(data => {
-  return data.cash_amount > 0 || data.has_trophy || data.has_medal;
-}, {
-  message: "Prize must have at least cash, trophy, or medal",
-  path: ["cash_amount"]
-});
-
-export type PrizeForm = z.infer<typeof prizeSchema>;
-
 // Player Import schema
 export const playerImportSchema = z.object({
   rank: z.number().min(1, "Rank must be a positive integer"),

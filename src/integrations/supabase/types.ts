@@ -798,10 +798,3 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
-export const Constants = {
-  public: {
-    Enums: {
-      app_role: ["master", "organizer", "user"],
-    },
-  },
-} as const
