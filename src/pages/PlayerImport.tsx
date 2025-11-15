@@ -1688,6 +1688,9 @@ export default function PlayerImport() {
     setShowMappingDialog(false);
 
     const preset = selectPresetBySource(importSource as any);
+    
+    // Track zero ratings before coercion
+    let zeroRatingCount = 0;
 
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
@@ -1703,6 +1706,10 @@ export default function PlayerImport() {
         } else if (fieldKey === 'sno') {
           value = value ? Number(value) : null;
         } else if (fieldKey === 'rating') {
+          // Track zeros before coercion
+          if (String(value ?? '').trim() === '0') {
+            zeroRatingCount++;
+          }
           // Apply rating normalizer with comma stripping config
           value = normalizeRating(value, importConfig.stripCommasFromRating);
         } else if (fieldKey === 'gender') {
@@ -1904,15 +1911,10 @@ export default function PlayerImport() {
       const ratingStats = {
         null: validPlayers.filter(p => p.rating == null).length,
         gt0: validPlayers.filter(p => p.rating != null && p.rating > 0).length,
-        // Note: zero_coerced count not tracked separately (0 becomes null in normalizeRating)
+        zero_coerced: zeroRatingCount,
         total: totalValid
       };
-      console.log('[import.coverage] ratings:', {
-        null: ratingStats.null,
-        gt0: ratingStats.gt0,
-        zero_coerced: 'merged into null',
-        total: ratingStats.total
-      });
+      console.log('[import.coverage] ratings:', ratingStats);
     }
 
     setValidationErrors(errors);
