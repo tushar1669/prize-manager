@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Trophy, Medal, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
@@ -118,9 +119,22 @@ export default function PublicWinnersPage() {
         if (oa !== ob) return oa - ob;
         return (a.place || 0) - (b.place || 0);                      // then place
       });
-      
+
       console.log('[public-winners] sorted main-first, order_idx, place', { count: sorted.length });
-      
+
+      if (!tournament.is_published && sorted.length > 0) {
+        console.warn('[public-winners] received winners for unpublished tournament', {
+          tournamentId: tournament.id,
+          count: sorted.length,
+        });
+        toast({
+          variant: 'destructive',
+          title: 'Tournament unpublished',
+          description: 'This tournament is not yet published. Winners cannot be shown.',
+        });
+        return [];
+      }
+
       return sorted;
     },
     enabled: !!(tournament?.id && tournament?.is_published),
