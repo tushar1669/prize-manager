@@ -1,17 +1,18 @@
 import { Navigate, useParams, Link } from 'react-router-dom';
 import { useMemo } from 'react';
+import { format } from 'date-fns';
+import { Loader2 } from 'lucide-react';
+
 import { AppNav } from '@/components/AppNav';
 import { BackBar } from '@/components/BackBar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2 } from 'lucide-react';
 import { useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { FinalPrizeSummaryHeader } from '@/components/final-prize/FinalPrizeSummaryHeader';
 import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import { CeremonyScriptView } from '@/components/final-prize/CeremonyScriptView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import { ArbiterSheetView } from '@/components/final-prize/ArbiterSheetView';
-import { format } from 'date-fns';
 
 const VIEW_TABS = [
   { id: 'v1', label: 'Category Cards' },
@@ -52,11 +53,11 @@ export default function FinalPrizeView() {
   const dateRange = useMemo(() => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date), [data?.tournament]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <AppNav />
-      <BackBar backTo={`/t/${id}/finalize`}>
-        Final prize list
-      </BackBar>
+    <div className="min-h-screen bg-slate-50 text-slate-900 print:bg-white print:text-slate-900">
+      <div className="print:hidden">
+        <AppNav />
+        <BackBar label="Back to Finalization" to={`/t/${id}/finalize`} />
+      </div>
       {data && (
         <FinalPrizeSummaryHeader
           tournamentTitle={data.tournament?.title}
@@ -68,7 +69,7 @@ export default function FinalPrizeView() {
       <main className="pb-16">
         <div className="mx-auto mt-6 max-w-7xl px-6">
           <Tabs value={normalized} className="w-full">
-            <TabsList className="w-full justify-start overflow-x-auto rounded-full bg-white p-1 shadow-sm">
+            <TabsList className="w-full justify-start overflow-x-auto rounded-full bg-white p-1 shadow-sm print:hidden">
               {VIEW_TABS.map(tab => (
                 <TabsTrigger
                   key={tab.id}
@@ -100,7 +101,7 @@ export default function FinalPrizeView() {
             {data && data.winners.length > 0 && (
               <>
                 <TabsContent value="v1" className="m-0">
-                  <CategoryCardsView categories={data.categories} byCategory={grouped.byCategory} />
+                  <CategoryCardsView groups={grouped.groups} />
                 </TabsContent>
                 <TabsContent value="v2" className="m-0">
                   <CeremonyScriptView winners={data.winners} />

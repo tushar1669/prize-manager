@@ -25,3 +25,7 @@ bun.lockb
 *.sw?
 playwright-report/
 test-results/
+
+# Generated preview artifacts
+public/previews/*
+!public/previews/.keep
