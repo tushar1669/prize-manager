@@ -559,6 +559,14 @@ export default function Finalize() {
                 >
                   View Public Page
                 </Button>
+                <Button
+                  onClick={() => navigate(`/t/${id}/final/v1`)}
+                  disabled={!winners || winners.length === 0}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Final Prize Views
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -863,7 +863,7 @@ export default function PlayerImport() {
                 : Boolean(picked.unrated);
           return {
             rank: Number(p.rank),
-            sno: picked.sno != null ? Number(picked.sno) : null,
+            sno: picked.sno != null ? String(picked.sno) : null,
             name: String(p.name || ''),
             rating: picked.rating != null ? Number(picked.rating) : null,
             dob: picked.dob || null,
