@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useExcelParser } from "@/hooks/useExcelParser";
 import { ColumnMappingDialog } from "@/components/ColumnMappingDialog";
-import { playerImportSchema, PlayerImportRow } from "@/lib/validations";
+import { playerImportSchema } from "@/lib/validations";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
@@ -93,6 +93,11 @@ import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import {
+  buildSupabasePlayerPayload,
+  type ParsedPlayer,
+  toNumericFideOrNull,
+} from '@/utils/playerImportPayload';
 import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
@@ -138,22 +143,6 @@ async function bulkUpsertPlayers(payload: any[]) {
 /**
  * Enforce numeric-only FIDE IDs (6-10 digits).
  */
-const toNumericFideOrNull = (v: unknown): string | null => {
-  const s = String(v ?? '').replace(/\D/g, '').trim();
-  return s && /^[0-9]{6,10}$/.test(s) ? s : null;
-};
-
-interface ParsedPlayer extends PlayerImportRow {
-  _originalIndex: number;
-  fide_id?: string | null;
-  federation?: string | null;
-  dob_raw?: string | null;
-  _dobInferred?: boolean;
-  _dobInferredReason?: string;
-  _rawUnrated?: unknown;
-  _rank_autofilled?: boolean;
-  [key: string]: unknown; // Index signature for rank autofill
-}
 
 type ImportLogInsert = Database["public"]["Tables"]["import_logs"]["Insert"];
 
@@ -827,23 +816,6 @@ export default function PlayerImport() {
       console.time('[import] batch-insert');
 
       const CHUNK_SIZE = 500;
-      const fields = [
-        'rank',
-        'sno',
-        'name',
-        'rating',
-        'dob',
-        'dob_raw',
-        'gender',
-        'state',
-        'city',
-        'club',
-        'disability',
-        'special_notes',
-        'fide_id',
-        'unrated',
-        'federation'
-      ];
 
       const results = {
         created: [] as ParsedPlayer[],
@@ -853,41 +825,7 @@ export default function PlayerImport() {
       };
 
       const buildRows = (playerList: ParsedPlayer[]) =>
-        playerList.map(p => {
-          const picked = pick(p, fields);
-          // Coerce rating: 0 → null (already done in normalizeRating)
-          const finalRating = picked.rating != null ? Number(picked.rating) : null;
-          
-          // Unrated inference: if rating > 0, force false; else use picked/inferred value
-          const normalizedUnrated = finalRating != null && finalRating > 0
-            ? false
-            : (typeof picked.unrated === 'boolean'
-                ? picked.unrated
-                : picked.unrated == null
-                  ? true  // Default: null rating → unrated=true
-                  : Boolean(picked.unrated));
-          
-          return {
-            rank: Number(p.rank),
-            sno: picked.sno != null ? String(picked.sno) : null,
-            name: String(p.name || ''),
-            rating: finalRating,
-            dob: picked.dob || null,
-            dob_raw: picked.dob_raw || picked.dob || null,
-            gender: picked.gender || null,
-            state: picked.state || null,
-            city: picked.city || null,
-            club: picked.club || null,
-            disability: picked.disability || null,
-            special_notes: picked.special_notes || null,
-            fide_id: toNumericFideOrNull(picked.fide_id),
-            unrated: normalizedUnrated,
-            federation: picked.federation || null,
-            tournament_id: id!,
-            tags_json: {},
-            warnings_json: {},
-          };
-        });
+        playerList.map(p => buildSupabasePlayerPayload(p, id!));
 
       if (replaceExisting) {
         console.log('[import] Deleting existing players');
