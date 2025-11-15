@@ -855,17 +855,23 @@ export default function PlayerImport() {
       const buildRows = (playerList: ParsedPlayer[]) =>
         playerList.map(p => {
           const picked = pick(p, fields);
-          const normalizedUnrated =
-            typeof picked.unrated === 'boolean'
-              ? picked.unrated
-              : picked.unrated == null
-                ? null
-                : Boolean(picked.unrated);
+          // Coerce rating: 0 → null (already done in normalizeRating)
+          const finalRating = picked.rating != null ? Number(picked.rating) : null;
+          
+          // Unrated inference: if rating > 0, force false; else use picked/inferred value
+          const normalizedUnrated = finalRating != null && finalRating > 0
+            ? false
+            : (typeof picked.unrated === 'boolean'
+                ? picked.unrated
+                : picked.unrated == null
+                  ? true  // Default: null rating → unrated=true
+                  : Boolean(picked.unrated));
+          
           return {
             rank: Number(p.rank),
             sno: picked.sno != null ? String(picked.sno) : null,
             name: String(p.name || ''),
-            rating: picked.rating != null ? Number(picked.rating) : null,
+            rating: finalRating,
             dob: picked.dob || null,
             dob_raw: picked.dob_raw || picked.dob || null,
             gender: picked.gender || null,
@@ -1955,6 +1961,20 @@ export default function PlayerImport() {
           percentage: (stateIndPct * 100).toFixed(1) + '%'
         });
       }
+      
+      // Rating coverage telemetry
+      const ratingStats = {
+        null: validPlayers.filter(p => p.rating == null).length,
+        gt0: validPlayers.filter(p => p.rating != null && p.rating > 0).length,
+        // Note: zero_coerced count not tracked separately (0 becomes null in normalizeRating)
+        total: totalValid
+      };
+      console.log('[import.coverage] ratings:', {
+        null: ratingStats.null,
+        gt0: ratingStats.gt0,
+        zero_coerced: 'merged into null',
+        total: ratingStats.total
+      });
     }
 
     setValidationErrors(errors);
