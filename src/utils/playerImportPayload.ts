@@ -1,7 +1,7 @@
 import type { PlayerImportRow } from '@/lib/validations';
 import type { Json } from '@/integrations/supabase/types';
 
-export const SUPABASE_PLAYER_FIELDS = [
+const SUPABASE_PLAYER_FIELDS = [
   'rank',
   'sno',
   'name',
