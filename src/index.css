@@ -71,21 +71,22 @@ All colors MUST be HSL.
   }
 }
 
+.poster-grid {
+  --poster-page-width: 210mm;
+}
+
+.poster-grid[data-poster-size='a3'] {
+  --poster-page-width: 297mm;
+}
+
 @media print {
   body {
     background: #ffffff !important;
     color: #111827 !important;
   }
 
-  .poster-grid[data-poster-size='a4'] {
-    width: 210mm !important;
-  }
-
-  .poster-grid[data-poster-size='a3'] {
-    width: 297mm !important;
-  }
-
   .poster-grid {
+    width: var(--poster-page-width) !important;
     margin-left: auto !important;
     margin-right: auto !important;
   }
