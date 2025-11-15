@@ -103,7 +103,7 @@ export default function FinalPrizeView() {
                   <CategoryCardsView categories={data.categories} byCategory={grouped.byCategory} />
                 </TabsContent>
                 <TabsContent value="v2" className="m-0">
-                  <CeremonyScriptView winners={data.winners} />
+                  <CeremonyScriptView tournamentId={id as string} />
                 </TabsContent>
                 <TabsContent value="v3" className="m-0">
                   <PosterGridView winners={data.winners} tournamentId={id as string} />
