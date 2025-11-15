@@ -40,8 +40,10 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
           <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
             {city && <span>{city}</span>}
             {dateRange && <span>• {dateRange}</span>}
-            <Badge className="rounded-full bg-[#6B46C1] text-white shadow-sm">{formatNumberIN(totals.totalPrizes)} Prizes</Badge>
-            <Badge variant="outline" className="rounded-full border-[#10B981]/50 text-[#0f5132]">
+            <Badge className="rounded-full bg-[#6B46C1] text-white shadow-sm print:bg-[#6B46C1]">
+              {formatNumberIN(totals.totalPrizes)} Prizes
+            </Badge>
+            <Badge variant="outline" className="rounded-full border-[#10B981]/50 text-[#0f5132] print:border-[#0f5132]/60 print:bg-white">
               {formatCurrencyINR(totals.totalCash)} Total Cash
             </Badge>
             <Badge variant="secondary" className="rounded-full">
@@ -49,8 +51,13 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
             </Badge>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleCopyLink} className="rounded-full border-[#6B46C1]/70 text-[#6B46C1] hover:bg-[#6B46C1]/10">
+        <div className="flex gap-2 print:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyLink}
+            className="rounded-full border-[#6B46C1]/70 text-[#6B46C1] hover:bg-[#6B46C1]/10"
+          >
             <Share2 className="mr-2 h-4 w-4" /> Copy link
           </Button>
           <Button size="sm" onClick={handlePrint} className="rounded-full bg-[#6B46C1] text-white shadow">
