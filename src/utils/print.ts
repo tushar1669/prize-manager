@@ -247,7 +247,7 @@ export async function exportPlayersViaPrint({
 
     console.log('[print] Loaded players for print', { count, usedColumns });
 
-    const html = buildPlayersPrintHtml(tournament ?? null, players ?? [], { maskDob });
+    const html = buildPlayersPrintHtml(tournament ?? null, players as PlayerRow[], { maskDob });
     const opened = openPrintWindow(html, `players-${tournamentId}`);
 
     if (!opened) {

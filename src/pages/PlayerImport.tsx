@@ -226,7 +226,7 @@ type ExistingPlayerRow = {
   dob?: string | null;
   rating?: number | null;
   fide_id?: string | null;
-  sno?: number | null;
+  sno?: string | null;
   rank?: number | null;
   [key: string]: unknown;
 };
@@ -443,7 +443,7 @@ export default function PlayerImport() {
     rating?: number | null;
     fide_id?: string | null;
     gender?: string | null;
-    sno?: number | null;
+    sno?: string | null;
     rank?: number | null;
     city?: string | null;
     state?: string | null;
@@ -1375,7 +1375,10 @@ export default function PlayerImport() {
   useEffect(() => {
     if (IMPORT_DEDUP_ENABLED && existingPlayers) {
       console.log('[import] Loaded', existingPlayers.length, 'existing players');
-      setDbPlayers(existingPlayers);
+      // Filter and cast: id and name are always selected
+      const validPlayers = existingPlayers
+        .filter((p): p is typeof p & { id: string; name: string } => !!p.id && !!p.name);
+      setDbPlayers(validPlayers);
     } else if (!IMPORT_DEDUP_ENABLED) {
       setDbPlayers([]);
     }
