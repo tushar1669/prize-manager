@@ -21,6 +21,7 @@ export interface PrizeRow {
   is_active: boolean;
   _tempId?: string;
   _status?: 'new' | 'dirty' | 'clean' | 'deleted';
+  _error?: string;
 }
 
 export interface CategoryRow {
@@ -197,21 +198,43 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   };
 
   const validationError = (): string | null => {
-    const places = draft
-      .filter(p => p._status !== 'deleted')
-      .map(p => Number(p.place));
+    // Clear all errors first
+    setDraft(prev => prev.map(p => ({ ...p, _error: undefined })));
 
-    const seen = new Set<number>();
-    const dup = new Set<number>();
-    for (const n of places) {
+    const activeRows = draft.filter(p => p._status !== 'deleted');
+    const placeMap = new Map<number, PrizeRow[]>();
+    
+    // Build map of place -> rows with that place
+    for (const row of activeRows) {
+      const n = Number(row.place);
       if (!Number.isInteger(n) || n < 1) {
+        // Mark invalid place
+        setDraft(prev => prev.map(p => 
+          (p.id === row.id || p._tempId === row._tempId) 
+            ? { ...p, _error: 'Invalid place' }
+            : p
+        ));
         return `Invalid place: ${n}. Place must be a positive integer.`;
       }
-      if (seen.has(n)) dup.add(n);
-      seen.add(n);
+      if (!placeMap.has(n)) placeMap.set(n, []);
+      placeMap.get(n)!.push(row);
     }
-    if (dup.size) {
-      return `Duplicate places: ${Array.from(dup).join(', ')}. Each place must be unique within the category.`;
+
+    // Find duplicates and mark them
+    const duplicates: number[] = [];
+    for (const [place, rows] of placeMap.entries()) {
+      if (rows.length > 1) {
+        duplicates.push(place);
+        // Mark all duplicate rows with error
+        setDraft(prev => prev.map(p => {
+          const isDup = rows.some(r => r.id === p.id || r._tempId === p._tempId);
+          return isDup ? { ...p, _error: 'Duplicate place' } : p;
+        }));
+      }
+    }
+
+    if (duplicates.length > 0) {
+      return `Duplicate places: ${duplicates.sort((a, b) => a - b).join(', ')}. Each place must be unique within the category.`;
     }
     return null;
   };
@@ -248,22 +271,34 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     const v = validationError();
     if (v) {
       showError({ title: 'Validation Error', message: v, hint: 'Fix duplicate/invalid place numbers before saving.' });
-      toast.error(v);
+      toast.error('Duplicate places in this category. Make each place unique.');
       return;
     }
 
     const delta = computeDelta();
-    console.log('[prizes-cat] save category', {
-      categoryId: category.id, inserts: delta.inserts.length, updates: delta.updates.length, deletes: delta.deletes.length
+    
+    // Preflight logging
+    const duplicateCheck = new Map<number, number>();
+    [...delta.inserts, ...delta.updates].forEach(p => {
+      duplicateCheck.set(p.place, (duplicateCheck.get(p.place) || 0) + 1);
+    });
+    const duplicates = Array.from(duplicateCheck.entries()).filter(([_, count]) => count > 1).map(([place]) => place);
+    
+    console.log('[prizes-cat.preflight]', {
+      categoryId: category.id,
+      inserts: delta.inserts.length,
+      updates: delta.updates.length,
+      deletes: delta.deletes.length,
+      duplicates: duplicates.length > 0 ? duplicates : 'none'
     });
 
     try {
       setSaving(true);
       await onSave(category.id, delta);
-      // reset statuses to clean & update baseline
+      // reset statuses to clean & update baseline, clear errors
       const cleaned = draft
         .filter(p => p._status !== 'deleted')
-        .map(p => ({ ...p, _status: 'clean' as const }));
+        .map(p => ({ ...p, _status: 'clean' as const, _error: undefined }));
       setDraft(cleaned);
       setLastSaved(cleaned);
       resetDirty(`cat-${category.id}`);
@@ -272,10 +307,13 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     } catch (e: any) {
       console.error('[prizes-cat] error', { scope: 'category', message: e?.message || String(e) });
       setDraft(lastSaved); // rollback
+      
+      // Check if it's a 409 or duplicate error
+      const is409 = String(e?.message || '').includes('unique') || String(e?.message || '').includes('duplicate');
       showError({
         title: 'Failed to save prizes',
         message: e?.message || 'Unknown error',
-        hint: 'Ensure each place is unique within the category.',
+        hint: is409 ? 'Duplicate place detected. Each place must be unique within the category.' : 'Ensure each place is unique within the category.',
       });
       toast.error(e?.message || 'Failed to save prizes');
     } finally {
@@ -377,14 +415,19 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                 return (
                   <tr key={row.id || row._tempId} className={cn('border-t')}>
                     <td className="py-2 pr-4">
-                      <Input
-                        ref={onFirst ? newRowFocusRef : undefined}
-                        type="number"
-                        min={1}
-                        value={row.place ?? ''}
-                        onChange={(e) => markDirty(rowIndex, { place: parseInt(e.target.value || '1', 10) })}
-                        className="w-20"
-                      />
+                      <div className="space-y-1">
+                        <Input
+                          ref={onFirst ? newRowFocusRef : undefined}
+                          type="number"
+                          min={1}
+                          value={row.place ?? ''}
+                          onChange={(e) => markDirty(rowIndex, { place: parseInt(e.target.value || '1', 10) })}
+                          className={cn("w-20", row._error && "border-destructive focus-visible:ring-destructive")}
+                        />
+                        {row._error && (
+                          <p className="text-xs text-destructive">{row._error}</p>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 pr-4">
                       <Input

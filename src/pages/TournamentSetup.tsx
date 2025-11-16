@@ -668,8 +668,20 @@ export default function TournamentSetup() {
         deletes: delta.deletes.length 
       });
 
-      // client-side duplicate guard
-      const places = [...delta.inserts.map(p => p.place), ...delta.updates.map(p => p.place)];
+      // Preflight: filter valid places (positive int only)
+      const validInserts = delta.inserts.filter(p => Number.isInteger(p.place) && p.place > 0);
+      const validUpdates = delta.updates.filter(p => Number.isInteger(p.place) && p.place > 0);
+      
+      console.log('[prizes-cat.preflight]', {
+        categoryId,
+        inserts: validInserts.length,
+        updates: validUpdates.length,
+        deletes: delta.deletes.length,
+        filtered: (delta.inserts.length - validInserts.length) + (delta.updates.length - validUpdates.length)
+      });
+
+      // Client-side duplicate guard
+      const places = [...validInserts.map(p => p.place), ...validUpdates.map(p => p.place)];
       const seen = new Set<number>(), dup = new Set<number>();
       for (const n of places) { 
         if (seen.has(n)) dup.add(n); 
@@ -677,34 +689,41 @@ export default function TournamentSetup() {
       }
       if (dup.size) throw new Error('Each place must be unique within the category.');
 
-      // Order: deletes → updates → inserts (avoid unique constraint conflicts)
+      // Order: deletes first to free up place constraints
       const ops = [];
       if (delta.deletes.length) {
         ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
       }
-      if (delta.updates.length) {
-        for (const p of delta.updates) {
-          ops.push(
-            supabase.from('prizes').update({
-              place: p.place,
-              cash_amount: p.cash_amount,
-              has_trophy: p.has_trophy,
-              has_medal: p.has_medal,
-              is_active: p.is_active ?? true
-            }).eq('id', p.id).then(r => r)
-          );
-        }
-      }
-      if (delta.inserts.length) {
-        const rows = delta.inserts.map(p => ({
+
+      // Use upsert for inserts + updates combined (with onConflict)
+      const upsertRows = [
+        ...validUpdates.map(p => ({
+          id: p.id,
           category_id: categoryId,
           place: p.place,
           cash_amount: p.cash_amount,
           has_trophy: p.has_trophy,
           has_medal: p.has_medal,
           is_active: p.is_active ?? true
-        }));
-        ops.push(supabase.from('prizes').insert(rows).select('id').then(r => r));
+        })),
+        ...validInserts.map(p => ({
+          category_id: categoryId,
+          place: p.place,
+          cash_amount: p.cash_amount,
+          has_trophy: p.has_trophy,
+          has_medal: p.has_medal,
+          is_active: p.is_active ?? true
+        }))
+      ];
+
+      if (upsertRows.length > 0) {
+        ops.push(
+          supabase
+            .from('prizes')
+            .upsert(upsertRows, { onConflict: 'category_id,place' })
+            .select('id')
+            .then(r => r)
+        );
       }
 
       const results = await Promise.all(ops);
