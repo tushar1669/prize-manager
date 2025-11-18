@@ -1,23 +1,8 @@
 import type { PlayerImportRow } from '@/lib/validations';
 import type { Json } from '@/integrations/supabase/types';
-
-const SUPABASE_PLAYER_FIELDS = [
-  'rank',
-  'sno',
-  'name',
-  'rating',
-  'dob',
-  'dob_raw',
-  'gender',
-  'state',
-  'city',
-  'club',
-  'disability',
-  'special_notes',
-  'fide_id',
-  'unrated',
-  'federation'
-] as const;
+import { ALIASES } from './headerAliases';
+import { extractStateFromIdent } from './importSchema';
+import { normalizeGrColumn } from './valueNormalizers';
 
 export type SupabasePlayerPayload = {
   rank: number;
@@ -57,53 +42,98 @@ export const toNumericFideOrNull = (v: unknown): string | null => {
   return s && /^[0-9]{6,10}$/.test(s) ? s : null;
 };
 
-const pick = (obj: Record<string, any>, keys: readonly string[]) =>
-  keys.reduce((acc, k) => {
-    if (k in obj) acc[k] = obj[k];
-    return acc;
-  }, {} as Record<string, any>);
-
 export function buildSupabasePlayerPayload(
   player: ParsedPlayer,
   tournamentId: string,
 ): SupabasePlayerPayload {
-  const picked = pick(player as Record<string, any>, SUPABASE_PLAYER_FIELDS);
-  const finalRating = picked.rating != null ? Number(picked.rating) : null;
-  const normalizedUnrated = finalRating != null && finalRating > 0
-    ? false
-    : (typeof picked.unrated === 'boolean'
-        ? picked.unrated
-        : picked.unrated == null
-          ? true
-          : Boolean(picked.unrated));
+  const lowerKeyMap = new Map<string, string>();
+  Object.keys(player).forEach(key => {
+    lowerKeyMap.set(key.toLowerCase(), key);
+  });
 
-  // Merge tags_json.special_group when disability=PC detected from Gr column
-  const tags = { ...(player.tags_json as object || {}) };
-  if (picked.disability === 'PC') {
-    const existingGroups = Array.isArray((tags as any).special_group) 
-      ? (tags as any).special_group 
-      : [];
-    if (!existingGroups.includes('PC')) {
-      (tags as any).special_group = [...existingGroups, 'PC'];
+  const getAliasedValue = (field: keyof typeof ALIASES | string) => {
+    const aliases = ALIASES[field as keyof typeof ALIASES] ?? [field];
+    for (const alias of aliases) {
+      const actualKey = lowerKeyMap.get(alias.toLowerCase());
+      if (actualKey && actualKey in player) {
+        const value = (player as Record<string, any>)[actualKey];
+        if (value !== undefined) return value;
+      }
+    }
+    return undefined;
+  };
+
+  const rank = getAliasedValue('rank') ?? player.rank;
+  const sno = getAliasedValue('sno') ?? player.sno;
+  const name = getAliasedValue('name') ?? player.name;
+  const ratingValue = getAliasedValue('rating') ?? player.rating;
+  const dob = getAliasedValue('dob') ?? player.dob;
+  const dobRaw = getAliasedValue('dob_raw') ?? player.dob_raw ?? dob;
+  const gender = getAliasedValue('gender') ?? player.gender;
+  let state = getAliasedValue('state') ?? player.state;
+  const city = getAliasedValue('city') ?? player.city;
+  const club = getAliasedValue('club') ?? player.club;
+  const disabilityFromField = getAliasedValue('disability') ?? player.disability;
+  const specialNotes = getAliasedValue('special_notes') ?? player.special_notes;
+  const fideId = getAliasedValue('fide_id') ?? player.fide_id;
+  const unrated = getAliasedValue('unrated');
+  const federation = getAliasedValue('federation') ?? player.federation;
+  const ident = getAliasedValue('ident');
+  const grInfo = normalizeGrColumn(getAliasedValue('gr'));
+
+  if ((!state || String(state).trim() === '') && ident) {
+    const extracted = extractStateFromIdent(String(ident));
+    if (extracted) {
+      state = extracted;
     }
   }
 
+  const finalRatingCandidate =
+    ratingValue != null && ratingValue !== '' ? Number(ratingValue) : null;
+  const finalRating = typeof finalRatingCandidate === 'number'
+    && Number.isFinite(finalRatingCandidate)
+    ? finalRatingCandidate
+    : null;
+  const normalizedUnrated = finalRating != null && finalRating > 0
+    ? false
+    : (typeof unrated === 'boolean'
+        ? unrated
+        : unrated == null
+          ? true
+          : Boolean(unrated));
+
+  // Merge tags_json.special_group when disability=PC detected from Gr column
+  const tags = { ...(player.tags_json as object || {}) };
+  const existingGroups = Array.isArray((tags as any).special_group)
+    ? (tags as any).special_group
+    : [];
+  const mergedGroups = new Set<string>(existingGroups);
+
+  const disability = grInfo.disability ?? disabilityFromField ?? null;
+  grInfo.tags.forEach(tag => mergedGroups.add(tag));
+  if (disability === 'PC') {
+    mergedGroups.add('PC');
+  }
+  if (mergedGroups.size > 0) {
+    (tags as any).special_group = Array.from(mergedGroups);
+  }
+
   return {
-    rank: Number(player.rank),
-    sno: picked.sno != null ? String(picked.sno) : null,
-    name: String(player.name || ''),
+    rank: Number(rank),
+    sno: sno != null ? String(sno) : null,
+    name: String(name || ''),
     rating: finalRating,
-    dob: picked.dob || null,
-    dob_raw: picked.dob_raw || picked.dob || null,
-    gender: picked.gender || null,
-    state: picked.state || null,
-    city: picked.city || null,
-    club: picked.club || null,
-    disability: picked.disability || null,
-    special_notes: picked.special_notes || null,
-    fide_id: toNumericFideOrNull(picked.fide_id),
+    dob: dob || null,
+    dob_raw: dobRaw || null,
+    gender: gender || null,
+    state: state || null,
+    city: city || null,
+    club: club || null,
+    disability,
+    special_notes: specialNotes || null,
+    fide_id: toNumericFideOrNull(fideId),
     unrated: normalizedUnrated,
-    federation: picked.federation || null,
+    federation: federation || null,
     tournament_id: tournamentId,
     tags_json: tags,
     warnings_json: {},
