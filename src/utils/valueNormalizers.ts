@@ -2,20 +2,18 @@
 // Value normalization for player import (gender, rating, unrated inference)
 
 /**
- * Normalize gender values to M/F/X
+ * Normalize gender values to M/F only; return null for anything else
  */
-export function normalizeGender(raw: any): 'M' | 'F' | 'Other' | null {
-  if (!raw) return null;
-  const s = String(raw).trim().toLowerCase();
-  
-  // Male variants
-  if (['m', 'male', 'boy', 'b'].includes(s)) return 'M';
-  
-  // Female variants (include 'w' for woman, common in international tournaments)
-  if (['f', 'female', 'girl', 'g', 'w', 'woman'].includes(s)) return 'F';
-  
-  // Other/Unknown
-  return 'Other';
+export function normalizeGender(raw: any): 'M' | 'F' | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  const normalized = s.toUpperCase();
+  if (normalized === 'M') return 'M';
+  if (normalized === 'F') return 'F';
+
+  return null;
 }
 
 /**
@@ -24,20 +22,22 @@ export function normalizeGender(raw: any): 'M' | 'F' | 'Other' | null {
  * Coerces 0/"0" to null (treating as unrated)
  */
 export function normalizeRating(raw: any, stripCommas: boolean = true): number | null {
-  if (raw == null || raw === '') return null;
-  
+  if (raw == null) return null;
+
   let str = String(raw).trim();
-  
+
   // Strip commas and spaces if configured (e.g., "1,800" or "1 800" → "1800")
   if (stripCommas) {
     str = str.replace(/[,\s]/g, '');
   }
-  
+
+  if (str === '' || str === '0') return null;
+
   const num = parseFloat(str);
-  
+
   // Validate: must be positive number (coerce 0 to null)
   if (isNaN(num) || num <= 0) return null;
-  
+
   return Math.round(num);
 }
 
