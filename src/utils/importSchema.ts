@@ -202,32 +202,9 @@ export function selectBestRatingColumn(detectedColumns: string[]): string | null
   return null;
 }
 
-/**
- * Extract 2-letter state code from Swiss-Manager Ident column
- * Ident format: IND/STATE/NNNN or similar patterns
- * Examples: "IND/KA/10203" → "KA", "IND/MH/1234" → "MH"
- */
-export function extractStateFromIdent(ident?: string | null): string | null {
-  if (!ident) return null;
-  
-  const str = String(ident).trim();
-  const parts = str.split('/');
-  
-  // Expect format like: IND/KA/NNNN or IND/MH/CODE
-  if (parts.length >= 2) {
-    const stateCandidate = parts[1].trim().toUpperCase();
-    // Valid if 2 uppercase letters
-    if (/^[A-Z]{2}$/.test(stateCandidate)) {
-      return stateCandidate;
-    }
-  }
-  
-  return null;
-}
-
 export type ImportConflictType =
-  | 'duplicate_in_file' 
-  | 'already_exists' 
+  | 'duplicate_in_file'
+  | 'already_exists'
   | 'conflict_different_dob'
   | 'conflict_different_rating';
 

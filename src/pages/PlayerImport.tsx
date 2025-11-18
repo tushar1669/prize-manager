@@ -52,7 +52,6 @@ import {
   selectBestRatingColumn,
   inferImportSource,
   findHeaderlessGenderColumn,
-  extractStateFromIdent
 } from '@/utils/importSchema';
 import {
   normalizeGender,
@@ -60,6 +59,7 @@ import {
   inferUnrated,
   fillSingleGapRanksInPlace,
 } from '@/utils/valueNormalizers';
+import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
 import {
   isFeatureEnabled,

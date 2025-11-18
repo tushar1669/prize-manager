@@ -1,12 +1,12 @@
 // src/utils/importPresets.ts
-import { 
-  mergeTitleAndName, 
-  ratingZeroToNull, 
-  genderBlankToMF, 
+import {
+  mergeTitleAndName,
+  ratingZeroToNull,
+  genderBlankToMF,
   digitsOnly,
   normalizeGrColumn,
-  extractStateFromIdent
 } from './valueNormalizers';
+import { extractStateFromIdent } from './stateExtract';
 
 export type FieldMap = Record<string, string | string[]>;
 export interface FieldNormalizer { field: string; normalize: (value: any, row?: any) => any; }
@@ -52,7 +52,11 @@ export const SWISS_MANAGER_V2: ImportPreset = {
     // PC detection from Gr column (applies AFTER gender normalization)
     { field: 'gr', normalize: (v) => normalizeGrColumn(v) },
     // State fallback from Ident column
-    { field: 'state', normalize: (v, row) => extractStateFromIdent(row?.ident, v) },
+    { field: 'state', normalize: (v, row) => {
+      const current = String(v ?? '').trim();
+      if (current) return current;
+      return extractStateFromIdent(String(row?.ident ?? ''));
+    } },
   ],
 };
 

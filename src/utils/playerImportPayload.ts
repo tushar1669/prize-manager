@@ -1,8 +1,8 @@
 import type { PlayerImportRow } from '@/lib/validations';
 import type { Json } from '@/integrations/supabase/types';
 import { ALIASES } from './headerAliases';
-import { extractStateFromIdent } from './importSchema';
 import { normalizeGrColumn } from './valueNormalizers';
+import { extractStateFromIdent } from './stateExtract';
 
 export type SupabasePlayerPayload = {
   rank: number;
