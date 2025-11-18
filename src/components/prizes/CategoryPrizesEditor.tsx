@@ -366,10 +366,10 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <ErrorPanel error={error} onDismiss={() => clearError()} />
         {restore && (
-          <div className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
             <div className="flex items-center justify-between gap-2">
               <div>Saved draft from <strong>{formatAge(restore.ageMs)}</strong> is available.</div>
               <div className="flex gap-2">
@@ -397,86 +397,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
             </div>
           </div>
         )}
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground">
-                <th className="text-left py-2 pr-4 w-20">Place</th>
-                <th className="text-left py-2 pr-4 w-40">Cash (₹)</th>
-                <th className="text-left py-2 pr-4 w-24">Trophy</th>
-                <th className="text-left py-2 pr-4 w-24">Medal</th>
-                <th className="text-right py-2 pl-4 w-16"> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row, idx) => {
-                const rowIndex = draft.findIndex(p => (p.id || p._tempId) === (row.id || row._tempId));
-                const onFirst = idx === visibleRows.length - 1 && row._status === 'new';
-                return (
-                  <tr key={row.id || row._tempId} className={cn('border-t')}>
-                    <td className="py-2 pr-4">
-                      <div className="space-y-1">
-                        <Input
-                          ref={onFirst ? newRowFocusRef : undefined}
-                          type="number"
-                          min={1}
-                          value={row.place ?? ''}
-                          onChange={(e) => markDirty(rowIndex, { place: parseInt(e.target.value || '1', 10) })}
-                          className={cn("w-20", row._error && "border-destructive focus-visible:ring-destructive")}
-                        />
-                        {row._error && (
-                          <p className="text-xs text-destructive">{row._error}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={row.cash_amount ?? 0}
-                        onChange={(e) => markDirty(rowIndex, { cash_amount: parseInt(e.target.value || '0', 10) })}
-                        className="w-40"
-                      />
-                    </td>
-                    <td className="py-2 pr-4">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={!!row.has_trophy}
-                          onCheckedChange={(val) => markDirty(rowIndex, { has_trophy: !!val })}
-                          aria-label={`Toggle trophy for place ${row.place}`}
-                        />
-                        <Trophy className="h-4 w-4 opacity-70" />
-                      </div>
-                    </td>
-                    <td className="py-2 pr-4">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={!!row.has_medal}
-                          onCheckedChange={(val) => markDirty(rowIndex, { has_medal: !!val })}
-                          aria-label={`Toggle medal for place ${row.place}`}
-                        />
-                        <Medal className="h-4 w-4 opacity-70" />
-                      </div>
-                    </td>
-                    <td className="py-2 pl-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete prize place ${row.place}`}
-                        title={`Delete prize place ${row.place}`}
-                        onClick={() => handleRemove(rowIndex)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
+        <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 bg-card py-2">
           <Button variant="secondary" onClick={handleAddRow}>
             <Plus className="h-4 w-4 mr-2" />
             Add prize row
@@ -497,6 +418,86 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
               </>
             )}
           </Button>
+        </div>
+        <div className="max-h-[500px] overflow-y-auto">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="text-left py-2 pr-4 w-20">Place</th>
+                  <th className="text-left py-2 pr-4 w-40">Cash (₹)</th>
+                  <th className="text-left py-2 pr-4 w-24">Trophy</th>
+                  <th className="text-left py-2 pr-4 w-24">Medal</th>
+                  <th className="text-right py-2 pl-4 w-16"> </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row, idx) => {
+                  const rowIndex = draft.findIndex(p => (p.id || p._tempId) === (row.id || row._tempId));
+                  const onFirst = idx === visibleRows.length - 1 && row._status === 'new';
+                  return (
+                    <tr key={row.id || row._tempId} className={cn('border-t')}>
+                      <td className="py-2 pr-4">
+                        <div className="space-y-1">
+                          <Input
+                            ref={onFirst ? newRowFocusRef : undefined}
+                            type="number"
+                            min={1}
+                            value={row.place ?? ''}
+                            onChange={(e) => markDirty(rowIndex, { place: parseInt(e.target.value || '1', 10) })}
+                            className={cn("w-20", row._error && "border-destructive focus-visible:ring-destructive")}
+                          />
+                          {row._error && (
+                            <p className="text-xs text-destructive">{row._error}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={row.cash_amount ?? 0}
+                          onChange={(e) => markDirty(rowIndex, { cash_amount: parseInt(e.target.value || '0', 10) })}
+                          className="w-40"
+                        />
+                      </td>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={!!row.has_trophy}
+                            onCheckedChange={(val) => markDirty(rowIndex, { has_trophy: !!val })}
+                            aria-label={`Toggle trophy for place ${row.place}`}
+                          />
+                          <Trophy className="h-4 w-4 opacity-70" />
+                        </div>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={!!row.has_medal}
+                            onCheckedChange={(val) => markDirty(rowIndex, { has_medal: !!val })}
+                            aria-label={`Toggle medal for place ${row.place}`}
+                          />
+                          <Medal className="h-4 w-4 opacity-70" />
+                        </div>
+                      </td>
+                      <td className="py-2 pl-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete prize place ${row.place}`}
+                          title={`Delete prize place ${row.place}`}
+                          onClick={() => handleRemove(rowIndex)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </CardContent>
     </Card>
