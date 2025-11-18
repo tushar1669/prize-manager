@@ -136,6 +136,49 @@ export function digitsOnly(raw: any): string | null {
   return s || null;
 }
 
+/**
+ * Normalize Gr column for Swiss-Manager: "PC" indicates Physically Challenged
+ * Returns { disability, tags } tuple for merging into player record
+ */
+export function normalizeGrColumn(raw: any): { disability: string | null; tags: string[] } {
+  if (raw == null) return { disability: null, tags: [] };
+  const s = String(raw).trim().toUpperCase();
+  if (s === 'PC' || s.includes('PC')) {
+    return { disability: 'PC', tags: ['PC'] };
+  }
+  return { disability: null, tags: [] };
+}
+
+/**
+ * Extract state code from Ident column as fallback when state is empty
+ * Known patterns: MH123456 → MH, DL789 → DL, etc.
+ * Returns state code or null; does NOT override existing state values
+ */
+export function extractStateFromIdent(ident: string | null, currentState: string | null): string | null {
+  // Don't override existing state
+  if (currentState && String(currentState).trim() !== '') {
+    return currentState;
+  }
+  
+  if (!ident) return null;
+  
+  const s = String(ident).trim().toUpperCase();
+  
+  // Pattern: First 2 letters before digits (e.g., MH123456, DL789, KA45678)
+  const match = s.match(/^([A-Z]{2})\d/);
+  if (match) {
+    const code = match[1];
+    // Warn if looks like Federation instead of State
+    const federations = ['IN', 'US', 'GB', 'CN', 'RU', 'FR', 'DE', 'ES', 'IT', 'BR'];
+    if (federations.includes(code)) {
+      console.warn(`[import.ident] Ident "${ident}" looks like Federation (${code}), not State. Please verify mapping.`);
+    }
+    return code;
+  }
+  
+  return null;
+}
+
 export function fillSingleGapRanksInPlace(
   players: Array<{ rank?: number | null; [key: string]: unknown }>,
 ): void {
