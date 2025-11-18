@@ -556,6 +556,12 @@ const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: 
       failCodes.add('disability_excluded');
     } else {
       passCodes.add('disability_ok');
+      console.log('[alloc.eligibility] disability check', {
+        player: player.name,
+        playerDisability: player.disability,
+        allowedDisabilities: c.allowed_disabilities,
+        eligible: true
+      });
     }
   }
   if (Array.isArray(c.allowed_cities) && c.allowed_cities.length > 0) {

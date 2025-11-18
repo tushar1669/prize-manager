@@ -1,5 +1,12 @@
 // src/utils/importPresets.ts
-import { mergeTitleAndName, ratingZeroToNull, genderBlankToMF, digitsOnly } from './valueNormalizers';
+import { 
+  mergeTitleAndName, 
+  ratingZeroToNull, 
+  genderBlankToMF, 
+  digitsOnly,
+  normalizeGrColumn,
+  extractStateFromIdent
+} from './valueNormalizers';
 
 export type FieldMap = Record<string, string | string[]>;
 export interface FieldNormalizer { field: string; normalize: (value: any, row?: any) => any; }
@@ -15,28 +22,37 @@ export interface ImportPreset {
   normalizers: FieldNormalizer[];
 }
 
-/** Swiss-Manager v2: uses blank gender column (''→M, 'F'→F) and treats Rtg=0 as null */
+/** Swiss-Manager v2: comprehensive header aliases + PC detection + Ident fallback */
 export const SWISS_MANAGER_V2: ImportPreset = {
   id: 'swiss-manager-v2',
   name: 'Swiss-Manager Interim Ranking (v2)',
-  description: 'Uses blank gender column rule and Rtg=0→null; optional Title+Name merge.',
+  description: 'Expanded aliases, Gr=PC→disability, Ident→state fallback, Rtg=0→null.',
   headerRowHint: 18,
   fieldMappings: {
-    // Prefer these if present; empty header for gender will be manually mapped in UI if needed
-    rank: ['rank', 'rk', 'position', 'pos'],
-    sno: ['sno', 's_no', 'sno.', 'start_no', 'seed', 'sr_no'],
+    rank: ['rank', 'rk', 'final_rank', 'position', 'pos'],
+    sno: ['sno', 's_no', 'sno.', 'start_no', 'start no', 'seed', 'sr_no', 'startno'],
     name: ['name', 'player_name', 'player'],
     title: ['title', '[title]'],
-    rating: ['rtg', 'rating', 'std', 'elo', 'irtg', 'nrtg'],
-    fide_id: ['fide-no.', 'fide_no', 'fideno', 'fide_id'],
-    dob: ['birth', 'dob', 'date_of_birth'],
-    gender: ['gender', 'sex'] // NOTE: not 'fs'
+    rating: ['rtg', 'rtg.', 'rating', 'rtng', 'std', 'elo', 'irtg', 'irtg.', 'nrtg'],
+    fide_id: ['fide-no.', 'fide no.', 'fide_no', 'fideno', 'fide_id', 'fide id', 'fid'],
+    dob: ['birth', 'dob', 'date_of_birth', 'date of birth', 'b-day'],
+    gender: ['gender', 'sex', 'gr', 'fs', 'sx'], // 'gr' can also indicate PC via normalizer
+    federation: ['federation', 'fed.', 'fed', 'country'],
+    state: ['state', 'ident/state', 'state/ut', 'region'],
+    city: ['city', 'town', 'place'],
+    club: ['club', 'academy', 'school/club'],
+    disability: ['disability', 'physically challenged', 'special group'],
+    ident: ['ident', 'identifier'] // New: for state fallback extraction
   },
   normalizers: [
     { field: 'name',   normalize: (_v, row) => mergeTitleAndName(row?.title, row?.name) },
     { field: 'rating', normalize: (v) => ratingZeroToNull(v) },
     { field: 'gender', normalize: (v) => genderBlankToMF(v) },
     { field: 'fide_id',normalize: (v) => digitsOnly(v) },
+    // PC detection from Gr column (applies AFTER gender normalization)
+    { field: 'gr', normalize: (v) => normalizeGrColumn(v) },
+    // State fallback from Ident column
+    { field: 'state', normalize: (v, row) => extractStateFromIdent(row?.ident, v) },
   ],
 };
 

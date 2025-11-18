@@ -77,6 +77,17 @@ export function buildSupabasePlayerPayload(
           ? true
           : Boolean(picked.unrated));
 
+  // Merge tags_json.special_group when disability=PC detected from Gr column
+  const tags = { ...(player.tags_json as object || {}) };
+  if (picked.disability === 'PC') {
+    const existingGroups = Array.isArray((tags as any).special_group) 
+      ? (tags as any).special_group 
+      : [];
+    if (!existingGroups.includes('PC')) {
+      (tags as any).special_group = [...existingGroups, 'PC'];
+    }
+  }
+
   return {
     rank: Number(player.rank),
     sno: picked.sno != null ? String(picked.sno) : null,
@@ -94,7 +105,7 @@ export function buildSupabasePlayerPayload(
     unrated: normalizedUnrated,
     federation: picked.federation || null,
     tournament_id: tournamentId,
-    tags_json: {},
+    tags_json: tags,
     warnings_json: {},
   };
 }
