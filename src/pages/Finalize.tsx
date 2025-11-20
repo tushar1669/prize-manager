@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
+import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
 
 interface Winner {
   prizeId: string;
@@ -40,6 +41,11 @@ interface AllocationPreviewMeta {
   unfilledCount?: number;
 }
 
+interface Unfilled {
+  prizeId: string;
+  reasonCodes: string[];
+}
+
 export default function Finalize() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -51,7 +57,7 @@ export default function Finalize() {
     conflicts?: unknown[];
     conflictsCount?: number;
     conflictCount?: number;
-    unfilled?: unknown[];
+    unfilled?: Unfilled[];
     unfilledCount?: number;
   } | undefined;
   
@@ -62,6 +68,7 @@ export default function Finalize() {
   }
 
   const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
+  const unfilled = (locationState?.unfilled || []) as Unfilled[];
   const fallbackConflicts = Array.isArray(locationState?.conflicts)
     ? locationState.conflicts.length
     : typeof locationState?.conflictsCount === 'number'
@@ -69,8 +76,8 @@ export default function Finalize() {
       : typeof locationState?.conflictCount === 'number'
         ? locationState.conflictCount
         : 0;
-  const fallbackUnfilled = Array.isArray(locationState?.unfilled)
-    ? locationState.unfilled.length
+  const fallbackUnfilled = unfilled.length > 0 
+    ? unfilled.length 
     : typeof locationState?.unfilledCount === 'number'
       ? locationState.unfilledCount
       : 0;
@@ -125,6 +132,20 @@ export default function Finalize() {
       return prizes;
     },
     enabled: !!id && winners.length > 0
+  });
+
+  // Fetch categories for unfilled prizes panel
+  const { data: categoriesList } = useQuery({
+    queryKey: ['categories-finalize', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name')
+        .eq('tournament_id', id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id && unfilled.length > 0
   });
 
   // Fetch next version number
@@ -441,6 +462,15 @@ export default function Finalize() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Unfilled Prizes Panel */}
+          {prizesList && (
+            <UnfilledPrizesPanel
+              unfilled={unfilled}
+              prizes={prizesList}
+              categories={categoriesList}
+            />
+          )}
 
           {/* Winners Table */}
           <Card>

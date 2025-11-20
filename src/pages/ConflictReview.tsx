@@ -20,6 +20,7 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
+import { formatReasonCode } from "@/utils/reasonCodeLabels";
 
 interface Winner {
   prizeId: string;
@@ -46,44 +47,7 @@ type ManualDecisionReason = "manual_override" | "suggested_resolution";
 
 type ManualDecisionsMap = Record<string, { playerId: string; reason: ManualDecisionReason }>;
 
-const reasonLabels: Record<string, string> = {
-  auto: "Auto allocated",
-  rank: "Rank priority",
-  brochure_order: "Brochure order",
-  value_tier: "Value tier",
-  manual_override: "Manual override",
-  suggested_resolution: "Accepted suggestion",
-  gender_ok: "Gender eligible",
-  gender_open: "Open gender",
-  age_ok: "Age eligible",
-  rating_ok: "Rating eligible",
-  rating_unrated_allowed: "Unrated allowed",
-  disability_ok: "Disability eligible",
-  city_ok: "City eligible",
-  state_ok: "State eligible",
-  club_ok: "Club eligible",
-  gender_missing: "Gender missing",
-  gender_mismatch: "Gender mismatch",
-  dob_missing: "DOB missing",
-  age_above_max: "Above age limit",
-  age_below_min: "Below age limit",
-  unrated_excluded: "Unrated not allowed",
-  rating_below_min: "Rating below minimum",
-  rating_above_max: "Rating above maximum",
-  disability_excluded: "Disability not eligible",
-  city_excluded: "City not eligible",
-  state_excluded: "State not eligible",
-  club_excluded: "Club not eligible",
-  no_eligible_players: "No eligible players",
-};
-
-const formatReasonCode = (code: string): string => {
-  if (reasonLabels[code]) return reasonLabels[code];
-  return code
-    .split("_")
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-};
+// Removed: now using shared formatReasonCode from @/utils/reasonCodeLabels
 
 const manualMapToOverrides = (map: ManualDecisionsMap) =>
   Object.entries(map).map(([prizeId, decision]) => ({ prizeId, playerId: decision.playerId }));
