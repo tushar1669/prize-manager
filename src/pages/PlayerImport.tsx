@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
+import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -2083,6 +2084,8 @@ export default function PlayerImport() {
       <AppNav />
       
       <div className="container mx-auto px-6 py-8 max-w-6xl">
+        <TournamentProgressBreadcrumbs />
+        
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
           <p className="text-muted-foreground">Upload Excel (.xlsx or .xls) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, club, disability, special_notes, fide_id.</p>

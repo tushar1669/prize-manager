@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppNav } from '@/components/AppNav';
+import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Trophy, Medal, GripVertical, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
@@ -412,6 +413,8 @@ export default function CategoryOrderReview() {
     <div className="min-h-screen bg-background">
       <AppNav />
       <div className="container max-w-5xl mx-auto p-6 space-y-6">
+        <TournamentProgressBreadcrumbs />
+        
         <div>
           <h1 className="text-3xl font-bold">Review Category Order</h1>
           <p className="text-muted-foreground mt-2">
