@@ -23,6 +23,7 @@ import { exportPlayersViaPrint } from "@/utils/print";
 import { Badge } from "@/components/ui/badge";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
+import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 
 interface Winner {
   prizeId: string;
@@ -53,7 +54,13 @@ export default function Finalize() {
     unfilled?: unknown[];
     unfilledCount?: number;
   } | undefined;
+  
+  // Early guard: if no winners in state, show fallback UI and don't run queries
   const winners = (locationState?.winners || []) as Winner[];
+  if (!locationState?.winners || winners.length === 0) {
+    return <NoAllocationGuard />;
+  }
+
   const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
   const fallbackConflicts = Array.isArray(locationState?.conflicts)
     ? locationState.conflicts.length
@@ -78,12 +85,6 @@ export default function Finalize() {
   const { role } = useUserRole();
   const [isExportingPrint, setIsExportingPrint] = useState(false);
   const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
-
-  // Block if no winners
-  if (winners.length === 0) {
-    toast.error('No winners to finalize. Resolve conflicts first.', { duration: 5000 });
-    navigate(`/t/${id}/review`);
-  }
 
   // Fetch players and prizes to show winner details
   const { data: playersList } = useQuery({
