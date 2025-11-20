@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
+import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -437,7 +438,9 @@ export default function ConflictReview() {
       <AppNav />
       <ErrorPanel error={error} onDismiss={clearError} />
       
-      <div className="container mx-auto px-6 py-8 max-w-7xl">{" "}
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
+        <TournamentProgressBreadcrumbs />
+        
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Review Allocations</h1>
           <div className="flex items-center gap-3 flex-wrap">

@@ -30,6 +30,7 @@ import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
+import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
@@ -1051,6 +1052,8 @@ export default function TournamentSetup() {
       <AppNav />
       
       <div className="container mx-auto px-6 py-8">
+        <TournamentProgressBreadcrumbs />
+        
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Tournament Setup</h1>
           <p className="text-muted-foreground">Configure your tournament details and prize structure</p>

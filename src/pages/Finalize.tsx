@@ -2,6 +2,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
+import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDown, ExternalLink, ArrowRight } from "lucide-react";
@@ -399,7 +400,9 @@ export default function Finalize() {
       <AppNav />
       <ErrorPanel error={error} onDismiss={clearError} />
       
-      <div className="container mx-auto px-6 py-8 max-w-4xl">{" "}
+      <div className="container mx-auto px-6 py-8 max-w-4xl">
+        <TournamentProgressBreadcrumbs />
+        
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
