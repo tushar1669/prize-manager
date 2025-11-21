@@ -388,6 +388,11 @@ export default function PlayerImport() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [importErrorBanner, setImportErrorBanner] = useState<{
+    type: 'rank-conflict' | 'other';
+    message: string;
+    failedCount: number;
+  } | null>(null);
   const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
   const [dedupeState, setDedupeState] = useState<DedupPassResult | null>(null);
   const [dedupeDecisions, setDedupeDecisions] = useState<DedupDecision[]>([]);
@@ -787,6 +792,7 @@ export default function PlayerImport() {
     onMutate: () => {
       importStartedAtRef.current = typeof performance !== 'undefined' ? performance.now() : null;
       setReplaceBanner(null);
+      setImportErrorBanner(null);
     },
     mutationFn: async ({ players, dedupe }: ImportMutationPayload) => {
       console.time('[import] batch-insert');
@@ -944,21 +950,48 @@ export default function PlayerImport() {
             });
 
             if (error) {
-              console.warn('[dedup] apply RPC failed', error);
+              // Handle PGRST202 (function not found) gracefully - it's expected during development
+              const isPgrst202 = error?.code === 'PGRST202' || error?.message?.includes('Could not find function');
+              if (isPgrst202) {
+                console.info('[dedup] import_apply_actions RPC not available, using local fallback');
+              } else {
+                console.warn('[dedup] apply RPC failed', error);
+              }
             } else {
               appliedViaRpc = true;
               console.log('[dedup] RPC applied', data);
               results.created.push(...createEntries.map(entry => entry.player));
               results.updated.push(...actionableUpdates.map(entry => entry.player));
             }
-          } catch (err) {
-            console.warn('[dedup] apply RPC threw', err);
+          } catch (err: any) {
+            // Handle network/404 errors for missing RPC
+            const is404 = err?.status === 404 || err?.code === 'PGRST202';
+            if (is404) {
+              console.info('[dedup] import_apply_actions RPC not available, using local fallback');
+            } else {
+              console.warn('[dedup] apply RPC threw', err);
+            }
           }
         } else {
           appliedViaRpc = true;
         }
 
         if (!appliedViaRpc) {
+          // Detect potential rank conflicts BEFORE attempting inserts
+          if (createEntries.length > 0 && dbPlayers.length > 0) {
+            const existingRanks = new Set(dbPlayers.map(p => p.rank).filter(r => r != null));
+            const conflictingRanks = createEntries.filter(entry => 
+              entry.player.rank != null && existingRanks.has(entry.player.rank)
+            );
+            
+            if (conflictingRanks.length > 0) {
+              console.warn(
+                '[dedup] warning: some create actions reuse existing rank values; these rows will likely fail due to players_uniq_tourn_rank',
+                { count: conflictingRanks.length, ranks: conflictingRanks.map(e => e.player.rank) }
+              );
+            }
+          }
+
           if (createEntries.length > 0) {
             const createChunks: (typeof createEntries)[] = [];
             for (let i = 0; i < createEntries.length; i += CHUNK_SIZE) {
@@ -1134,7 +1167,27 @@ export default function PlayerImport() {
         }
         navigate(`/t/${id}/review`);
       } else {
-        toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
+        // Check if failures are due to rank uniqueness constraint
+        const rankConflictCount = results.failed.filter(f => 
+          f.error.includes('players_uniq_tourn_rank') || 
+          f.error.includes('duplicate key')
+        ).length;
+
+        if (rankConflictCount > 0) {
+          setImportErrorBanner({
+            type: 'rank-conflict',
+            message: `${rankConflictCount} player${rankConflictCount === 1 ? '' : 's'} used rank numbers that are already taken in this tournament.`,
+            failedCount: rankConflictCount,
+          });
+          toast.error(`${rankConflictCount} player${rankConflictCount === 1 ? '' : 's'} could not be imported due to rank conflicts`);
+        } else {
+          setImportErrorBanner({
+            type: 'other',
+            message: `${results.failed.length} player${results.failed.length === 1 ? '' : 's'} failed to import.`,
+            failedCount: results.failed.length,
+          });
+          toast.warning(`Applied ${totalImported} player actions. ${results.failed.length} failed.`);
+        }
 
         const errorRows: ErrorRow[] = results.failed.map(f => ({
           rowIndex: f.player._originalIndex,
@@ -1477,6 +1530,7 @@ export default function PlayerImport() {
     setParseError(null);
     setParseStatus('idle');
     setReplaceBanner(null);
+    setImportErrorBanner(null);
     setShowMappingDialog(false);
     setIsParsing(false);
     setLastParseMode(null);
@@ -1520,6 +1574,7 @@ export default function PlayerImport() {
     setShowDuplicateDialog(false);
     setDedupeReviewed(false);
     setReplaceBanner(null);
+    setImportErrorBanner(null);
 
     toast.info(`Uploading ${selectedFile.name}...`);
 
@@ -2329,6 +2384,24 @@ export default function PlayerImport() {
                 <AlertDescription>
                   {autoFilledRankCount} rank{autoFilledRankCount === 1 ? '' : 's'} were auto-filled based on
                   neighboring values. Please double-check before importing.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {importErrorBanner && (
+              <Alert variant="destructive" className="border-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Some players could not be imported</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <div>{importErrorBanner.message}</div>
+                  {importErrorBanner.type === 'rank-conflict' && (
+                    <div className="text-sm">
+                      Please adjust their rank values in Excel and re-import, or use <strong>Replace mode</strong> to clear all existing players first.
+                    </div>
+                  )}
+                  <div className="text-sm opacity-80">
+                    An error workbook with the failed rows has been downloaded.
+                  </div>
                 </AlertDescription>
               </Alert>
             )}
