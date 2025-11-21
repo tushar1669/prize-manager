@@ -89,7 +89,7 @@ import {
   type DedupAction,
   type DedupIncomingPlayer,
 } from '@/utils/dedup';
-import { DuplicateReviewDialog } from "@/components/DuplicateReviewDialog";
+import { DeduplicationWizard } from "@/components/dedup/DeduplicationWizard";
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
@@ -728,35 +728,10 @@ export default function PlayerImport() {
     [mappedPlayers, runDedupe],
   );
 
-  const handleActionChange = useCallback(
-    (candidate: DedupCandidate, action: DedupAction) => {
-      setDedupeDecisions(prev => {
-        const map = new Map(prev.map(decision => [decision.row, decision]));
-
-        if (action === 'update' && candidate.bestMatch) {
-          map.set(candidate.row, {
-            row: candidate.row,
-            action: 'update',
-            existingId: candidate.bestMatch.existing.id,
-            payload: candidate.bestMatch.merge.changes,
-          });
-        } else if (action === 'skip') {
-          map.set(candidate.row, {
-            row: candidate.row,
-            action: 'skip',
-            existingId: candidate.bestMatch?.existing.id,
-          });
-        } else {
-          map.set(candidate.row, { row: candidate.row, action: 'create' });
-        }
-
-        return Array.from(map.values()).sort((a, b) => a.row - b.row);
-      });
-
-      setDedupeReviewed(false);
-    },
-    [],
-  );
+  const handleDecisionsChange = useCallback((decisions: DedupDecision[]) => {
+    setDedupeDecisions(decisions);
+    setDedupeReviewed(false);
+  }, []);
 
   const handleReplaceExistingChange = useCallback(
     (checked: boolean) => {
@@ -2677,7 +2652,7 @@ export default function PlayerImport() {
         sampleRows={parsedData as Record<string, any>[]}
         onConfirm={handleMappingConfirm}
       />
-      <DuplicateReviewDialog
+      <DeduplicationWizard
         open={showDuplicateDialog}
         onOpenChange={setShowDuplicateDialog}
         candidates={dedupeState?.candidates ?? []}
@@ -2694,9 +2669,8 @@ export default function PlayerImport() {
         }
         mergePolicy={importConfig.mergePolicy}
         onMergePolicyChange={handleMergePolicyChange}
-        onActionChange={handleActionChange}
+        onDecisionsChange={handleDecisionsChange}
         onConfirm={handleConfirmDuplicates}
-        isSubmitting={importPlayersMutation.isPending || isRunningDedup}
       />
     </div>
   );
