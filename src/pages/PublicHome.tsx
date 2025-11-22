@@ -29,13 +29,15 @@ export default function PublicHome() {
       const tournamentIds = tournaments.map(t => t.id);
       const { data, error } = await supabase
         .from('allocations')
-        .select('tournament_id')
-        .in('tournament_id', tournamentIds);
-      
+        .select('tournament_id, version')
+        .in('tournament_id', tournamentIds)
+        .order('version', { ascending: false });
+
       if (error) throw error;
-      
+
       const map: Record<string, boolean> = {};
       data?.forEach(a => {
+        if (map[a.tournament_id]) return;
         map[a.tournament_id] = true;
       });
       return map;
