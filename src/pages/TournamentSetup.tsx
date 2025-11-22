@@ -66,12 +66,9 @@ export default function TournamentSetup() {
     category: any | null;
   }>({ open: false, category: null });
   const [savedCriteria, setSavedCriteria] = useState<any>(null);
-  const [prizes, setPrizes] = useState([
-    { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
-  ]);
-  const [initialPrizes, setInitialPrizes] = useState([
-    { place: 1, cash_amount: 0, has_trophy: false, has_medal: false },
-  ]);
+  // Start with empty arrays - will be populated during hydration
+  const [prizes, setPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
+  const [initialPrizes, setInitialPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
   const [includeCriteriaOnCopy, setIncludeCriteriaOnCopy] = useState(true);
   const [dupDialog, setDupDialog] = useState<{
@@ -243,18 +240,9 @@ export default function TournamentSetup() {
   // Autosave Main Prizes while dirty (only after hydration)
   const isMainPrizesDirty = useMemo(() => {
     if (!hasHydratedPrizes) return false;
-    if (!Array.isArray(prizes) || prizes.length === 0) return false;
+    if (!Array.isArray(prizes)) return false;
     
-    // Block on default one-row placeholder like [{place:1,cash_amount:0,...}]
-    const looksDefault =
-      prizes.length === 1 &&
-      prizes[0] &&
-      prizes[0].place === 1 &&
-      (prizes[0].cash_amount ?? 0) === 0 &&
-      !prizes[0].has_trophy &&
-      !prizes[0].has_medal;
-    if (looksDefault) return false;
-    
+    // Simple comparison: has state changed from baseline?
     return JSON.stringify(prizes) !== JSON.stringify(initialPrizes);
   }, [prizes, initialPrizes, hasHydratedPrizes]);
   
@@ -360,31 +348,39 @@ export default function TournamentSetup() {
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
-    dlog('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories, hasPendingDraft });
+    console.log('[setup] hydration check', { 
+      tid: id,
+      hasHydratedPrizes, 
+      activeTab, 
+      hasCategories: !!categories, 
+      hasPendingDraft 
+    });
+    
     if (!categories || hasHydratedPrizes || activeTab !== 'prizes' || hasPendingDraft) return;
     
     const mainCat = categories.find(c => c.is_main);
     
-    // Check if draft is newer than DB data
+    // Check if draft exists first
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
-    if (draft && mainCat?.prizes && mainCat.prizes.length > 0) {
-      const draftTimestamp = Date.now() - draft.ageMs;
-      
-      // If draft is significantly newer (>30s), prefer showing banner
-      if (draftTimestamp > Date.now() - 30000) {
-        console.log('[prizes] draft is recent, showing banner');
+    
+    if (draft) {
+      // Draft exists - check if it's recent (within last 5 minutes)
+      if (draft.ageMs < 300000) { // 5 minutes
+        console.log('[setup] recent draft found, showing restore banner', { ageMs: draft.ageMs });
         setHasPendingDraft(true);
         setMainPrizesRestore(draft);
         setHasHydratedPrizes(true);
         return;
       } else {
-        // Draft is stale, clear it and use DB
-        console.log('[prizes] clearing stale draft, using DB');
+        // Draft is too old, clear it
+        console.log('[setup] stale draft found, clearing', { ageMs: draft.ageMs });
         clearDraft(mainPrizesDraftKey);
       }
     }
     
+    // No draft or draft was cleared
     if (mainCat?.prizes && mainCat.prizes.length > 0) {
+      // Load from DB
       const dbPrizes = mainCat.prizes.map(p => ({
         place: p.place,
         cash_amount: p.cash_amount,
@@ -392,16 +388,26 @@ export default function TournamentSetup() {
         has_medal: p.has_medal
       }));
       
-      console.log('[prizes] hydrating main prizes from DB', { count: dbPrizes.length });
+      console.log('[setup] hydrated setup from Supabase', { 
+        tournamentId: id,
+        categoryId: mainCat.id,
+        prizeCount: dbPrizes.length 
+      });
       setPrizes(dbPrizes);
       setInitialPrizes(dbPrizes);
       setHasHydratedPrizes(true);
-    } else if (mainCat) {
-      // Main category exists but no prizes - set empty state
+    } else if (mainCat && (!mainCat.prizes || mainCat.prizes.length === 0)) {
+      // Main category exists but has no prizes - set empty state
+      console.log('[setup] main category exists with no prizes, setting empty state');
+      setPrizes([]);
+      setInitialPrizes([]);
       setHasHydratedPrizes(true);
     } else {
-      // No Main category exists - show placeholder
-      console.log('[prizes] no Main category found, showing placeholder');
+      // No main category exists - seed default single-row placeholder
+      console.log('[setup] seeding default prizes for new tournament', { tournamentId: id });
+      const defaultPrizes = [{ place: 1, cash_amount: 0, has_trophy: false, has_medal: false }];
+      setPrizes(defaultPrizes);
+      setInitialPrizes(defaultPrizes);
       setHasHydratedPrizes(true);
     }
   }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft, id, mainPrizesDraftKey]);
@@ -1344,55 +1350,63 @@ export default function TournamentSetup() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {prizes.map((prize, index) => (
-                      <TableRow key={index} className="border-border" data-testid="prize-row">
-                        <TableCell className="font-medium">{prize.place}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={prize.cash_amount}
-                            onChange={(e) => {
-                              const newPrizes = [...prizes];
-                              newPrizes[index].cash_amount = parseInt(e.target.value) || 0;
-                              setPrizes(newPrizes);
-                            }}
-                            className="w-32"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Checkbox
-                            checked={prize.has_trophy}
-                            onCheckedChange={(checked) => {
-                              const newPrizes = [...prizes];
-                              newPrizes[index].has_trophy = checked as boolean;
-                              setPrizes(newPrizes);
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Checkbox
-                            checked={prize.has_medal}
-                            onCheckedChange={(checked) => {
-                              const newPrizes = [...prizes];
-                              newPrizes[index].has_medal = checked as boolean;
-                              setPrizes(newPrizes);
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {prizes.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemovePrize(index)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
+                    {prizes.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No prizes defined yet. Click "Add Prize Row" to start.
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      prizes.map((prize, index) => (
+                        <TableRow key={index} className="border-border" data-testid="prize-row">
+                          <TableCell className="font-medium">{prize.place}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={prize.cash_amount}
+                              onChange={(e) => {
+                                const newPrizes = [...prizes];
+                                newPrizes[index].cash_amount = parseInt(e.target.value) || 0;
+                                setPrizes(newPrizes);
+                              }}
+                              className="w-32"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Checkbox
+                              checked={prize.has_trophy}
+                              onCheckedChange={(checked) => {
+                                const newPrizes = [...prizes];
+                                newPrizes[index].has_trophy = checked as boolean;
+                                setPrizes(newPrizes);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Checkbox
+                              checked={prize.has_medal}
+                              onCheckedChange={(checked) => {
+                                const newPrizes = [...prizes];
+                                newPrizes[index].has_medal = checked as boolean;
+                                setPrizes(newPrizes);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {prizes.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemovePrize(index)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
                 <Button variant="outline" size="sm" onClick={handleAddPrize} className="mt-4 gap-2">
