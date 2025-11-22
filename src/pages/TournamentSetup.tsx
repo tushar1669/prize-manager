@@ -349,6 +349,15 @@ export default function TournamentSetup() {
     refetchOnWindowFocus: false
   });
 
+  // UI-only sort for Setup page: show newest categories at top for better editing UX
+  // (CategoryOrderReview still uses order_idx ASC for brochure order)
+  const sortedCategories = useMemo(() => {
+    if (!categories) return [];
+    return categories
+      .filter(c => !c.is_main)
+      .sort((a, b) => (b.order_idx ?? 0) - (a.order_idx ?? 0)); // DESC = newest first
+  }, [categories]);
+
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
     dlog('[prizes] hydration check', { hasHydratedPrizes, activeTab, categories: !!categories, hasPendingDraft });
@@ -1511,7 +1520,7 @@ export default function TournamentSetup() {
                   </div>
                 ) : categories && categories.length > 0 ? (
                   <div className="space-y-4">
-                {categories.filter(c => !c.is_main).map((cat) => (
+                {sortedCategories.map((cat) => (
                   <div key={cat.id} data-category-id={cat.id}>
                     <CategoryPrizesEditor
                       ref={getEditorRef(cat.id)}
