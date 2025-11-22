@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trophy, Calendar, MapPin, ExternalLink, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
+import { getLatestAllocations } from "@/utils/getLatestAllocations";
 
 export default function PublicTournament() {
   const { slug } = useParams();
@@ -31,14 +32,9 @@ export default function PublicTournament() {
     queryKey: ['tournament-has-results', tournament?.id],
     queryFn: async () => {
       if (!tournament?.id) return false;
-      
-      const { count, error } = await supabase
-        .from('allocations')
-        .select('*', { count: 'exact', head: true })
-        .eq('tournament_id', tournament.id);
-      
-      if (error) throw error;
-      return (count ?? 0) > 0;
+
+      const { allocations } = await getLatestAllocations(tournament.id);
+      return allocations.length > 0;
     },
     enabled: !!tournament?.id,
   });

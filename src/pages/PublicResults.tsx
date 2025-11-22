@@ -6,6 +6,8 @@ import { safeSelectPlayersByIds } from "@/utils/safeSelectPlayers";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trophy, Medal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { getLatestAllocations } from "@/utils/getLatestAllocations";
 
 export default function PublicResults() {
   const { slug } = useParams();
@@ -31,16 +33,12 @@ export default function PublicResults() {
   const { data: results, isLoading: resultsLoading } = useQuery({
     queryKey: ['public-results', tournament?.id],
     queryFn: async () => {
-      if (!tournament?.id) return [];
+      if (!tournament?.id) return { rows: [], version: null };
 
       // Fetch allocations with player and prize data
-      const { data: allocations, error: allocError } = await supabase
-        .from('allocations')
-        .select('player_id, prize_id')
-        .eq('tournament_id', tournament.id);
-      
-      if (allocError) throw allocError;
-      if (!allocations || allocations.length === 0) return [];
+      const { allocations, version } = await getLatestAllocations(tournament.id);
+
+      if (!allocations || allocations.length === 0) return { rows: [], version };
 
       // Fetch players
       const playerIds = allocations.map(a => a.player_id);
@@ -112,11 +110,13 @@ export default function PublicResults() {
       console.groupEnd();
 
       // Sort: main first, then by place
-      return deduplicated.sort((a, b) => {
+      const rows = deduplicated.sort((a, b) => {
         if (a.isMain && !b.isMain) return -1;
         if (!a.isMain && b.isMain) return 1;
         return a.place - b.place;
       });
+
+      return { rows, version };
     },
     enabled: !!tournament?.id,
   });
@@ -157,12 +157,15 @@ export default function PublicResults() {
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
         <div className="container mx-auto px-6 py-12">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
-              <p className="text-lg text-muted-foreground">Final Results</p>
-            </div>
-            <Button variant="outline" asChild>
-              <Link to={`/p/${slug}/details`}>
+          <div>
+            <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
+            <p className="text-lg text-muted-foreground">Final Results</p>
+            {typeof results?.version === 'number' && (
+              <Badge variant="outline" className="mt-2 text-xs">Allocations v{results.version}</Badge>
+            )}
+          </div>
+          <Button variant="outline" asChild>
+            <Link to={`/p/${slug}/details`}>
                 <ExternalLink className="h-4 w-4 mr-2" />
                 View Details
               </Link>
@@ -173,7 +176,7 @@ export default function PublicResults() {
 
       <div className="container mx-auto px-6 py-12">
         <div className="max-w-4xl mx-auto">
-          {!results || results.length === 0 ? (
+          {!results?.rows || results.rows.length === 0 ? (
             <Card>
               <CardContent className="pt-6 text-center text-muted-foreground">
                 No published results yet.
@@ -196,7 +199,7 @@ export default function PublicResults() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {results.map((result, idx) => (
+                      {results.rows.map((result, idx) => (
                         <TableRow key={idx} className="border-border">
                           <TableCell className="font-medium">{result.categoryName}</TableCell>
                           <TableCell className="font-bold text-lg">{result.place}</TableCell>

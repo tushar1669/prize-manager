@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { byMainOrderPlace } from "@/utils/sortWinners";
+import { getLatestAllocations } from "@/utils/getLatestAllocations";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
@@ -33,25 +34,23 @@ export default function PublicWinnersPage() {
 
   const { data: results, isLoading: resultsLoading } = useQuery({
     queryKey: ['public-winners', tournament?.id],
-    queryFn: async () => {
-      if (!tournament?.id) return [];
-      if (tournament.is_published === false) {
-        console.log('[public-winners] gated (unpublished)');
-        toast({
-          variant: 'destructive',
-          title: 'Tournament unpublished',
-          description: 'This tournament is not yet published. Winners cannot be shown.',
-        });
-        return [];
-      }
+      queryFn: async () => {
+        if (!tournament?.id) return { rows: [], version: null };
+        if (tournament.is_published === false) {
+          console.log('[public-winners] gated (unpublished)');
+          toast({
+            variant: 'destructive',
+            title: 'Tournament unpublished',
+            description: 'This tournament is not yet published. Winners cannot be shown.',
+          });
+          return { rows: [], version: null };
+        }
 
-      const { data: allocations, error: allocError } = await supabase
-        .from('allocations')
-        .select('player_id, prize_id')
-        .eq('tournament_id', tournament.id);
-      
-      if (allocError) throw allocError;
-      if (!allocations || allocations.length === 0) return [];
+      const { allocations, version } = await getLatestAllocations(tournament.id);
+
+      if (!allocations || allocations.length === 0) {
+        return { rows: [], version };
+      }
 
       // De-duplicate IDs before queries
       const playerIds = [...new Set(allocations.map(a => a.player_id).filter(Boolean) as string[])];
@@ -119,22 +118,22 @@ export default function PublicWinnersPage() {
       console.log('[public-winners] comparator: main→order_idx→place');
       const sorted = deduplicated.sort(byMainOrderPlace);
 
-      console.log('[public-winners] sorted main-first, order_idx, place', { count: sorted.length });
+        console.log('[public-winners] sorted main-first, order_idx, place', { count: sorted.length });
 
-      if (!tournament.is_published && sorted.length > 0) {
-        console.warn('[public-winners] received winners for unpublished tournament', {
-          tournamentId: tournament.id,
-          count: sorted.length,
-        });
-        toast({
-          variant: 'destructive',
-          title: 'Tournament unpublished',
-          description: 'This tournament is not yet published. Winners cannot be shown.',
-        });
-        return [];
-      }
+        if (!tournament.is_published && sorted.length > 0) {
+          console.warn('[public-winners] received winners for unpublished tournament', {
+            tournamentId: tournament.id,
+            count: sorted.length,
+          });
+          toast({
+            variant: 'destructive',
+            title: 'Tournament unpublished',
+            description: 'This tournament is not yet published. Winners cannot be shown.',
+          });
+          return { rows: [], version };
+        }
 
-      return sorted;
+        return { rows: sorted, version };
     },
     enabled: !!tournament?.id,
   });
@@ -158,8 +157,8 @@ export default function PublicWinnersPage() {
     );
   }
 
-  const totalPrizes = results?.length || 0;
-  const totalCash = results?.reduce((sum, r) => sum + Number(r.cashAmount || 0), 0) || 0;
+  const totalPrizes = results?.rows?.length || 0;
+  const totalCash = results?.rows?.reduce((sum, r) => sum + Number(r.cashAmount || 0), 0) || 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -202,10 +201,15 @@ export default function PublicWinnersPage() {
       {tournament.is_published && (
         <Card>
           <CardHeader>
-            <CardTitle>Winners</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>Winners</CardTitle>
+              {typeof results?.version === 'number' && (
+                <Badge variant="outline" className="text-xs">Allocations v{results.version}</Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            {!results || results.length === 0 ? (
+            {!results?.rows || results.rows.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 No winners allocated yet
               </div>
@@ -224,7 +228,7 @@ export default function PublicWinnersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((result, idx) => (
+                  {results.rows.map((result, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">{result.place}</TableCell>
                       <TableCell>{result.categoryName}</TableCell>

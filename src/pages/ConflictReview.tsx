@@ -295,6 +295,31 @@ export default function ConflictReview() {
     }
   });
 
+  const finalizeMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Tournament ID missing');
+      if (winners.length === 0) throw new Error('No allocations to finalize');
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const { data, error } = await supabase.functions.invoke('finalize', {
+        body: { tournamentId: id, winners },
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      });
+
+      if (error) throw error;
+      return data as { version: number; allocationsCount: number };
+    },
+    onSuccess: (data) => {
+      toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
+      navigate(`/t/${id}/finalize`, { state: { winners, previewMeta, conflicts, unfilled, finalizeResult: data } });
+    },
+    onError: (error: any) => {
+      console.error('[finalize] error from review', error);
+      toast.error(error?.message || 'Failed to finalize allocations');
+    }
+  });
+
   useEffect(() => {
     if (!id) return;
 
@@ -735,29 +760,31 @@ export default function ConflictReview() {
             }
             navigate(`/t/${id}/import`);
           }}>Back</Button>
-          <Button 
+          <Button
             onClick={() => {
               if (!id) {
                 toast.error('Tournament ID missing');
                 navigate('/dashboard');
                 return;
               }
-              navigate(`/t/${id}/finalize`, { state: { winners } });
-            }} 
+              finalizeMutation.mutate();
+            }}
             disabled={
               isPreviewMode ||
               !previewCompleted ||
               winners.length === 0 ||
-              conflicts.length > 0
-            } 
+              conflicts.length > 0 ||
+              finalizeMutation.isPending
+            }
             title={
               isPreviewMode ? 'Commit allocation first' :
               !previewCompleted ? 'Run preview first' :
-              conflicts.length > 0 ? 'Resolve all conflicts before finalizing' : 
-              winners.length === 0 ? 'No winners to finalize' : ''
+              conflicts.length > 0 ? 'Resolve all conflicts before finalizing' :
+              winners.length === 0 ? 'No winners to finalize' :
+              finalizeMutation.isPending ? 'Finalizing...' : ''
             }
           >
-            Finalize <ArrowRight className="h-4 w-4 ml-2" />
+            {finalizeMutation.isPending ? 'Finalizing' : 'Finalize'} <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
       </div>

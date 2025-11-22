@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { safeSelectPlayersByIds } from '@/utils/safeSelectPlayers';
 import { byMainOrderPlace } from '@/utils/sortWinners';
+import { getLatestAllocations } from '@/utils/getLatestAllocations';
 
 export interface FinalPrizeWinnerRow {
   prizeId: string;
@@ -53,6 +54,7 @@ export interface FinalPrizeData {
     is_main: boolean;
     order_idx: number | null;
   }[];
+  version: number | null;
 }
 
 async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData> {
@@ -66,14 +68,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     throw tournamentError;
   }
 
-  const { data: allocations, error: allocationError } = await supabase
-    .from('allocations')
-    .select('player_id, prize_id')
-    .eq('tournament_id', tournamentId);
-
-  if (allocationError) {
-    throw allocationError;
-  }
+  const { allocations, version } = await getLatestAllocations(tournamentId);
 
   if (!allocations || allocations.length === 0) {
     return {
@@ -82,11 +77,12 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
       totals: {
         totalPrizes: 0,
         totalCash: 0,
-        mainCount: 0,
-        categoryCount: 0,
-      },
-      categories: [],
-    };
+      mainCount: 0,
+      categoryCount: 0,
+    },
+    categories: [],
+    version,
+  };
   }
 
   const prizeIds = Array.from(
@@ -209,6 +205,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
       // fallback: name alphabetical
       return a.name.localeCompare(b.name);
     }),
+    version,
   };
 }
 
@@ -248,5 +245,5 @@ export function useFinalPrizeData(tournamentId?: string) {
     return { byCategory, groups };
   }, [query.data]);
 
-  return { ...query, grouped };
+  return { ...query, grouped, version: query.data?.version ?? null };
 }

@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -60,6 +60,7 @@ export default function Finalize() {
     conflictCount?: number;
     unfilled?: Unfilled[];
     unfilledCount?: number;
+    finalizeResult?: { version: number; allocationsCount: number };
   } | undefined;
   
   // Early guard: if no winners in state, show fallback UI and don't run queries
@@ -93,6 +94,7 @@ export default function Finalize() {
   const { role } = useUserRole();
   const [isExportingPrint, setIsExportingPrint] = useState(false);
   const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
+  const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
 
   // Fetch players and prizes to show winner details
   const { data: playersList } = useQuery({
@@ -165,6 +167,8 @@ export default function Finalize() {
       return (data?.version ?? 0) + 1;
     },
   });
+
+  const publishVersion = finalizeResult?.version ?? nextVersion ?? 1;
 
   // Fetch summary data
   const { data: summary } = useQuery({
@@ -240,13 +244,8 @@ export default function Finalize() {
     },
     onSuccess: (data) => {
       console.log('[finalize] finalize complete', data);
+      setFinalizeResult(data);
       toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
-      if (!id) {
-        toast.error('Tournament ID missing');
-        navigate('/dashboard');
-        return;
-      }
-      navigate(`/t/${id}/publish`, { state: { version: data.version } });
     },
     onError: (error: any) => {
       console.error('[finalize] error', error);
@@ -258,6 +257,11 @@ export default function Finalize() {
       toast.error(`Finalization failed: ${error.message}`);
     }
   });
+
+  useEffect(() => {
+    if (!id || winners.length === 0 || finalizeResult || finalizeMutation.isPending) return;
+    finalizeMutation.mutate(winners);
+  }, [finalizeMutation, finalizeMutation.isPending, finalizeResult, id, winners]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -320,15 +324,15 @@ export default function Finalize() {
       }
 
       const { data: { user } } = await supabase.auth.getUser();
-      const { error: pubError } = await supabase
-        .from('publications')
-        .upsert({
-          tournament_id: id,
-          slug,
-          version: nextVersion || 1,
-          published_by: user?.id,
-          is_active: true
-        }, { onConflict: 'tournament_id,version' });
+          const { error: pubError } = await supabase
+            .from('publications')
+            .upsert({
+              tournament_id: id,
+              slug,
+              version: publishVersion,
+              published_by: user?.id,
+              is_active: true
+            }, { onConflict: 'tournament_id,version' });
 
       if (pubError) {
         console.error(`[publish] error id=${requestId} message=${pubError.message}`);
@@ -391,7 +395,24 @@ export default function Finalize() {
       toast.error("No allocations to finalize");
       return;
     }
-    finalizeMutation.mutate(winners);
+
+    const proceed = async () => {
+      if (!id) {
+        toast.error('Tournament ID missing');
+        navigate('/dashboard');
+        return;
+      }
+
+      try {
+        const result = finalizeResult ?? await finalizeMutation.mutateAsync(winners);
+        setFinalizeResult(result);
+        navigate(`/t/${id}/publish`, { state: { version: result.version } });
+      } catch (error) {
+        console.error('[finalize] publish flow error', error);
+      }
+    };
+
+    void proceed();
   };
 
   return (
@@ -404,12 +425,12 @@ export default function Finalize() {
         <TournamentProgressBreadcrumbs />
         
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
-            <span className="text-xs rounded-full px-2 py-1 bg-muted">
-              v{nextVersion ?? 1}
-            </span>
-          </div>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
+              <span className="text-xs rounded-full px-2 py-1 bg-muted">
+              v{publishVersion}
+              </span>
+            </div>
           <p className="text-muted-foreground">
             Review final allocations before publishing
           </p>
@@ -573,7 +594,7 @@ export default function Finalize() {
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground mb-4">
-                By publishing, you create an immutable version (v{nextVersion ?? 1}) of these allocations.
+                By publishing, you create an immutable version (v{publishVersion}) of these allocations.
                 The tournament will be available at a public URL that can be shared with participants.
               </p>
               <div className="space-y-3">
