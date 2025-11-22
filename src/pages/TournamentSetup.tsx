@@ -40,28 +40,6 @@ import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 const DEBUG = false;
 const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
 
-// Helper functions for silent auto-restore on nav-away
-function setNavAwayFlag(tournamentId: string) {
-  try {
-    sessionStorage.setItem(`nav-away:t:${tournamentId}`, String(Date.now()));
-  } catch { /* ignore */ }
-}
-
-function getNavAwayFlag(tournamentId: string): number | null {
-  try {
-    const raw = sessionStorage.getItem(`nav-away:t:${tournamentId}`);
-    return raw ? parseInt(raw, 10) : null;
-  } catch {
-    return null;
-  }
-}
-
-function clearNavAwayFlag(tournamentId: string) {
-  try {
-    sessionStorage.removeItem(`nav-away:t:${tournamentId}`);
-  } catch { /* ignore */ }
-}
-
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -244,20 +222,9 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (activeTab !== 'prizes' || !mainPrizesDraftKey || !id) return;
     
-    const navAwayTimestamp = getNavAwayFlag(id);
-    const recentNavAway = navAwayTimestamp && (Date.now() - navAwayTimestamp < 5 * 60 * 1000); // 5 min TTL
-    
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
-    if (draft && recentNavAway) {
-      // Silent auto-restore: apply draft without showing banner
-      dlog('[draft] silent auto-restore on return', { count: draft.data?.length, ageMs: draft.ageMs });
-      setPrizes(draft.data || []);
-      setInitialPrizes(draft.data || []);
-      setHasHydratedPrizes(true); // Block DB hydration
-      setHasPendingDraft(false); // No banner
-      clearNavAwayFlag(id);
-    } else if (draft) {
-      // Normal draft detection: show banner for manual restore
+    if (draft) {
+      // Show banner for manual restore (no more silent auto-restore)
       setMainPrizesRestore(draft);
       setHasPendingDraft(true);
     } else {
@@ -388,6 +355,26 @@ export default function TournamentSetup() {
     if (!categories || hasHydratedPrizes || activeTab !== 'prizes' || hasPendingDraft) return;
     
     const mainCat = categories.find(c => c.is_main);
+    
+    // Check if draft is newer than DB data
+    const draft = getDraft<any>(mainPrizesDraftKey, 1);
+    if (draft && mainCat?.prizes && mainCat.prizes.length > 0) {
+      const draftTimestamp = Date.now() - draft.ageMs;
+      
+      // If draft is significantly newer (>30s), prefer showing banner
+      if (draftTimestamp > Date.now() - 30000) {
+        console.log('[prizes] draft is recent, showing banner');
+        setHasPendingDraft(true);
+        setMainPrizesRestore(draft);
+        setHasHydratedPrizes(true);
+        return;
+      } else {
+        // Draft is stale, clear it and use DB
+        console.log('[prizes] clearing stale draft, using DB');
+        clearDraft(mainPrizesDraftKey);
+      }
+    }
+    
     if (mainCat?.prizes && mainCat.prizes.length > 0) {
       const dbPrizes = mainCat.prizes.map(p => ({
         place: p.place,
@@ -401,65 +388,14 @@ export default function TournamentSetup() {
       setInitialPrizes(dbPrizes);
       setHasHydratedPrizes(true);
     } else if (mainCat) {
+      // Main category exists but no prizes - set empty state
       setHasHydratedPrizes(true);
     } else {
-      // No Main category exists → auto-create with default prizes
-      console.log('[prizes] no Main category found, auto-creating with defaults');
-      
-      const defaultPrizes = [
-        { place: 1, cash_amount: 10000, has_trophy: true, has_medal: false },
-        { place: 2, cash_amount: 7000, has_trophy: false, has_medal: true },
-        { place: 3, cash_amount: 5000, has_trophy: false, has_medal: true },
-      ];
-      
-      setPrizes(defaultPrizes);
-      setInitialPrizes(defaultPrizes);
+      // No Main category exists - show placeholder
+      console.log('[prizes] no Main category found, showing placeholder');
       setHasHydratedPrizes(true);
-      
-      // Auto-save to DB (non-blocking)
-      (async () => {
-        try {
-          console.log('[prizes] creating Main category + default prizes in DB');
-          const { data: newMainCat, error: createError } = await supabase
-            .from('categories')
-            .insert({
-              tournament_id: id,
-              name: 'Main (Open)',
-              is_main: true,
-              criteria_json: {},
-              order_idx: 0,
-              is_active: true
-            })
-            .select('id')
-            .single();
-          
-          if (createError) throw createError;
-          
-          const prizesToInsert = defaultPrizes.map(p => ({
-            category_id: newMainCat.id,
-            place: p.place,
-            cash_amount: p.cash_amount,
-            has_trophy: p.has_trophy,
-            has_medal: p.has_medal,
-            is_active: true
-          }));
-          
-          const { error: insertError } = await supabase
-            .from('prizes')
-            .insert(prizesToInsert);
-          
-          if (insertError) throw insertError;
-          
-          console.log('[prizes] Main category + prizes auto-created successfully');
-          queryClient.invalidateQueries({ queryKey: ['categories', id] });
-          toast.success('Main prizes initialized with defaults');
-        } catch (err: any) {
-          console.error('[prizes] auto-create failed', err);
-          toast.error('Failed to initialize Main prizes. Please save manually.');
-        }
-      })();
     }
-  }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft, id, queryClient]);
+  }, [categories, hasHydratedPrizes, activeTab, hasPendingDraft, id, mainPrizesDraftKey]);
 
   // Player count for conditional CTA
   const { data: playerCount = 0, isLoading: loadingPlayerCount } = useQuery({
@@ -474,6 +410,13 @@ export default function TournamentSetup() {
       return count ?? 0;
     },
   });
+
+  // Gating logic: can only proceed when Main category exists in DB with prizes AND no unsaved changes
+  const canProceed = useMemo(() => {
+    const mainCat = categories?.find(c => c.is_main);
+    const hasPrizesInDB = mainCat?.prizes && mainCat.prizes.length > 0;
+    return hasPrizesInDB && !isMainPrizesDirty;
+  }, [categories, isMainPrizesDirty]);
 
   // Update tournament mutation
   const updateTournamentMutation = useMutation({
@@ -545,10 +488,10 @@ export default function TournamentSetup() {
     }
   });
 
-  // Save prizes mutation
+  // Save prizes mutation (refactored to support inline save + navigate)
   const savePrizesMutation = useMutation({
-    mutationFn: async () => {
-      console.log('[prizes] mutate start', { count: prizes?.length, prizes });
+    mutationFn: async ({ shouldNavigate }: { shouldNavigate?: boolean } = {}) => {
+      console.log('[prizes] mutate start', { count: prizes?.length, shouldNavigate });
       
       if (!id) throw new Error('No tournament ID');
       if (!Array.isArray(prizes)) throw new Error('No prizes in state');
@@ -587,13 +530,6 @@ export default function TournamentSetup() {
 
       console.log('[prizes] deleting then inserting', { mainCategoryId });
       
-      // Check existing count before delete for debugging
-      const { count: beforeCount } = await supabase
-        .from('prizes')
-        .select('id', { count: 'exact', head: true })
-        .eq('category_id', mainCategoryId);
-      console.log('[prizes] before delete count', beforeCount);
-      
       // Delete existing prizes for main category
       const { error: delErr } = await supabase
         .from('prizes')
@@ -615,22 +551,32 @@ export default function TournamentSetup() {
       const { error, data } = await supabase
         .from('prizes')
         .insert(prizesToInsert)
-        .select('id'); // Force return to ensure insert happened
+        .select('id');
       
       console.log('[prizes] inserted count', { count: data?.length });
       
       if (error) throw error;
+      
+      return { shouldNavigate };
     },
-    onSuccess: async () => {
-      console.log('[prizes] save ok', { count: prizes.length });
-      console.log('[nav] to order-review', { id });
+    onSuccess: async ({ shouldNavigate }) => {
+      console.log('[prizes] save ok', { count: prizes.length, shouldNavigate });
+      
+      // Clear draft and reset dirty state
       clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
-      setInitialPrizes(prizes);
+      
+      // Refetch categories to sync local state with DB
       await queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.success(`${prizes.length} main prizes saved successfully`, { duration: 3000 });
-      // small delay so user sees the toast
-      setTimeout(() => navigate(`/t/${id}/order-review`), 600);
+      
+      // Update baseline to current prizes
+      setInitialPrizes([...prizes]);
+      
+      toast.success(`${prizes.length} main prizes saved successfully`);
+      
+      if (shouldNavigate) {
+        setTimeout(() => navigate(`/t/${id}/order-review`), 600);
+      }
     },
     onError: (error: any) => {
       console.error('[prizes] save main prizes error', error);
@@ -877,26 +823,21 @@ export default function TournamentSetup() {
   const draftKeyRef = useRef(mainPrizesDraftKey);
   useEffect(() => { draftKeyRef.current = mainPrizesDraftKey; }, [mainPrizesDraftKey]);
 
-  // Register keyboard Save (Cmd/Ctrl+S) on Prizes tab => save *draft locally* only
-  const saveDraftHotkey = useCallback(async () => {
-    const key = draftKeyRef.current;
-    if (!key) return;
-    dlog('[shortcut] saving draft from keyboard', { count: prizesRef.current?.length });
-    setDraft(key, prizesRef.current, 1);
-    setInitialPrizes(prizesRef.current);
-    setHasHydratedPrizes(true); // Prevent DB re-hydration on return
-    resetDirty('main-prizes');
-    toast.success('Draft saved locally (Cmd/Ctrl+S)');
-  }, [resetDirty, setHasHydratedPrizes]);
+  // Register keyboard Save (Cmd/Ctrl+S) on Prizes tab => save to DB
+  const savePrizesHotkey = useCallback(async () => {
+    if (!isMainPrizesDirty) return;
+    dlog('[shortcut] saving main prizes to DB from keyboard');
+    await savePrizesMutation.mutateAsync({ shouldNavigate: false });
+  }, [isMainPrizesDirty, savePrizesMutation]);
 
   useEffect(() => {
     if (activeTab === 'prizes') {
-      registerOnSave(saveDraftHotkey);
+      registerOnSave(savePrizesHotkey);
     } else {
       registerOnSave(null);
     }
     return () => registerOnSave(null);
-  }, [activeTab, registerOnSave, saveDraftHotkey]);
+  }, [activeTab, registerOnSave, savePrizesHotkey]);
 
   // Register Details tab save handler for Cmd/Ctrl+S
   useEffect(() => {
@@ -1311,7 +1252,6 @@ export default function TournamentSetup() {
                         setMainPrizesRestore(null);
                         setHasPendingDraft(false);
                         setHasHydratedPrizes(true);
-                        if (id) clearNavAwayFlag(id);
                       }}
                     >
                       Restore draft
@@ -1335,19 +1275,52 @@ export default function TournamentSetup() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Main Prizes (Open)</CardTitle>
-                    <CardDescription>Define prizes for top finishers</CardDescription>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <CardTitle>Main Prizes (Open)</CardTitle>
+                      <CardDescription>Define prizes for top finishers</CardDescription>
+                    </div>
+                    {isMainPrizesDirty && (
+                      <Badge variant="secondary" className="text-xs">
+                        Unsaved changes
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Prize allocation rules are configured in{" "}
-                    <button 
-                      className="underline hover:no-underline text-primary font-medium" 
-                      onClick={() => navigate(`/t/${id}/settings`)}
-                    >
-                      Settings
-                    </button>
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      Prize allocation rules are configured in{" "}
+                      <button 
+                        className="underline hover:no-underline text-primary font-medium" 
+                        onClick={() => navigate(`/t/${id}/settings`)}
+                      >
+                        Settings
+                      </button>
+                    </p>
+                    {isOrganizer && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => savePrizesMutation.mutate({ shouldNavigate: false })}
+                        disabled={!isMainPrizesDirty || savePrizesMutation.isPending}
+                        className="gap-2"
+                      >
+                        {savePrizesMutation.isPending ? (
+                          <>
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                              <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                            </svg>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4" />
+                            Save Main Prizes
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1579,16 +1552,7 @@ export default function TournamentSetup() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      // Set nav-away flag and auto-save current draft before navigating
-                      if (id && !!mainPrizesDraftKey && isMainPrizesDirty) {
-                        dlog('[nav-away] auto-saving draft before Settings', { count: prizes?.length });
-                        setDraft(mainPrizesDraftKey, prizes, 1);
-                        setInitialPrizes(prizes);
-                        setNavAwayFlag(id);
-                      }
-                      navigate(`/t/${id}/settings`);
-                    }}
+                    onClick={() => navigate(`/t/${id}/settings`)}
                   >
                     Edit Rules
                   </Button>
@@ -1608,47 +1572,24 @@ export default function TournamentSetup() {
             <div className="flex justify-between">
               <Button variant="outline" onClick={handleCancel}>Cancel</Button>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    console.log('[draft] save draft click', { count: prizes?.length, hasHydratedPrizes });
-                    // Persist only to session storage, no DB writes
-                    setDraft(mainPrizesDraftKey, prizes, 1);
-                    setInitialPrizes(prizes);
-                    setHasHydratedPrizes(true); // Prevent DB re-hydration on return
-                    resetDirty('main-prizes');
-                    toast.success('Draft saved locally');
-                  }}
-                >
-                  Save Draft
-                </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => {
-                    // Set nav-away flag and auto-save current draft before navigating
-                    if (id && !!mainPrizesDraftKey && isMainPrizesDirty) {
-                      dlog('[nav-away] auto-saving draft before Order Review', { count: prizes?.length });
-                      setDraft(mainPrizesDraftKey, prizes, 1);
-                      setInitialPrizes(prizes);
-                      setNavAwayFlag(id);
-                    }
-                    console.log('[nav] review category order clicked', { isDirty: isMainPrizesDirty });
-                    navigate(`/t/${id}/order-review`);
-                  }}
+                  onClick={() => navigate(`/t/${id}/order-review`)}
                 >
                   Review Category Order
                 </Button>
                 <Button
                   onClick={() => {
-                    console.log('[nav] next clicked', { playerCount });
+                    console.log('[nav] next clicked', { playerCount, canProceed });
                     if (playerCount > 0) {
                       navigate(`/t/${id}/review`);
                     } else {
                       navigate(`/t/${id}/import`);
                     }
                   }}
-                  disabled={loadingPlayerCount}
+                  disabled={loadingPlayerCount || !canProceed}
                   className="gap-2"
+                  title={!canProceed ? "Please save main prizes before continuing" : undefined}
                 >
                   {loadingPlayerCount
                     ? '...'
