@@ -9,7 +9,7 @@ const corsHeaders = {
 
 interface AllocatePrizesRequest {
   tournamentId: string;
-  overrides?: Array<{ prizeId: string; playerId: string }>;
+  overrides?: Array<{ prizeId: string; playerId: string; force?: boolean }>;
   ruleConfigOverride?: any;
   dryRun?: boolean;
 }
@@ -203,19 +203,71 @@ Deno.serve(async (req) => {
       isManual: boolean;
     }> = [];
     const assignedPlayers = new Set<string>();
+    const conflicts: Array<{
+      id: string;
+      type: string;
+      impacted_players: string[];
+      impacted_prizes: string[];
+      reasons: string[];
+      suggested: { prizeId: string; playerId: string } | null;
+      tournament_id: string;
+    }> = [];
     const unfilled: Array<{ prizeId: string; reasonCodes: string[] }> = [];
     const coverageData: CoverageItem[] = [];
 
     // Apply manual overrides first
+    const prizeLookup = new Map<string, { cat: CategoryRow; p: PrizeRow }>(
+      prizeQueue.map(entry => [entry.p.id, entry])
+    );
+    const playerLookup = new Map<string, any>(
+      (players || []).map(p => [p.id, p])
+    );
+
     for (const override of overrides) {
+      const prizeContext = prizeLookup.get(override.prizeId);
+      const player = playerLookup.get(override.playerId);
+      const force = override.force === true;
+
+      const evaluation = (prizeContext && player)
+        ? evaluateEligibility(player, prizeContext.cat, rules, tournamentStartDate)
+        : null;
+      const eligible = evaluation?.eligible === true;
+
+      if (!eligible && !force) {
+        const reasons = ['manual_override_ineligible'];
+        if (evaluation?.reasonCodes?.length) {
+          reasons.push(...evaluation.reasonCodes);
+        }
+        if (!prizeContext || !player) {
+          reasons.push('manual_override_missing_context');
+        }
+
+        conflicts.push({
+          id: crypto.randomUUID(),
+          type: 'manual_override',
+          impacted_players: [override.playerId],
+          impacted_prizes: [override.prizeId],
+          reasons,
+          suggested: null,
+          tournament_id: tournamentId,
+        });
+
+        console.warn(`[alloc.override] prize=${override.prizeId} player=${override.playerId} status=ineligible reasons=${reasons.join(',')}`);
+        continue;
+      }
+
       assignedPlayers.add(override.playerId);
+      const reasons = new Set<string>([
+        force && !eligible ? 'manual_override_forced' : 'manual_override',
+        ...(evaluation?.passCodes || [])
+      ]);
       winners.push({
         prizeId: override.prizeId,
         playerId: override.playerId,
-        reasons: ['manual_override'],
+        reasons: Array.from(reasons),
         isManual: true
       });
-      console.log(`[alloc.win] prize=${override.prizeId} player=${override.playerId} rank=manual reasons=manual_override`);
+      console.log(`[alloc.win] prize=${override.prizeId} player=${override.playerId} rank=manual reasons=${Array.from(reasons).join(',')}`);
     }
 
     // Allocate prizes in brochure priority order
@@ -322,15 +374,6 @@ Deno.serve(async (req) => {
     }
 
     // 7) Minimal conflict detection: only for identical prizeKey ties
-    const conflicts: Array<{
-      id: string;
-      type: string;
-      impacted_players: string[];
-      impacted_prizes: string[];
-      reasons: string[];
-      suggested: { prizeId: string; playerId: string } | null;
-      tournament_id: string;
-    }> = [];
     
     // Build eligibility map: player -> prizes they're eligible for
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
