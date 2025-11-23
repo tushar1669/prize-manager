@@ -25,6 +25,8 @@ export default function Settings() {
     defaultValues: {
       strict_age: true,
       allow_unrated_in_rating: false,
+      allow_missing_dob_for_age: false,
+      max_age_inclusive: true,
       prefer_main_on_equal_value: true,
       prefer_category_rank_on_tie: false,
       category_priority_order: []
@@ -56,7 +58,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -74,6 +76,8 @@ export default function Settings() {
         form.reset({
           strict_age: data.strict_age,
           allow_unrated_in_rating: data.allow_unrated_in_rating,
+          allow_missing_dob_for_age: data.allow_missing_dob_for_age,
+          max_age_inclusive: data.max_age_inclusive,
           prefer_main_on_equal_value: data.prefer_main_on_equal_value,
           prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
           category_priority_order: data.category_priority_order as string[] || []
@@ -176,6 +180,52 @@ export default function Settings() {
 
                 <FormField
                   control={form.control}
+                  name="allow_missing_dob_for_age"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Allow Missing DOB for Age Rules
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          Treat players with missing birthdates as eligible but flag them for review
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="max_age_inclusive"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Inclusive Maximum Age
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          When enabled, players exactly at the maximum age remain eligible
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="allow_unrated_in_rating"
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between py-2">
@@ -255,6 +305,8 @@ export default function Settings() {
               <CardContent>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
                   <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Unrated in Rating: <strong>{form.watch('allow_unrated_in_rating') ? 'ON' : 'OFF'}</strong></li>
                   <li>Prefer Main on Equal Value: <strong>{form.watch('prefer_main_on_equal_value') ? 'ON' : 'OFF'}</strong></li>
                   <li>Prefer Category Rank on Tie: <strong>{form.watch('prefer_category_rank_on_tie') ? 'ON' : 'OFF'}</strong></li>

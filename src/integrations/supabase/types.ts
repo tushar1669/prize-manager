@@ -463,9 +463,11 @@ export type Database = {
       }
       rule_config: {
         Row: {
+          allow_missing_dob_for_age: boolean | null
           allow_unrated_in_rating: boolean | null
           category_priority_order: Json | null
           created_at: string | null
+          max_age_inclusive: boolean | null
           prefer_category_rank_on_tie: boolean | null
           prefer_main_on_equal_value: boolean | null
           strict_age: boolean | null
@@ -473,9 +475,11 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
+          max_age_inclusive?: boolean | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null
@@ -483,9 +487,11 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
+          max_age_inclusive?: boolean | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null
