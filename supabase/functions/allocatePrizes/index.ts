@@ -12,6 +12,16 @@ interface AllocatePrizesRequest {
   overrides?: Array<{ prizeId: string; playerId: string; force?: boolean }>;
   ruleConfigOverride?: any;
   dryRun?: boolean;
+  tieBreakStrategy?: TieBreakStrategy;
+}
+
+type TieBreakField = 'rating' | 'name';
+type TieBreakStrategy = 'rating_then_name' | 'none' | TieBreakField[];
+
+export function normalizeTieBreakStrategy(strategy: TieBreakStrategy | undefined): TieBreakField[] {
+  if (Array.isArray(strategy)) return strategy.filter((s): s is TieBreakField => s === 'rating' || s === 'name');
+  if (strategy === 'none') return [];
+  return ['rating', 'name'];
 }
 
 interface CoverageItem {
@@ -57,7 +67,7 @@ Deno.serve(async (req) => {
     );
 
     const payload: AllocatePrizesRequest = await req.json();
-    const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false } = payload;
+    const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false, tieBreakStrategy } = payload;
 
     console.log(`[allocatePrizes] Starting allocation for tournament ${tournamentId}`);
 
@@ -147,6 +157,7 @@ Deno.serve(async (req) => {
       prefer_category_rank_on_tie: false,
       prefer_main_on_equal_value: true,
       category_priority_order: ['main', 'others'],
+      tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
     };
 
@@ -154,7 +165,15 @@ Deno.serve(async (req) => {
       ...defaultRules,
       ...(ruleConfig || {}),
       ...(ruleConfigOverride || {}),
+      ...(tieBreakStrategy ? { tie_break_strategy: tieBreakStrategy } : {}),
     };
+
+    // Support camelCase override for API callers
+    if (rules.tieBreakStrategy && !rules.tie_break_strategy) {
+      rules.tie_break_strategy = rules.tieBreakStrategy;
+    }
+
+    const tieBreakFields = normalizeTieBreakStrategy(rules.tie_break_strategy);
 
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
 
@@ -329,21 +348,35 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Deterministic tie-breaking: rank ASC → rating DESC → name ASC
-      eligible.sort(compareEligibleByRankRatingName);
+      // Deterministic tie-breaking based on configured strategy
+      eligible.sort((a, b) => compareEligibleByRankRatingName(a, b, tieBreakFields));
       const winner = eligible[0];
 
       // Compute tie-break reason for logging
-      let tieBreak: 'none' | 'rating' | 'name' = 'none';
+      let tieBreak: 'none' | TieBreakField = 'none';
       if (eligible.length > 1) {
         const r0 = eligible[0].player.rank ?? Number.MAX_SAFE_INTEGER;
         const r1 = eligible[1].player.rank ?? Number.MAX_SAFE_INTEGER;
-        
+
         if (r0 === r1) {
-          // Ranks are equal, determine if tie was broken by rating or name
-          const rt0 = eligible[0].player.rating ?? 0;
-          const rt1 = eligible[1].player.rating ?? 0;
-          tieBreak = (rt0 !== rt1) ? 'rating' : 'name';
+          for (const field of tieBreakFields) {
+            if (field === 'rating') {
+              const rt0 = eligible[0].player.rating ?? 0;
+              const rt1 = eligible[1].player.rating ?? 0;
+              if (rt0 !== rt1) {
+                tieBreak = 'rating';
+                break;
+              }
+            }
+            if (field === 'name') {
+              const nameA = (eligible[0].player.name ?? '').toString();
+              const nameB = (eligible[1].player.name ?? '').toString();
+              if (nameA !== nameB) {
+                tieBreak = 'name';
+                break;
+              }
+            }
+          }
         }
       }
 
@@ -672,25 +705,37 @@ const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p
 
 /**
  * Deterministic comparator for eligible players.
- * Sort order: rank ASC → rating DESC → name ASC
+ * Sort order: rank ASC → configurable tie-breaks (rating DESC, name ASC)
  * Exported for testing.
  */
 export function compareEligibleByRankRatingName(
   a: { player: { rank?: number | null; rating?: number | null; name?: string | null } },
-  b: { player: { rank?: number | null; rating?: number | null; name?: string | null } }
+  b: { player: { rank?: number | null; rating?: number | null; name?: string | null } },
+  tieBreakStrategy?: TieBreakStrategy
 ): number {
   // Primary: rank ascending (lower rank = better)
   const rankA = a.player.rank ?? Number.MAX_SAFE_INTEGER;
   const rankB = b.player.rank ?? Number.MAX_SAFE_INTEGER;
   if (rankA !== rankB) return rankA - rankB;
 
-  // Secondary: rating descending (higher rating = better)
-  const ratingA = a.player.rating ?? 0;
-  const ratingB = b.player.rating ?? 0;
-  if (ratingA !== ratingB) return ratingB - ratingA;
+  const tieBreaks = normalizeTieBreakStrategy(tieBreakStrategy);
 
-  // Tertiary: name ascending (alphabetical)
-  const nameA = (a.player.name ?? '').toString();
-  const nameB = (b.player.name ?? '').toString();
-  return nameA.localeCompare(nameB);
+  for (const field of tieBreaks) {
+    if (field === 'rating') {
+      // rating descending (higher rating = better)
+      const ratingA = a.player.rating ?? 0;
+      const ratingB = b.player.rating ?? 0;
+      if (ratingA !== ratingB) return ratingB - ratingA;
+    }
+
+    if (field === 'name') {
+      // name ascending (alphabetical)
+      const nameA = (a.player.name ?? '').toString();
+      const nameB = (b.player.name ?? '').toString();
+      const cmp = nameA.localeCompare(nameB);
+      if (cmp !== 0) return cmp;
+    }
+  }
+
+  return 0;
 }

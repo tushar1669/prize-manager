@@ -48,12 +48,41 @@ test.describe('Allocator: Deterministic Tie-Breaking', () => {
       makeCandidate(1, 1800, 'Alice'),
       makeCandidate(2, 2100, 'Bob'),
     ];
-    
+
     arr.sort(compareEligibleByRankRatingName);
-    
+
     // Should sort by rank only
     expect(arr[0].player.name).toBe('Alice'); // rank 1
     expect(arr[1].player.name).toBe('Bob');   // rank 2
     expect(arr[2].player.name).toBe('Charlie'); // rank 3
+  });
+
+  test('supports disabling tie-breaks via strategy "none"', () => {
+    const arr = [
+      makeCandidate(1, 2200, 'Bala'),
+      makeCandidate(1, 2300, 'Amit'),
+      makeCandidate(1, 2100, 'Chirag'),
+    ];
+
+    arr.sort((a, b) => compareEligibleByRankRatingName(a, b, 'none'));
+
+    // With rank-only tie-breaks, original order is preserved
+    expect(arr[0].player.name).toBe('Bala');
+    expect(arr[1].player.name).toBe('Amit');
+    expect(arr[2].player.name).toBe('Chirag');
+  });
+
+  test('supports custom tie-break arrays', () => {
+    const arr = [
+      makeCandidate(1, 2000, 'Zara'),
+      makeCandidate(1, 2100, 'Mira'),
+      makeCandidate(1, 1900, 'Aditi'),
+    ];
+
+    arr.sort((a, b) => compareEligibleByRankRatingName(a, b, ['name']));
+
+    expect(arr[0].player.name).toBe('Aditi');
+    expect(arr[1].player.name).toBe('Mira');
+    expect(arr[2].player.name).toBe('Zara');
   });
 });
