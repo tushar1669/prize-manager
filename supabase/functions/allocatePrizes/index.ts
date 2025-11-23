@@ -516,7 +516,7 @@ Deno.serve(async (req) => {
 
 // ============= Helper Functions =============
 
-const normGender = (g?: string | null): string | null => {
+export const normGender = (g?: string | null): string | null => {
   if (!g) return null;
   const s = String(g).trim().toLowerCase();
   if (['m', 'male', 'boy', 'boys'].includes(s)) return 'M';
@@ -524,7 +524,7 @@ const normGender = (g?: string | null): string | null => {
   return null;
 };
 
-const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null => {
+export const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null => {
   if (!dobISO) return null;
   const d = new Date(dobISO);
   if (Number.isNaN(d.getTime())) return null;
@@ -536,7 +536,7 @@ const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null
 };
 
 // Detect rating category purely by presence of rating bounds
-const isRatingCategory = (criteria: any): boolean =>
+export const isRatingCategory = (criteria: any): boolean =>
   criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number');
 
 type EligibilityResult = {
@@ -631,7 +631,7 @@ const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?:
   return allowedSet.has(canonical);
 };
 
-const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
+export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
   const c = cat.criteria_json || {};
   const failCodes = new Set<string>();
   const passCodes = new Set<string>();
@@ -801,7 +801,7 @@ const valueTier = (p: PrizeRow): number => {
   return -1; // no value
 };
 
-const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
+export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
   return {
     order: cat.order_idx ?? 0,                 // brochure order (ASC)
     tier: valueTier(p),                        // DESC
@@ -813,7 +813,7 @@ const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
 };
 
 // Sort comparator: brochure order ASC, tier DESC, cash DESC, main DESC, place ASC, pid ASC
-const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
+export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
   const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
   if (ak.order !== bk.order) return ak.order - bk.order;
   if (ak.tier !== bk.tier) return bk.tier - ak.tier;
