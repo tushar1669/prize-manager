@@ -154,6 +154,8 @@ Deno.serve(async (req) => {
     const defaultRules = {
       strict_age: true,
       allow_unrated_in_rating: false,
+      allow_missing_dob_for_age: false,
+      max_age_inclusive: true,
       prefer_category_rank_on_tie: false,
       prefer_main_on_equal_value: true,
       category_priority_order: ['main', 'others'],
@@ -278,7 +280,8 @@ Deno.serve(async (req) => {
       assignedPlayers.add(override.playerId);
       const reasons = new Set<string>([
         force && !eligible ? 'manual_override_forced' : 'manual_override',
-        ...(evaluation?.passCodes || [])
+        ...(evaluation?.passCodes || []),
+        ...(evaluation?.warnCodes || [])
       ]);
       winners.push({
         prizeId: override.prizeId,
@@ -294,7 +297,7 @@ Deno.serve(async (req) => {
       // Skip if manually overridden
       if (overrides.find(o => o.prizeId === p.id)) continue;
 
-      const eligible: Array<{ player: any; passCodes: string[] }> = [];
+      const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
       for (const player of (players || []) as any[]) {
@@ -302,11 +305,13 @@ Deno.serve(async (req) => {
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (rules.verbose_logs) {
           const status = evaluation.eligible ? 'eligible' : 'ineligible';
-          const codes = evaluation.eligible ? evaluation.passCodes : evaluation.reasonCodes;
+          const codes = evaluation.eligible
+            ? [...evaluation.passCodes, ...evaluation.warnCodes]
+            : evaluation.reasonCodes;
           console.log(`[alloc.check] prize=${p.id} player=${player.id} status=${status} codes=${codes.join(',') || 'none'}`);
         }
         if (evaluation.eligible) {
-          eligible.push({ player, passCodes: evaluation.passCodes });
+          eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
         } else {
           evaluation.reasonCodes.forEach(code => failCodes.add(code));
         }
@@ -381,7 +386,7 @@ Deno.serve(async (req) => {
       }
 
       assignedPlayers.add(winner.player.id);
-      const reasonSet = new Set<string>(['auto', 'rank', 'brochure_order', 'value_tier', ...winner.passCodes]);
+      const reasonSet = new Set<string>(['auto', 'rank', 'brochure_order', 'value_tier', ...winner.passCodes, ...winner.warnCodes]);
       const reasonList = Array.from(reasonSet);
       winners.push({
         prizeId: p.id,
@@ -538,6 +543,7 @@ type EligibilityResult = {
   eligible: boolean;
   reasonCodes: string[];
   passCodes: string[];
+  warnCodes: string[];
 };
 
 type LocationType = 'state' | 'city' | 'club';
@@ -629,6 +635,7 @@ const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: 
   const c = cat.criteria_json || {};
   const failCodes = new Set<string>();
   const passCodes = new Set<string>();
+  const warnCodes = new Set<string>();
 
   // Gender check
   const reqG = c.gender?.toUpperCase?.() || null; // 'M' | 'F' | 'OPEN' | undefined
@@ -655,24 +662,38 @@ const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: 
 
   // Age (strict ON by default)
   const strict = rules?.strict_age !== false;
+  const allowMissingDob = c.allow_missing_dob_for_age != null
+    ? !!c.allow_missing_dob_for_age
+    : !!rules?.allow_missing_dob_for_age;
+  const maxAgeInclusive = c.max_age_inclusive != null
+    ? !!c.max_age_inclusive
+    : rules?.max_age_inclusive ?? true;
   const age = yearsOn(player.dob ?? null, onDate);
   const hasAgeRule = strict && (c.max_age != null || c.min_age != null);
   let ageOk = true;
   if (hasAgeRule) {
     if (age == null) {
-      failCodes.add('dob_missing');
-      ageOk = false;
-    } else {
-      if (c.max_age != null && age > Number(c.max_age)) {
-        failCodes.add('age_above_max');
+      if (allowMissingDob) {
+        warnCodes.add('dob_missing_allowed');
+      } else {
+        failCodes.add('dob_missing');
         ageOk = false;
+      }
+    } else {
+      if (c.max_age != null) {
+        const maxAge = Number(c.max_age);
+        const exceeds = maxAgeInclusive ? age > maxAge : age >= maxAge;
+        if (exceeds) {
+          failCodes.add('age_above_max');
+          ageOk = false;
+        }
       }
       if (c.min_age != null && age < Number(c.min_age)) {
         failCodes.add('age_below_min');
         ageOk = false;
       }
     }
-    if (ageOk) {
+    if (ageOk && age != null) {
       passCodes.add('age_ok');
     }
   }
@@ -765,6 +786,7 @@ const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: 
     eligible,
     reasonCodes: Array.from(failCodes),
     passCodes: Array.from(passCodes),
+    warnCodes: Array.from(warnCodes),
   };
 };
 

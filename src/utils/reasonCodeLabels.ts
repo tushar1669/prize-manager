@@ -27,6 +27,7 @@ export const reasonCodeLabels: Record<string, string> = {
   gender_missing: "Gender missing",
   gender_mismatch: "Gender requirements not met",
   dob_missing: "DOB missing",
+  dob_missing_allowed: "DOB missing (allowed by rules)",
   age_above_max: "Above age limit",
   age_below_min: "Below age limit",
   age_out_of_range: "Age requirements not met",
