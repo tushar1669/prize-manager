@@ -662,7 +662,7 @@ export default function PlayerImport() {
   const runDedupe = useCallback(
     async (
       players: ParsedPlayer[],
-      options: { autoOpen?: boolean; policy?: MergePolicy } = {},
+      options: { autoOpen?: boolean; policy?: MergePolicy; allowMerge?: boolean } = {},
     ) => {
       const applyFallback = () => {
         const fallbackDecisions = players.map(player => ({ row: player._originalIndex, action: 'create' as const }));
@@ -679,16 +679,11 @@ export default function PlayerImport() {
         return;
       }
 
-      if (replaceExisting) {
-        console.info('[dedup] skipped (replace mode)');
-        applyFallback();
-        return;
-      }
-
       setIsRunningDedup(true);
 
       try {
         const policy = options.policy ?? importConfig.mergePolicy;
+        const allowMerge = options.allowMerge ?? !replaceExisting;
         console.log('[dedup] run', {
           count: players.length,
           policy,
@@ -702,9 +697,16 @@ export default function PlayerImport() {
           mergePolicy: policy,
         });
 
+        const nextDecisions = allowMerge
+          ? result.decisions
+          : result.candidates.map(candidate => ({ row: candidate.row, action: 'create' as const }));
+
         setDedupeState(result);
-        setDedupeDecisions(result.decisions);
-        setDedupeReviewed(false);
+        setDedupeDecisions(nextDecisions);
+        setDedupeReviewed(!allowMerge);
+        if (!allowMerge) {
+          setShowDuplicateDialog(false);
+        }
 
         if (options.autoOpen && result.candidates.some(candidate => candidate.bestMatch)) {
           setShowDuplicateDialog(true);
@@ -810,76 +812,54 @@ export default function PlayerImport() {
         playerList.map(p => buildSupabasePlayerPayload(p, id!));
 
       if (replaceExisting) {
-        console.log('[import] Deleting existing players');
-        const { error: deleteError, count: deletedCount } = await supabase
-          .from('players')
-          .delete({ count: 'exact' })
-          .eq('tournament_id', id);
+        const rpcPayload = players.map(player => ({
+          row_index: player._originalIndex,
+          ...buildSupabasePlayerPayload(player, id!),
+        }));
 
-        if (deleteError) {
-          const message = `Failed to clear existing players: ${deleteError.message}`;
+        const { data, error } = await supabase.rpc('import_replace_players' as any, {
+          tournament_id: id,
+          players: rpcPayload,
+        });
+
+        if (error) {
+          const message = `Failed to replace players: ${error.message}`;
           setReplaceBanner({ type: 'error', message });
           throw new Error(message);
         }
 
-        const { count: verifyCount, error: verifyError } = await supabase
-          .from('players')
-          .select('id', { count: 'exact', head: true })
-          .eq('tournament_id', id);
+        const rpcResult = Array.isArray(data) ? data?.[0] : data;
+        const rpcErrors = (rpcResult as any)?.error_rows ?? [];
+        const failedIndices = new Set<number>();
 
-        if (verifyError) {
-          const message = `Unable to verify deletion: ${verifyError.message}`;
-          setReplaceBanner({ type: 'error', message });
-          throw new Error(message);
-        }
-
-        if ((verifyCount ?? 0) > 0) {
-          const message = `Delete verification failed: ${verifyCount} player${verifyCount === 1 ? '' : 's'} remain.`;
-          setReplaceBanner({ type: 'error', message });
-          throw new Error('Delete verification failed; aborting import.');
-        }
-
-        const clearedMessage = `Cleared ${deletedCount ?? 0} existing player${(deletedCount ?? 0) === 1 ? '' : 's'} before import.`;
-        setReplaceBanner({ type: 'success', message: clearedMessage });
-        console.log('[import] delete verification passed');
-        toast.success('Existing players deleted. Proceeding with import.');
-
-        const chunks: ParsedPlayer[][] = [];
-        for (let i = 0; i < players.length; i += CHUNK_SIZE) {
-          chunks.push(players.slice(i, i + CHUNK_SIZE));
-        }
-
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
-          const payload = buildRows(chunk);
-          
-          let bulkError: any = null;
-          try {
-            await bulkUpsertPlayers(payload);
-          } catch (err: any) {
-            bulkError = err;
-          }
-
-          if (!bulkError) {
-            results.created.push(...chunk);
-          } else if (bulkError.isSnoConflict) {
-            // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
-            results.created.push(...chunk);
-          } else {
-            // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
-            console.warn('[import] Chunk failed (non-SNo conflict), trying individual inserts', bulkError?.message);
-            for (const player of chunk) {
-              const [singlePayload] = buildRows([player]);
-              const { error: singleError } = await supabase.from('players').insert([singlePayload]);
-
-              if (!singleError) {
-                results.created.push(player);
-              } else {
-                results.failed.push({ player, error: singleError.message });
-              }
+        rpcErrors.forEach((errRow: any) => {
+          const rowIndex = Number(errRow?.row_index);
+          if (Number.isFinite(rowIndex)) {
+            failedIndices.add(rowIndex);
+            const player = players.find(p => p._originalIndex === rowIndex);
+            if (player) {
+              const rank = errRow?.rank ?? player.rank;
+              const reason = errRow?.reason
+                ?? `Duplicate rank ${rank ?? ''} in import file (tournament rank must be unique).`;
+              results.failed.push({ player, error: reason });
             }
           }
+        });
+
+        const insertedCount = (rpcResult as any)?.inserted_count ?? 0;
+
+        if (failedIndices.size > 0) {
+          setReplaceBanner({
+            type: 'error',
+            message: 'Import aborted due to duplicate ranks. Download the error workbook for details.',
+          });
+        } else {
+          results.created.push(...players);
+          setReplaceBanner({
+            type: 'success',
+            message: `Replaced ${insertedCount} player${insertedCount === 1 ? '' : 's'} in a single transaction.`,
+          });
+          toast.success('Existing players replaced successfully');
         }
       } else if (IMPORT_DEDUP_ENABLED && dedupe) {
         const playersByRow = new Map(players.map(p => [p._originalIndex, p]));
@@ -1168,9 +1148,10 @@ export default function PlayerImport() {
         navigate(`/t/${id}/review`);
       } else {
         // Check if failures are due to rank uniqueness constraint
-        const rankConflictCount = results.failed.filter(f => 
-          f.error.includes('players_uniq_tourn_rank') || 
-          f.error.includes('duplicate key')
+        const rankConflictCount = results.failed.filter(f =>
+          f.error.includes('players_uniq_tourn_rank') ||
+          f.error.includes('duplicate key') ||
+          f.error.toLowerCase().includes('tournament rank must be unique')
         ).length;
 
         if (rankConflictCount > 0) {
@@ -1313,8 +1294,8 @@ export default function PlayerImport() {
   useEffect(() => {
     if (!IMPORT_DEDUP_ENABLED) return;
 
-    if (!replaceExisting && mappedPlayers.length > 0) {
-      void runDedupe(mappedPlayers);
+    if (mappedPlayers.length > 0) {
+      void runDedupe(mappedPlayers, { allowMerge: !replaceExisting });
     } else if (replaceExisting) {
       setShowDuplicateDialog(false);
       setDedupeReviewed(true);
