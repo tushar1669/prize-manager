@@ -1,0 +1,41 @@
+[
+  {
+    "id": "d1",
+    "_originalIndex": 1,
+    "rank": 1,
+    "sno": 201,
+    "name": "Duplicate Rank High",
+    "rating": 2000,
+    "dob": "2008-01-01",
+    "gender": "M",
+    "state": "MH",
+    "fide_id": "99001",
+    "unrated": false
+  },
+  {
+    "id": "d2",
+    "_originalIndex": 2,
+    "rank": 1,
+    "sno": 202,
+    "name": "Duplicate Rank Low",
+    "rating": 1800,
+    "dob": "2009-03-03",
+    "gender": "M",
+    "state": "MH",
+    "fide_id": "99002",
+    "unrated": false
+  },
+  {
+    "id": "d3",
+    "_originalIndex": 3,
+    "rank": 2,
+    "sno": 203,
+    "name": "Duplicate FIDE Twin",
+    "rating": 1700,
+    "dob": "2010-04-04",
+    "gender": "F",
+    "state": "KA",
+    "fide_id": "99002",
+    "unrated": false
+  }
+]
