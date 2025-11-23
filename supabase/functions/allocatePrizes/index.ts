@@ -540,6 +540,91 @@ type EligibilityResult = {
   passCodes: string[];
 };
 
+type LocationType = 'state' | 'city' | 'club';
+type AliasSpec = Record<string, string | string[]> | string[] | undefined;
+
+const STATE_ALIASES: Record<string, string> = {
+  MH: 'MAHARASHTRA',
+  KA: 'KARNATAKA',
+  KN: 'KARNATAKA',
+  TN: 'TAMIL NADU',
+  DL: 'DELHI',
+  GJ: 'GUJARAT',
+  RJ: 'RAJASTHAN',
+  WB: 'WEST BENGAL',
+  KL: 'KERALA',
+};
+
+const normalizeLocation = (raw: any, type?: LocationType): string => {
+  const str = String(raw ?? '').trim();
+  if (!str) return '';
+
+  const upper = str.toUpperCase();
+  if (type === 'state') {
+    const mapped = STATE_ALIASES[upper];
+    if (mapped) return mapped.toLowerCase();
+    if (/^[A-Z]{2,3}$/.test(upper)) return upper.toLowerCase();
+  }
+
+  return upper.toLowerCase();
+};
+
+const buildAliasLookup = (aliases: AliasSpec, type?: LocationType): Map<string, string> => {
+  const lookup = new Map<string, string>();
+  if (!aliases) return lookup;
+
+  const addAlias = (alias: string, canonical?: string) => {
+    const normAlias = normalizeLocation(alias, type);
+    if (!normAlias) return;
+    const normCanonical = normalizeLocation(canonical ?? alias, type);
+    if (!normCanonical) return;
+    lookup.set(normAlias, normCanonical);
+  };
+
+  if (Array.isArray(aliases)) {
+    aliases.forEach((alias) => addAlias(alias));
+  } else {
+    for (const [canonical, aliasList] of Object.entries(aliases)) {
+      if (Array.isArray(aliasList)) {
+        aliasList.forEach((alias) => addAlias(alias, canonical));
+      } else if (aliasList) {
+        addAlias(aliasList, canonical);
+      }
+      addAlias(canonical, canonical);
+    }
+  }
+
+  return lookup;
+};
+
+const normalizeAllowedList = (values: any[] | undefined, aliases: AliasSpec, type?: LocationType) => {
+  const aliasLookup = buildAliasLookup(aliases, type);
+  const allowedSet = new Set<string>();
+
+  if (Array.isArray(values)) {
+    values.forEach((v) => {
+      const norm = normalizeLocation(v, type);
+      if (norm) allowedSet.add(norm);
+    });
+  }
+
+  for (const target of aliasLookup.values()) {
+    allowedSet.add(target);
+  }
+
+  return { allowedSet, aliasLookup };
+};
+
+const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?: LocationType): boolean => {
+  if (!Array.isArray(values) || values.length === 0) return true;
+
+  const { allowedSet, aliasLookup } = normalizeAllowedList(values, aliases, type);
+  const norm = normalizeLocation(value, type);
+  if (!norm) return false;
+  const canonical = aliasLookup.get(norm) ?? norm;
+  return allowedSet.has(canonical);
+};
+
 const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
   const c = cat.criteria_json || {};
   const failCodes = new Set<string>();
@@ -654,21 +739,21 @@ const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: 
     }
   }
   if (Array.isArray(c.allowed_cities) && c.allowed_cities.length > 0) {
-    if (!inList(player.city, c.allowed_cities)) {
+    if (!matchesLocation(player.city, c.allowed_cities, c.city_aliases, 'city')) {
       failCodes.add('city_excluded');
     } else {
       passCodes.add('city_ok');
     }
   }
   if (Array.isArray(c.allowed_states) && c.allowed_states.length > 0) {
-    if (!inList(player.state, c.allowed_states)) {
+    if (!matchesLocation(player.state, c.allowed_states, c.state_aliases, 'state')) {
       failCodes.add('state_excluded');
     } else {
       passCodes.add('state_ok');
     }
   }
   if (Array.isArray(c.allowed_clubs) && c.allowed_clubs.length > 0) {
-    if (!inList(player.club, c.allowed_clubs)) {
+    if (!matchesLocation(player.club, c.allowed_clubs, c.club_aliases, 'club')) {
       failCodes.add('club_excluded');
     } else {
       passCodes.add('club_ok');
