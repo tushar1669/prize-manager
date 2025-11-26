@@ -33,20 +33,20 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur print:static print:bg-white">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground md:text-3xl">{tournamentTitle || 'Final Prize List'}</h1>
-          <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur print:static print:border-black print:bg-white print:py-3">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between print:px-4 print:py-2">
+        <div className="space-y-2 print:space-y-1">
+          <h1 className="text-2xl font-bold text-foreground md:text-3xl print:text-2xl print:text-black">{tournamentTitle || 'Final Prize List'}</h1>
+          <div className="flex flex-wrap gap-2 text-sm text-muted-foreground print:gap-1.5 print:text-xs print:text-black">
             {city && <span>{city}</span>}
             {dateRange && <span>• {dateRange}</span>}
-            <Badge className="rounded-full bg-primary text-primary-foreground shadow-sm">
+            <Badge className="rounded-full bg-primary text-primary-foreground shadow-sm print:border print:border-black print:bg-white print:text-black print:shadow-none">
               {formatNumberIN(totals.totalPrizes)} Prizes
             </Badge>
-            <Badge variant="outline" className="rounded-full border-success/50 text-success">
+            <Badge variant="outline" className="rounded-full border-success/50 text-success print:border-black print:text-black">
               {formatCurrencyINR(totals.totalCash)} Total Cash
             </Badge>
-            <Badge variant="secondary" className="rounded-full">
+            <Badge variant="secondary" className="rounded-full print:border print:border-black print:bg-white print:text-black">
               {formatNumberIN(totals.categoryCount)} Categories
             </Badge>
           </div>
