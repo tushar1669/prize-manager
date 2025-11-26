@@ -15,46 +15,46 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId }: Arb
 
   return (
     <div className="mx-auto mt-8 max-w-6xl px-6 pb-12">
-      <div className="overflow-x-auto rounded-2xl border border-border/70 bg-white shadow-sm shadow-[#6B46C1]/10 print:shadow-none">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm print:shadow-none">
         {isLoading && winners.length === 0 ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
             Preparing arbiter sheet…
           </div>
         ) : (
-          <Table className="min-w-full text-sm">
-            <TableHeader className="bg-[#6B46C1]/10 text-left print:table-header-group">
-              <TableRow>
-                <TableHead className="w-16">Place</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead>SNo</TableHead>
-                <TableHead>Rank</TableHead>
-                <TableHead>Club</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="w-24">Sign</TableHead>
+          <Table className="min-w-full text-base">
+            <TableHeader className="bg-primary/10 text-left print:table-header-group">
+              <TableRow className="border-border">
+                <TableHead className="w-16 font-bold text-foreground">Place</TableHead>
+                <TableHead className="font-bold text-foreground">Category</TableHead>
+                <TableHead className="font-bold text-foreground">Player</TableHead>
+                <TableHead className="font-bold text-foreground">SNo</TableHead>
+                <TableHead className="font-bold text-foreground">Rank</TableHead>
+                <TableHead className="font-bold text-foreground">Club</TableHead>
+                <TableHead className="font-bold text-foreground">State</TableHead>
+                <TableHead className="text-right font-bold text-foreground">Amount</TableHead>
+                <TableHead className="w-24 font-bold text-foreground">Sign</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {winners.map((winner, index) => (
-                <TableRow key={winner.prizeId} className={index % 2 === 0 ? 'bg-muted/40 print:bg-transparent' : ''}>
-                  <TableCell className="font-semibold text-[#2D1B69]">{winner.place}</TableCell>
-                  <TableCell>{winner.categoryName}</TableCell>
+                <TableRow key={winner.prizeId} className={index % 2 === 0 ? 'bg-muted/40 print:bg-transparent border-border' : 'border-border'}>
+                  <TableCell className="font-bold text-primary">{winner.place}</TableCell>
+                  <TableCell className="text-muted-foreground">{winner.categoryName}</TableCell>
                   <TableCell>
-                    <div className="font-medium text-foreground">{winner.playerName}</div>
+                    <div className="font-semibold text-foreground">{winner.playerName}</div>
                   </TableCell>
-                  <TableCell>{winner.sno || '—'}</TableCell>
-                  <TableCell>{winner.rank || '—'}</TableCell>
-                  <TableCell>{winner.club || '—'}</TableCell>
-                  <TableCell>{winner.state || '—'}</TableCell>
-                  <TableCell className="text-right font-semibold text-[#10B981]">{formatCurrencyINR(winner.amount)}</TableCell>
-                  <TableCell className="border-l border-border/60">
-                    <div className="h-6 rounded-md border border-dashed border-border/60"></div>
+                  <TableCell className="text-muted-foreground">{winner.sno || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{winner.rank || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{winner.club || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{winner.state || '—'}</TableCell>
+                  <TableCell className="text-right font-bold text-success">{formatCurrencyINR(winner.amount)}</TableCell>
+                  <TableCell className="border-l border-border">
+                    <div className="h-6 rounded-md border border-dashed border-border"></div>
                   </TableCell>
                 </TableRow>
               ))}
               {winners.length === 0 && !isLoading && (
-                <TableRow>
+                <TableRow className="border-border">
                   <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                     No prize allocations found yet.
                   </TableCell>

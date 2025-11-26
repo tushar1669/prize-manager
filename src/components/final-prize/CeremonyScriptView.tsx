@@ -64,28 +64,28 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
 
   return (
     <div className="mx-auto mt-8 max-w-5xl px-6 pb-16">
-      <ol className="ceremony-script flex flex-col gap-4 text-slate-900 print:gap-3">
+      <ol className="ceremony-script flex flex-col gap-5 text-foreground print:gap-3">
         {winners.map((winner, index) => (
           <li
             key={winner.prizeId}
-            className="ceremony-line rounded-3xl border border-border/70 bg-white/95 px-6 py-5 shadow-sm shadow-[#6B46C1]/5 transition hover:border-[#6B46C1]/50 print:rounded-xl print:bg-white print:px-5 print:py-4 print:shadow-none"
+            className="ceremony-line rounded-lg border border-border bg-card px-6 py-6 shadow-sm transition hover:border-primary/50 print:rounded-xl print:bg-white print:px-5 print:py-4 print:shadow-none"
           >
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               <div className="flex items-center gap-4">
-                <div className="text-4xl font-black leading-none text-[#6B46C1]">{index + 1}</div>
+                <div className="text-5xl font-black leading-none text-primary">{index + 1}</div>
                 <div className="space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-[0.3em] text-[#6B46C1]/80">
+                  <div className="text-xs font-semibold uppercase tracking-[0.3em] text-primary/80">
                     {winner.categoryName}
                   </div>
-                  <div className="text-2xl font-semibold leading-tight text-slate-900">
+                  <div className="text-2xl font-bold leading-tight text-foreground">
                     {renderPlace(winner.place)}
                   </div>
                 </div>
               </div>
-              <div className="min-w-[12rem] flex-1 text-3xl font-bold leading-none text-slate-900">
+              <div className="min-w-[12rem] flex-1 text-3xl font-bold leading-none text-foreground">
                 {winner.playerName}
               </div>
-              <div className="text-2xl font-semibold leading-none text-emerald-700">
+              <div className="text-2xl font-bold leading-none text-success">
                 {formatCurrencyINR(winner.amount)}
               </div>
             </div>
