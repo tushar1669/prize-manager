@@ -236,4 +236,134 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(winners[1]).toEqual({ prizeId: 'u1600-1', playerId: 'd4' });
     expect(unfilled.length).toBe(0);
   });
+
+  it('implements max-cash-per-player: player gets higher-value category prize over lower main prize', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Alice', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Bob', rating: 1800, fide_id: '1002', gender: 'M', dob: '2005-02-01', state: 'MH', unrated: false },
+      { id: 'p3', rank: 3, name: 'Charlie', rating: 1400, fide_id: '1003', gender: 'M', dob: '2005-03-01', state: 'DL', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [
+          { id: 'main-1', place: 1, cash_amount: 5000, has_trophy: true, has_medal: false },
+          { id: 'main-2', place: 2, cash_amount: 3000, has_trophy: false, has_medal: true },
+        ],
+      },
+      {
+        id: 'u1600',
+        name: 'Under 1600',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_rating: 1600 },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 7000, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, unfilled } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Alice (rank 1, rating 1500) is eligible for Main-1 (5000) and U1600-1 (7000)
+    // Should get U1600-1 (7000) due to max-cash-per-player
+    expect(winners.find(w => w.playerId === 'p1')).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    
+    // Bob (rank 2, rating 1800) is only eligible for Main (not U1600)
+    // Should get Main-1 (5000)
+    expect(winners.find(w => w.playerId === 'p2')).toEqual({ prizeId: 'main-1', playerId: 'p2' });
+    
+    // Charlie (rank 3, rating 1400) is eligible for Main-2 (3000) and U1600, but U1600-1 already taken
+    // Should get Main-2 (3000)
+    expect(winners.find(w => w.playerId === 'p3')).toEqual({ prizeId: 'main-2', playerId: 'p3' });
+
+    expect(winners.length).toBe(3);
+    expect(unfilled.length).toBe(0);
+  });
+
+  it('prefers main prize when cash amounts are equal and prefer_main_on_equal_value is true', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Alice', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [
+          { id: 'main-1', place: 1, cash_amount: 5000, has_trophy: true, has_medal: false },
+        ],
+      },
+      {
+        id: 'u1600',
+        name: 'Under 1600',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_rating: 1600 },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 5000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const rulesWithMainPref = { ...defaultRules, prefer_main_on_equal_value: true };
+    const { winners, unfilled } = runAllocation(categories, players, rulesWithMainPref, new Date('2024-05-01'));
+
+    // Alice is eligible for both Main-1 (5000) and U1600-1 (5000)
+    // With prefer_main_on_equal_value=true, should get Main-1
+    expect(winners[0]).toEqual({ prizeId: 'main-1', playerId: 'p1' });
+    expect(winners.length).toBe(1);
+    expect(unfilled.length).toBe(1);
+    expect(unfilled[0].prizeId).toBe('u1600-1');
+  });
+
+  it('allocates rating prize when higher cash than main, even if main comes first in brochure order', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Alice', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Bob', rating: 1400, fide_id: '1002', gender: 'M', dob: '2005-02-01', state: 'MH', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0, // Listed first in brochure
+        criteria_json: {},
+        prizes: [
+          { id: 'main-1', place: 1, cash_amount: 3000, has_trophy: true, has_medal: false },
+        ],
+      },
+      {
+        id: 'u1600',
+        name: 'Under 1600',
+        is_main: false,
+        order_idx: 1, // Listed second in brochure
+        criteria_json: { max_rating: 1600 },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 8000, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, unfilled } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Despite Main being listed first (order_idx=0), U1600 has higher cash (8000 vs 3000)
+    // Alice should get U1600-1 (8000)
+    expect(winners.find(w => w.playerId === 'p1')).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    
+    // Bob should get Main-1 (3000)
+    expect(winners.find(w => w.playerId === 'p2')).toEqual({ prizeId: 'main-1', playerId: 'p2' });
+
+    expect(winners.length).toBe(2);
+    expect(unfilled.length).toBe(0);
+  });
 });
