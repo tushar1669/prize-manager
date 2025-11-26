@@ -639,6 +639,13 @@ export type Database = {
         Args: { candidates: Json; tournament_id: string }
         Returns: Json
       }
+      import_replace_players: {
+        Args: { players: Json; tournament_id: string }
+        Returns: {
+          error_rows: Json
+          inserted_count: number
+        }[]
+      }
       list_my_tournaments: {
         Args: { include_all?: boolean }
         Returns: {

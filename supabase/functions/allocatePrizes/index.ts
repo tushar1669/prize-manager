@@ -121,9 +121,28 @@ Deno.serve(async (req) => {
       .order('rank', { ascending: true });
 
     if (playersError) throw new Error(`Failed to fetch players: ${playersError.message}`);
+    if (!players) throw new Error('No players data returned');
+
+    // Double assertion to work around TypeScript's union type narrowing limitation
+    const playerRows = players as unknown as Array<{
+      id: string;
+      rank?: number | null;
+      name?: string | null;
+      rating?: number | null;
+      dob?: string | null;
+      gender?: string | null;
+      state?: string | null;
+      city?: string | null;
+      club?: string | null;
+      fide_id?: string | null;
+      disability?: string | null;
+      unrated?: boolean;
+      federation?: string | null;
+      sno?: string | null;
+    }>;
 
     // Log actual column availability for diagnostics
-    const samplePlayer = players && players[0];
+    const samplePlayer = playerRows[0];
     const availableColumns = samplePlayer ? Object.keys(samplePlayer) : [];
     const missingColumns = REQUIRED_COLUMNS.filter(c => !availableColumns.includes(c));
 
@@ -131,7 +150,7 @@ Deno.serve(async (req) => {
       console.warn(`[allocation.input] Missing columns in player data: ${missingColumns.join(',')}. Categories requiring these fields may have unfilled prizes.`);
     }
 
-    console.log(`[allocation.input] columns=${availableColumns.join(',')} count=${players?.length || 0} missing=${missingColumns.join(',') || 'none'}`);
+    console.log(`[allocation.input] columns=${availableColumns.join(',')} count=${playerRows.length} missing=${missingColumns.join(',') || 'none'}`);
 
     // 4) Fetch rule config
     const { data: ruleConfig, error: ruleConfigError } = await supabaseClient
@@ -179,11 +198,11 @@ Deno.serve(async (req) => {
 
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
 
-    console.log(`[alloc] tid=${tournamentId} players=${players?.length || 0} categories=${activeCategories.length} prizes=${activePrizes.length}`);
+    console.log(`[alloc] tid=${tournamentId} players=${playerRows.length} categories=${activeCategories.length} prizes=${activePrizes.length}`);
 
     // Pre-flight field coverage check
-    if (players && players.length > 0) {
-      const sample = players[0] as any;
+    if (playerRows.length > 0) {
+      const sample = playerRows[0] as any;
       const criticalFields = ['id', 'rank', 'dob', 'gender', 'rating'];
       const missingCritical = criticalFields.filter(f => sample[f] === undefined);
       
@@ -196,13 +215,13 @@ Deno.serve(async (req) => {
       const fieldsToCheck = ['dob', 'gender', 'rating', 'state', 'city', 'club', 'disability', 'fide_id'];
       
       for (const field of fieldsToCheck) {
-        fieldCoverage[field] = players.filter((p: any) => p[field] != null && p[field] !== '').length;
+        fieldCoverage[field] = playerRows.filter((p: any) => p[field] != null && p[field] !== '').length;
       }
       
       console.log(`[alloc.preflight] Field coverage (non-null):`, fieldCoverage);
     }
 
-    // 5) Build prize queue sorted by brochure order
+    // 5) Build prize queue sorted GLOBALLY by cash amount first (max-cash-per-player semantics)
     const prizeQueue = activeCategories.flatMap(cat => 
       cat.prizes.map(p => ({ cat, p }))
     );
@@ -241,7 +260,7 @@ Deno.serve(async (req) => {
       prizeQueue.map(entry => [entry.p.id, entry])
     );
     const playerLookup = new Map<string, any>(
-      (players || []).map(p => [p.id, p])
+      playerRows.map(p => [p.id, p])
     );
 
     for (const override of overrides) {
@@ -300,7 +319,7 @@ Deno.serve(async (req) => {
       const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
-      for (const player of (players || []) as any[]) {
+      for (const player of playerRows) {
         if (assignedPlayers.has(player.id)) continue;
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (rules.verbose_logs) {
@@ -323,7 +342,7 @@ Deno.serve(async (req) => {
         // Detailed coverage diagnostic
         const categoryName = cat.name;
         const prizePlace = p.place;
-        const totalPlayers = (players || []).length;
+        const totalPlayers = playerRows.length;
         const alreadyAssigned = assignedPlayers.size;
         const availablePool = totalPlayers - alreadyAssigned;
         
@@ -386,7 +405,7 @@ Deno.serve(async (req) => {
       }
 
       assignedPlayers.add(winner.player.id);
-      const reasonSet = new Set<string>(['auto', 'rank', 'brochure_order', 'value_tier', ...winner.passCodes, ...winner.warnCodes]);
+      const reasonSet = new Set<string>(['auto', 'rank', 'max_cash_priority', ...winner.passCodes, ...winner.warnCodes]);
       const reasonList = Array.from(reasonSet);
       winners.push({
         prizeId: p.id,
@@ -416,7 +435,7 @@ Deno.serve(async (req) => {
     // Build eligibility map: player -> prizes they're eligible for
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
     for (const { cat, p } of prizeQueue) {
-      for (const player of (players || []) as any[]) {
+      for (const player of playerRows) {
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (evaluation.eligible) {
           if (!playerEligiblePrizes.has(player.id)) {
@@ -493,7 +512,7 @@ Deno.serve(async (req) => {
         unfilled,
         coverage: dryRun ? coverageData : undefined,
         meta: {
-          playerCount: players?.length || 0,
+          playerCount: playerRows.length,
           activeCategoryCount: activeCategories.length,
           activePrizeCount: activePrizes.length,
           winnersCount: winners.length,
@@ -803,23 +822,32 @@ const valueTier = (p: PrizeRow): number => {
 
 export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
   return {
-    order: cat.order_idx ?? 0,                 // brochure order (ASC)
-    tier: valueTier(p),                        // DESC
-    cash: p.cash_amount ?? 0,                  // DESC
-    main: cat.is_main ? 1 : 0,                 // DESC
-    place: p.place ?? 9999,                    // ASC
-    pid: p.id                                  // ASC (stable)
+    cash: p.cash_amount ?? 0,                  // PRIMARY: cash DESC (max-cash-per-player)
+    main: cat.is_main ? 1 : 0,                 // DESC (prefer main when cash equal)
+    order: cat.order_idx ?? 0,                 // brochure order ASC
+    place: p.place ?? 9999,                    // ASC (1st, 2nd, 3rd...)
+    pid: p.id                                  // ASC (stable tie-breaker)
   };
 };
 
-// Sort comparator: brochure order ASC, tier DESC, cash DESC, main DESC, place ASC, pid ASC
+// Sort comparator: CASH DESC (highest first), main DESC (prefer main when equal), order ASC, place ASC, pid ASC
+// This implements "max-cash-per-player" semantics: each player gets the highest-value prize they're eligible for
 export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
   const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
-  if (ak.order !== bk.order) return ak.order - bk.order;
-  if (ak.tier !== bk.tier) return bk.tier - ak.tier;
+  
+  // PRIMARY: Cash amount descending (highest cash first)
   if (ak.cash !== bk.cash) return bk.cash - ak.cash;
+  
+  // When cash equal, prefer main category
   if (ak.main !== bk.main) return bk.main - ak.main;
+  
+  // Then brochure order
+  if (ak.order !== bk.order) return ak.order - bk.order;
+  
+  // Then place within category
   if (ak.place !== bk.place) return ak.place - bk.place;
+  
+  // Finally stable by prize ID
   return String(ak.pid).localeCompare(String(bk.pid));
 };
 
