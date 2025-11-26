@@ -53,7 +53,7 @@ export default function FinalPrizeView() {
   const dateRange = useMemo(() => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date), [data?.tournament]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 print:bg-white print:text-slate-900">
+    <div className="min-h-screen bg-background text-foreground print:bg-white print:text-slate-900">
       <div className="print:hidden">
         <AppNav />
         <BackBar label="Back to Finalization" to={`/t/${id}/finalize`} />
@@ -69,13 +69,13 @@ export default function FinalPrizeView() {
       <main className="pb-16">
         <div className="mx-auto mt-6 max-w-7xl px-6">
           <Tabs value={normalized} className="w-full">
-            <TabsList className="w-full justify-start overflow-x-auto rounded-full bg-white p-1 shadow-sm print:hidden">
+            <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-card border border-border p-1 shadow-sm print:hidden">
               {VIEW_TABS.map(tab => (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
                   asChild
-                  className="rounded-full px-4 text-sm font-medium data-[state=active]:bg-[#6B46C1] data-[state=active]:text-white"
+                  className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   <Link to={`/t/${id}/final/${tab.id}`}>{tab.label}</Link>
                 </TabsTrigger>

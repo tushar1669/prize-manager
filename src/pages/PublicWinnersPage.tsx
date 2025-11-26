@@ -161,54 +161,55 @@ export default function PublicWinnersPage() {
   const totalCash = results?.rows?.reduce((sum, r) => sum + Number(r.cashAmount || 0), 0) || 0;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-2xl">{tournament.title}</CardTitle>
-          <div className="text-sm text-muted-foreground space-y-1">
-            {tournament.city && <div>{tournament.city}</div>}
-            {tournament.start_date && (
-              <div>
-                {tournament.start_date}
-                {tournament.end_date && tournament.end_date !== tournament.start_date && ` – ${tournament.end_date}`}
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!tournament.is_published && (
-            <Alert className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>This tournament is not yet published</AlertDescription>
-            </Alert>
-          )}
-          
-          {tournament.is_published && (
-            <div className="flex gap-4 mb-4">
-              <Badge variant="outline" className="text-base px-3 py-1">
-                {totalPrizes} Winners
-              </Badge>
-              {totalCash > 0 && (
-                <Badge variant="outline" className="text-base px-3 py-1">
-                  ₹{totalCash.toLocaleString('en-IN')} Total Prize
-                </Badge>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {tournament.is_published && (
-        <Card>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <Card className="mb-6 bg-card border-border">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle>Winners</CardTitle>
-              {typeof results?.version === 'number' && (
-                <Badge variant="outline" className="text-xs">Allocations v{results.version}</Badge>
+            <CardTitle className="text-3xl font-bold text-foreground">{tournament.title}</CardTitle>
+            <div className="text-base text-muted-foreground space-y-1">
+              {tournament.city && <div>{tournament.city}</div>}
+              {tournament.start_date && (
+                <div>
+                  {tournament.start_date}
+                  {tournament.end_date && tournament.end_date !== tournament.start_date && ` – ${tournament.end_date}`}
+                </div>
               )}
             </div>
           </CardHeader>
           <CardContent>
+            {!tournament.is_published && (
+              <Alert className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>This tournament is not yet published</AlertDescription>
+              </Alert>
+            )}
+            
+            {tournament.is_published && (
+              <div className="flex gap-4 mb-4">
+                <Badge variant="outline" className="text-base px-4 py-1.5 border-border">
+                  {totalPrizes} Winners
+                </Badge>
+                {totalCash > 0 && (
+                  <Badge variant="outline" className="text-base px-4 py-1.5 border-border">
+                    ₹{totalCash.toLocaleString('en-IN')} Total Prize
+                  </Badge>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {tournament.is_published && (
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-2xl font-bold text-foreground">Winners</CardTitle>
+                {typeof results?.version === 'number' && (
+                  <Badge variant="outline" className="text-xs border-border">Allocations v{results.version}</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
             {!results?.rows || results.rows.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 No winners allocated yet
@@ -216,33 +217,33 @@ export default function PublicWinnersPage() {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">Place</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Player</TableHead>
-                    <TableHead className="w-20">SNo</TableHead>
-                    <TableHead className="w-20">Rank</TableHead>
-                    <TableHead>Club</TableHead>
-                    <TableHead className="w-24">State</TableHead>
-                    <TableHead className="w-32 text-right">Prize</TableHead>
+                  <TableRow className="border-border">
+                    <TableHead className="w-16 text-base">Place</TableHead>
+                    <TableHead className="text-base">Category</TableHead>
+                    <TableHead className="text-base">Player</TableHead>
+                    <TableHead className="w-20 text-base">SNo</TableHead>
+                    <TableHead className="w-20 text-base">Rank</TableHead>
+                    <TableHead className="text-base">Club</TableHead>
+                    <TableHead className="w-24 text-base">State</TableHead>
+                    <TableHead className="w-32 text-right text-base">Prize</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {results.rows.map((result, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{result.place}</TableCell>
-                      <TableCell>{result.categoryName}</TableCell>
-                      <TableCell>{result.playerName}</TableCell>
-                      <TableCell>{result.sno || '—'}</TableCell>
-                      <TableCell>{result.rank || '—'}</TableCell>
-                      <TableCell>{result.club || '—'}</TableCell>
-                      <TableCell>{result.state || '—'}</TableCell>
+                    <TableRow key={idx} className="border-border">
+                      <TableCell className="font-bold text-base text-foreground">{result.place}</TableCell>
+                      <TableCell className="text-base text-muted-foreground">{result.categoryName}</TableCell>
+                      <TableCell className="font-semibold text-base text-foreground">{result.playerName}</TableCell>
+                      <TableCell className="text-base text-muted-foreground">{result.sno || '—'}</TableCell>
+                      <TableCell className="text-base text-muted-foreground">{result.rank || '—'}</TableCell>
+                      <TableCell className="text-base text-muted-foreground">{result.club || '—'}</TableCell>
+                      <TableCell className="text-base text-muted-foreground">{result.state || '—'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {result.hasTrophy && <Trophy className="h-4 w-4 text-amber-600" />}
-                          {result.hasMedal && <Medal className="h-4 w-4 text-slate-600" />}
+                          {result.hasTrophy && <Trophy className="h-5 w-5 text-accent" />}
+                          {result.hasMedal && <Medal className="h-5 w-5 text-success" />}
                           {result.cashAmount > 0 && (
-                            <span className="font-medium">
+                            <span className="font-bold text-base text-success">
                               ₹{Number(result.cashAmount).toLocaleString('en-IN')}
                             </span>
                           )}
@@ -257,10 +258,11 @@ export default function PublicWinnersPage() {
         </Card>
       )}
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
-        <Link to="/" className="hover:underline">
-          Back to Home
-        </Link>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          <Link to="/" className="hover:underline">
+            Back to Home
+          </Link>
+        </div>
       </div>
     </div>
   );
