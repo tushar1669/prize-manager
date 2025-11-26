@@ -53,7 +53,7 @@ export default function FinalPrizeView() {
   const dateRange = useMemo(() => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date), [data?.tournament]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground print:bg-white print:text-slate-900">
+    <div className="min-h-screen bg-background text-foreground print:bg-white print:text-black">
       <div className="print:hidden">
         <AppNav />
         <BackBar label="Back to Finalization" to={`/t/${id}/finalize`} />
@@ -66,8 +66,8 @@ export default function FinalPrizeView() {
           totals={data.totals}
         />
       )}
-      <main className="pb-16">
-        <div className="mx-auto mt-6 max-w-7xl px-6">
+      <main className="pb-16 print:pb-0">
+        <div className="mx-auto mt-6 max-w-7xl px-6 pm-print-page print:mt-2 print:px-4">
           <Tabs value={normalized} className="w-full">
             <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-card border border-border p-1 shadow-sm print:hidden">
               {VIEW_TABS.map(tab => (
@@ -105,16 +105,16 @@ export default function FinalPrizeView() {
             </div>
             {data && data.winners.length > 0 && (
               <>
-                <TabsContent value="v1" className="m-0">
+                <TabsContent value="v1" className={`m-0 ${normalized !== 'v1' ? 'print:hidden' : ''}`}>
                   <CategoryCardsView groups={grouped.groups} />
                 </TabsContent>
-                <TabsContent value="v2" className="m-0">
+                <TabsContent value="v2" className={`m-0 ${normalized !== 'v2' ? 'print:hidden' : ''}`}>
                   <CeremonyScriptView tournamentId={id as string} />
                 </TabsContent>
-                <TabsContent value="v3" className="m-0">
+                <TabsContent value="v3" className={`m-0 ${normalized !== 'v3' ? 'print:hidden' : ''}`}>
                   <PosterGridView winners={data.winners} tournamentId={id as string} />
                 </TabsContent>
-                <TabsContent value="v4" className="m-0">
+                <TabsContent value="v4" className={`m-0 ${normalized !== 'v4' ? 'print:hidden' : ''}`}>
                   <ArbiterSheetView winners={data.winners} tournamentId={id as string} />
                 </TabsContent>
               </>

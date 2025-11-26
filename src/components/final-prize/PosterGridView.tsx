@@ -26,10 +26,10 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
 
   return (
     <div
-      className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12"
+      className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4"
       data-poster-size={posterSize}
     >
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 print:mb-3 print:hidden">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold text-foreground">Champions Board</h2>
           <p className="text-sm text-muted-foreground">Display near the venue entrance or results desk.</p>
@@ -63,32 +63,32 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           </div>
         </div>
       </div>
-      <div className={`grid gap-4 ${gridLayout}`}>
+      <div className={`grid gap-4 ${gridLayout} print:gap-3`}>
         {winners.map(winner => (
           <div
             key={winner.prizeId}
-            className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-lg print:shadow-none"
+            className="pm-print-avoid-break flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-lg print:border-black/30 print:bg-white print:p-3 print:shadow-none"
           >
-            <Badge className="w-fit rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground">
+            <Badge className="w-fit rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
               {winner.categoryName}
             </Badge>
-            <div className="text-3xl font-extrabold tracking-tight text-foreground">
+            <div className="text-3xl font-extrabold tracking-tight text-foreground print:text-lg print:text-black">
               {winner.playerName}
             </div>
-            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-              <span className="rounded-full bg-success/10 px-3 py-1 text-success">Place {winner.place}</span>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">
+            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground print:gap-1 print:text-xs print:text-black">
+              <span className="rounded-full bg-success/10 px-3 py-1 text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">Place {winner.place}</span>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-primary print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">
                 {formatCurrencyINR(winner.amount)}
               </span>
-              {winner.state && <span className="rounded-full bg-muted px-3 py-1">{winner.state}</span>}
+              {winner.state && <span className="rounded-full bg-muted px-3 py-1 print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">{winner.state}</span>}
             </div>
-            <div className="text-base text-muted-foreground">
+            <div className="text-base text-muted-foreground print:text-xs print:text-black/70">
               {winner.club || 'Club TBC'} • Rank {winner.rank ?? '—'}
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-8 grid gap-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-foreground sm:grid-cols-[minmax(5rem,7rem)_1fr]">
+      <div className="mt-8 grid gap-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-foreground sm:grid-cols-[minmax(5rem,7rem)_1fr] print:hidden">
         <div className="flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-card text-xs font-semibold uppercase tracking-wide text-primary">
           QR Code
         </div>

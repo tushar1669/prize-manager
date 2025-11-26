@@ -14,48 +14,48 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId }: Arb
   const winners = useMemo(() => providedWinners ?? data?.winners ?? [], [providedWinners, data?.winners]);
 
   return (
-    <div className="mx-auto mt-8 max-w-6xl px-6 pb-12">
-      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm print:shadow-none">
+    <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:w-full print:max-w-none print:px-0 print:pb-4">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm print:overflow-visible print:rounded-none print:border-black print:bg-white print:shadow-none">
         {isLoading && winners.length === 0 ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
             Preparing arbiter sheet…
           </div>
         ) : (
-          <Table className="min-w-full text-base">
-            <TableHeader className="bg-primary/10 text-left print:table-header-group">
-              <TableRow className="border-border">
-                <TableHead className="w-16 font-bold text-foreground">Place</TableHead>
-                <TableHead className="font-bold text-foreground">Category</TableHead>
-                <TableHead className="font-bold text-foreground">Player</TableHead>
-                <TableHead className="font-bold text-foreground">SNo</TableHead>
-                <TableHead className="font-bold text-foreground">Rank</TableHead>
-                <TableHead className="font-bold text-foreground">Club</TableHead>
-                <TableHead className="font-bold text-foreground">State</TableHead>
-                <TableHead className="text-right font-bold text-foreground">Amount</TableHead>
-                <TableHead className="w-24 font-bold text-foreground">Sign</TableHead>
+          <Table className="min-w-full text-base print:text-[11px]">
+            <TableHeader className="bg-primary/10 text-left print:table-header-group print:bg-black/5">
+              <TableRow className="border-border print:border-black">
+                <TableHead className="w-16 font-bold text-foreground print:text-black">Place</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">Category</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">Player</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">SNo</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">Rank</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">Club</TableHead>
+                <TableHead className="font-bold text-foreground print:text-black">State</TableHead>
+                <TableHead className="text-right font-bold text-foreground print:text-black">Amount</TableHead>
+                <TableHead className="w-24 font-bold text-foreground print:text-black">Sign</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {winners.map((winner, index) => (
-                <TableRow key={winner.prizeId} className={index % 2 === 0 ? 'bg-muted/40 print:bg-transparent border-border' : 'border-border'}>
-                  <TableCell className="font-bold text-primary">{winner.place}</TableCell>
-                  <TableCell className="text-muted-foreground">{winner.categoryName}</TableCell>
+                <TableRow key={winner.prizeId} className={index % 2 === 0 ? 'bg-muted/40 print:bg-transparent border-border' : 'border-border print:border-black/20'}>
+                  <TableCell className="font-bold text-primary print:text-black">{winner.place}</TableCell>
+                  <TableCell className="text-muted-foreground print:text-black/70">{winner.categoryName}</TableCell>
                   <TableCell>
-                    <div className="font-semibold text-foreground">{winner.playerName}</div>
+                    <div className="font-semibold text-foreground print:text-black">{winner.playerName}</div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{winner.sno || '—'}</TableCell>
-                  <TableCell className="text-muted-foreground">{winner.rank || '—'}</TableCell>
-                  <TableCell className="text-muted-foreground">{winner.club || '—'}</TableCell>
-                  <TableCell className="text-muted-foreground">{winner.state || '—'}</TableCell>
-                  <TableCell className="text-right font-bold text-success">{formatCurrencyINR(winner.amount)}</TableCell>
-                  <TableCell className="border-l border-border">
-                    <div className="h-6 rounded-md border border-dashed border-border"></div>
+                  <TableCell className="text-muted-foreground print:text-black/70">{winner.sno || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground print:text-black/70">{winner.rank || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground print:text-black/70">{winner.club || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground print:text-black/70">{winner.state || '—'}</TableCell>
+                  <TableCell className="text-right font-bold text-success print:text-black">{formatCurrencyINR(winner.amount)}</TableCell>
+                  <TableCell className="border-l border-border print:border-black/30">
+                    <div className="h-6 rounded-md border border-dashed border-border print:border-black/30"></div>
                   </TableCell>
                 </TableRow>
               ))}
               {winners.length === 0 && !isLoading && (
-                <TableRow className="border-border">
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                <TableRow className="border-border print:border-black">
+                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground print:text-black/70">
                     No prize allocations found yet.
                   </TableCell>
                 </TableRow>
