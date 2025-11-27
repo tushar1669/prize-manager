@@ -1694,7 +1694,8 @@ export default function TournamentSetup() {
           setCriteriaSheet({ open, category: criteriaSheet.category })
         }
       >
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        {/* Key forces re-render when category changes, ensuring defaultChecked/defaultValue are applied fresh */}
+        <SheetContent key={criteriaSheet.category?.id || 'new'} className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>
               Edit Rules: {criteriaSheet.category?.name}

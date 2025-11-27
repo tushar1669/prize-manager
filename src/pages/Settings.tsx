@@ -33,10 +33,10 @@ export default function Settings() {
     }
   });
 
-  // TODO Phase 2: Replace with real categories from DB
-  // Fetch real categories from the database
+  // Fetch categories for display (using a separate query key to avoid cache collision
+  // with TournamentSetup which includes prizes in its categories query)
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories', id],
+    queryKey: ['categories-settings', id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
