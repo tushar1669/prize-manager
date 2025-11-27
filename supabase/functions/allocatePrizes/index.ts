@@ -719,12 +719,9 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
 
   // Rating category handling
   const ratingCat = isRatingCategory(c);
-  const allowUnratedRule = !!rules?.allow_unrated_in_rating;
-  const hasMinRating = typeof c.min_rating === 'number';
-  const hasMaxRating = typeof c.max_rating === 'number';
-  const allowUnratedByMaxOnly = hasMaxRating && !hasMinRating && c.exclude_unrated !== true;
-  const excludeUnratedByCriteria = hasMaxRating && !hasMinRating && c.exclude_unrated === true;
-  const allowUnrated = !excludeUnratedByCriteria && (allowUnratedByMaxOnly || allowUnratedRule);
+  // Read the per-category include_unrated setting from criteria_json (defaults to true for backwards compatibility)
+  const includeUnratedByCriteria = c.include_unrated !== false;
+  const allowUnrated = includeUnratedByCriteria;
 
   const rating = (() => {
     const raw = player.rating == null ? null : Number(player.rating);
@@ -735,7 +732,7 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
     let ratingOk = true;
     if ((rating == null || rating === 0)) {
       if (!allowUnrated) {
-        failCodes.add(excludeUnratedByCriteria ? 'unrated_excluded_by_criteria' : 'unrated_excluded');
+        failCodes.add('unrated_excluded');
         ratingOk = false;
       } else {
         passCodes.add('rating_unrated_allowed');
@@ -755,9 +752,6 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
 
     if (ratingOk && !(rating == null && allowUnrated)) {
       passCodes.add('rating_ok');
-      if (excludeUnratedByCriteria) {
-        passCodes.add('rating_required_by_criteria');
-      }
     }
   }
 
