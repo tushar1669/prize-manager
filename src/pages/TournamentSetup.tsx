@@ -1923,7 +1923,8 @@ export default function TournamentSetup() {
                 const dob = (document.getElementById('criteria-dob') as HTMLInputElement)?.value || null;
                 const minRating = Number((document.getElementById('criteria-min-rating') as HTMLInputElement)?.value) || null;
                 const maxRating = Number((document.getElementById('criteria-max-rating') as HTMLInputElement)?.value) || null;
-                const includeUnrated = (document.getElementById('criteria-include-unrated') as HTMLInputElement)?.checked ?? true;
+                const includeUnratedEl = document.getElementById('criteria-include-unrated');
+                const includeUnrated = includeUnratedEl?.getAttribute('data-state') === 'checked';
                 const gender = (document.getElementById('criteria-gender') as HTMLSelectElement)?.value || '';
                 
                 const disabilityStr = (document.getElementById('criteria-disability') as HTMLInputElement)?.value || '';
