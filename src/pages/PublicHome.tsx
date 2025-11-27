@@ -7,7 +7,7 @@ import { Calendar, MapPin, ExternalLink, Trophy, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function PublicHome() {
-  const { data: tournaments, isLoading } = useQuery({
+  const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -49,6 +49,24 @@ export default function PublicHome() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="text-destructive">Unable to load tournaments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              Please check your internet connection or try again in a few minutes.
+            </p>
+            <Button onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
