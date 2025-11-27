@@ -366,4 +366,116 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(winners.length).toBe(2);
     expect(unfilled.length).toBe(0);
   });
+
+  it('unrated-only category excludes rated players and accepts only unrated players', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'unrated',
+        name: 'Unrated',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          unrated_only: true,
+          // no min_rating, no max_rating
+        },
+        prizes: [
+          { id: 'unrated-1', place: 1, cash_amount: 1000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, unfilled, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p2 (unrated) should win
+    expect(winners.length).toBe(1);
+    expect(winners[0]).toEqual({ prizeId: 'unrated-1', playerId: 'p2' });
+
+    // p1 should be rejected with rated_player_excluded_unrated_only
+    const p1Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p1' && e.categoryId === 'unrated');
+    expect(p1Eligibility?.reasonCodes).toContain('rated_player_excluded_unrated_only');
+
+    expect(unfilled.length).toBe(0);
+  });
+
+  it('veteran + unrated-only category requires both age and unrated status', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Senior', rating: 1600, fide_id: '1001', gender: 'M', dob: '1950-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Senior', rating: null, fide_id: null, gender: 'M', dob: '1950-01-01', state: 'MH', unrated: true },
+      { id: 'p3', rank: 3, name: 'Unrated Young', rating: null, fide_id: null, gender: 'M', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'veteran-unrated',
+        name: 'Veteran Unrated',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_age: 60,
+          unrated_only: true,
+        },
+        prizes: [
+          { id: 'vet-unrated-1', place: 1, cash_amount: 1500, has_trophy: true, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, unfilled, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p2 (unrated + age >= 60) should win
+    expect(winners.length).toBe(1);
+    expect(winners[0]).toEqual({ prizeId: 'vet-unrated-1', playerId: 'p2' });
+
+    // p1 should be excluded because rated (even though age passes)
+    const p1Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p1' && e.categoryId === 'veteran-unrated');
+    expect(p1Eligibility?.reasonCodes).toContain('rated_player_excluded_unrated_only');
+
+    // p3 should be excluded by age (too young)
+    const p3Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p3' && e.categoryId === 'veteran-unrated');
+    expect(p3Eligibility?.reasonCodes).toContain('age_below_min');
+
+    expect(unfilled.length).toBe(0);
+  });
+
+  it('regression: rating category with include_unrated=false still works after unrated_only addition', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'u1600-no-unrated',
+        name: 'Under 1600 (no unrated)',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_rating: 1200,
+          max_rating: 1600,
+          include_unrated: false,
+          // unrated_only NOT set (undefined)
+        },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 2000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, unfilled, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p1 (rated, within range) should win
+    expect(winners.length).toBe(1);
+    expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+
+    // p2 should be excluded because unrated and include_unrated=false
+    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated');
+    expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
+
+    expect(unfilled.length).toBe(0);
+  });
 });

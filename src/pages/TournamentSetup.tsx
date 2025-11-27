@@ -1822,6 +1822,49 @@ export default function TournamentSetup() {
                     </p>
                   </div>
 
+                  {/* Unrated-only Category */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="criteria-unrated-only"
+                        defaultChecked={criteria?.unrated_only ?? false}
+                        onCheckedChange={(checked) => {
+                          // When toggled, we need to update dependent fields visually
+                          const minRatingEl = document.getElementById('criteria-min-rating') as HTMLInputElement;
+                          const maxRatingEl = document.getElementById('criteria-max-rating') as HTMLInputElement;
+                          const includeUnratedEl = document.getElementById('criteria-include-unrated');
+                          
+                          if (checked) {
+                            // Disable rating inputs when unrated-only is checked
+                            if (minRatingEl) minRatingEl.disabled = true;
+                            if (maxRatingEl) maxRatingEl.disabled = true;
+                            // Force include_unrated checkbox to checked and disabled
+                            if (includeUnratedEl) {
+                              includeUnratedEl.setAttribute('data-state', 'checked');
+                              includeUnratedEl.setAttribute('aria-disabled', 'true');
+                              includeUnratedEl.classList.add('opacity-50', 'cursor-not-allowed');
+                            }
+                          } else {
+                            // Re-enable rating inputs
+                            if (minRatingEl) minRatingEl.disabled = false;
+                            if (maxRatingEl) maxRatingEl.disabled = false;
+                            // Re-enable include_unrated checkbox
+                            if (includeUnratedEl) {
+                              includeUnratedEl.removeAttribute('aria-disabled');
+                              includeUnratedEl.classList.remove('opacity-50', 'cursor-not-allowed');
+                            }
+                          }
+                        }}
+                      />
+                      <Label htmlFor="criteria-unrated-only">
+                        Unrated-only category
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">
+                      Only players without a rating are eligible. All rated players are excluded.
+                    </p>
+                  </div>
+
                   {/* Rating Range */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1832,6 +1875,8 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.min_rating}
                         placeholder="e.g., 1200"
+                        disabled={criteria?.unrated_only === true}
+                        className={criteria?.unrated_only === true ? 'opacity-50' : ''}
                       />
                     </div>
                     <div>
@@ -1842,20 +1887,37 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.max_rating}
                         placeholder="e.g., 1800"
+                        disabled={criteria?.unrated_only === true}
+                        className={criteria?.unrated_only === true ? 'opacity-50' : ''}
                       />
                     </div>
                   </div>
+                  {criteria?.unrated_only && (
+                    <p className="text-xs text-amber-500">
+                      Rating range is ignored when "Unrated-only" is enabled.
+                    </p>
+                  )}
 
                   {/* Include Unrated */}
                   <div className="flex items-center gap-2">
                     <Checkbox
                       id="criteria-include-unrated"
-                      defaultChecked={criteria?.include_unrated ?? true}
+                      defaultChecked={criteria?.unrated_only === true ? true : (criteria?.include_unrated ?? true)}
+                      disabled={criteria?.unrated_only === true}
+                      className={criteria?.unrated_only === true ? 'opacity-50 cursor-not-allowed' : ''}
                     />
-                    <Label htmlFor="criteria-include-unrated">
+                    <Label 
+                      htmlFor="criteria-include-unrated"
+                      className={criteria?.unrated_only === true ? 'opacity-50' : ''}
+                    >
                       Include unrated players
                     </Label>
                   </div>
+                  {criteria?.unrated_only && (
+                    <p className="text-xs text-muted-foreground ml-6">
+                      This is implied when "Unrated-only" is enabled.
+                    </p>
+                  )}
 
                   {/* Gender Filter */}
                   <div>
@@ -1945,11 +2007,23 @@ export default function TournamentSetup() {
                   .map((s) => s.trim())
                   .filter(Boolean);
 
+                // Read unrated-only checkbox
+                const unratedOnlyEl = document.getElementById('criteria-unrated-only');
+                const unratedOnly = unratedOnlyEl?.getAttribute('data-state') === 'checked';
+
                 const criteria: any = {};
                 if (dob) criteria.dob_on_or_after = dob;
-                if (minRating) criteria.min_rating = minRating;
-                if (maxRating) criteria.max_rating = maxRating;
-                criteria.include_unrated = includeUnrated;
+                
+                // Only save rating fields if not unrated-only mode
+                if (!unratedOnly) {
+                  if (minRating) criteria.min_rating = minRating;
+                  if (maxRating) criteria.max_rating = maxRating;
+                  criteria.include_unrated = includeUnrated;
+                }
+                
+                // Save unrated_only flag
+                criteria.unrated_only = unratedOnly;
+                
                 if (gender) criteria.gender = gender;
                 if (disability_types.length > 0) criteria.disability_types = disability_types;
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
