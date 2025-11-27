@@ -224,28 +224,6 @@ export default function Settings() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="allow_unrated_in_rating"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between py-2">
-                      <div>
-                        <FormLabel className="text-foreground font-medium">
-                          Allow Unrated in Rating Categories
-                        </FormLabel>
-                        <FormDescription className="text-sm text-muted-foreground mt-1">
-                          Include unrated players when allocating rating bracket prizes
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}
@@ -307,7 +285,7 @@ export default function Settings() {
                   <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
-                  <li>Allow Unrated in Rating: <strong>{form.watch('allow_unrated_in_rating') ? 'ON' : 'OFF'}</strong></li>
+                  
                   <li>Prefer Main on Equal Value: <strong>{form.watch('prefer_main_on_equal_value') ? 'ON' : 'OFF'}</strong></li>
                   <li>Prefer Category Rank on Tie: <strong>{form.watch('prefer_category_rank_on_tie') ? 'ON' : 'OFF'}</strong></li>
                 </ul>
