@@ -718,40 +718,64 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   }
 
   // Rating category handling
-  const ratingCat = isRatingCategory(c);
+  // Detect unrated_only mode: category only allows unrated players
+  const unratedOnly = c.unrated_only === true;
+  // A category is rating-aware if it has min/max rating OR is unrated-only
+  const ratingCat = isRatingCategory(c) || unratedOnly;
   // Read the per-category include_unrated setting from criteria_json (defaults to true for backwards compatibility)
   const includeUnratedByCriteria = c.include_unrated !== false;
-  const allowUnrated = includeUnratedByCriteria;
+  // When unrated_only is true, unrated players are always allowed by definition
+  const allowUnrated = unratedOnly || includeUnratedByCriteria;
 
   const rating = (() => {
     const raw = player.rating == null ? null : Number(player.rating);
     if (raw == null) return null;
     return raw <= 0 ? null : raw;
   })();
+
+  // Determine if player is unrated
+  const isUnrated = (rating == null || rating === 0) || player?.unrated === true;
+
   if (ratingCat) {
     let ratingOk = true;
-    if ((rating == null || rating === 0)) {
-      if (!allowUnrated) {
-        failCodes.add('unrated_excluded');
+
+    // Handle unrated-only mode first (takes precedence over everything else)
+    if (unratedOnly) {
+      if (!isUnrated) {
+        // Rated players are excluded in unrated-only categories
+        failCodes.add('rated_player_excluded_unrated_only');
         ratingOk = false;
       } else {
-        passCodes.add('rating_unrated_allowed');
+        // Unrated players pass the rating dimension
+        passCodes.add('unrated_only_ok');
       }
-    }
+      // Skip min/max rating checks entirely for unrated-only categories
+    } else {
+      // Standard rating category logic (not unrated-only)
+      if (isUnrated) {
+        if (!allowUnrated) {
+          failCodes.add('unrated_excluded');
+          ratingOk = false;
+        } else {
+          passCodes.add('rating_unrated_allowed');
+        }
+      }
 
-    if (rating != null) {
-      if (c.min_rating != null && rating < Number(c.min_rating)) {
-        failCodes.add('rating_below_min');
-        ratingOk = false;
+      // Apply min/max rating checks only for rated players in non-unrated-only categories
+      if (rating != null && !isUnrated) {
+        if (c.min_rating != null && rating < Number(c.min_rating)) {
+          failCodes.add('rating_below_min');
+          ratingOk = false;
+        }
+        if (c.max_rating != null && rating > Number(c.max_rating)) {
+          failCodes.add('rating_above_max');
+          ratingOk = false;
+        }
       }
-      if (c.max_rating != null && rating > Number(c.max_rating)) {
-        failCodes.add('rating_above_max');
-        ratingOk = false;
-      }
-    }
 
-    if (ratingOk && !(rating == null && allowUnrated)) {
-      passCodes.add('rating_ok');
+      if (ratingOk && !isUnrated) {
+        passCodes.add('rating_ok');
+      }
     }
   }
 
