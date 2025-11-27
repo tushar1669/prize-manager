@@ -422,6 +422,7 @@ export type Database = {
           is_active: boolean | null
           published_at: string | null
           published_by: string | null
+          request_id: string | null
           slug: string
           tournament_id: string
           version: number
@@ -431,6 +432,7 @@ export type Database = {
           is_active?: boolean | null
           published_at?: string | null
           published_by?: string | null
+          request_id?: string | null
           slug: string
           tournament_id: string
           version?: number
@@ -440,6 +442,7 @@ export type Database = {
           is_active?: boolean | null
           published_at?: string | null
           published_by?: string | null
+          request_id?: string | null
           slug?: string
           tournament_id?: string
           version?: number
@@ -679,7 +682,7 @@ export type Database = {
       publish_tournament: {
         Args: { requested_slug?: string; tournament_id: string }
         Returns: {
-          published_at: string
+          request_id: string
           slug: string
           version: number
         }[]
