@@ -18,7 +18,7 @@ import { formatCurrencyINR } from "@/utils/currency";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
-  const [activeView, setActiveView] = useState<string>("cards");
+  const [activeView, setActiveView] = useState<string>("v1");
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament-by-id', id],
@@ -66,7 +66,7 @@ export default function PublicWinnersPage() {
   const categories = grouped?.groups || [];
 
   return (
-    <div className="min-h-screen bg-background print:bg-white">
+    <div className="min-h-screen bg-background text-foreground print:bg-white print:text-black">
       <div className="container mx-auto px-4 py-8 pm-print-page print:px-4 print:py-3">
         <Card className="mb-6 bg-card border-border print:border-black print:bg-white">
           <CardHeader className="print:pb-2">
@@ -122,14 +122,14 @@ export default function PublicWinnersPage() {
               ) : (
                 <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
                   <TabsList className="grid w-full grid-cols-5 mb-6 print:hidden">
-                    <TabsTrigger value="cards">Category Cards</TabsTrigger>
+                    <TabsTrigger value="v1">Category Cards</TabsTrigger>
                     <TabsTrigger value="table">Table View</TabsTrigger>
                     <TabsTrigger value="ceremony">Ceremony Script</TabsTrigger>
                     <TabsTrigger value="poster">Poster Grid</TabsTrigger>
                     <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="cards" className={activeView !== 'cards' ? 'print:hidden' : ''}>
+                  <TabsContent value="v1" className={activeView !== 'v1' ? 'print:hidden' : ''}>
                     <CategoryCardsView groups={categories} />
                   </TabsContent>
 
