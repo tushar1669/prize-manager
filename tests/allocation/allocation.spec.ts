@@ -111,6 +111,14 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const assigned = new Set<string>();
     const winners: Array<{ prizeId: string; playerId: string }> = [];
     const unfilled: Array<{ prizeId: string; reasonCodes: string[] }> = [];
+    const eligibilityLog: Array<{
+      playerId: string;
+      categoryId: string;
+      eligible: boolean;
+      reasonCodes: string[];
+      passCodes: string[];
+      warnCodes: string[];
+    }> = [];
 
     for (const { cat, p } of prizeQueue) {
       const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
@@ -119,6 +127,14 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
       for (const player of players) {
         if (assigned.has(player.id)) continue;
         const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate);
+        eligibilityLog.push({
+          playerId: player.id,
+          categoryId: cat.id,
+          eligible: evaluation.eligible,
+          reasonCodes: evaluation.reasonCodes,
+          passCodes: evaluation.passCodes,
+          warnCodes: evaluation.warnCodes,
+        });
         if (evaluation.eligible) {
           eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
         } else {
@@ -137,7 +153,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
       winners.push({ prizeId: p.id, playerId: winner.player.id });
     }
 
-    return { winners, unfilled };
+    return { winners, unfilled, eligibilityLog };
   };
 
   it('respects age, gender, and location filters while picking top ranks', () => {
@@ -398,6 +414,9 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     // p1 should be rejected with rated_player_excluded_unrated_only
     const p1Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p1' && e.categoryId === 'unrated');
     expect(p1Eligibility?.reasonCodes).toContain('rated_player_excluded_unrated_only');
+    // p2 should explicitly pass via unrated_only_ok
+    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'unrated');
+    expect(p2Eligibility?.passCodes).toContain('unrated_only_ok');
 
     expect(unfilled.length).toBe(0);
   });
@@ -439,6 +458,10 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const p3Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p3' && e.categoryId === 'veteran-unrated');
     expect(p3Eligibility?.reasonCodes).toContain('age_below_min');
 
+    // p2 should explicitly show unrated_only_ok pass code
+    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'veteran-unrated');
+    expect(p2Eligibility?.passCodes).toContain('unrated_only_ok');
+
     expect(unfilled.length).toBe(0);
   });
 
@@ -479,6 +502,72 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(unfilled.length).toBe(0);
   });
 
+  it('per-category include_unrated=false blocks unrated even when global allow_unrated_in_rating=true', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'u1600-no-unrated-override',
+        name: 'Under 1600 (override no unrated)',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_rating: 1200,
+          max_rating: 1600,
+          include_unrated: false,
+        },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 2000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const rulesAllowUnrated = { ...defaultRules, allow_unrated_in_rating: true };
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, rulesAllowUnrated, new Date('2024-05-01'));
+
+    expect(winners).toEqual([{ prizeId: 'u1600-1', playerId: 'p1' }]);
+    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated-override');
+    expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
+  });
+
+  it('per-category include_unrated=true allows unrated even when global allow_unrated_in_rating=false', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'u1600-allow-unrated',
+        name: 'Under 1600 (allow unrated)',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_rating: 1200,
+          max_rating: 1600,
+          include_unrated: true,
+        },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 2000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const rulesBlockUnrated = { ...defaultRules, allow_unrated_in_rating: false };
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, rulesBlockUnrated, new Date('2024-05-01'));
+
+    expect(winners).toEqual([{ prizeId: 'u1600-1', playerId: 'p1' }]);
+    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-allow-unrated');
+    expect(p2Eligibility?.eligible).toBe(true);
+    expect(p2Eligibility?.passCodes).toContain('rating_unrated_allowed');
+    expect(p2Eligibility?.reasonCodes).not.toContain('unrated_excluded');
+  });
+
   it('uses legacy fallback when include_unrated is unset: unrated blocked when global rule is false and band has min+max', () => {
     const players = [
       { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
@@ -504,12 +593,14 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     const rulesNoUnrated = { ...defaultRules, allow_unrated_in_rating: false };
 
-    const { winners, unfilled } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
+    const { winners, unfilled, eligibilityLog } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
 
     // Only p1 (rated, within range) should win
     // p2 should be blocked by legacy logic (min+max band, no global allow)
     expect(winners.length).toBe(1);
     expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-legacy');
+    expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
     expect(unfilled.length).toBe(0);
   });
 
@@ -538,12 +629,53 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     const rulesNoUnrated = { ...defaultRules, allow_unrated_in_rating: false };
 
-    const { winners, unfilled } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
+    const { winners, unfilled, eligibilityLog } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
 
     // p1 (rated, within max) wins first prize
     // p2 (unrated) should be ALLOWED by legacy max-only band logic, but prize is taken
     expect(winners.length).toBe(1);
     expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-maxonly');
+    expect(p2Eligibility?.eligible).toBe(true);
+    expect(p2Eligibility?.passCodes).toContain('rating_unrated_allowed');
     expect(unfilled.length).toBe(0);
+  });
+
+  it('age-only categories ignore rating for both rated and unrated seniors', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Senior', rating: 1500, fide_id: '1001', gender: 'M', dob: '1950-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Senior', rating: null, fide_id: null, gender: 'M', dob: '1950-01-01', state: 'MH', unrated: true },
+      { id: 'p3', rank: 3, name: 'Young Rated', rating: 1600, fide_id: '1003', gender: 'M', dob: '2010-01-01', state: 'MH', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'veteran',
+        name: 'Veteran',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_age: 60,
+          // no rating bounds and unrated_only is false/undefined
+        },
+        prizes: [
+          { id: 'vet-1', place: 1, cash_amount: 1200, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    expect(winners).toEqual([{ prizeId: 'vet-1', playerId: 'p1' }]);
+
+    const p1Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p1' && e.categoryId === 'veteran');
+    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'veteran');
+    const p3Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p3' && e.categoryId === 'veteran');
+
+    expect(p1Eligibility?.eligible).toBe(true);
+    expect(p2Eligibility?.eligible).toBe(true);
+    expect(p1Eligibility?.reasonCodes).not.toContain('unrated_excluded');
+    expect(p2Eligibility?.reasonCodes).not.toContain('unrated_excluded');
+    expect(p3Eligibility?.reasonCodes).toContain('age_below_min');
   });
 });
