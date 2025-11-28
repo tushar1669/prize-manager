@@ -720,16 +720,43 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   // Rating category handling
   // Detect unrated_only mode: category only allows unrated players
   const unratedOnly = c.unrated_only === true;
-  // A category is rating-aware if it has min/max rating OR is unrated-only
+
+  // A category is rating-aware if it has rating bounds OR is explicitly unrated-only
   const ratingCat = isRatingCategory(c) || unratedOnly;
-  const includeUnratedByCriteria = c.include_unrated;
-  const includeUnratedProvided = includeUnratedByCriteria === true || includeUnratedByCriteria === false;
-  const maxOnlyBandAllowsUnrated = c.max_rating != null && c.min_rating == null;
-  const legacyAllowUnrated = (rules?.allow_unrated_in_rating === true) || maxOnlyBandAllowsUnrated;
-  // Apply include_unrated override if provided; otherwise, use legacy rules. unrated_only always allows unrated.
-  const allowUnrated = unratedOnly
-    || includeUnratedByCriteria === true
-    || (!includeUnratedProvided && legacyAllowUnrated);
+
+  // Legacy flags used before we added per-category include_unrated
+  const allowUnratedRule = !!rules?.allow_unrated_in_rating;
+  const hasMinRating = typeof c.min_rating === 'number';
+  const hasMaxRating = typeof c.max_rating === 'number';
+
+  // Legacy: "max-only" bands historically allowed unrated players
+  const allowUnratedByMaxOnly = hasMaxRating && !hasMinRating;
+
+  // Legacy fallback when include_unrated was not present
+  const legacyAllowUnrated = allowUnratedRule || allowUnratedByMaxOnly;
+
+  // Explicit per-category behaviour
+  const includeUnrated = c.include_unrated;
+
+  // Truth table for allowUnrated:
+  // - unrated_only = true => ignore min/max, rated blocked, unrated allowed
+  // - include_unrated = true => allow unrated in rating categories
+  // - include_unrated = false => block unrated in rating categories
+  // - include_unrated unset => legacy: allow_unrated_in_rating OR (max-only band)
+  let allowUnrated: boolean;
+  if (unratedOnly) {
+    // unrated_only always allows unrated (rated players are handled separately)
+    allowUnrated = true;
+  } else if (includeUnrated === true) {
+    // Explicitly include unrated
+    allowUnrated = true;
+  } else if (includeUnrated === false) {
+    // Explicitly exclude unrated
+    allowUnrated = false;
+  } else {
+    // include_unrated unset → use legacy behaviour
+    allowUnrated = legacyAllowUnrated;
+  }
 
   const rating = (() => {
     const raw = player.rating == null ? null : Number(player.rating);
