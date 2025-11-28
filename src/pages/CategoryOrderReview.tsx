@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, memo } from 'react';
+import { useEffect, useState, useCallback, memo, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -155,6 +155,9 @@ export default function CategoryOrderReview() {
   const [saving, setSaving] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
   const [lastSavedOrder, setLastSavedOrder] = useState<Category[]>([]);
+  
+  // Track drag state to prevent effects from interfering during drag
+  const isDraggingRef = useRef(false);
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty, registerOnSave } = useDirty();
 
@@ -264,7 +267,10 @@ export default function CategoryOrderReview() {
   }, [id]);
 
   // Track dirty state (by *array order* + active flags), not order_idx (which changes only after save)
+  // Skip updates during drag to prevent re-renders that interfere with @dnd-kit
   useEffect(() => {
+    if (isDraggingRef.current) return; // Don't update dirty state during drag
+    
     const currentOrder = cats.map(c => c.id).join(',');
     const savedOrder = lastSavedOrder.map(c => c.id).join(',');
     if (currentOrder !== savedOrder) {
@@ -308,10 +314,29 @@ export default function CategoryOrderReview() {
     version: 1,
   });
 
+  // Memoize sortable IDs to prevent @dnd-kit from resetting during re-renders
+  const sortableIds = useMemo(() => cats.map(c => c.id), [cats]);
+
+  // Drag lifecycle handlers
+  const handleDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+    console.log('[order-review] drag start');
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    isDraggingRef.current = false;
+    console.log('[order-review] drag cancel');
+  }, []);
+
   // Stable drag-end handler
   const handleDragEnd = useCallback((event: DragEndEvent) => {
+    isDraggingRef.current = false;
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    
+    if (!over || active.id === over.id) {
+      console.log('[order-review] drag end (no change)');
+      return;
+    }
 
     setCats((prev: Category[]) => {
       const oldIdx = prev.findIndex((c: Category) => c.id === active.id);
@@ -488,8 +513,14 @@ export default function CategoryOrderReview() {
         )}
 
         <div className="space-y-4">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={cats.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          <DndContext 
+            sensors={sensors} 
+            collisionDetection={closestCenter} 
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
               {cats.map((c: Category) => (
                 <SortableCategoryItem
                   key={c.id}
