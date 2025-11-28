@@ -2087,6 +2087,7 @@ export default function PlayerImport() {
   const hasData = mappedPlayers.length > 0;
   const validationErrorCount = validationErrors.length;
   const hasValidationErrors = validationErrorCount > 0;
+  const validPlayerCount = Math.max(mappedPlayers.length - validationErrorCount, 0);
   const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0;
 
   return (
@@ -2254,6 +2255,12 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
+            <ImportSummaryBar
+              totalPlayers={mappedPlayers.length}
+              validPlayers={validPlayerCount}
+              errorCount={validationErrorCount}
+              statesExtracted={statesExtractedCount}
+            />
             {CONFLICT_REVIEW_ENABLED && conflicts.length > 0 && (
               <Card className="border-amber-200 bg-amber-50/80">
                 <CardHeader>
