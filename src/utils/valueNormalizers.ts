@@ -163,6 +163,19 @@ export function normalizeGrColumn(raw: any): {
   return { disability: null, tags: [], group_label: trimmed };
 }
 
+/**
+ * Normalize Type column for Swiss-Manager:
+ * - Returns the raw value trimmed, or null if empty
+ * - Does NOT interpret semantics (PC, S60, F14, etc. are just strings)
+ * - Case is preserved for display, matching is case-insensitive in allocator
+ */
+export function normalizeTypeColumn(raw: any): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  return s;
+}
+
 export function fillSingleGapRanksInPlace(
   players: Array<{ rank?: number | null; [key: string]: unknown }>,
 ): void {

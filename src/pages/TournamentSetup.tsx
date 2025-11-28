@@ -1987,6 +1987,19 @@ export default function TournamentSetup() {
                       Uses the Gr column from Swiss-Manager ranking file. Only players whose Gr value matches one of these groups will be eligible. Leave empty to allow all.
                     </p>
                   </div>
+
+                  {/* Allowed Types (Type column) */}
+                  <div>
+                    <Label htmlFor="criteria-types">Type (Type column from Swiss-Manager)</Label>
+                    <Input
+                      id="criteria-types"
+                      placeholder="e.g., PC, S60, F14, U15, Section A"
+                      defaultValue={criteria?.allowed_types?.join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Uses the Type column from Swiss-Manager ranking file (e.g., PC, S60, F14, U15). Only players whose Type matches will be eligible. Leave empty to allow all.
+                    </p>
+                  </div>
                 </>
               );
             })()}
@@ -2026,6 +2039,12 @@ export default function TournamentSetup() {
                   .map((s) => s.trim())
                   .filter(Boolean);
 
+                const typesStr = (document.getElementById('criteria-types') as HTMLInputElement)?.value || '';
+                const allowed_types = typesStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
                 const unratedOnly = unratedOnlyEl?.getAttribute('data-state') === 'checked';
@@ -2048,6 +2067,7 @@ export default function TournamentSetup() {
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
                 if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;
                 if (allowed_groups.length > 0) criteria.allowed_groups = allowed_groups;
+                if (allowed_types.length > 0) criteria.allowed_types = allowed_types;
 
                 if (criteriaSheet.category?.id) {
                   saveCriteriaMutation.mutate({

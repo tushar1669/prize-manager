@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     const REQUIRED_COLUMNS = [
       'id', 'rank', 'name', 'rating', 'dob', 'gender', 
       'state', 'city', 'club', 'fide_id', 'disability', 'unrated',
-      'federation', 'sno', 'group_label'
+      'federation', 'sno', 'group_label', 'type_label'
     ];
 
     console.log(`[allocation.input] Fetching players with columns=${REQUIRED_COLUMNS.join(',')}`);
@@ -140,6 +140,7 @@ Deno.serve(async (req) => {
       federation?: string | null;
       sno?: string | null;
       group_label?: string | null;
+      type_label?: string | null;
     }>;
 
     // Log actual column availability for diagnostics
@@ -859,6 +860,18 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
       failCodes.add('group_excluded');
     } else {
       passCodes.add('group_ok');
+    }
+  }
+
+  // Type filter (Swiss-Manager Type column): case-insensitive, trimmed matching
+  if (Array.isArray(c.allowed_types) && c.allowed_types.length > 0) {
+    const playerType = (player.type_label ?? '').trim().toUpperCase();
+    const allowedTypes = c.allowed_types.map((t: any) => String(t ?? '').trim().toUpperCase());
+    
+    if (!playerType || !allowedTypes.includes(playerType)) {
+      failCodes.add('type_excluded');
+    } else {
+      passCodes.add('type_ok');
     }
   }
 

@@ -24,6 +24,7 @@ export const reasonCodeLabels: Record<string, string> = {
   state_ok: "State eligible",
   club_ok: "Club eligible",
   group_ok: "Group eligible",
+  type_ok: "Type eligible",
   
   // Eligibility - negative
   gender_missing: "Gender missing",
@@ -45,6 +46,7 @@ export const reasonCodeLabels: Record<string, string> = {
   state_mismatch: "Location requirements not met",
   club_excluded: "Club not eligible",
   group_excluded: "Group not eligible",
+  type_excluded: "Type not eligible",
   
   // Unfilled reasons
   no_eligible_players: "No eligible players found",
