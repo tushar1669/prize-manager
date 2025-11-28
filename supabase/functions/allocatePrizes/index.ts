@@ -722,10 +722,14 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   const unratedOnly = c.unrated_only === true;
   // A category is rating-aware if it has min/max rating OR is unrated-only
   const ratingCat = isRatingCategory(c) || unratedOnly;
-  // Read the per-category include_unrated setting from criteria_json (defaults to true for backwards compatibility)
-  const includeUnratedByCriteria = c.include_unrated !== false;
-  // When unrated_only is true, unrated players are always allowed by definition
-  const allowUnrated = unratedOnly || includeUnratedByCriteria;
+  const includeUnratedByCriteria = c.include_unrated;
+  const includeUnratedProvided = includeUnratedByCriteria === true || includeUnratedByCriteria === false;
+  const maxOnlyBandAllowsUnrated = c.max_rating != null && c.min_rating == null;
+  const legacyAllowUnrated = (rules?.allow_unrated_in_rating === true) || maxOnlyBandAllowsUnrated;
+  // Apply include_unrated override if provided; otherwise, use legacy rules. unrated_only always allows unrated.
+  const allowUnrated = unratedOnly
+    || includeUnratedByCriteria === true
+    || (!includeUnratedProvided && legacyAllowUnrated);
 
   const rating = (() => {
     const raw = player.rating == null ? null : Number(player.rating);
