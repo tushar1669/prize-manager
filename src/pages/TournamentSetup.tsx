@@ -911,10 +911,11 @@ export default function TournamentSetup() {
     const src = cats;
     if (!src) throw new Error('Source category not found');
 
-    // 2) Create new category with cloned criteria
+    // 2) Create new category with cloned criteria (excluding legacy dob_on_or_after)
     const criteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
       ? { ...(src.criteria_json as Record<string, any>) }
       : {} as Record<string, any>;
+    delete criteria.dob_on_or_after;
 
     const { data: created, error: createError } = await supabase
       .from('categories')
