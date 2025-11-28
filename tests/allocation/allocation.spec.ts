@@ -478,4 +478,72 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     expect(unfilled.length).toBe(0);
   });
+
+  it('uses legacy fallback when include_unrated is unset: unrated blocked when global rule is false and band has min+max', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'u1600-legacy',
+        name: 'Under 1600 legacy',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          min_rating: 1200,
+          max_rating: 1600,
+          // include_unrated is deliberately UNSET here to test legacy fallback
+        },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 2000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const rulesNoUnrated = { ...defaultRules, allow_unrated_in_rating: false };
+
+    const { winners, unfilled } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
+
+    // Only p1 (rated, within range) should win
+    // p2 should be blocked by legacy logic (min+max band, no global allow)
+    expect(winners.length).toBe(1);
+    expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    expect(unfilled.length).toBe(0);
+  });
+
+  it('uses legacy fallback: max-only band allows unrated when include_unrated is unset', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Rated Player', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
+      { id: 'p2', rank: 2, name: 'Unrated Player', rating: null, fide_id: null, gender: 'F', dob: '2005-01-01', state: 'MH', unrated: true },
+    ];
+
+    const categories = [
+      {
+        id: 'u1600-maxonly',
+        name: 'Under 1600 max-only',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          max_rating: 1600,
+          // NO min_rating - this is a "max-only" band
+          // include_unrated is deliberately UNSET here
+        },
+        prizes: [
+          { id: 'u1600-1', place: 1, cash_amount: 2000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const rulesNoUnrated = { ...defaultRules, allow_unrated_in_rating: false };
+
+    const { winners, unfilled } = runAllocation(categories, players, rulesNoUnrated, new Date('2024-05-01'));
+
+    // p1 (rated, within max) wins first prize
+    // p2 (unrated) should be ALLOWED by legacy max-only band logic, but prize is taken
+    expect(winners.length).toBe(1);
+    expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
+    expect(unfilled.length).toBe(0);
+  });
 });
