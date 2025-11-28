@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -51,6 +51,102 @@ type Category = {
   is_active?: boolean; 
   prizes: Prize[] 
 };
+
+// Extracted outside main component to maintain stable reference
+interface SortableCategoryItemProps {
+  cat: Category;
+  onToggleCat: (id: string) => void;
+  onTogglePrize: (cid: string, pid: string) => void;
+  onDeleteCategory?: (cat: Category) => void;
+}
+
+const SortableCategoryItem = memo(function SortableCategoryItem({
+  cat,
+  onToggleCat,
+  onTogglePrize,
+  onDeleteCategory,
+}: SortableCategoryItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 50 : undefined,
+  } as React.CSSProperties;
+
+  return (
+    <Card ref={setNodeRef} style={style} className={`overflow-hidden ${isDragging ? 'shadow-lg ring-2 ring-primary' : ''}`}>
+      <CardContent className="p-6">
+        <div className="flex items-start gap-4">
+          {/* Drag handle (keyboard accessible) */}
+          <button
+            type="button"
+            className="p-2 rounded hover:bg-muted/60 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Drag to reorder"
+            title="Drag to reorder. Press space or enter to pick up, arrow keys to move, enter to drop."
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+          </button>
+
+          <div className="flex-1 space-y-4">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={!!cat.is_active}
+                onCheckedChange={() => onToggleCat(cat.id)}
+                aria-label={`Include ${cat.name}`}
+              />
+              <span className="font-semibold text-lg">{cat.name}</span>
+              {cat.is_main && (
+                <span className="px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/30">
+                  Main
+                </span>
+              )}
+              {!cat.is_main && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteCategory?.(cat);
+                  }}
+                  title="Delete category"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            <div className="grid gap-2 pl-8">
+              {(cat.prizes || []).sort((a, b) => a.place - b.place).map(p => (
+                <div key={p.id} className="flex items-center gap-3 text-sm">
+                  <Checkbox
+                    checked={!!p.is_active}
+                    onCheckedChange={() => onTogglePrize(cat.id, p.id)}
+                    aria-label={`Include prize place #${p.place}`}
+                  />
+                  <span className="w-20 font-medium">Place #{p.place}</span>
+                  <span className="w-28 font-mono">₹{p.cash_amount ?? 0}</span>
+                  <div className="flex gap-1 text-muted-foreground">
+                    {p.has_trophy && <Trophy className="h-4 w-4" />}
+                    {p.has_medal && <Medal className="h-4 w-4" />}
+                  </div>
+                </div>
+              ))}
+              {(!cat.prizes || cat.prizes.length === 0) && (
+                <div className="text-sm text-muted-foreground">No prizes in this category.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function CategoryOrderReview() {
   const { id } = useParams();
@@ -212,7 +308,8 @@ export default function CategoryOrderReview() {
     version: 1,
   });
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  // Stable drag-end handler
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -225,9 +322,10 @@ export default function CategoryOrderReview() {
       console.log('[order-review] dnd end', reordered.map((c: Category, i: number) => ({ id: c.id, name: c.name, order: i })));
       return reordered;
     });
-  };
+  }, []);
 
-  const handleConfirm = async () => {
+  // Stable confirm handler
+  const handleConfirm = useCallback(async () => {
     try {
       setSaving(true);
       
@@ -289,7 +387,7 @@ export default function CategoryOrderReview() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [cats, lastSavedOrder, id, navigate, resetDirty, orderDraftKey, clearError, showError]);
 
   // Register save handler for global shortcut (after handleConfirm is defined)
   useEffect(() => {
@@ -307,98 +405,24 @@ export default function CategoryOrderReview() {
     return () => registerOnSave(null);
   }, [isDirty, handleConfirm, registerOnSave]);
 
-  // Sortable category item component
-  function SortableCategoryItem({
-    cat,
-    onToggleCat,
-    onTogglePrize,
-    onDeleteCategory,
-  }: {
-    cat: Category;
-    onToggleCat: (id: string) => void;
-    onTogglePrize: (cid: string, pid: string) => void;
-    onDeleteCategory?: (cat: Category) => void;
-  }) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+  // Stable toggle handlers
+  const handleToggleCat = useCallback((cid: string) => {
+    console.log('[order-review] toggle category', { categoryId: cid });
+    setCats(prev => prev.map(x => x.id === cid ? { ...x, is_active: !x.is_active } : x));
+  }, []);
 
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.6 : undefined,
-    } as React.CSSProperties;
+  const handleTogglePrize = useCallback((cid: string, pid: string) => {
+    console.log('[order-review] toggle prize', { categoryId: cid, prizeId: pid });
+    setCats(prev => prev.map(x =>
+      x.id === cid
+        ? { ...x, prizes: (x.prizes || []).map((p: Prize) => p.id === pid ? { ...p, is_active: !p.is_active } : p) }
+        : x
+    ));
+  }, []);
 
-    return (
-      <Card ref={setNodeRef} style={style} className="overflow-hidden">
-        <CardContent className="p-6">
-          <div className="flex items-start gap-4">
-            {/* Drag handle (keyboard accessible) */}
-            <button
-              type="button"
-              className="p-2 rounded hover:bg-muted/60 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring"
-              aria-label="Drag to reorder"
-              title="Drag to reorder. Press space or enter to pick up, arrow keys to move, enter to drop."
-              {...attributes}
-              {...listeners}
-            >
-              <GripVertical className="h-5 w-5 text-muted-foreground" />
-            </button>
-
-            <div className="flex-1 space-y-4">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={!!cat.is_active}
-                  onCheckedChange={() => onToggleCat(cat.id)}
-                  aria-label={`Include ${cat.name}`}
-                />
-                <span className="font-semibold text-lg">{cat.name}</span>
-                {cat.is_main && (
-                  <span className="px-2 py-1 text-xs rounded-md bg-primary/10 text-primary border border-primary/30">
-                    Main
-                  </span>
-                )}
-                {!cat.is_main && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteCategory?.(cat);
-                    }}
-                    title="Delete category"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-
-              <div className="grid gap-2 pl-8">
-                {(cat.prizes || []).sort((a, b) => a.place - b.place).map(p => (
-                  <div key={p.id} className="flex items-center gap-3 text-sm">
-                    <Checkbox
-                      checked={!!p.is_active}
-                      onCheckedChange={() => onTogglePrize(cat.id, p.id)}
-                      aria-label={`Include prize place #${p.place}`}
-                    />
-                    <span className="w-20 font-medium">Place #{p.place}</span>
-                    <span className="w-28 font-mono">₹{p.cash_amount ?? 0}</span>
-                    <div className="flex gap-1 text-muted-foreground">
-                      {p.has_trophy && <Trophy className="h-4 w-4" />}
-                      {p.has_medal && <Medal className="h-4 w-4" />}
-                    </div>
-                  </div>
-                ))}
-                {(!cat.prizes || cat.prizes.length === 0) && (
-                  <div className="text-sm text-muted-foreground">No prizes in this category.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const handleDeleteCategory = useCallback((cat: Category) => {
+    setDeleteDialog({ open: true, category: cat });
+  }, []);
 
   if (loading) {
     return (
@@ -470,89 +494,69 @@ export default function CategoryOrderReview() {
                 <SortableCategoryItem
                   key={c.id}
                   cat={c}
-                  onToggleCat={(cid) => {
-                    console.log('[order-review] toggle category', { categoryId: cid });
-                    setCats(prev => prev.map(x => x.id === cid ? { ...x, is_active: !x.is_active } : x));
-                  }}
-                  onTogglePrize={(cid, pid) => {
-                    console.log('[order-review] toggle prize', { categoryId: cid, prizeId: pid });
-                    setCats(prev => prev.map(x =>
-                      x.id === cid
-                        ? { ...x, prizes: (x.prizes || []).map((p: Prize) => p.id === pid ? { ...p, is_active: !p.is_active } : p) }
-                        : x
-                    ));
-                  }}
-                  onDeleteCategory={(cat) => setDeleteDialog({ open: true, category: cat })}
+                  onToggleCat={handleToggleCat}
+                  onTogglePrize={handleTogglePrize}
+                  onDeleteCategory={handleDeleteCategory}
                 />
               ))}
             </SortableContext>
           </DndContext>
         </div>
 
-        <div className="flex justify-between pt-4">
-          <Button 
-            type="button"
-            variant="outline" 
-            onClick={() => {
-              console.log('[order-review] cancel click');
-              navigate(`/t/${id}/setup?tab=prizes`);
-            }}
-          >
+        <div className="flex gap-4 justify-end pt-4 border-t">
+          <Button variant="outline" disabled={saving} onClick={() => navigate(`/t/${id}/setup`)}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={saving}>
+          <Button 
+            onClick={handleConfirm} 
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Confirm & Continue'}
           </Button>
         </div>
-
-        <AlertDialog open={deleteDialog.open} onOpenChange={(open) => {
-          if (!open) {
-            setDeleteDialog({ open: false, category: null });
-            setDeleteConfirmText('');
-          }
-        }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Category: {deleteDialog.category?.name}</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete the category and <strong>{deleteDialog.category?.prizes?.length || 0} prize(s)</strong> associated with it. 
-                This action cannot be undone.
-                <br /><br />
-                Type <strong>{deleteDialog.category?.name}</strong> to confirm:
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <Input
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Type category name to confirm"
-              className="mt-2"
-            />
-            <AlertDialogFooter>
-              <AlertDialogCancel 
-                type="button"
-                onClick={() => {
-                  setDeleteDialog({ open: false, category: null });
-                  setDeleteConfirmText('');
-                }}
-              >
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                type="button"
-                disabled={deleteConfirmText !== deleteDialog.category?.name || deleteCategoryMutation.isPending}
-                onClick={() => {
-                  if (deleteDialog.category?.id) {
-                    deleteCategoryMutation.mutate(deleteDialog.category.id);
-                  }
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {deleteCategoryMutation.isPending ? 'Deleting...' : 'Delete Category'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteDialog({ open: false, category: null });
+          setDeleteConfirmText('');
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the category "{deleteDialog.category?.name}" and all its prizes.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Type <strong>delete</strong> to confirm:
+            </p>
+            <Input 
+              value={deleteConfirmText} 
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="delete"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteConfirmText.toLowerCase() !== 'delete' || deleteCategoryMutation.isPending}
+              onClick={() => {
+                if (deleteDialog.category) {
+                  deleteCategoryMutation.mutate(deleteDialog.category.id);
+                }
+              }}
+            >
+              {deleteCategoryMutation.isPending ? 'Deleting…' : 'Delete Category'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
