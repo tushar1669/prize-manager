@@ -1,52 +1,77 @@
 # Rating eligibility behavior (allocatePrizes edge function)
 
 ## Source
-Logic pulled from `supabase/functions/allocatePrizes/index.ts` around the rating check in `evaluateEligibility`.
+Logic pulled from `supabase/functions/allocatePrizes/index.ts` around the rating check in `evaluateEligibility` and validated by `tests/allocation/allocation.spec.ts`.
 
 ## Decision tree
-1. **Detect rating-aware categories.**
-   - `ratingCat` is `true` when the category has `min_rating` or `max_rating`, **or** when `criteria_json.unrated_only` is `true` (even without rating bounds).【F:supabase/functions/allocatePrizes/index.ts†L720-L769】
-2. **Compute `allowUnrated`.**
-   - If `unrated_only` is `true`: unrated is always allowed; rated handling is decided later.【F:supabase/functions/allocatePrizes/index.ts†L741-L758】
-   - Else if `include_unrated === true`: allow unrated.【F:supabase/functions/allocatePrizes/index.ts†L741-L758】
-   - Else if `include_unrated === false`: block unrated.【F:supabase/functions/allocatePrizes/index.ts†L741-L758】
-   - Else (`include_unrated` unset): fall back to legacy behaviour → `rules.allow_unrated_in_rating` **or** a max-only band (`max_rating` set and `min_rating` absent).【F:supabase/functions/allocatePrizes/index.ts†L727-L758】
-3. **Evaluate rating dimension when `ratingCat` is `true`.**
-   - **Unrated-only category (`unrated_only: true`):**
-     - Rated players fail with `rated_player_excluded_unrated_only`.
-     - Unrated players pass with `unrated_only_ok`.
-     - Min/max checks are **skipped** entirely.【F:supabase/functions/allocatePrizes/index.ts†L773-L809】
-   - **Standard rating category:**
-     - If player is unrated:
-       - Pass when `allowUnrated` is `true`, otherwise fail with `unrated_excluded`.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】
-     - If player is rated:
-       - Apply `min_rating` and `max_rating` bounds (fail with `rating_below_min` / `rating_above_max` as needed).【F:supabase/functions/allocatePrizes/index.ts†L795-L809】
-       - Passing rated players add `rating_ok`.【F:supabase/functions/allocatePrizes/index.ts†L805-L809】
-4. **Non-rating categories.** When `ratingCat` is `false`, the rating block is skipped; age/gender/other filters still apply.【F:supabase/functions/allocatePrizes/index.ts†L690-L809】
-
-## How the new flags interact
-- `criteria_json.unrated_only: true`
-  - Forces `ratingCat = true` even without bounds.
-  - Ignores `min_rating`/`max_rating` if present.
-  - Excludes all rated players; allows all unrated players.【F:supabase/functions/allocatePrizes/index.ts†L720-L809】
-- `criteria_json.include_unrated`
-  - `true` → allow unrated players in rating categories (unless `unrated_only` is also true, in which case rated players are still blocked).【F:supabase/functions/allocatePrizes/index.ts†L741-L809】
-  - `false` → block unrated players in rating categories.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】
-  - `undefined` → legacy fallback: allow unrated when `rules.allow_unrated_in_rating` is set **or** when the band is max-only (has `max_rating` and no `min_rating`).【F:supabase/functions/allocatePrizes/index.ts†L727-L758】
+1. **Identify rating-aware categories (`ratingCat`).**
+   - `true` when `min_rating` or `max_rating` is present, **or** when `criteria_json.unrated_only === true` (even with no rating bounds).【F:supabase/functions/allocatePrizes/index.ts†L720-L775】【F:tests/allocation/allocation.spec.ts†L386-L419】
+   - `false` when no rating bounds and `unrated_only` is unset/false; rating is ignored and only age/gender/other filters apply (e.g., pure Veteran categories).【F:supabase/functions/allocatePrizes/index.ts†L690-L775】【F:tests/allocation/allocation.spec.ts†L644-L678】
+2. **Compute `allowUnrated` (used only when `ratingCat` is true and the category is not `unrated_only`).**
+   - If `unrated_only === true`: force `allowUnrated = true` (rated players handled separately).【F:supabase/functions/allocatePrizes/index.ts†L741-L775】
+   - Else if `include_unrated === true`: `allowUnrated = true` (explicit opt-in).【F:supabase/functions/allocatePrizes/index.ts†L741-L775】【F:tests/allocation/allocation.spec.ts†L537-L568】
+   - Else if `include_unrated === false`: `allowUnrated = false` (explicit opt-out, overrides global).【F:supabase/functions/allocatePrizes/index.ts†L741-L775】【F:tests/allocation/allocation.spec.ts†L468-L534】
+   - Else (`include_unrated` unset): legacy fallback → `rules.allow_unrated_in_rating` **or** a max-only band (`max_rating` present, `min_rating` absent).【F:supabase/functions/allocatePrizes/index.ts†L725-L775】【F:tests/allocation/allocation.spec.ts†L571-L644】
+3. **Evaluate rating dimension when `ratingCat` is true.**
+   - **Unrated-only categories (`unrated_only: true`):** rated players fail with `rated_player_excluded_unrated_only`; unrated players pass via `unrated_only_ok`; any `min_rating`/`max_rating` is ignored.【F:supabase/functions/allocatePrizes/index.ts†L773-L809】【F:tests/allocation/allocation.spec.ts†L386-L463】
+   - **Standard rating categories:**
+     - Unrated players: allowed only when `allowUnrated` is true (otherwise fail with `unrated_excluded`).【F:supabase/functions/allocatePrizes/index.ts†L741-L809】【F:tests/allocation/allocation.spec.ts†L468-L644】
+     - Rated players: checked against `min_rating` / `max_rating` (fail with `rating_below_min` or `rating_above_max`); passing rated players add `rating_ok`.【F:supabase/functions/allocatePrizes/index.ts†L795-L809】
+4. **Age/veteran interaction.**
+   - Age constraints run before rating. A category with age bounds but **no** rating bounds (and `unrated_only` unset) skips rating entirely, so both rated and unrated entrants can qualify purely on age (e.g., Veteran).【F:supabase/functions/allocatePrizes/index.ts†L690-L775】【F:tests/allocation/allocation.spec.ts†L644-L678】
+   - When age bounds are combined with `unrated_only: true`, players must satisfy age **and** be unrated; rated veterans are excluded, unrated veterans qualify.【F:supabase/functions/allocatePrizes/index.ts†L690-L809】【F:tests/allocation/allocation.spec.ts†L424-L463】
 
 ## Configuration examples
-- **Standard rating band (rated only).**
-  - `min_rating: 1200`, `max_rating: 1600`, `include_unrated: false`
-  - Rated players must fall within 1200–1600; unrated players fail with `unrated_excluded`.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】
-- **Rating band that includes unrated.**
-  - `min_rating: 1200`, `max_rating: 1600`, `include_unrated: true`
-  - Rated players still checked against bounds; unrated players allowed because `include_unrated` is explicitly true.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】
-- **Unrated-only category.**
-  - `unrated_only: true` (no rating bounds required)
-  - All rated players are rejected; all unrated players pass; min/max are ignored even if set.【F:supabase/functions/allocatePrizes/index.ts†L720-L809】
-- **Veteran (age-only).**
-  - No `min_rating`/`max_rating` and `unrated_only` unset
-  - `ratingCat` is false, so rating checks are skipped; only age and other filters apply.【F:supabase/functions/allocatePrizes/index.ts†L690-L809】
-- **Veteran + Unrated-only.**
-  - Age bounds set (e.g., `min_age: 60`) **and** `unrated_only: true`
-  - Age is validated first; rating dimension forces unrated-only behavior (rated players excluded, unrated allowed).【F:supabase/functions/allocatePrizes/index.ts†L690-L809】
+- **Pure Unrated (no rating bounds).**
+  ```json
+  {
+    "name": "Unrated Only",
+    "criteria_json": { "unrated_only": true }
+  }
+  ```
+  Rated players are rejected; unrated players qualify; any rating bounds are ignored.【F:supabase/functions/allocatePrizes/index.ts†L720-L809】【F:tests/allocation/allocation.spec.ts†L386-L419】
+
+- **Veteran (age-only, rating ignored).**
+  ```json
+  {
+    "name": "Veteran",
+    "criteria_json": { "min_age": 60 }
+  }
+  ```
+  No rating filters; both rated and unrated seniors are eligible if age matches.【F:supabase/functions/allocatePrizes/index.ts†L690-L775】【F:tests/allocation/allocation.spec.ts†L644-L678】
+
+- **Veteran Unrated-only (age + unrated gate).**
+  ```json
+  {
+    "name": "Veteran Unrated",
+    "criteria_json": { "min_age": 60, "unrated_only": true }
+  }
+  ```
+  Requires age match **and** unrated status; rated seniors are excluded.【F:supabase/functions/allocatePrizes/index.ts†L690-L809】【F:tests/allocation/allocation.spec.ts†L424-L463】
+
+- **U1600 (rated only).**
+  ```json
+  {
+    "name": "U1600 (rated only)",
+    "criteria_json": { "max_rating": 1600, "include_unrated": false }
+  }
+  ```
+  Rated players must be ≤1600; unrated players fail due to explicit block.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】【F:tests/allocation/allocation.spec.ts†L468-L534】
+
+- **U1600 (allow unrated).**
+  ```json
+  {
+    "name": "U1600 (allow unrated)",
+    "criteria_json": { "max_rating": 1600, "include_unrated": true }
+  }
+  ```
+  Rated players must be ≤1600; unrated players are explicitly allowed.【F:supabase/functions/allocatePrizes/index.ts†L741-L809】【F:tests/allocation/allocation.spec.ts†L537-L568】
+
+- **Legacy U1600 max-only band (include_unrated unset).**
+  ```json
+  {
+    "name": "U1600 (legacy max-only)",
+    "criteria_json": { "max_rating": 1600 }
+  }
+  ```
+  With `include_unrated` unset, unrated players are allowed via legacy max-only fallback even when global `allow_unrated_in_rating` is false.【F:supabase/functions/allocatePrizes/index.ts†L725-L809】【F:tests/allocation/allocation.spec.ts†L607-L644】
