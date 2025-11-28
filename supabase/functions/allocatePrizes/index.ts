@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     const REQUIRED_COLUMNS = [
       'id', 'rank', 'name', 'rating', 'dob', 'gender', 
       'state', 'city', 'club', 'fide_id', 'disability', 'unrated',
-      'federation', 'sno'
+      'federation', 'sno', 'group_label'
     ];
 
     console.log(`[allocation.input] Fetching players with columns=${REQUIRED_COLUMNS.join(',')}`);
@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
       unrated?: boolean;
       federation?: string | null;
       sno?: string | null;
+      group_label?: string | null;
     }>;
 
     // Log actual column availability for diagnostics
@@ -846,6 +847,18 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
       failCodes.add('club_excluded');
     } else {
       passCodes.add('club_ok');
+    }
+  }
+
+  // Group filter (Gr column): case-insensitive, trimmed matching
+  if (Array.isArray(c.allowed_groups) && c.allowed_groups.length > 0) {
+    const playerGroup = (player.group_label ?? '').trim().toUpperCase();
+    const allowedNormalized = c.allowed_groups.map((g: any) => String(g ?? '').trim().toUpperCase());
+    
+    if (!playerGroup || !allowedNormalized.includes(playerGroup)) {
+      failCodes.add('group_excluded');
+    } else {
+      passCodes.add('group_ok');
     }
   }
 

@@ -1941,11 +1941,11 @@ export default function TournamentSetup() {
                     <Label htmlFor="criteria-disability">Disability Types (comma-separated)</Label>
                     <Input
                       id="criteria-disability"
-                      placeholder="e.g., Hearing, Visual, Physical"
-                      defaultValue={criteria?.disability_types?.join(', ')}
+                      placeholder="e.g., PC, Hearing, Visual"
+                      defaultValue={criteria?.allowed_disabilities?.join(', ')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Leave empty for no disability restriction
+                      Uses the disability field. "PC" is auto-detected from Swiss-Manager Gr column.
                     </p>
                   </div>
 
@@ -1972,6 +1972,19 @@ export default function TournamentSetup() {
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Leave empty to allow all clubs
+                    </p>
+                  </div>
+
+                  {/* Allowed Groups (Gr column) */}
+                  <div>
+                    <Label htmlFor="criteria-groups">Group (Gr column from Swiss-Manager)</Label>
+                    <Input
+                      id="criteria-groups"
+                      placeholder="e.g., Raipur, Section A, Senior"
+                      defaultValue={criteria?.allowed_groups?.join(', ')}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Uses the Gr column from Swiss-Manager ranking file. Only players whose Gr value matches one of these groups will be eligible. Leave empty to allow all.
                     </p>
                   </div>
                 </>
@@ -2007,6 +2020,12 @@ export default function TournamentSetup() {
                   .map((s) => s.trim())
                   .filter(Boolean);
 
+                const groupsStr = (document.getElementById('criteria-groups') as HTMLInputElement)?.value || '';
+                const allowed_groups = groupsStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
                 const unratedOnly = unratedOnlyEl?.getAttribute('data-state') === 'checked';
@@ -2025,9 +2044,10 @@ export default function TournamentSetup() {
                 criteria.unrated_only = unratedOnly;
                 
                 if (gender) criteria.gender = gender;
-                if (disability_types.length > 0) criteria.disability_types = disability_types;
+                if (disability_types.length > 0) criteria.allowed_disabilities = disability_types;
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
                 if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;
+                if (allowed_groups.length > 0) criteria.allowed_groups = allowed_groups;
 
                 if (criteriaSheet.category?.id) {
                   saveCriteriaMutation.mutate({

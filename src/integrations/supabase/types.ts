@@ -299,6 +299,7 @@ export type Database = {
           federation: string | null
           fide_id: string | null
           gender: string | null
+          group_label: string | null
           id: string
           name: string
           rank: number
@@ -322,6 +323,7 @@ export type Database = {
           federation?: string | null
           fide_id?: string | null
           gender?: string | null
+          group_label?: string | null
           id?: string
           name: string
           rank: number
@@ -345,6 +347,7 @@ export type Database = {
           federation?: string | null
           fide_id?: string | null
           gender?: string | null
+          group_label?: string | null
           id?: string
           name?: string
           rank?: number

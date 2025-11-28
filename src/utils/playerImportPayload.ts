@@ -23,6 +23,7 @@ export type SupabasePlayerPayload = {
   tournament_id: string;
   tags_json: Json;
   warnings_json: Json;
+  group_label: string | null;
 };
 
 export interface ParsedPlayer extends PlayerImportRow {
@@ -137,5 +138,6 @@ export function buildSupabasePlayerPayload(
     tournament_id: tournamentId,
     tags_json: tags,
     warnings_json: {},
+    group_label: grInfo.group_label,
   };
 }
