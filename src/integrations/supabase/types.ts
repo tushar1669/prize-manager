@@ -309,6 +309,7 @@ export type Database = {
           state: string | null
           tags_json: Json | null
           tournament_id: string
+          type_label: string | null
           unrated: boolean
           updated_at: string | null
           warnings_json: Json | null
@@ -333,6 +334,7 @@ export type Database = {
           state?: string | null
           tags_json?: Json | null
           tournament_id: string
+          type_label?: string | null
           unrated?: boolean
           updated_at?: string | null
           warnings_json?: Json | null
@@ -357,6 +359,7 @@ export type Database = {
           state?: string | null
           tags_json?: Json | null
           tournament_id?: string
+          type_label?: string | null
           unrated?: boolean
           updated_at?: string | null
           warnings_json?: Json | null

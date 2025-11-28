@@ -32,6 +32,9 @@ export const ALIASES: Record<string, string[]> = {
   fed_code: ['fed', 'fed.', 'fid'], // 3-letter FIDE federation code
   gr: ['gr'],
 
+  // Swiss-Manager Type column (generic category: PC, S60, F14, U15, Section A, etc.)
+  type: ['type'],
+
   disability: ['disability', 'disability_type', 'pwd', 'ph', 'physically_handicapped', 'special_category'],
   special_notes: ['special_notes', 'notes', 'remarks', 'special_needs', 'accommodations', 'comments'],
 

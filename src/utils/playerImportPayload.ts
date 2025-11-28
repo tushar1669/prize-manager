@@ -1,7 +1,7 @@
 import type { PlayerImportRow } from '@/lib/validations';
 import type { Json } from '@/integrations/supabase/types';
 import { ALIASES } from './headerAliases';
-import { normalizeGrColumn } from './valueNormalizers';
+import { normalizeGrColumn, normalizeTypeColumn } from './valueNormalizers';
 import { extractStateFromIdent } from './stateExtract';
 
 export type SupabasePlayerPayload = {
@@ -24,6 +24,7 @@ export type SupabasePlayerPayload = {
   tags_json: Json;
   warnings_json: Json;
   group_label: string | null;
+  type_label: string | null;
 };
 
 export interface ParsedPlayer extends PlayerImportRow {
@@ -81,6 +82,7 @@ export function buildSupabasePlayerPayload(
   const federation = getAliasedValue('federation') ?? player.federation;
   const ident = getAliasedValue('ident');
   const grInfo = normalizeGrColumn(getAliasedValue('gr'));
+  const typeLabel = normalizeTypeColumn(getAliasedValue('type'));
 
   if ((!state || String(state).trim() === '') && ident) {
     const extracted = extractStateFromIdent(String(ident));
@@ -139,5 +141,6 @@ export function buildSupabasePlayerPayload(
     tags_json: tags,
     warnings_json: {},
     group_label: grInfo.group_label,
+    type_label: typeLabel,
   };
 }

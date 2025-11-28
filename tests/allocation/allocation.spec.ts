@@ -83,6 +83,25 @@ describe('valueNormalizers', () => {
     expect(normalizeGrColumn('').group_label).toBeNull();
     expect(normalizeGrColumn('   ').group_label).toBeNull();
   });
+
+  it('normalizes Type column: trims whitespace, preserves case, returns null for empty', () => {
+    const { normalizeTypeColumn } = require('@/utils/valueNormalizers');
+    
+    // Basic trimming
+    expect(normalizeTypeColumn(' S60 ')).toBe('S60');
+    expect(normalizeTypeColumn('PC')).toBe('PC');
+    expect(normalizeTypeColumn('  F14  ')).toBe('F14');
+    
+    // Case preservation
+    expect(normalizeTypeColumn('pc')).toBe('pc');
+    expect(normalizeTypeColumn('Pc')).toBe('Pc');
+    
+    // Empty/null handling
+    expect(normalizeTypeColumn(null)).toBeNull();
+    expect(normalizeTypeColumn('')).toBeNull();
+    expect(normalizeTypeColumn('   ')).toBeNull();
+    expect(normalizeTypeColumn(undefined)).toBeNull();
+  });
 });
 
 describe('playerImportPayload', () => {
@@ -935,5 +954,190 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'sections-ab');
     expect(p3Eligibility?.reasonCodes).toContain('group_excluded');
+  });
+
+  // ============= Type (Type column) Tests =============
+
+  it('type-only category filters by type_label from Type column', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'PC Type Player', rating: 1500, gender: 'M', dob: '2000-01-01', type_label: 'PC', unrated: false },
+      { id: 'p2', rank: 2, name: 'S60 Type Player', rating: 1600, gender: 'M', dob: '2000-01-01', type_label: 'S60', unrated: false },
+      { id: 'p3', rank: 3, name: 'No Type Player', rating: 1400, gender: 'M', dob: '2000-01-01', type_label: null, unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'best-pc-type',
+        name: 'Best PC (Type)',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          allowed_types: ['PC'],
+        },
+        prizes: [
+          { id: 'pc-type-1', place: 1, cash_amount: 2000, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p1 (Type=PC) wins
+    expect(winners).toEqual([{ prizeId: 'pc-type-1', playerId: 'p1' }]);
+
+    const p1Eligibility = eligibilityLog.find(e => e.playerId === 'p1' && e.categoryId === 'best-pc-type');
+    expect(p1Eligibility?.eligible).toBe(true);
+    expect(p1Eligibility?.passCodes).toContain('type_ok');
+
+    const p2Eligibility = eligibilityLog.find(e => e.playerId === 'p2' && e.categoryId === 'best-pc-type');
+    expect(p2Eligibility?.eligible).toBe(false);
+    expect(p2Eligibility?.reasonCodes).toContain('type_excluded');
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'best-pc-type');
+    expect(p3Eligibility?.eligible).toBe(false);
+    expect(p3Eligibility?.reasonCodes).toContain('type_excluded');
+  });
+
+  it('type + age: S60 category requires both Type and age >= 60', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'S60 Senior', rating: 1500, gender: 'M', dob: '1950-01-01', type_label: 'S60', unrated: false },
+      { id: 'p2', rank: 2, name: 'S60 Young', rating: 1600, gender: 'M', dob: '2000-01-01', type_label: 'S60', unrated: false },
+      { id: 'p3', rank: 3, name: 'U15 Senior', rating: 1400, gender: 'M', dob: '1950-01-01', type_label: 'U15', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 's60-senior',
+        name: 'Best S60',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          allowed_types: ['S60'],
+          min_age: 60,
+        },
+        prizes: [
+          { id: 's60-1', place: 1, cash_amount: 1500, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p1 (S60 + age >= 60) wins
+    expect(winners).toEqual([{ prizeId: 's60-1', playerId: 'p1' }]);
+
+    const p2Eligibility = eligibilityLog.find(e => e.playerId === 'p2' && e.categoryId === 's60-senior');
+    expect(p2Eligibility?.reasonCodes).toContain('age_below_min'); // Fails age
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 's60-senior');
+    expect(p3Eligibility?.reasonCodes).toContain('type_excluded'); // Fails type
+  });
+
+  it('type + group: PC in Raipur requires both Type and Group', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Raipur PC', rating: 1500, gender: 'M', dob: '2000-01-01', group_label: 'Raipur', type_label: 'PC', unrated: false },
+      { id: 'p2', rank: 2, name: 'Raipur U15', rating: 1600, gender: 'M', dob: '2000-01-01', group_label: 'Raipur', type_label: 'U15', unrated: false },
+      { id: 'p3', rank: 3, name: 'Durg PC', rating: 1400, gender: 'M', dob: '2000-01-01', group_label: 'Durg', type_label: 'PC', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'raipur-pc',
+        name: 'Best Raipur PC',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          allowed_groups: ['Raipur'],
+          allowed_types: ['PC'],
+        },
+        prizes: [
+          { id: 'rpc-1', place: 1, cash_amount: 1200, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // Only p1 (Raipur + PC) wins
+    expect(winners).toEqual([{ prizeId: 'rpc-1', playerId: 'p1' }]);
+
+    const p1Eligibility = eligibilityLog.find(e => e.playerId === 'p1' && e.categoryId === 'raipur-pc');
+    expect(p1Eligibility?.passCodes).toContain('group_ok');
+    expect(p1Eligibility?.passCodes).toContain('type_ok');
+
+    const p2Eligibility = eligibilityLog.find(e => e.playerId === 'p2' && e.categoryId === 'raipur-pc');
+    expect(p2Eligibility?.reasonCodes).toContain('type_excluded'); // Has Raipur but wrong Type
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'raipur-pc');
+    expect(p3Eligibility?.reasonCodes).toContain('group_excluded'); // Has PC but wrong Group
+  });
+
+  it('handles multiple allowed types (PC or S60)', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'PC Player', rating: 1500, gender: 'M', dob: '2000-01-01', type_label: 'PC', unrated: false },
+      { id: 'p2', rank: 2, name: 'S60 Player', rating: 1600, gender: 'M', dob: '2000-01-01', type_label: 'S60', unrated: false },
+      { id: 'p3', rank: 3, name: 'F14 Player', rating: 1400, gender: 'F', dob: '2010-01-01', type_label: 'F14', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'pc-or-s60',
+        name: 'PC or S60',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          allowed_types: ['PC', 'S60'],
+        },
+        prizes: [
+          { id: 'pcs60-1', place: 1, cash_amount: 1500, has_trophy: true, has_medal: false },
+          { id: 'pcs60-2', place: 2, cash_amount: 1000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // p1 (PC) wins 1st, p2 (S60) wins 2nd, p3 (F14) excluded
+    expect(winners).toEqual([
+      { prizeId: 'pcs60-1', playerId: 'p1' },
+      { prizeId: 'pcs60-2', playerId: 'p2' },
+    ]);
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'pc-or-s60');
+    expect(p3Eligibility?.reasonCodes).toContain('type_excluded');
+  });
+
+  it('type matching is case-insensitive', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'PC Lower', rating: 1500, gender: 'M', dob: '2000-01-01', type_label: 'pc', unrated: false },
+      { id: 'p2', rank: 2, name: 'PC Upper', rating: 1400, gender: 'M', dob: '2000-01-01', type_label: 'PC', unrated: false },
+      { id: 'p3', rank: 3, name: 'PC Mixed', rating: 1300, gender: 'M', dob: '2000-01-01', type_label: 'Pc', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'pc-case',
+        name: 'PC Case Test',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: {
+          allowed_types: ['PC'], // uppercase in criteria
+        },
+        prizes: [
+          { id: 'case-1', place: 1, cash_amount: 1000, has_trophy: false, has_medal: false },
+          { id: 'case-2', place: 2, cash_amount: 800, has_trophy: false, has_medal: false },
+          { id: 'case-3', place: 3, cash_amount: 600, has_trophy: false, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // All three should match despite different cases
+    expect(winners).toEqual([
+      { prizeId: 'case-1', playerId: 'p1' },
+      { prizeId: 'case-2', playerId: 'p2' },
+      { prizeId: 'case-3', playerId: 'p3' },
+    ]);
   });
 });
