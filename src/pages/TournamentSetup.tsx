@@ -896,11 +896,9 @@ export default function TournamentSetup() {
   const duplicateCategoryWithPrizes = async ({
     sourceId,
     newName,
-    dobOnOrAfter,
   }: {
     sourceId: string;
     newName: string;
-    dobOnOrAfter?: string | null;
   }) => {
     // 1) Fetch source category
     const { data: cats, error: catError } = await supabase
@@ -915,9 +913,8 @@ export default function TournamentSetup() {
 
     // 2) Create new category with cloned criteria
     const criteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
-      ? { ...(src.criteria_json as Record<string, any>) } 
+      ? { ...(src.criteria_json as Record<string, any>) }
       : {} as Record<string, any>;
-    if (dobOnOrAfter) criteria.dob_on_or_after = dobOnOrAfter;
 
     const { data: created, error: createError } = await supabase
       .from('categories')
@@ -1645,14 +1642,6 @@ export default function TournamentSetup() {
               <Label htmlFor="dup-new-name">New Category Name</Label>
               <Input id="dup-new-name" placeholder="e.g., U-9 Girls" />
             </div>
-
-            <div>
-              <Label htmlFor="dup-dob">DOB On or After (optional override)</Label>
-              <Input id="dup-dob" type="date" />
-              <p className="text-xs text-muted-foreground mt-1">
-                Leave empty to keep the original DOB rule.
-              </p>
-            </div>
           </div>
 
           <DialogFooter>
@@ -1663,14 +1652,12 @@ export default function TournamentSetup() {
               onClick={async () => {
                 try {
                   const name = (document.getElementById('dup-new-name') as HTMLInputElement)?.value?.trim();
-                  const dob = (document.getElementById('dup-dob') as HTMLInputElement)?.value || null;
                   if (!dupDialog.sourceId) throw new Error('Source missing');
                   if (!name) { toast.error('Please enter a name'); return; }
 
-                  await duplicateCategoryWithPrizes({ 
-                    sourceId: dupDialog.sourceId, 
-                    newName: name, 
-                    dobOnOrAfter: dob || undefined 
+                  await duplicateCategoryWithPrizes({
+                    sourceId: dupDialog.sourceId,
+                    newName: name,
                   });
                   toast.success('Category duplicated');
                   setDupDialog({ open: false, sourceId: null });
