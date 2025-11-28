@@ -137,16 +137,30 @@ export function digitsOnly(raw: any): string | null {
 }
 
 /**
- * Normalize Gr column for Swiss-Manager: "PC" indicates Physically Challenged
- * Returns { disability, tags } tuple for merging into player record
+ * Normalize Gr column for Swiss-Manager:
+ * - Always preserves raw value as group_label (trimmed, case preserved)
+ * - "PC" indicates Physically Challenged (backward compatibility)
+ * Returns { disability, tags, group_label } tuple for merging into player record
  */
-export function normalizeGrColumn(raw: any): { disability: string | null; tags: string[] } {
-  if (raw == null) return { disability: null, tags: [] };
-  const s = String(raw).trim().toUpperCase();
-  if (s === 'PC' || s.includes('PC')) {
-    return { disability: 'PC', tags: ['PC'] };
+export function normalizeGrColumn(raw: any): { 
+  disability: string | null; 
+  tags: string[]; 
+  group_label: string | null;
+} {
+  if (raw == null) return { disability: null, tags: [], group_label: null };
+  
+  const trimmed = String(raw).trim();
+  if (!trimmed) return { disability: null, tags: [], group_label: null };
+  
+  const upper = trimmed.toUpperCase();
+  
+  // PC detection for backward compatibility (disability field)
+  if (upper === 'PC' || upper.includes('PC')) {
+    return { disability: 'PC', tags: ['PC'], group_label: trimmed };
   }
-  return { disability: null, tags: [] };
+  
+  // All other values: just preserve as group_label
+  return { disability: null, tags: [], group_label: trimmed };
 }
 
 export function fillSingleGapRanksInPlace(
