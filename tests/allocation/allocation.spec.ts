@@ -1140,4 +1140,76 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
       { prizeId: 'case-3', playerId: 'p3' },
     ]);
   });
+
+  // ============= Age (min_age / max_age) Tests =============
+
+  it('max_age criterion filters for Under-X categories (U-13)', () => {
+    // Tournament date: 2024-05-01
+    // max_age: 13 → player must be <= 13 years old on tournament date
+    const players = [
+      { id: 'p1', rank: 1, name: 'Young 10yo', rating: 1000, gender: 'M', dob: '2014-06-01', unrated: false }, // ~10 yo
+      { id: 'p2', rank: 2, name: 'Edge 13yo', rating: 1100, gender: 'M', dob: '2011-04-30', unrated: false }, // exactly 13
+      { id: 'p3', rank: 3, name: 'Old 15yo', rating: 1200, gender: 'M', dob: '2009-01-01', unrated: false }, // ~15 yo
+    ];
+
+    const categories = [
+      {
+        id: 'u13',
+        name: 'Under 13',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: { max_age: 13 },
+        prizes: [
+          { id: 'u13-1', place: 1, cash_amount: 1000, has_trophy: true, has_medal: false },
+          { id: 'u13-2', place: 2, cash_amount: 500, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // p1 (10yo) wins 1st, p2 (13yo) wins 2nd, p3 (15yo) excluded
+    expect(winners).toEqual([
+      { prizeId: 'u13-1', playerId: 'p1' },
+      { prizeId: 'u13-2', playerId: 'p2' },
+    ]);
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'u13');
+    expect(p3Eligibility?.reasonCodes).toContain('age_above_max');
+  });
+
+  // ============= State (allowed_states) Tests =============
+
+  it('allowed_states filters by player state', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'MH Player', rating: 1500, gender: 'M', dob: '2000-01-01', state: 'Maharashtra', unrated: false },
+      { id: 'p2', rank: 2, name: 'KA Player', rating: 1600, gender: 'M', dob: '2000-01-01', state: 'Karnataka', unrated: false },
+      { id: 'p3', rank: 3, name: 'TN Player', rating: 1400, gender: 'M', dob: '2000-01-01', state: 'Tamil Nadu', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'mh-ka-only',
+        name: 'Maharashtra/Karnataka Only',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: { allowed_states: ['Maharashtra', 'Karnataka'] },
+        prizes: [
+          { id: 'state-1', place: 1, cash_amount: 1500, has_trophy: true, has_medal: false },
+          { id: 'state-2', place: 2, cash_amount: 1000, has_trophy: false, has_medal: true },
+        ],
+      },
+    ];
+
+    const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    // p1 (MH) wins 1st, p2 (KA) wins 2nd, p3 (TN) excluded
+    expect(winners).toEqual([
+      { prizeId: 'state-1', playerId: 'p1' },
+      { prizeId: 'state-2', playerId: 'p2' },
+    ]);
+
+    const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'mh-ka-only');
+    expect(p3Eligibility?.reasonCodes).toContain('location_excluded');
+  });
 });

@@ -1770,31 +1770,41 @@ export default function TournamentSetup() {
                   size="sm"
                   className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
-                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
-                    if (el) el.value = '2016-01-01';
+                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
+                    if (el) el.value = '9';
                   }}
                 >
-                  U-9 (DOB ≥ 2016)
+                  U-9
                 </Button>
                 <Button 
                   variant="secondary" 
                   size="sm" 
                   onClick={() => {
-                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
-                    if (el) el.value = '2014-01-01';
+                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
+                    if (el) el.value = '11';
                   }}
                 >
-                  U-11 (DOB ≥ 2014)
+                  U-11
                 </Button>
                 <Button 
                   variant="secondary" 
                   size="sm" 
                   onClick={() => {
-                    const el = document.getElementById('criteria-dob') as HTMLInputElement;
-                    if (el) el.value = '2012-01-01';
+                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
+                    if (el) el.value = '13';
                   }}
                 >
-                  U-13 (DOB ≥ 2012)
+                  U-13
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => {
+                    const el = document.getElementById('criteria-min-age') as HTMLInputElement;
+                    if (el) el.value = '60';
+                  }}
+                >
+                  Veteran 60+
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
@@ -1802,24 +1812,38 @@ export default function TournamentSetup() {
               </p>
             </div>
 
-            {/* DOB Cutoff */}
+            {/* Age Range */}
             {(() => {
               const criteria = criteriaSheet.category?.criteria_json as any;
               return (
                 <>
-                  <div>
-                    <Label htmlFor="criteria-dob">
-                      Date of Birth On or After (minimum age)
-                    </Label>
-                    <Input
-                      id="criteria-dob"
-                      type="date"
-                      defaultValue={criteria?.dob_on_or_after}
-                      placeholder="YYYY-MM-DD"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Only players born on or after this date will be eligible
-                    </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="criteria-max-age">Max Age (for Under-X categories)</Label>
+                      <Input
+                        id="criteria-max-age"
+                        type="number"
+                        min="0"
+                        defaultValue={criteria?.max_age ?? ''}
+                        placeholder="e.g., 9, 11, 13"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        For "Under X" categories. E.g., U-9 = max age 9.
+                      </p>
+                    </div>
+                    <div>
+                      <Label htmlFor="criteria-min-age">Min Age (for Veteran/Senior)</Label>
+                      <Input
+                        id="criteria-min-age"
+                        type="number"
+                        min="0"
+                        defaultValue={criteria?.min_age ?? ''}
+                        placeholder="e.g., 60"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        For "60+ Veteran" categories. Leave empty for no minimum.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Unrated-only Category */}
@@ -1975,6 +1999,19 @@ export default function TournamentSetup() {
                     </p>
                   </div>
 
+                  {/* Allowed States */}
+                  <div>
+                    <Label htmlFor="criteria-states">Allowed States (comma-separated)</Label>
+                    <Input
+                      id="criteria-states"
+                      placeholder="e.g., Maharashtra, Karnataka, MH, KA"
+                      defaultValue={criteria?.allowed_states?.join(', ') ?? ''}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave empty to allow all states. Accepts full names or abbreviations.
+                    </p>
+                  </div>
+
                   {/* Allowed Groups (Gr column) */}
                   <div>
                     <Label htmlFor="criteria-groups">Group (Gr column from Swiss-Manager)</Label>
@@ -2008,9 +2045,17 @@ export default function TournamentSetup() {
           <SheetFooter>
             <Button
               onClick={() => {
-                const dob = (document.getElementById('criteria-dob') as HTMLInputElement)?.value || null;
-                const minRating = Number((document.getElementById('criteria-min-rating') as HTMLInputElement)?.value) || null;
-                const maxRating = Number((document.getElementById('criteria-max-rating') as HTMLInputElement)?.value) || null;
+                // Age fields (min_age/max_age)
+                const maxAgeRaw = (document.getElementById('criteria-max-age') as HTMLInputElement)?.value;
+                const minAgeRaw = (document.getElementById('criteria-min-age') as HTMLInputElement)?.value;
+                const maxAge = maxAgeRaw ? Number(maxAgeRaw) : null;
+                const minAge = minAgeRaw ? Number(minAgeRaw) : null;
+
+                const minRatingRaw = (document.getElementById('criteria-min-rating') as HTMLInputElement)?.value;
+                const maxRatingRaw = (document.getElementById('criteria-max-rating') as HTMLInputElement)?.value;
+                const minRating = minRatingRaw ? Number(minRatingRaw) : null;
+                const maxRating = maxRatingRaw ? Number(maxRatingRaw) : null;
+
                 const includeUnratedEl = document.getElementById('criteria-include-unrated');
                 const includeUnrated = includeUnratedEl?.getAttribute('data-state') === 'checked';
                 const gender = (document.getElementById('criteria-gender') as HTMLSelectElement)?.value || '';
@@ -2033,6 +2078,12 @@ export default function TournamentSetup() {
                   .map((s) => s.trim())
                   .filter(Boolean);
 
+                const statesStr = (document.getElementById('criteria-states') as HTMLInputElement)?.value || '';
+                const allowed_states = statesStr
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
                 const groupsStr = (document.getElementById('criteria-groups') as HTMLInputElement)?.value || '';
                 const allowed_groups = groupsStr
                   .split(',')
@@ -2050,12 +2101,15 @@ export default function TournamentSetup() {
                 const unratedOnly = unratedOnlyEl?.getAttribute('data-state') === 'checked';
 
                 const criteria: any = {};
-                if (dob) criteria.dob_on_or_after = dob;
+                
+                // Age fields (used by allocator)
+                if (maxAge != null && !isNaN(maxAge)) criteria.max_age = maxAge;
+                if (minAge != null && !isNaN(minAge)) criteria.min_age = minAge;
                 
                 // Only save rating fields if not unrated-only mode
                 if (!unratedOnly) {
-                  if (minRating) criteria.min_rating = minRating;
-                  if (maxRating) criteria.max_rating = maxRating;
+                  if (minRating != null && !isNaN(minRating)) criteria.min_rating = minRating;
+                  if (maxRating != null && !isNaN(maxRating)) criteria.max_rating = maxRating;
                   criteria.include_unrated = includeUnrated;
                 }
                 
@@ -2066,6 +2120,7 @@ export default function TournamentSetup() {
                 if (disability_types.length > 0) criteria.allowed_disabilities = disability_types;
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
                 if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;
+                if (allowed_states.length > 0) criteria.allowed_states = allowed_states;
                 if (allowed_groups.length > 0) criteria.allowed_groups = allowed_groups;
                 if (allowed_types.length > 0) criteria.allowed_types = allowed_types;
 
