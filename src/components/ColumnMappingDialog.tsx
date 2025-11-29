@@ -68,6 +68,15 @@ export function ColumnMappingDialog({
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [headerlessGenderDetected, setHeaderlessGenderDetected] = useState<{ column: string; sample?: string } | null>(null);
 
+  const columnOptions = detectedColumns.map((col, idx) => {
+    const isPlaceholder = col.startsWith("__EMPTY_COL_");
+    return {
+      value: col,
+      label: isPlaceholder ? `Empty column ${idx + 1} (unmapped)` : col,
+      disabled: isPlaceholder
+    };
+  });
+
   // Auto-mapping logic extracted as useCallback
   const performAutoMapping = useCallback(() => {
     if (detectedColumns.length === 0) {
@@ -207,8 +216,10 @@ export function ColumnMappingDialog({
                       <SelectValue placeholder="Select file column" />
                     </SelectTrigger>
                     <SelectContent>
-                      {detectedColumns.map(col => (
-                        <SelectItem key={col} value={col}>{col}</SelectItem>
+                      {columnOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                          {option.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -244,8 +255,10 @@ export function ColumnMappingDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__skip__">Skip this field</SelectItem>
-                      {detectedColumns.map(col => (
-                        <SelectItem key={col} value={col}>{col}</SelectItem>
+                      {columnOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                          {option.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

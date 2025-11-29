@@ -15,6 +15,13 @@ function normalizeHeader(header: unknown): string {
   return String(header ?? "").trim();
 }
 
+function withHeaderPlaceholders(row: unknown[]): string[] {
+  return row.map((cell, idx) => {
+    const normalized = normalizeHeader(cell);
+    return normalized.length > 0 ? normalized : `__EMPTY_COL_${idx}`;
+  });
+}
+
 function normalizeForMatching(header: string): string {
   return header
     .toLowerCase()
@@ -223,7 +230,7 @@ function detectHeaders(workbook: XLSX.WorkBook): { sheetName: string; headerRowI
 
       const score = scoreRow(row);
       if (score > 15) {
-        const headers = row.map(normalizeHeader).filter((value) => value.length > 0);
+        const headers = withHeaderPlaceholders(row);
         candidates.push({ sheetName, rowIndex, score, headers });
       }
     }
@@ -340,7 +347,10 @@ Deno.serve(async (req) => {
       throw new Error("Detected sheet missing");
     }
 
-    const trimmedHeaders = headers.map(normalizeHeader);
+    const trimmedHeaders = headers.map((header, idx) => {
+      const normalized = normalizeHeader(header);
+      return normalized.length > 0 ? normalized : `__EMPTY_COL_${idx}`;
+    });
     const dataRows = XLSX.utils.sheet_to_json(sheet, {
       header: trimmedHeaders,
       range: headerRowIndex + 1,
