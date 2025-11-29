@@ -104,9 +104,10 @@ export function detectHeaderRow(
       
       // Only consider rows with positive score (threshold: 15 = ~2 core fields)
       if (score > 15) {
-        const headers = row
-          .map(c => String(c || '').trim())
-          .filter(h => h.length > 0);
+        const headers = row.map((c, idx) => {
+          const header = String(c || '').trim();
+          return header.length > 0 ? header : `__EMPTY_COL_${idx}`;
+        });
         
         candidates.push({
           sheetName,

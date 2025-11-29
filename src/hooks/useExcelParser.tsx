@@ -26,9 +26,10 @@ export type ParseFileOptions = {
 };
 
 function normalizeHeaders(headers: any[]): string[] {
-  return (headers || [])
-    .map((header) => String(header ?? "").trim())
-    .filter((header) => header.length > 0);
+  return (headers || []).map((header, idx) => {
+    const trimmed = String(header ?? "").trim();
+    return trimmed.length > 0 ? trimmed : `__EMPTY_COL_${idx}`;
+  });
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
