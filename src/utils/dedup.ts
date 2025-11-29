@@ -239,14 +239,20 @@ export async function fetchDedupCandidates(
       return [];
     }
 
-    if (!Array.isArray(data)) {
+    let matchesPayload: unknown[] = [];
+
+    if (Array.isArray(data)) {
+      matchesPayload = data;
+    } else if (data && typeof data === "object" && Array.isArray((data as any).matches)) {
+      matchesPayload = (data as any).matches;
+    } else {
       console.warn("[dedup] RPC returned unexpected payload", data);
       return [];
     }
 
     const grouped = new Map<number, DedupExistingPlayer[]>();
 
-    data.forEach((entry: any) => {
+    matchesPayload.forEach((entry: any) => {
       const candidateRow = Number(entry?.cand_idx ?? entry?.row);
       const playerId = entry?.player_id;
 
