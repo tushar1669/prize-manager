@@ -1717,7 +1717,22 @@ export default function PlayerImport() {
 
         // Phase 6: Apply value normalizers
         if (fieldKey === 'rank') {
-          value = value ? Number(value) : 0;
+          if (value == null) {
+            value = null;
+          } else if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+              value = null;
+            } else {
+              const parsed = Number(trimmed);
+              value = Number.isFinite(parsed) ? parsed : null;
+            }
+          } else if (typeof value === 'number') {
+            value = Number.isFinite(value) ? value : null;
+          } else {
+            const parsed = Number(value);
+            value = Number.isFinite(parsed) ? parsed : null;
+          }
         } else if (fieldKey === 'sno') {
           value = value ? Number(value) : null;
         } else if (fieldKey === 'rating') {
@@ -1810,6 +1825,22 @@ export default function PlayerImport() {
     .filter(p => !isFooterRow(p));
 
     fillSingleGapRanksInPlace(mapped);
+
+    // Phase 6b: Auto-fill missing ranks for named rows after preserving existing numbers
+    const rowsWithNames = mapped.filter(player => String(player.name ?? '').trim().length > 0);
+    const maxRank = rowsWithNames.reduce((max, player) => {
+      const rankNum = Number(player.rank);
+      return Number.isFinite(rankNum) && rankNum >= 1 ? Math.max(max, rankNum) : max;
+    }, 0);
+
+    let nextRank = maxRank + 1;
+    rowsWithNames.forEach(player => {
+      const rankNum = Number(player.rank);
+      if (player.rank == null || Number.isNaN(rankNum)) {
+        player.rank = nextRank++;
+        player._rank_autofilled = true;
+      }
+    });
     const autofilledCount = mapped.filter(player => player._rank_autofilled).length;
     setAutoFilledRankCount(autofilledCount);
     if (autofilledCount > 0) {
