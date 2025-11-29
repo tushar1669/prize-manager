@@ -24,6 +24,7 @@ export function normalizeTieBreakStrategy(strategy: TieBreakStrategy | undefined
   return ['rating', 'name'];
 }
 
+// Enhanced coverage entry type for debug reporting
 interface CoverageItem {
   categoryId: string;
   categoryName: string;
@@ -33,6 +34,84 @@ interface CoverageItem {
   pickedCount: number;
   winnerId?: string;
   reasonCodes: string[];
+  
+  // Debug stats
+  prize_id: string;
+  category_id: string | null;
+  category_name: string;
+  prize_place: number;
+  prize_label: string;
+  prize_type: 'cash' | 'trophy' | 'medal' | 'other';
+  amount: number | null;
+  
+  winner_player_id: string | null;
+  winner_rank: number | null;
+  winner_rating: number | null;
+  winner_name: string | null;
+  
+  candidates_before_one_prize: number;
+  candidates_after_one_prize: number;
+  reason_code: string | null;
+  reason_details: string | null;
+  
+  is_main: boolean;
+  is_category: boolean;
+  is_unfilled: boolean;
+  is_blocked_by_one_prize: boolean;
+  raw_fail_codes: string[];
+}
+
+// Helper to derive prize type
+function derivePrizeType(p: PrizeRow): 'cash' | 'trophy' | 'medal' | 'other' {
+  if ((p.cash_amount ?? 0) > 0) return 'cash';
+  if (p.has_trophy) return 'trophy';
+  if (p.has_medal) return 'medal';
+  return 'other';
+}
+
+// Helper to derive reason code
+function deriveReasonCode(
+  rawFailCodes: string[],
+  candidatesBeforeOnePrize: number,
+  candidatesAfterOnePrize: number
+): string | null {
+  if (candidatesBeforeOnePrize > 0 && candidatesAfterOnePrize === 0) {
+    return 'BLOCKED_BY_ONE_PRIZE_POLICY';
+  }
+
+  if (candidatesBeforeOnePrize === 0) {
+    const hasRating = rawFailCodes.some(c =>
+      c.includes('rating') || c.includes('unrated')
+    );
+    const hasAge = rawFailCodes.some(c => c.includes('age') || c.includes('dob'));
+    const hasGender = rawFailCodes.some(c => c.includes('gender'));
+    const hasLocation = rawFailCodes.some(c =>
+      c.includes('state') || c.includes('city') || c.includes('club')
+    );
+    const hasTypeOrGroup = rawFailCodes.some(c =>
+      c.includes('type') || c.includes('group')
+    );
+
+    if (hasRating) return 'TOO_STRICT_CRITERIA_RATING';
+    if (hasAge) return 'TOO_STRICT_CRITERIA_AGE';
+    if (hasGender) return 'TOO_STRICT_CRITERIA_GENDER';
+    if (hasLocation) return 'TOO_STRICT_CRITERIA_LOCATION';
+    if (hasTypeOrGroup) return 'TOO_STRICT_CRITERIA_TYPE_OR_GROUP';
+
+    return 'NO_ELIGIBLE_PLAYERS';
+  }
+
+  return null;
+}
+
+// Helper to build a prize label
+function buildPrizeLabel(cat: CategoryRow, p: PrizeRow): string {
+  const ordinal = (n: number) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  return `${ordinal(p.place)} ${cat.name}`;
 }
 
 type PrizeRow = {
@@ -318,11 +397,12 @@ Deno.serve(async (req) => {
       // Skip if manually overridden
       if (overrides.find(o => o.prizeId === p.id)) continue;
 
+      // Track eligibility BEFORE one-prize exclusion
+      const eligibleBeforeOnePrize: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
       for (const player of playerRows) {
-        if (assignedPlayers.has(player.id)) continue;
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
         if (rules.verbose_logs) {
           const status = evaluation.eligible ? 'eligible' : 'ineligible';
@@ -332,14 +412,23 @@ Deno.serve(async (req) => {
           console.log(`[alloc.check] prize=${p.id} player=${player.id} status=${status} codes=${codes.join(',') || 'none'}`);
         }
         if (evaluation.eligible) {
-          eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
+          eligibleBeforeOnePrize.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
+          // Only add to eligible pool if not already assigned
+          if (!assignedPlayers.has(player.id)) {
+            eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
+          }
         } else {
           evaluation.reasonCodes.forEach(code => failCodes.add(code));
         }
       }
 
+      const candidatesBeforeOnePrize = eligibleBeforeOnePrize.length;
+      const candidatesAfterOnePrize = eligible.length;
+      const isBlockedByOnePrize = candidatesBeforeOnePrize > 0 && candidatesAfterOnePrize === 0;
+      const rawFailCodes = Array.from(failCodes).sort();
+
       if (eligible.length === 0) {
-        const reasonList = failCodes.size > 0 ? Array.from(failCodes).sort() : ['no_eligible_players'];
+        const reasonList = failCodes.size > 0 ? rawFailCodes : ['no_eligible_players'];
         
         // Detailed coverage diagnostic
         const categoryName = cat.name;
@@ -358,15 +447,46 @@ Deno.serve(async (req) => {
           console.warn(`[allocation.coverage] "${categoryName}" place ${prizePlace} unfilled due to missing/excluded fields: ${fieldMissingReasons.join(', ')}`);
         }
         
-        // Track coverage
+        // Derive the reason code
+        const reasonCode = deriveReasonCode(rawFailCodes, candidatesBeforeOnePrize, candidatesAfterOnePrize);
+        
+        // Track coverage with enriched data
         coverageData.push({
+          // Legacy fields
           categoryId: cat.id,
           categoryName: cat.name,
           prizeId: p.id,
           place: p.place,
           eligibleCount: 0,
           pickedCount: 0,
-          reasonCodes: reasonList
+          reasonCodes: reasonList,
+          
+          // Enhanced debug fields
+          prize_id: p.id,
+          category_id: cat.id,
+          category_name: cat.name,
+          prize_place: p.place,
+          prize_label: buildPrizeLabel(cat, p),
+          prize_type: derivePrizeType(p),
+          amount: p.cash_amount,
+          
+          winner_player_id: null,
+          winner_rank: null,
+          winner_rating: null,
+          winner_name: null,
+          
+          candidates_before_one_prize: candidatesBeforeOnePrize,
+          candidates_after_one_prize: candidatesAfterOnePrize,
+          reason_code: reasonCode,
+          reason_details: isBlockedByOnePrize 
+            ? `${candidatesBeforeOnePrize} player(s) eligible, but all already won higher-priority prizes` 
+            : `No players match the criteria: ${reasonList.slice(0, 3).join(', ')}`,
+          
+          is_main: cat.is_main,
+          is_category: !cat.is_main,
+          is_unfilled: true,
+          is_blocked_by_one_prize: isBlockedByOnePrize,
+          raw_fail_codes: rawFailCodes
         });
         
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
@@ -416,8 +536,9 @@ Deno.serve(async (req) => {
         isManual: false
       });
 
-      // Track coverage
+      // Track coverage with enriched data
       coverageData.push({
+        // Legacy fields
         categoryId: cat.id,
         categoryName: cat.name,
         prizeId: p.id,
@@ -425,7 +546,32 @@ Deno.serve(async (req) => {
         eligibleCount: eligible.length,
         pickedCount: 1,
         winnerId: winner.player.id,
-        reasonCodes: reasonList
+        reasonCodes: reasonList,
+        
+        // Enhanced debug fields
+        prize_id: p.id,
+        category_id: cat.id,
+        category_name: cat.name,
+        prize_place: p.place,
+        prize_label: buildPrizeLabel(cat, p),
+        prize_type: derivePrizeType(p),
+        amount: p.cash_amount,
+        
+        winner_player_id: winner.player.id,
+        winner_rank: winner.player.rank ?? null,
+        winner_rating: winner.player.rating ?? null,
+        winner_name: winner.player.name ?? null,
+        
+        candidates_before_one_prize: candidatesBeforeOnePrize,
+        candidates_after_one_prize: candidatesAfterOnePrize,
+        reason_code: null,
+        reason_details: null,
+        
+        is_main: cat.is_main,
+        is_category: !cat.is_main,
+        is_unfilled: false,
+        is_blocked_by_one_prize: false,
+        raw_fail_codes: []
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
@@ -512,7 +658,7 @@ Deno.serve(async (req) => {
         winners,
         conflicts,
         unfilled,
-        coverage: dryRun ? coverageData : undefined,
+        coverage: coverageData, // Always return coverage for debug report
         meta: {
           playerCount: playerRows.length,
           activeCategoryCount: activeCategories.length,
