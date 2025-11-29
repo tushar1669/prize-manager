@@ -56,7 +56,7 @@ const optionalFields = [
 
 // Use centralized aliases from importSchema
 const mappingRules = HEADER_ALIASES;
-const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
+const GENDER_DENYLIST = new Set(['fed', 'federation']);
 
 export function ColumnMappingDialog({
   open,

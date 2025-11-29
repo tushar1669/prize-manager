@@ -14,8 +14,8 @@ export const ALIASES: Record<string, string[]> = {
   // Swiss-Manager uses "Birth" header (not "DOB")
   dob: ['birth', 'dob', 'date_of_birth', 'birth_date', 'birthdate', 'd.o.b', 'd_o_b'],
 
-  // Generic gender aliases (Swiss-Manager's 'fs' handled via preset normalizer)
-  gender: ['gender', 'sex', 'g', 'm/f', 'boy/girl', 'b/g'],
+  // Generic gender aliases (including Swiss-Manager's 'fs' column)
+  gender: ['gender', 'sex', 'g', 'm/f', 'boy/girl', 'b/g', 'fs'],
 
   state: ['state', 'province', 'region', 'st', 'association'],
   city: ['city', 'town', 'location', 'place'],
