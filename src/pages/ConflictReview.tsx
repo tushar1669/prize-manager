@@ -21,7 +21,9 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
+import { AllocationDebugReport } from "@/components/allocation/AllocationDebugReport";
 import { formatReasonCode } from "@/utils/reasonCodeLabels";
+import type { AllocationCoverageEntry } from "@/types/allocation";
 
 interface Winner {
   prizeId: string;
@@ -78,16 +80,7 @@ export default function ConflictReview() {
   
   // Preview mode state
   const [isPreviewMode, setIsPreviewMode] = useState(true);
-  const [coverageData, setCoverageData] = useState<Array<{
-    categoryId: string;
-    categoryName: string;
-    prizeId: string;
-    place: number;
-    eligibleCount: number;
-    pickedCount: number;
-    winnerId?: string;
-    reasonCodes: string[];
-  }>>([]);
+  const [coverageData, setCoverageData] = useState<AllocationCoverageEntry[]>([]);
   const [previewCompleted, setPreviewCompleted] = useState(false);
 
   useEffect(() => {
@@ -204,16 +197,7 @@ export default function ConflictReview() {
         winners: Winner[];
         conflicts: Conflict[];
         unfilled?: Unfilled[];
-        coverage?: Array<{
-          categoryId: string;
-          categoryName: string;
-          prizeId: string;
-          place: number;
-          eligibleCount: number;
-          pickedCount: number;
-          winnerId?: string;
-          reasonCodes: string[];
-        }>;
+        coverage?: AllocationCoverageEntry[];
         meta?: {
           playerCount?: number;
           activePrizeCount?: number;
@@ -249,7 +233,7 @@ export default function ConflictReview() {
         setPreviewCompleted(true);
         console.log('[review] Preview completed, coverage:', data.coverage);
         
-        const zeroEligibleCount = data.coverage.filter(c => c.eligibleCount === 0).length;
+        const zeroEligibleCount = data.coverage.filter(c => c.candidates_after_one_prize === 0 || c.is_unfilled).length;
         if (zeroEligibleCount > 0) {
           toast.warning(`Preview shows ${zeroEligibleCount} prize(s) with no eligible players. Review coverage before committing.`);
         } else {
@@ -505,7 +489,7 @@ export default function ConflictReview() {
             disabled={
               !previewCompleted || 
               allocateMutation.isPending ||
-              coverageData.some(c => c.eligibleCount === 0 && !c.reasonCodes.includes('already_assigned'))
+              coverageData.some(c => c.is_unfilled && !c.raw_fail_codes.includes('already_assigned'))
             }
             variant="default"
           >
@@ -529,77 +513,11 @@ export default function ConflictReview() {
         </Alert>
 
         {previewCompleted && coverageData.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                Allocation Coverage
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-96">
-                <table className="w-full text-sm">
-                  <thead className="border-b sticky top-0 bg-background">
-                    <tr>
-                      <th className="text-left py-2 px-3">Category</th>
-                      <th className="text-left py-2 px-3">Place</th>
-                      <th className="text-right py-2 px-3">Eligible</th>
-                      <th className="text-right py-2 px-3">Picked</th>
-                      <th className="text-left py-2 px-3">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {coverageData.map((item, idx) => {
-                      const isZeroEligible = item.eligibleCount === 0;
-                      const winner = item.winnerId ? getPlayer(item.winnerId) : null;
-                      
-                      return (
-                        <tr 
-                          key={`${item.prizeId}-${idx}`}
-                          className={`border-b ${isZeroEligible ? 'bg-destructive/10' : ''}`}
-                        >
-                          <td className="py-2 px-3 font-medium">{item.categoryName}</td>
-                          <td className="py-2 px-3">{item.place}</td>
-                          <td className="py-2 px-3 text-right">
-                            {isZeroEligible ? (
-                              <Badge variant="destructive">{item.eligibleCount}</Badge>
-                            ) : (
-                              <span>{item.eligibleCount}</span>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right">{item.pickedCount}</td>
-                          <td className="py-2 px-3">
-                            {item.pickedCount === 1 && winner ? (
-                              <span className="text-xs text-muted-foreground">
-                                {winner.name} (Rank {winner.rank || 'N/A'})
-                              </span>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {item.reasonCodes[0] ? formatReasonCode(item.reasonCodes[0]) : 'No reasons'}
-                                </Badge>
-                                <IneligibilityTooltip reasonCodes={item.reasonCodes} />
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </ScrollArea>
-              
-              {coverageData.some(c => c.eligibleCount === 0) && (
-                <Alert className="mt-4 border-destructive/50 bg-destructive/10">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Warning</AlertTitle>
-                  <AlertDescription>
-                    Some prize categories have zero eligible players. Review the coverage table to identify missing fields or restrictive criteria.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+          <AllocationDebugReport
+            coverage={coverageData}
+            totalPlayers={summaryCounts.players}
+            totalPrizes={summaryCounts.activePrizes}
+          />
         )}
 
         {allocateMutation.isPending ? (
