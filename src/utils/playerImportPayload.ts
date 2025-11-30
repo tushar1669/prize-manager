@@ -121,6 +121,12 @@ export function buildSupabasePlayerPayload(
     (tags as any).special_group = Array.from(mergedGroups);
   }
 
+  const warnings: Json = ((player as any).warnings_json as Json) ?? {};
+  const genderWarnings = (player as any)._genderWarnings as string[] | undefined;
+  if (genderWarnings?.length) {
+    (warnings as any).gender = genderWarnings;
+  }
+
   return {
     rank: Number(rank),
     sno: sno != null ? String(sno) : null,
@@ -139,7 +145,7 @@ export function buildSupabasePlayerPayload(
     federation: federation || null,
     tournament_id: tournamentId,
     tags_json: tags,
-    warnings_json: {},
+    warnings_json: warnings,
     group_label: grInfo.group_label,
     type_label: typeLabel,
   };
