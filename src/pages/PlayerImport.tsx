@@ -54,7 +54,6 @@ import {
   inferImportSource,
 } from '@/utils/importSchema';
 import {
-  normalizeGender,
   normalizeRating,
   inferUnrated,
   fillSingleGapRanksInPlace,
@@ -1521,6 +1520,8 @@ export default function PlayerImport() {
     setImportSource('unknown');
     resetDirty('import');
 
+    genderConfigRef.current = null;
+
     // Also clear file input so the same file can be picked again
     const input = document.getElementById('players-file-input') as HTMLInputElement | null;
     if (input) input.value = '';
@@ -1566,6 +1567,8 @@ export default function PlayerImport() {
     setImportSource('unknown');
     setLastParseMode(null);
 
+    genderConfigRef.current = null;
+
     try {
       logContextRef.current = null;
       lastFileInfoRef.current = {
@@ -1595,6 +1598,10 @@ export default function PlayerImport() {
       setHeaders(detectedHeaders);
       setParseError(null); // Clear any previous error
       setParseStatus('ok');
+
+      genderConfigRef.current = data?.length
+        ? analyzeGenderColumns(data as Record<string, any>[])
+        : null;
 
       if (fallback === 'server-error') {
         toast.error('Server parsing failed. Local parser used instead.');
@@ -1639,15 +1646,6 @@ export default function PlayerImport() {
     }
   };
 
-  useEffect(() => {
-    if (!parsedData.length) {
-      genderConfigRef.current = null;
-      return;
-    }
-
-    genderConfigRef.current = analyzeGenderColumns(parsedData as Record<string, any>[]);
-  }, [parsedData]);
-
   // Auto-mapping useEffect - runs AFTER headers state is committed
   useEffect(() => {
     if (headers.length === 0 || parsedData.length === 0) return;
@@ -1660,7 +1658,7 @@ export default function PlayerImport() {
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
 
-    const genderConfig = genderConfigRef.current ?? analyzeGenderColumns(parsedData as Record<string, any>[]);
+    const genderConfig = genderConfigRef.current;
     const headerlessGender = genderConfig?.headerlessGenderColumn;
     const genderCandidate = genderConfig?.preferredColumn;
     if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
@@ -1759,8 +1757,9 @@ export default function PlayerImport() {
           // Apply rating normalizer with comma stripping config
           value = normalizeRating(value, importConfig.stripCommasFromRating);
         } else if (fieldKey === 'gender') {
-          // Apply gender normalizer
-          value = normalizeGender(value);
+          // Preserve raw gender value for inference without pre-normalizing
+          player._rawGender = value;
+          return;
         } else if (fieldKey === 'federation' || fieldKey === 'fed_code') {
           // Map both federation and fed_code to the federation field
           player.federation = value ? String(value).trim() || null : null;
