@@ -407,6 +407,10 @@ export default function PlayerImport() {
     city: number;
     federation: number;
   } | null>(null);
+  const [femaleCountSummary, setFemaleCountSummary] = useState<{
+    femaleFromGender: number;
+    femaleFromFmg: number;
+  } | null>(null);
   const hasMappedRef = useRef(false);
   const genderConfigRef = useRef<GenderColumnConfig | null>(null);
   const logContextRef = useRef<ImportLogContext | null>(null);
@@ -1518,6 +1522,8 @@ export default function PlayerImport() {
     setIsParsing(false);
     setLastParseMode(null);
     setImportSource('unknown');
+    setDataCoverage(null);
+    setFemaleCountSummary(null);
     resetDirty('import');
 
     genderConfigRef.current = null;
@@ -1560,6 +1566,8 @@ export default function PlayerImport() {
     setDedupeReviewed(false);
     setReplaceBanner(null);
     setImportErrorBanner(null);
+    setDataCoverage(null);
+    setFemaleCountSummary(null);
 
     toast.info(`Uploading ${selectedFile.name}...`);
 
@@ -1839,6 +1847,9 @@ export default function PlayerImport() {
       const typeValue = mapping.type ? row[mapping.type] : player.type;
       const typeLabel = normalizeTypeColumn(typeValue);
 
+      player.group_label = grInfo.group_label;
+      player.type_label = typeLabel;
+
       const genderInference = inferGenderForRow(
         row,
         genderConfigRef.current,
@@ -1963,6 +1974,7 @@ export default function PlayerImport() {
 
     // Calculate data coverage for quality checks
     const totalValid = validPlayers.length;
+    setFemaleCountSummary(null);
     if (totalValid > 0) {
       const coverage = {
         dob: validPlayers.filter(p => p.dob).length / totalValid,
@@ -1972,6 +1984,14 @@ export default function PlayerImport() {
         federation: validPlayers.filter(p => p.federation).length / totalValid,
       };
       setDataCoverage(coverage);
+
+      const femaleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'F').length;
+      const femaleFromFmg = validPlayers.filter(p => {
+        const typeLabel = String((p as any).type_label ?? p.type ?? '').trim().toUpperCase();
+        const groupLabel = String((p as any).group_label ?? p.gr ?? '').trim().toUpperCase();
+        return typeLabel === 'FMG' || groupLabel === 'FMG';
+      }).length;
+      setFemaleCountSummary({ femaleFromGender, femaleFromFmg });
 
       // Check if state looks like federation (IND, IN, INDIA)
       const stateIndCount = validPlayers.filter(p => 
@@ -2000,6 +2020,8 @@ export default function PlayerImport() {
         total: totalValid
       };
       console.log('[import.coverage] ratings:', ratingStats);
+    } else {
+      setDataCoverage(null);
     }
 
     setValidationErrors(errors);
@@ -2471,7 +2493,18 @@ export default function PlayerImport() {
                 <AlertDescription>All {mappedPlayers.length} players validated</AlertDescription>
               </Alert>
             )}
-            
+
+            {mappedPlayers.length > 0 && (
+              <ImportSummaryBar
+                totalPlayers={mappedPlayers.length}
+                validPlayers={Math.max(mappedPlayers.length - validationErrors.length, 0)}
+                errorCount={validationErrors.length}
+                statesExtracted={statesExtractedCount}
+                femaleFromGender={femaleCountSummary?.femaleFromGender}
+                femaleFromFmg={femaleCountSummary?.femaleFromFmg}
+              />
+            )}
+
             {dataCoverage && (
               <DataCoverageBar coverage={dataCoverage} />
             )}
