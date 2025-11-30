@@ -2,7 +2,6 @@
 import {
   mergeTitleAndName,
   ratingZeroToNull,
-  genderBlankToMF,
   digitsOnly,
   normalizeGrColumn,
 } from './valueNormalizers';
@@ -47,9 +46,8 @@ export const SWISS_MANAGER_V2: ImportPreset = {
   normalizers: [
     { field: 'name',   normalize: (_v, row) => mergeTitleAndName(row?.title, row?.name) },
     { field: 'rating', normalize: (v) => ratingZeroToNull(v) },
-    { field: 'gender', normalize: (v) => genderBlankToMF(v) },
     { field: 'fide_id',normalize: (v) => digitsOnly(v) },
-    // PC detection from Gr column (applies AFTER gender normalization)
+    // PC detection from Gr column
     { field: 'gr', normalize: (v) => normalizeGrColumn(v) },
     // State fallback from Ident column
     { field: 'state', normalize: (v, row) => {
