@@ -177,6 +177,12 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
           <span className="capitalize">{entry.prize_type}</span>
           {entry.amount != null && entry.amount > 0 && <span>· ₹{entry.amount}</span>}
         </div>
+        {/* Diagnosis summary for 0-candidate cases */}
+        {entry.diagnosis_summary && entry.candidates_before_one_prize === 0 && (
+          <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+            <span className="font-medium">Diagnosis:</span> {entry.diagnosis_summary}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <div className="text-right text-xs">
@@ -220,6 +226,12 @@ function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
               : `No players match the criteria`
             }
           </div>
+          {/* Diagnosis summary for 0-candidate cases */}
+          {entry.diagnosis_summary && entry.candidates_before_one_prize === 0 && (
+            <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+              <span className="font-medium">Diagnosis:</span> {entry.diagnosis_summary}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">

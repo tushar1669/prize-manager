@@ -59,6 +59,7 @@ interface CoverageItem {
   is_unfilled: boolean;
   is_blocked_by_one_prize: boolean;
   raw_fail_codes: string[];
+  diagnosis_summary: string | null;
 }
 
 // Helper to derive prize type
@@ -102,6 +103,109 @@ function deriveReasonCode(
   }
 
   return null;
+}
+
+// Helper to build diagnosis summary for 0-candidate categories
+function buildDiagnosisSummary(
+  rawFailCodes: string[],
+  cat: CategoryRow,
+  candidatesBeforeOnePrize: number
+): string | null {
+  if (candidatesBeforeOnePrize > 0) {
+    return null; // Only diagnose when there were 0 candidates
+  }
+
+  const issues: string[] = [];
+  const criteria = cat.criteria_json || {};
+
+  // Check each criteria dimension
+  if (rawFailCodes.some(c => c.includes('rating') || c.includes('unrated'))) {
+    const minRating = criteria.min_rating;
+    const maxRating = criteria.max_rating;
+    const unratedOnly = criteria.unrated_only;
+    if (unratedOnly) {
+      issues.push('Unrated-only category but no unrated players found');
+    } else if (minRating != null && maxRating != null) {
+      issues.push(`Rating band ${minRating}–${maxRating} excludes all players`);
+    } else if (minRating != null) {
+      issues.push(`Min rating ${minRating} too high for player pool`);
+    } else if (maxRating != null) {
+      issues.push(`Max rating ${maxRating} too low for player pool`);
+    } else {
+      issues.push('Rating criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('age') || c.includes('dob'))) {
+    const minAge = criteria.min_age;
+    const maxAge = criteria.max_age;
+    if (minAge != null && maxAge != null) {
+      issues.push(`Age ${minAge}–${maxAge} excludes all players`);
+    } else if (minAge != null) {
+      issues.push(`No players aged ${minAge}+ found`);
+    } else if (maxAge != null) {
+      issues.push(`No players under ${maxAge} found`);
+    } else {
+      issues.push('Age criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('gender'))) {
+    const gender = criteria.gender;
+    if (gender) {
+      issues.push(`No players with gender=${gender} found`);
+    } else {
+      issues.push('Gender criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('state') || c.includes('city') || c.includes('club'))) {
+    const states = criteria.allowed_states;
+    const cities = criteria.allowed_cities;
+    const clubs = criteria.allowed_clubs;
+    const parts: string[] = [];
+    if (states?.length) parts.push(`state in [${states.slice(0, 3).join(', ')}${states.length > 3 ? '...' : ''}]`);
+    if (cities?.length) parts.push(`city in [${cities.slice(0, 3).join(', ')}${cities.length > 3 ? '...' : ''}]`);
+    if (clubs?.length) parts.push(`club in [${clubs.slice(0, 3).join(', ')}${clubs.length > 3 ? '...' : ''}]`);
+    if (parts.length) {
+      issues.push(`No players match location: ${parts.join(', ')}`);
+    } else {
+      issues.push('Location criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('type'))) {
+    const types = criteria.allowed_types;
+    if (types?.length) {
+      issues.push(`No players with type in [${types.slice(0, 3).join(', ')}${types.length > 3 ? '...' : ''}]`);
+    } else {
+      issues.push('Type criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('group'))) {
+    const groups = criteria.allowed_groups;
+    if (groups?.length) {
+      issues.push(`No players with group in [${groups.slice(0, 3).join(', ')}${groups.length > 3 ? '...' : ''}]`);
+    } else {
+      issues.push('Group criteria exclude all players');
+    }
+  }
+
+  if (rawFailCodes.some(c => c.includes('disability'))) {
+    const disabilities = criteria.allowed_disabilities;
+    if (disabilities?.length) {
+      issues.push(`No players with disability in [${disabilities.join(', ')}]`);
+    } else {
+      issues.push('Disability criteria exclude all players');
+    }
+  }
+
+  if (issues.length === 0) {
+    return 'No players match the combined criteria';
+  }
+
+  return issues.join('; ');
 }
 
 // Helper to build a prize label
@@ -450,6 +554,9 @@ Deno.serve(async (req) => {
         // Derive the reason code
         const reasonCode = deriveReasonCode(rawFailCodes, candidatesBeforeOnePrize, candidatesAfterOnePrize);
         
+        // Build diagnosis summary for 0-candidate cases
+        const diagnosisSummary = buildDiagnosisSummary(rawFailCodes, cat, candidatesBeforeOnePrize);
+        
         // Track coverage with enriched data
         coverageData.push({
           // Legacy fields
@@ -486,7 +593,8 @@ Deno.serve(async (req) => {
           is_category: !cat.is_main,
           is_unfilled: true,
           is_blocked_by_one_prize: isBlockedByOnePrize,
-          raw_fail_codes: rawFailCodes
+          raw_fail_codes: rawFailCodes,
+          diagnosis_summary: diagnosisSummary
         });
         
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
@@ -571,7 +679,8 @@ Deno.serve(async (req) => {
         is_category: !cat.is_main,
         is_unfilled: false,
         is_blocked_by_one_prize: false,
-        raw_fail_codes: []
+        raw_fail_codes: [],
+        diagnosis_summary: null
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
