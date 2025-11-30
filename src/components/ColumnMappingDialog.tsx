@@ -3,7 +3,6 @@ import {
   HEADER_ALIASES,
   selectBestRatingColumn,
   normalizeHeaderForMatching,
-  findHeaderlessGenderColumn
 } from "@/utils/importSchema";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
@@ -26,6 +25,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, RotateCcw } from "lucide-react";
 import { GenderDetectionChip } from "@/components/import/GenderDetectionChip";
+import { analyzeGenderColumns } from "@/utils/genderInference";
 
 interface ColumnMappingDialogProps {
   open: boolean;
@@ -95,18 +95,23 @@ export function ColumnMappingDialog({
       }
     }
 
-    const headerlessGender = findHeaderlessGenderColumn(detectedColumns, sampleRows);
-    if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
-      autoMapping.gender = headerlessGender;
-      console.log('[import] gender source: headerless column after 2nd Name');
-      console.log('[ui.badge] gender_headerless_shown=true');
-      
-      // Extract sample value for display
-      const sampleValue = sampleRows?.[0]?.[headerlessGender];
-      setHeaderlessGenderDetected({ 
-        column: headerlessGender, 
-        sample: sampleValue ? String(sampleValue) : undefined 
-      });
+    const genderConfig = analyzeGenderColumns(sampleRows);
+    const headerlessGender = genderConfig.headerlessGenderColumn;
+    const genderCandidate = genderConfig.preferredColumn;
+
+    if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
+      autoMapping.gender = genderCandidate;
+
+      if (genderConfig.preferredSource === 'headerless_after_name' && headerlessGender) {
+        console.log('[import] gender source: headerless column after 2nd Name');
+        console.log('[ui.badge] gender_headerless_shown=true');
+
+        const sampleValue = sampleRows?.[0]?.[headerlessGender];
+        setHeaderlessGenderDetected({
+          column: headerlessGender,
+          sample: sampleValue ? String(sampleValue) : undefined
+        });
+      }
     }
 
     // Pre-normalize aliases

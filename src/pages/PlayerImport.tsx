@@ -52,13 +52,14 @@ import {
   normalizeHeaderForMatching,
   selectBestRatingColumn,
   inferImportSource,
-  findHeaderlessGenderColumn,
 } from '@/utils/importSchema';
 import {
   normalizeGender,
   normalizeRating,
   inferUnrated,
   fillSingleGapRanksInPlace,
+  normalizeGrColumn,
+  normalizeTypeColumn,
 } from '@/utils/valueNormalizers';
 import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
@@ -102,6 +103,7 @@ import {
 import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
+import { analyzeGenderColumns, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
 
 /**
  * Bulk upsert players via PostgREST with precise conflict handling.
@@ -407,6 +409,7 @@ export default function PlayerImport() {
     federation: number;
   } | null>(null);
   const hasMappedRef = useRef(false);
+  const genderConfigRef = useRef<GenderColumnConfig | null>(null);
   const logContextRef = useRef<ImportLogContext | null>(null);
   const lastFileInfoRef = useRef<LastFileInfo>({
     name: null,
@@ -1636,6 +1639,15 @@ export default function PlayerImport() {
     }
   };
 
+  useEffect(() => {
+    if (!parsedData.length) {
+      genderConfigRef.current = null;
+      return;
+    }
+
+    genderConfigRef.current = analyzeGenderColumns(parsedData as Record<string, any>[]);
+  }, [parsedData]);
+
   // Auto-mapping useEffect - runs AFTER headers state is committed
   useEffect(() => {
     if (headers.length === 0 || parsedData.length === 0) return;
@@ -1648,10 +1660,14 @@ export default function PlayerImport() {
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
 
-    const headerlessGender = findHeaderlessGenderColumn(headers, parsedData as Record<string, any>[]);
-    if (headerlessGender && !GENDER_DENYLIST.has(normalizeHeaderForMatching(headerlessGender))) {
-      autoMapping.gender = headerlessGender;
-      console.log("[import] gender source: headerless column after Name (not 'fs')");
+    const genderConfig = genderConfigRef.current ?? analyzeGenderColumns(parsedData as Record<string, any>[]);
+    const headerlessGender = genderConfig?.headerlessGenderColumn;
+    const genderCandidate = genderConfig?.preferredColumn;
+    if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
+      autoMapping.gender = genderCandidate;
+      if (genderConfig?.preferredSource === 'headerless_after_name') {
+        console.log("[import] gender source: headerless column after Name (not 'fs')");
+      }
     }
 
     if (isFeatureEnabled('RATING_PRIORITY')) {
@@ -1808,16 +1824,40 @@ export default function PlayerImport() {
 
       // Phase 6: Infer unrated flag after all fields mapped
       player.unrated = inferUnrated(
-        { 
-          rating: player.rating, 
+        {
+          rating: player.rating,
           fide_id: player.fide_id,
-          unrated: player._rawUnrated 
+          unrated: player._rawUnrated
         },
         {
           treatEmptyAsUnrated: importConfig.treatEmptyAsUnrated,
           inferFromMissingRating: importConfig.inferUnratedFromMissingData
         }
       );
+
+      const grValue = mapping.gr ? row[mapping.gr] : player.gr;
+      const grInfo = normalizeGrColumn(grValue);
+      const typeValue = mapping.type ? row[mapping.type] : player.type;
+      const typeLabel = normalizeTypeColumn(typeValue);
+
+      const genderInference = inferGenderForRow(
+        row,
+        genderConfigRef.current,
+        typeLabel,
+        grInfo.group_label
+      );
+
+      if (genderInference.gender !== null) {
+        player.gender = genderInference.gender;
+      }
+
+      if (genderInference.sources.length) {
+        player._genderSources = genderInference.sources;
+      }
+
+      if (genderInference.warnings.length) {
+        player._genderWarnings = genderInference.warnings;
+      }
 
       return player as ParsedPlayer;
     })
