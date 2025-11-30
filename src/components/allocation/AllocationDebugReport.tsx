@@ -14,16 +14,20 @@ import {
   XCircle,
   Info,
   Layers,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { IneligibilityTooltip } from './IneligibilityTooltip';
 import type { AllocationCoverageEntry, CategorySummary, UnfilledReasonCode } from '@/types/allocation';
 import { getReasonLabel } from '@/types/allocation';
+import { exportCoverageToXlsx } from '@/utils/allocationCoverageExport';
 
 interface AllocationDebugReportProps {
   coverage: AllocationCoverageEntry[];
   totalPlayers: number;
   totalPrizes: number;
+  tournamentSlug?: string;
 }
 
 // Badge variant based on reason code
@@ -230,9 +234,18 @@ function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
   );
 }
 
-export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes }: AllocationDebugReportProps) {
+export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes, tournamentSlug }: AllocationDebugReportProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const handleDownloadCoverage = () => {
+    const success = exportCoverageToXlsx(coverage, tournamentSlug || 'tournament');
+    if (success) {
+      toast.success('Coverage report downloaded (.xlsx)');
+    } else {
+      toast.error('Failed to download coverage report');
+    }
+  };
   
   // Build category summaries
   const categorySummaries = useMemo(() => {
@@ -336,24 +349,38 @@ export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes }: A
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mb-6">
       <Card>
         <CardHeader className="pb-3">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Layers className="h-5 w-5" />
-                Allocation Debug Report
-                {suspiciousEntries.length > 0 && (
-                  <Badge variant="destructive" className="ml-2">
-                    {suspiciousEntries.length} suspicious
-                  </Badge>
-                )}
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{filledCount} filled</Badge>
-                {unfilledCount > 0 && <Badge variant="secondary">{unfilledCount} unfilled</Badge>}
-                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </div>
+          <div className="flex items-center justify-between">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex-1 justify-between p-0 h-auto hover:bg-transparent">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Layers className="h-5 w-5" />
+                  Allocation Debug Report
+                  {suspiciousEntries.length > 0 && (
+                    <Badge variant="destructive" className="ml-2">
+                      {suspiciousEntries.length} suspicious
+                    </Badge>
+                  )}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{filledCount} filled</Badge>
+                  {unfilledCount > 0 && <Badge variant="secondary">{unfilledCount} unfilled</Badge>}
+                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </div>
+              </Button>
+            </CollapsibleTrigger>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-3"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownloadCoverage();
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Download (.xlsx)
             </Button>
-          </CollapsibleTrigger>
+          </div>
         </CardHeader>
         
         <CollapsibleContent>
