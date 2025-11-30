@@ -25,7 +25,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, RotateCcw } from "lucide-react";
 import { GenderDetectionChip } from "@/components/import/GenderDetectionChip";
-import { analyzeGenderColumns } from "@/utils/genderInference";
+import { analyzeGenderColumns, type GenderSource } from "@/utils/genderInference";
 
 interface ColumnMappingDialogProps {
   open: boolean;
@@ -66,7 +66,10 @@ export function ColumnMappingDialog({
   sampleRows
 }: ColumnMappingDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [headerlessGenderDetected, setHeaderlessGenderDetected] = useState<{ column: string; sample?: string } | null>(null);
+  const [genderDetection, setGenderDetection] = useState<
+    { column: string; sample?: string; source: Extract<GenderSource, 'fs_column' | 'headerless_after_name'> }
+    | null
+  >(null);
 
   const columnOptions = detectedColumns.map((col, idx) => {
     const isPlaceholder = col.startsWith("__EMPTY_COL_");
@@ -96,20 +99,19 @@ export function ColumnMappingDialog({
     }
 
     const genderConfig = analyzeGenderColumns(sampleRows);
-    const headerlessGender = genderConfig.headerlessGenderColumn;
     const genderCandidate = genderConfig.preferredColumn;
+
+    setGenderDetection(null);
 
     if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
       autoMapping.gender = genderCandidate;
 
-      if (genderConfig.preferredSource === 'headerless_after_name' && headerlessGender) {
-        console.log('[import] gender source: headerless column after 2nd Name');
-        console.log('[ui.badge] gender_headerless_shown=true');
-
-        const sampleValue = sampleRows?.[0]?.[headerlessGender];
-        setHeaderlessGenderDetected({
-          column: headerlessGender,
-          sample: sampleValue ? String(sampleValue) : undefined
+      if (genderConfig.preferredSource === 'headerless_after_name' || genderConfig.preferredSource === 'fs_column') {
+        const sampleValue = sampleRows?.[0]?.[genderCandidate];
+        setGenderDetection({
+          column: genderCandidate,
+          sample: sampleValue ? String(sampleValue) : undefined,
+          source: genderConfig.preferredSource,
         });
       }
     }
@@ -184,10 +186,11 @@ export function ColumnMappingDialog({
 
         <div className="space-y-6 py-4">
           {/* Gender detection chip */}
-          {headerlessGenderDetected && mapping.gender === headerlessGenderDetected.column && (
-            <GenderDetectionChip 
-              columnName={headerlessGenderDetected.column}
-              sampleValue={headerlessGenderDetected.sample}
+          {genderDetection && mapping.gender === genderDetection.column && (
+            <GenderDetectionChip
+              columnName={genderDetection.column}
+              sampleValue={genderDetection.sample}
+              source={genderDetection.source}
             />
           )}
           {/* Phase 3: Rating priority notice */}
