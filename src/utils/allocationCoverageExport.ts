@@ -32,6 +32,7 @@ export function exportCoverageToXlsx(
     candidates_before_one_prize: entry.candidates_before_one_prize ?? 0,
     candidates_after_one_prize: entry.candidates_after_one_prize ?? 0,
     reason_code: entry.reason_code ?? '',
+    diagnosis_summary: entry.diagnosis_summary ?? '',
     raw_fail_codes: (entry.raw_fail_codes ?? []).join(', '),
   }));
 

@@ -58,6 +58,9 @@ export interface AllocationCoverageEntry {
 
   // Raw failure codes from evaluateEligibility
   raw_fail_codes: string[];
+  
+  // Diagnosis summary for 0-candidate categories (Task 4)
+  diagnosis_summary?: string | null;
 }
 
 /**
