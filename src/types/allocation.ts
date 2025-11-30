@@ -130,13 +130,13 @@ export function deriveReasonCode(
  * Human-readable labels for reason codes.
  */
 export const reasonCodeToLabel: Record<UnfilledReasonCode, string> = {
-  NO_ELIGIBLE_PLAYERS: 'No eligible players',
-  BLOCKED_BY_ONE_PRIZE_POLICY: 'Blocked by one-prize policy',
-  TOO_STRICT_CRITERIA_RATING: 'Too strict rating band',
-  TOO_STRICT_CRITERIA_AGE: 'Too strict age criteria',
-  TOO_STRICT_CRITERIA_GENDER: 'Gender criteria mismatch',
-  TOO_STRICT_CRITERIA_LOCATION: 'Location criteria mismatch',
-  TOO_STRICT_CRITERIA_TYPE_OR_GROUP: 'Type/Group criteria mismatch',
+  NO_ELIGIBLE_PLAYERS: 'No eligible winner (no players match criteria)',
+  BLOCKED_BY_ONE_PRIZE_POLICY: 'No eligible winner (blocked by one-prize policy)',
+  TOO_STRICT_CRITERIA_RATING: 'No eligible winner (rating criteria)',
+  TOO_STRICT_CRITERIA_AGE: 'No eligible winner (age criteria)',
+  TOO_STRICT_CRITERIA_GENDER: 'No eligible winner (gender criteria)',
+  TOO_STRICT_CRITERIA_LOCATION: 'No eligible winner (location criteria)',
+  TOO_STRICT_CRITERIA_TYPE_OR_GROUP: 'No eligible winner (type/group criteria)',
   CATEGORY_INACTIVE: 'Category is inactive',
   INTERNAL_ERROR: 'Internal error',
 };

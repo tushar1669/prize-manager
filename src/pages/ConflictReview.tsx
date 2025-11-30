@@ -88,6 +88,21 @@ export default function ConflictReview() {
   }, [manualDecisions]);
 
   // Fetch scoped players and prizes for this tournament
+  const { data: tournamentData } = useQuery({
+    queryKey: ['tournament-data', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('slug, title')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
   const { data: playersList } = useQuery({
     queryKey: ['players-list', id],
     queryFn: async () => {
@@ -233,9 +248,24 @@ export default function ConflictReview() {
         setPreviewCompleted(true);
         console.log('[review] Preview completed, coverage:', data.coverage);
         
-        const zeroEligibleCount = data.coverage.filter(c => c.candidates_after_one_prize === 0 || c.is_unfilled).length;
-        if (zeroEligibleCount > 0) {
-          toast.warning(`Preview shows ${zeroEligibleCount} prize(s) with no eligible players. Review coverage before committing.`);
+        const totalUnfilled = data.coverage.filter(c => c.is_unfilled).length;
+        const blockedByPolicy = data.coverage.filter(c => c.reason_code === 'BLOCKED_BY_ONE_PRIZE_POLICY').length;
+        const noEligible = data.coverage.filter(c =>
+          c.reason_code === 'NO_ELIGIBLE_PLAYERS' ||
+          (c.reason_code && c.reason_code.startsWith('TOO_STRICT_CRITERIA_'))
+        ).length;
+        const critical = data.coverage.filter(c =>
+          c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE'
+        ).length;
+
+        if (critical > 0) {
+          toast.error(`Preview found ${critical} critical allocation error(s). Fix those before committing.`);
+        } else if (totalUnfilled > 0) {
+          toast.warning(
+            `Preview shows ${totalUnfilled} unfilled prize(s): ` +
+            `${blockedByPolicy} blocked by one-prize policy, ` +
+            `${noEligible} with no eligible players. You can still commit, but review the debug report.`
+          );
         } else {
           toast.success('Preview looks good! You can now commit the allocation.');
         }
@@ -486,11 +516,15 @@ export default function ConflictReview() {
                 dryRun: false 
               });
             }}
-            disabled={
-              !previewCompleted || 
-              allocateMutation.isPending ||
-              coverageData.some(c => c.is_unfilled && !c.raw_fail_codes.includes('already_assigned'))
-            }
+            disabled={(() => {
+              // Allow commit if preview completed and no critical errors
+              const hasCoverage = previewCompleted && coverageData.length > 0;
+              const hasCriticalUnfilled = coverageData.some(c =>
+                c.is_unfilled &&
+                (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
+              );
+              return !hasCoverage || allocateMutation.isPending || hasCriticalUnfilled;
+            })()}
             variant="default"
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -517,6 +551,7 @@ export default function ConflictReview() {
             coverage={coverageData}
             totalPlayers={summaryCounts.players}
             totalPrizes={summaryCounts.activePrizes}
+            tournamentSlug={tournamentData?.slug || tournamentData?.title || id}
           />
         )}
 

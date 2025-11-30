@@ -102,6 +102,7 @@ import {
 import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
+import { GenderSummaryChip } from "@/components/import/GenderSummaryChip";
 import { analyzeGenderColumns, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
 
 /**
@@ -410,6 +411,8 @@ export default function PlayerImport() {
   const [femaleCountSummary, setFemaleCountSummary] = useState<{
     femaleFromGender: number;
     femaleFromFmg: number;
+    maleFromGender: number;
+    genderSources: import("@/utils/genderInference").GenderSource[];
   } | null>(null);
   const hasMappedRef = useRef(false);
   const genderConfigRef = useRef<GenderColumnConfig | null>(null);
@@ -1986,12 +1989,24 @@ export default function PlayerImport() {
       setDataCoverage(coverage);
 
       const femaleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'F').length;
+      const maleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'M').length;
       const femaleFromFmg = validPlayers.filter(p => {
         const typeLabel = String((p as any).type_label ?? p.type ?? '').trim().toUpperCase();
         const groupLabel = String((p as any).group_label ?? p.gr ?? '').trim().toUpperCase();
         return typeLabel === 'FMG' || groupLabel === 'FMG';
       }).length;
-      setFemaleCountSummary({ femaleFromGender, femaleFromFmg });
+      
+      // Determine gender sources from config
+      const genderSources: import("@/utils/genderInference").GenderSource[] = [];
+      const config = genderConfigRef.current;
+      if (config?.preferredSource) {
+        genderSources.push(config.preferredSource);
+      }
+      if (femaleFromFmg > 0) {
+        genderSources.push('type_label');
+      }
+      
+      setFemaleCountSummary({ femaleFromGender, femaleFromFmg, maleFromGender, genderSources });
 
       // Check if state looks like federation (IND, IN, INDIA)
       const stateIndCount = validPlayers.filter(p => 
@@ -2507,6 +2522,19 @@ export default function PlayerImport() {
 
             {dataCoverage && (
               <DataCoverageBar coverage={dataCoverage} />
+            )}
+
+            {/* Gender detection summary chip - always shown when players exist */}
+            {mappedPlayers.length > 0 && femaleCountSummary && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <GenderSummaryChip
+                  femaleFromGender={femaleCountSummary.femaleFromGender}
+                  maleFromGender={femaleCountSummary.maleFromGender}
+                  femaleFromFmg={femaleCountSummary.femaleFromFmg}
+                  sources={femaleCountSummary.genderSources}
+                  totalPlayers={mappedPlayers.length}
+                />
+              </div>
             )}
             
             <Card>
