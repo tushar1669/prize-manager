@@ -1,19 +1,35 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 
 interface ImportSummaryBarProps {
   totalPlayers: number;
   validPlayers: number;
   errorCount: number;
   statesExtracted?: number;
+  femaleFromGender?: number | null;
+  femaleFromFmg?: number | null;
 }
 
-export function ImportSummaryBar({ 
-  totalPlayers, 
-  validPlayers, 
+export function ImportSummaryBar({
+  totalPlayers,
+  validPlayers,
   errorCount,
-  statesExtracted 
+  statesExtracted,
+  femaleFromGender,
+  femaleFromFmg
 }: ImportSummaryBarProps) {
+  const femaleFromGenderCount = femaleFromGender ?? 0;
+  const femaleFromFmgCount = femaleFromFmg ?? 0;
+
+  const hasFemaleCounts = femaleFromGender != null && femaleFromFmg != null;
+  const femaleDifference = Math.abs(femaleFromGenderCount - femaleFromFmgCount);
+  const hasFemaleMismatch =
+    hasFemaleCounts &&
+    femaleFromGenderCount > 0 &&
+    femaleFromFmgCount > 0 &&
+    femaleDifference > 1;
+  const hasMissingGender = hasFemaleCounts && femaleFromGenderCount === 0 && femaleFromFmgCount > 0;
+
   return (
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="py-3">
@@ -49,6 +65,27 @@ export function ImportSummaryBar({
             </>
           )}
         </div>
+        {(hasFemaleMismatch || hasMissingGender) && (
+          <div
+            className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
+              hasMissingGender
+                ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4" />
+            <div className="space-y-1">
+              <div className="font-semibold">
+                {hasMissingGender ? 'Gender column missing female values' : 'Female counts look mismatched'}
+              </div>
+              <div className="text-xs sm:text-sm">
+                Gender column shows <strong>{femaleFromGenderCount}</strong> female
+                {femaleFromGenderCount === 1 ? '' : 's'}, Type/Gr (FMG) shows <strong>{femaleFromFmgCount}</strong>.
+                {hasFemaleMismatch && !hasMissingGender && ' Please double-check your gender and Type/Group mapping.'}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
