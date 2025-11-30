@@ -39,6 +39,46 @@ function normalizeCell(cell: unknown): string {
     .toLowerCase();
 }
 
+function normalizeGender(raw: unknown): "M" | "F" | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  const normalized = s.toUpperCase();
+  if (normalized === "M") return "M";
+  if (normalized === "F") return "F";
+
+  return null;
+}
+
+function genderBlankToMF(raw: unknown): "M" | "F" | null {
+  if (raw == null || String(raw).trim() === "") return "M";
+  const s = String(raw).trim().toUpperCase();
+  if (s === "F") return "F";
+  return null;
+}
+
+type Gender = "M" | "F" | "Other" | null;
+type GenderSource = "gender_column" | "fs_column" | "headerless_after_name" | "type_label" | "group_label";
+
+interface GenderInference {
+  gender: Gender;
+  sources: GenderSource[];
+  warnings: string[];
+}
+
+interface GenderColumnConfig {
+  genderColumn: string | null;
+  fsColumn: string | null;
+  headerlessGenderColumn: string | null;
+  preferredColumn: string | null;
+  preferredSource: GenderSource | null;
+}
+
+const HEADER_ALIASES = {
+  gender: ["gender", "sex", "g", "m/f", "boy/girl", "b/g", "fs"]
+};
+
 const HEADERLESS_KEY_PATTERN = /^__empty/i;
 const GENDER_VALUE_TOKENS = new Set([
   "m",
@@ -176,6 +216,137 @@ function findHeaderlessGenderColumn(
   }
 
   return bestKey;
+}
+
+function collectHeaders(rows: Array<Record<string, unknown>>): string[] {
+  const headers: string[] = [];
+  const seen = new Set<string>();
+
+  rows.forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    Object.keys(row).forEach((key) => {
+      if (!seen.has(key)) {
+        seen.add(key);
+        headers.push(key);
+      }
+    });
+  });
+
+  return headers;
+}
+
+function analyzeGenderColumns(rows: Array<Record<string, unknown>>): GenderColumnConfig {
+  const headers = collectHeaders(rows);
+  const normalized = headers.map(normalizeForMatching);
+  const genderAliases = (HEADER_ALIASES.gender || []).map(normalizeForMatching);
+  const fsToken = normalizeForMatching("fs");
+
+  let genderColumn: string | null = null;
+  let fsColumn: string | null = null;
+
+  normalized.forEach((key, idx) => {
+    if (genderAliases.includes(key) && key !== fsToken && !genderColumn) {
+      genderColumn = headers[idx];
+    }
+    if (key === fsToken && !fsColumn) {
+      fsColumn = headers[idx];
+    }
+  });
+
+  const headerlessGenderColumn =
+    findHeaderlessGenderColumn(headers, rows as Array<Record<string, unknown>>) || null;
+
+  const preferredColumn = genderColumn || fsColumn || headerlessGenderColumn || null;
+  let preferredSource: GenderSource | null = null;
+  if (preferredColumn) {
+    if (preferredColumn === genderColumn) {
+      preferredSource = "gender_column";
+    } else if (preferredColumn === fsColumn) {
+      preferredSource = "fs_column";
+    } else if (preferredColumn === headerlessGenderColumn) {
+      preferredSource = "headerless_after_name";
+    }
+  }
+
+  return {
+    genderColumn,
+    fsColumn,
+    headerlessGenderColumn,
+    preferredColumn,
+    preferredSource
+  };
+}
+
+function normalizeGenderValue(value: unknown, source: GenderSource | null): Gender {
+  if (source === "fs_column" || source === "headerless_after_name") {
+    return genderBlankToMF(value);
+  }
+
+  const normalized = normalizeGender(value);
+  if (normalized) return normalized;
+
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "other") return "Other";
+
+  return null;
+}
+
+function inferGenderForRow(
+  row: Record<string, unknown>,
+  config?: GenderColumnConfig | null,
+  typeLabel?: string | null,
+  groupLabel?: string | null
+): GenderInference {
+  const result: GenderInference = { gender: null, sources: [], warnings: [] };
+  const candidates: Array<{ column: string; source: GenderSource }> = [];
+  const seenColumns = new Set<string>();
+
+  const addCandidate = (column: string | null | undefined, source: GenderSource) => {
+    if (!column || seenColumns.has(column)) return;
+    seenColumns.add(column);
+    candidates.push({ column, source });
+  };
+
+  if (config?.preferredColumn) {
+    addCandidate(config.preferredColumn, config.preferredSource ?? "gender_column");
+  }
+  addCandidate(config?.genderColumn, "gender_column");
+  addCandidate(config?.fsColumn, "fs_column");
+  addCandidate(config?.headerlessGenderColumn, "headerless_after_name");
+
+  if (!config?.preferredColumn && "gender" in row) {
+    addCandidate("gender", "gender_column");
+  }
+
+  for (const candidate of candidates) {
+    const value = row[candidate.column];
+    const normalized = normalizeGenderValue(value, candidate.source);
+    if (normalized) {
+      result.gender = normalized;
+      result.sources.push(candidate.source);
+      break;
+    }
+  }
+
+  const normalizedType = typeLabel?.trim().toUpperCase();
+  const normalizedGroup = groupLabel?.trim().toUpperCase();
+  const hasFMGType = normalizedType === "FMG";
+  const hasFMGGroup = normalizedGroup === "FMG";
+
+  if (hasFMGType || hasFMGGroup) {
+    if (result.gender && result.gender !== "F") {
+      result.warnings.push(
+        "Type/Group label FMG indicates Female; overriding conflicting gender value."
+      );
+    }
+    result.gender = "F";
+    if (hasFMGType) result.sources.push("type_label");
+    if (hasFMGGroup) result.sources.push("group_label");
+  }
+
+  result.sources = Array.from(new Set(result.sources));
+
+  return result;
 }
 
 function scoreRow(row: unknown[]): number {
@@ -358,6 +529,17 @@ Deno.serve(async (req) => {
       defval: ""
     }) as Record<string, unknown>[];
 
+    const genderConfig = analyzeGenderColumns(dataRows as Record<string, unknown>[]);
+    const rowsWithGender = dataRows.map((row) => {
+      const genderInference = inferGenderForRow(row as Record<string, unknown>, genderConfig);
+      return {
+        ...row,
+        _gender: genderInference.gender,
+        _genderSources: genderInference.sources,
+        _genderWarnings: genderInference.warnings
+      };
+    });
+
     const source = inferSource(trimmedHeaders, dataRows as Record<string, unknown>[]);
     const durationMs = Math.round(performance.now() - start);
     const rowCount = dataRows.length;
@@ -384,7 +566,8 @@ Deno.serve(async (req) => {
       sheetName,
       headerRow: headerRowIndex + 1,
       headers: trimmedHeaders,
-      rows: dataRows,
+      rows: rowsWithGender,
+      genderConfig,
       fileHash,
       rowCount,
       source,
