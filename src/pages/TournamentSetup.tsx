@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
 import { tournamentDetailsSchema, TournamentDetailsForm, categorySchema, CategoryForm } from "@/lib/validations";
+import { classifyTimeControl } from "@/utils/timeControl";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Upload, ArrowRight, X, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -131,7 +132,13 @@ export default function TournamentSetup() {
       notes: '',
       brochure_url: '',
       chessresults_url: '',
-      public_results_url: ''
+      public_results_url: '',
+      time_control_base_minutes: undefined,
+      time_control_increment_seconds: undefined,
+      chief_arbiter: '',
+      tournament_director: '',
+      entry_fee_amount: undefined,
+      cash_prize_total: undefined
     }
   });
 
@@ -155,7 +162,7 @@ export default function TournamentSetup() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, venue, city, event_code, notes, brochure_url, chessresults_url, public_results_url, owner_id, status')
+        .select('id, title, start_date, end_date, venue, city, event_code, notes, brochure_url, chessresults_url, public_results_url, owner_id, status, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total')
         .eq('id', id)
         .single();
       
@@ -192,7 +199,13 @@ export default function TournamentSetup() {
         notes: tournament.notes || '',
         brochure_url: tournament.brochure_url || '',
         chessresults_url: tournament.chessresults_url || '',
-        public_results_url: tournament.public_results_url || ''
+        public_results_url: tournament.public_results_url || '',
+        time_control_base_minutes: tournament.time_control_base_minutes ?? undefined,
+        time_control_increment_seconds: tournament.time_control_increment_seconds ?? undefined,
+        chief_arbiter: tournament.chief_arbiter || '',
+        tournament_director: tournament.tournament_director || '',
+        entry_fee_amount: tournament.entry_fee_amount ?? undefined,
+        cash_prize_total: tournament.cash_prize_total ?? undefined
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1158,6 +1171,160 @@ export default function TournamentSetup() {
                         </FormItem>
                       )}
                     />
+
+                    {/* Time Control with FIDE Badge */}
+                    <div className="space-y-4 p-4 border border-border rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-base font-semibold">Time Control</Label>
+                        {(() => {
+                          const baseMin = detailsForm.watch('time_control_base_minutes');
+                          const incSec = detailsForm.watch('time_control_increment_seconds');
+                          const category = classifyTimeControl(baseMin, incSec);
+                          
+                          if (category === 'UNKNOWN') return null;
+                          
+                          const variantMap = {
+                            'BLITZ': 'destructive' as const,
+                            'RAPID': 'default' as const,
+                            'CLASSICAL': 'secondary' as const
+                          };
+                          
+                          return (
+                            <Badge variant={variantMap[category]} className="text-xs">
+                              {category}
+                            </Badge>
+                          );
+                        })()}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={detailsForm.control}
+                          name="time_control_base_minutes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Base time (minutes)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  placeholder="e.g., 5, 15, 90"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={detailsForm.control}
+                          name="time_control_increment_seconds"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Increment (seconds per move)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  placeholder="e.g., 3, 10, 30"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Example: 5 + 3 means 5 minutes base + 3 seconds per move
+                      </p>
+                    </div>
+
+                    {/* Organizer Information */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={detailsForm.control}
+                        name="chief_arbiter"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Chief Arbiter</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Name of chief arbiter" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={detailsForm.control}
+                        name="tournament_director"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tournament Director</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Name of tournament director" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* Financial Information */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={detailsForm.control}
+                        name="entry_fee_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Entry Fee</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="e.g., 500"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs">
+                              Entry fee per player in tournament currency
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={detailsForm.control}
+                        name="cash_prize_total"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Total Cash Prize</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="e.g., 50000"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs">
+                              Sum of all cash prizes (approx, for reference)
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <FormField
                       control={detailsForm.control}

@@ -11,7 +11,14 @@ export const tournamentDetailsSchema = z.object({
   notes: z.string().optional(),
   brochure_url: z.string().optional(),
   chessresults_url: z.string().url().optional().or(z.literal('')),
-  public_results_url: z.string().url().optional().or(z.literal(''))
+  public_results_url: z.string().url().optional().or(z.literal('')),
+  // New metadata fields (all optional)
+  time_control_base_minutes: z.number().int().min(0).nullable().optional(),
+  time_control_increment_seconds: z.number().int().min(0).nullable().optional(),
+  chief_arbiter: z.string().max(200).optional(),
+  tournament_director: z.string().max(200).optional(),
+  entry_fee_amount: z.number().min(0).nullable().optional(),
+  cash_prize_total: z.number().min(0).nullable().optional()
 }).refine(data => {
   if (data.start_date && data.end_date) {
     return new Date(data.end_date) >= new Date(data.start_date);
