@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -15,19 +16,25 @@ import {
   Info,
   Layers,
   AlertCircle,
-  Download
+  Download,
+  FileSearch
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { IneligibilityTooltip } from './IneligibilityTooltip';
 import type { AllocationCoverageEntry, CategorySummary, UnfilledReasonCode } from '@/types/allocation';
 import { getReasonLabel } from '@/types/allocation';
 import { exportCoverageToXlsx } from '@/utils/allocationCoverageExport';
+import { exportRcaToXlsx } from '@/utils/allocationRcaExport';
+import { buildRcaRows, type WinnerEntry, type PlayerInfo } from '@/types/rca';
 
 interface AllocationDebugReportProps {
   coverage: AllocationCoverageEntry[];
   totalPlayers: number;
   totalPrizes: number;
   tournamentSlug?: string;
+  tournamentTitle?: string;
+  winners?: WinnerEntry[];
+  players?: PlayerInfo[];
 }
 
 // Badge variant based on reason code
@@ -246,7 +253,15 @@ function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
   );
 }
 
-export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes, tournamentSlug }: AllocationDebugReportProps) {
+export function AllocationDebugReport({ 
+  coverage, 
+  totalPlayers, 
+  totalPrizes, 
+  tournamentSlug,
+  tournamentTitle,
+  winners,
+  players
+}: AllocationDebugReportProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
@@ -258,6 +273,32 @@ export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes, tou
       toast.error('Failed to download coverage report');
     }
   };
+
+  const handleDownloadRca = () => {
+    if (!winners || !players) {
+      toast.error('RCA data not available. Run Preview first.');
+      return;
+    }
+    
+    const rcaRows = buildRcaRows(
+      coverage,
+      winners,
+      players,
+      tournamentSlug || 'tournament',
+      tournamentTitle || tournamentSlug || 'Tournament'
+    );
+    
+    console.log('[rca-export] Exporting', rcaRows.length, 'rows for', tournamentSlug);
+    
+    const success = exportRcaToXlsx(rcaRows, tournamentSlug || 'tournament');
+    if (success) {
+      toast.success('RCA report downloaded (.xlsx)');
+    } else {
+      toast.error('Failed to download RCA report');
+    }
+  };
+
+  const canDownloadRca = Boolean(coverage.length > 0 && winners && players);
   
   // Build category summaries
   const categorySummaries = useMemo(() => {
@@ -380,18 +421,40 @@ export function AllocationDebugReport({ coverage, totalPlayers, totalPrizes, tou
                 </div>
               </Button>
             </CollapsibleTrigger>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-3"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDownloadCoverage();
-              }}
-            >
-              <Download className="h-4 w-4 mr-1" />
-              Download (.xlsx)
-            </Button>
+            <div className="flex items-center gap-2 ml-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadCoverage();
+                }}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Coverage (.xlsx)
+              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadRca();
+                      }}
+                      disabled={!canDownloadRca}
+                    >
+                      <FileSearch className="h-4 w-4 mr-1" />
+                      RCA (.xlsx)
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Engine vs final winners (for audit / RCA)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         </CardHeader>
         
