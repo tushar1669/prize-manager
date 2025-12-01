@@ -527,10 +527,13 @@ export type Database = {
       tournaments: {
         Row: {
           brochure_url: string | null
+          cash_prize_total: number | null
           chessresults_url: string | null
+          chief_arbiter: string | null
           city: string | null
           created_at: string | null
           end_date: string
+          entry_fee_amount: number | null
           event_code: string | null
           id: string
           is_published: boolean
@@ -541,16 +544,23 @@ export type Database = {
           slug: string | null
           start_date: string
           status: string
+          time_control_base_minutes: number | null
+          time_control_category: string | null
+          time_control_increment_seconds: number | null
           title: string
+          tournament_director: string | null
           updated_at: string | null
           venue: string | null
         }
         Insert: {
           brochure_url?: string | null
+          cash_prize_total?: number | null
           chessresults_url?: string | null
+          chief_arbiter?: string | null
           city?: string | null
           created_at?: string | null
           end_date: string
+          entry_fee_amount?: number | null
           event_code?: string | null
           id?: string
           is_published?: boolean
@@ -561,16 +571,23 @@ export type Database = {
           slug?: string | null
           start_date: string
           status?: string
+          time_control_base_minutes?: number | null
+          time_control_category?: string | null
+          time_control_increment_seconds?: number | null
           title: string
+          tournament_director?: string | null
           updated_at?: string | null
           venue?: string | null
         }
         Update: {
           brochure_url?: string | null
+          cash_prize_total?: number | null
           chessresults_url?: string | null
+          chief_arbiter?: string | null
           city?: string | null
           created_at?: string | null
           end_date?: string
+          entry_fee_amount?: number | null
           event_code?: string | null
           id?: string
           is_published?: boolean
@@ -581,7 +598,11 @@ export type Database = {
           slug?: string | null
           start_date?: string
           status?: string
+          time_control_base_minutes?: number | null
+          time_control_category?: string | null
+          time_control_increment_seconds?: number | null
           title?: string
+          tournament_director?: string | null
           updated_at?: string | null
           venue?: string | null
         }
@@ -659,10 +680,13 @@ export type Database = {
         Args: { include_all?: boolean }
         Returns: {
           brochure_url: string | null
+          cash_prize_total: number | null
           chessresults_url: string | null
+          chief_arbiter: string | null
           city: string | null
           created_at: string | null
           end_date: string
+          entry_fee_amount: number | null
           event_code: string | null
           id: string
           is_published: boolean
@@ -673,7 +697,11 @@ export type Database = {
           slug: string | null
           start_date: string
           status: string
+          time_control_base_minutes: number | null
+          time_control_category: string | null
+          time_control_increment_seconds: number | null
           title: string
+          tournament_director: string | null
           updated_at: string | null
           venue: string | null
         }[]
