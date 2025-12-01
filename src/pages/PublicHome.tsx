@@ -64,44 +64,22 @@ function formatCurrency(amount: number | null | undefined) {
 }
 
 export default function PublicHome() {
-  const { data: tournaments, isLoading, error, refetch } = useQuery<PublicTournament[]>({
+  const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
-    queryFn: async () => {
+    queryFn: async (): Promise<PublicTournament[]> => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select(
-          [
-            'id',
-            'title',
-            'start_date',
-            'end_date',
-            'city',
-            'venue',
-            'public_slug',
-            'brochure_url',
-            'chessresults_url',
-            'public_results_url',
-            'created_at',
-            'time_control_base_minutes',
-            'time_control_increment_seconds',
-            'time_control_category',
-            'chief_arbiter',
-            'tournament_director',
-            'entry_fee_amount',
-            'cash_prize_total',
-          ].join(', ')
-        )
+        .select('id, title, start_date, end_date, city, venue, public_slug, brochure_url, chessresults_url, public_results_url, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total')
         .eq('is_published', true)
-        // Latest tournaments first: start_date desc (nulls last) then created_at desc
-        .order('start_date', { ascending: false, nullsLast: true })
+        .order('start_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data ?? [];
+      return (data as unknown as PublicTournament[]) ?? [];
     },
   });
 
-  const tournamentList = tournaments ?? [];
+  const tournamentList: PublicTournament[] = tournaments ?? [];
 
   const { data: allocationsMap } = useQuery({
     queryKey: ['allocations-map'],
@@ -126,6 +104,30 @@ export default function PublicHome() {
     },
     enabled: !!tournamentList && tournamentList.length > 0,
   });
+
+  // Helper function for rendering time control - must be defined before early returns
+  const renderTimeControl = (t: PublicTournament) => {
+    const formatted = formatTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
+    const categoryFromFields = t.time_control_category && t.time_control_category !== "UNKNOWN" ? t.time_control_category : null;
+    const classified = classifyTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
+    const category = categoryFromFields ?? (classified !== "UNKNOWN" ? classified : null);
+
+    if (!formatted && !category) return null;
+
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Clock className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          {category && badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">] && (
+            <Badge variant={badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">]} className="text-[10px] tracking-wide">
+              {category}
+            </Badge>
+          )}
+          {formatted && <span className="font-medium text-foreground">{formatted}</span>}
+        </div>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -152,31 +154,6 @@ export default function PublicHome() {
       </div>
     );
   }
-
-  const renderTimeControl = useMemo(() => {
-    return (t: PublicTournament) => {
-      const formatted = formatTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
-      const categoryFromFields = t.time_control_category && t.time_control_category !== "UNKNOWN" ? t.time_control_category : null;
-      const classified = classifyTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
-      const category = categoryFromFields ?? (classified !== "UNKNOWN" ? classified : null);
-
-      if (!formatted && !category) return null;
-
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          <div className="flex items-center gap-2">
-            {category && badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">] && (
-              <Badge variant={badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">]} className="text-[10px] tracking-wide">
-                {category}
-              </Badge>
-            )}
-            {formatted && <span className="font-medium text-foreground">{formatted}</span>}
-          </div>
-        </div>
-      );
-    };
-  }, []);
 
   return (
     <>
