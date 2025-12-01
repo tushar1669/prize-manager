@@ -560,62 +560,117 @@ export default function ConflictReview() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              {conflicts.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" /><h3 className="text-lg font-semibold">All Clear!</h3></CardContent></Card>
-              ) : (
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
-                    {conflicts.some(c => c.suggested) && (
-                      <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
-                        Resolve All
-                      </Button>
-                    )}
-                  </div>
-                  <ScrollArea className="h-[600px]">
-                    <div className="space-y-3">
-                      {conflicts.map(conflict => {
-                        const prize = conflict.impacted_prizes[0] ? getPrize(conflict.impacted_prizes[0]) : null;
-                        const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
-                        
-                        return (
-                          <Card key={conflict.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedConflict(conflict)}>
-                            <CardHeader>
-                              <CardTitle className="text-base flex items-center gap-2">
-                                <Badge variant="destructive">
-                                  {conflict.type === 'tie' ? 'Tie – identical prize priority' : conflict.type}
-                                </Badge>
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2">
-                              {player && (
-                                <p className="text-sm">
-                                  <strong>Player:</strong> {player.name} (Rating: {player.rating || 'N/A'})
-                                </p>
-                              )}
-                              {prize && (
-                                <p className="text-sm">
-                                  <strong>Prize:</strong> {prize.category_name} - Place #{prize.place} (₹{prize.cash_amount})
-                                </p>
-                              )}
-                              <p className="text-xs text-muted-foreground">
-                                {conflict.type === 'tie' 
-                                  ? `Player is equally eligible for ${conflict.impacted_prizes.length} prizes with identical brochure order, value tier, cash, main-ness and place. Choose one.`
-                                  : conflict.reasons.join(', ')
-                                }
-                              </p>
-                              <div className="flex gap-2 mt-3">
-                                {conflict.suggested && <Button size="sm" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); void handleAccept(conflict.id); }}>Accept</Button>}
-                                <Button size="sm" variant="outline" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+              {(() => {
+                // Compute unfilled and critical counts from coverage data
+                const unfilledCount = coverageData.filter(c => c.is_unfilled).length;
+                const criticalCount = coverageData.filter(c =>
+                  c.is_unfilled &&
+                  (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
+                ).length;
+                const filledCount = coverageData.filter(c => !c.is_unfilled).length;
+                const totalPrizes = coverageData.length;
+
+                if (conflicts.length > 0) {
+                  // Show conflicts list
+                  return (
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
+                        {conflicts.some(c => c.suggested) && (
+                          <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
+                            Resolve All
+                          </Button>
+                        )}
+                      </div>
+                      <ScrollArea className="h-[600px]">
+                        <div className="space-y-3">
+                          {conflicts.map(conflict => {
+                            const prize = conflict.impacted_prizes[0] ? getPrize(conflict.impacted_prizes[0]) : null;
+                            const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
+                            
+                            return (
+                              <Card key={conflict.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedConflict(conflict)}>
+                                <CardHeader>
+                                  <CardTitle className="text-base flex items-center gap-2">
+                                    <Badge variant="destructive">
+                                      {conflict.type === 'tie' ? 'Tie – identical prize priority' : conflict.type}
+                                    </Badge>
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                  {player && (
+                                    <p className="text-sm">
+                                      <strong>Player:</strong> {player.name} (Rating: {player.rating || 'N/A'})
+                                    </p>
+                                  )}
+                                  {prize && (
+                                    <p className="text-sm">
+                                      <strong>Prize:</strong> {prize.category_name} - Place #{prize.place} (₹{prize.cash_amount})
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground">
+                                    {conflict.type === 'tie' 
+                                      ? `Player is equally eligible for ${conflict.impacted_prizes.length} prizes with identical brochure order, value tier, cash, main-ness and place. Choose one.`
+                                      : conflict.reasons.join(', ')
+                                    }
+                                  </p>
+                                  <div className="flex gap-2 mt-3">
+                                    {conflict.suggested && <Button size="sm" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); void handleAccept(conflict.id); }}>Accept</Button>}
+                                    <Button size="sm" variant="outline" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
                     </div>
-                  </ScrollArea>
-                </div>
-              )}
+                  );
+                }
+
+                // Show status card based on critical/unfilled counts
+                if (criticalCount > 0) {
+                  return (
+                    <Card className="border-amber-500/50 bg-amber-500/10">
+                      <CardContent className="py-12 text-center">
+                        <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Fix critical issues before committing</h3>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {criticalCount} prize(s) have critical errors (inactive category or internal error). 
+                          Review the debug report and fix these issues before you can commit.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+
+                if (unfilledCount > 0) {
+                  return (
+                    <Card className="border-primary/30 bg-primary/5">
+                      <CardContent className="py-12 text-center">
+                        <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {filledCount} of {totalPrizes} prizes have winners. {unfilledCount} prize(s) will be marked as "No eligible winner". You can still commit.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+
+                // All clear - no conflicts, no unfilled
+                return (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold">All Clear!</h3>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        All {totalPrizes > 0 ? totalPrizes : summaryCounts.activePrizes} prizes have eligible winners.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
             </div>
             <div className="space-y-4">
               <Card>
