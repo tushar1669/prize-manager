@@ -110,7 +110,7 @@ export default function ConflictReview() {
       
       const { data, count, usedColumns } = await safeSelectPlayersByTournament(
         id,
-        ['id', 'name', 'dob', 'dob_raw', 'rating'],
+        ['id', 'name', 'rank', 'dob', 'dob_raw', 'rating'],
         { column: 'rank', ascending: true, nullsFirst: false }
       );
       
@@ -552,6 +552,14 @@ export default function ConflictReview() {
             totalPlayers={summaryCounts.players}
             totalPrizes={summaryCounts.activePrizes}
             tournamentSlug={tournamentData?.slug || tournamentData?.title || id}
+            tournamentTitle={tournamentData?.title}
+            winners={winners}
+            players={playersList?.map(p => ({ 
+              id: p.id, 
+              name: p.name, 
+              rank: (p as any).rank ?? null, 
+              rating: p.rating 
+            })) || []}
           />
         )}
 
