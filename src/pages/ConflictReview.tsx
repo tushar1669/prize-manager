@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -649,7 +649,25 @@ export default function ConflictReview() {
                     <Card className="border-primary/30 bg-primary/5">
                       <CardContent className="py-12 text-center">
                         <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
+                        <div className="flex items-center justify-center gap-2">
+                          <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-80 text-left">
+                              <p className="text-sm font-medium mb-2">Why are some prizes unfilled?</p>
+                              <ul className="text-xs text-muted-foreground space-y-1.5">
+                                <li><strong>No eligible players:</strong> The category criteria (age, rating, gender, location, etc.) don't match any imported players.</li>
+                                <li><strong>One-prize policy:</strong> All eligible players already won a higher-value prize. Each player can only win one prize.</li>
+                                <li><strong>Too strict criteria:</strong> The category rules are too narrow for the player pool.</li>
+                              </ul>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Check the Allocation Debug Report for detailed diagnostics.
+                              </p>
+                            </HoverCardContent>
+                          </HoverCard>
+                        </div>
                         <p className="text-sm text-muted-foreground mt-2">
                           {filledCount} of {totalPrizes} prizes have winners. {unfilledCount} prize(s) will be marked as "No eligible winner". You can still commit.
                         </p>
