@@ -71,6 +71,8 @@ export default function PublicHome() {
         .from('tournaments')
         .select('id, title, start_date, end_date, city, venue, public_slug, brochure_url, chessresults_url, public_results_url, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total')
         .eq('is_published', true)
+        .eq('is_archived', false)
+        .is('deleted_at', null)
         .order('start_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 

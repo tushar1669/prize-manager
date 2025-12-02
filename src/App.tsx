@@ -29,6 +29,7 @@ import SpecialLanding from "./pages/SpecialLanding";
 import Account from "./pages/Account";
 import CategoryOrderReview from "./pages/CategoryOrderReview";
 import PublicWinnersPage from "./pages/PublicWinnersPage";
+import AdminTournaments from "./pages/AdminTournaments";
 
 const queryClient = new QueryClient();
 
@@ -73,6 +74,7 @@ const App = () => {
               <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
               <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
+              <Route path="/admin/tournaments" element={<ProtectedRoute><AdminTournaments /></ProtectedRoute>} />
 
               {/* Fallback */}
               <Route path="*" element={<NotFound />} />
