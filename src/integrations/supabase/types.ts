@@ -653,6 +653,7 @@ export type Database = {
           public_results_url: string | null
           public_slug: string | null
           published_at: string | null
+          slug: string | null
           start_date: string | null
           title: string | null
           venue: string | null

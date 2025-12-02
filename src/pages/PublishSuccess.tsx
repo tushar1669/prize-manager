@@ -19,18 +19,18 @@ export default function PublishSuccess() {
   // Fetch publication if not passed in state
   const { data: publication } = useQuery({
     queryKey: ['publication', id],
-    queryFn: async () => {
+    queryFn: async (): Promise<{ slug: string } | null> => {
       const { data, error } = await supabase
         .from('published_tournaments')
         .select('slug')
-        .eq('id', id)
+        .eq('id', id as string)
         .maybeSingle();
 
       if (error) {
         console.error('[publish] error fetching published_tournaments view', error);
         throw error;
       }
-      return data;
+      return data as unknown as { slug: string } | null;
     },
     enabled: !!id && !slugFromState
   });
