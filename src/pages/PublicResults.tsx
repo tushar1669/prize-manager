@@ -9,23 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 
+type PublishedTournamentBasic = {
+  id: string;
+  title: string;
+  slug: string;
+};
+
 export default function PublicResults() {
   const { slug } = useParams();
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament', slug],
-    queryFn: async () => {
+    queryFn: async (): Promise<PublishedTournamentBasic | null> => {
       const { data, error } = await supabase
         .from('published_tournaments')
         .select('id, title, slug')
-        .eq('slug', slug)
+        .eq('slug', slug as string)
         .maybeSingle();
 
       if (error) throw error;
       if (data) {
         console.log(`[public] anon fetch ok slug=${slug}`);
       }
-      return data;
+      return data as unknown as PublishedTournamentBasic | null;
     },
     enabled: !!slug,
   });

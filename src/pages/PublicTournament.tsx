@@ -7,23 +7,39 @@ import { Trophy, Calendar, MapPin, ExternalLink, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 
+type PublishedTournament = {
+  id: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+  city: string | null;
+  venue: string | null;
+  notes: string | null;
+  public_slug: string | null;
+  brochure_url: string | null;
+  chessresults_url: string | null;
+  public_results_url: string | null;
+  slug: string;
+  version: number | null;
+};
+
 export default function PublicTournament() {
   const { slug } = useParams();
 
   const { data: tournament, isLoading } = useQuery({
     queryKey: ['public-tournament', slug],
-    queryFn: async () => {
+    queryFn: async (): Promise<PublishedTournament | null> => {
       const { data, error } = await supabase
         .from('published_tournaments')
         .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, slug, version')
-        .eq('slug', slug)
+        .eq('slug', slug as string)
         .maybeSingle();
 
       if (error) throw error;
       if (data) {
         console.log(`[public] anon fetch ok slug=${slug}`);
       }
-      return data;
+      return data as unknown as PublishedTournament | null;
     },
     enabled: !!slug,
   });
