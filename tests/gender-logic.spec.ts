@@ -22,12 +22,21 @@ describe('gender inference', () => {
     const inference = inferGenderForRow({ fs: 'F' }, baseConfig);
     expect(inference.gender).toBe('F');
     expect(inference.sources).toContain('fs_column');
+    expect(inference.gender_source).toBe('fs_column');
+  });
+
+  it('treats headerless gender column with F as female only', () => {
+    const inference = inferGenderForRow({ hidden: 'F' }, { ...baseConfig, headerlessGenderColumn: 'hidden' });
+    expect(inference.gender).toBe('F');
+    expect(inference.sources).toContain('headerless_after_name');
+    expect(inference.gender_source).toBe('headerless_after_name');
   });
 
   it('sets female when Type/Group carries FMG marker', () => {
     const inference = inferGenderForRow({}, baseConfig, 'FMG', null);
     expect(inference.gender).toBe('F');
     expect(inference.sources).toContain('type_label');
+    expect(inference.female_signal_source).toBe('FMG');
   });
 
   it('prefers explicit female gender even when FS is blank', () => {
@@ -39,8 +48,14 @@ describe('gender inference', () => {
   it('overrides male gender when Type includes FMG and records warning', () => {
     const inference = inferGenderForRow({ gender: 'M' }, baseConfig, 'FMG', null);
     expect(inference.gender).toBe('F');
-    expect(inference.warnings).toContain('FMG overrides gender');
+    expect(inference.warnings).toContain('female signal overrides explicit male gender');
     expect(inference.sources).toContain('type_label');
+    expect(inference.gender_source).toBe('type_label');
+  });
+
+  it('leaves blank gender values as null', () => {
+    const inference = inferGenderForRow({}, baseConfig);
+    expect(inference.gender).toBeNull();
   });
 });
 

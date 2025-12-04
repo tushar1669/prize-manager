@@ -1864,6 +1864,10 @@ export default function PlayerImport() {
         player.gender = genderInference.gender;
       }
 
+      if (genderInference.gender_source) {
+        (player as any).gender_source = genderInference.gender_source;
+      }
+
       if (genderInference.sources.length) {
         player._genderSources = genderInference.sources;
       }
