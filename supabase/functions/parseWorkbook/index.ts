@@ -499,6 +499,7 @@ Deno.serve(async (req) => {
 
   const tournamentId = req.headers.get("x-tournament-id") ?? "";
   const providedHash = req.headers.get("x-sha256") ?? "";
+  const genderDebugTournamentId = "74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15";
 
   try {
     const start = performance.now();
@@ -536,7 +537,49 @@ Deno.serve(async (req) => {
 
     const genderConfig = analyzeGenderColumns(dataRows as Record<string, unknown>[]);
     const rowsWithGender = dataRows.map((row) => {
-      const genderInference = inferGenderForRow(row as Record<string, unknown>, genderConfig);
+      const typedRow = row as Record<string, unknown>;
+      const genderInference = inferGenderForRow(typedRow, genderConfig);
+
+      // TEMP: gender debug logging for tournament 74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15
+      if (tournamentId === genderDebugTournamentId) {
+        const fsRaw = genderConfig.fsColumn ? typedRow[genderConfig.fsColumn] : undefined;
+        const headerlessGenderRaw = genderConfig.headerlessGenderColumn
+          ? typedRow[genderConfig.headerlessGenderColumn]
+          : undefined;
+        const typeRaw = (typedRow.type_label ?? typedRow.type ?? typedRow.Type ?? typedRow.TYPE) as
+          | string
+          | undefined;
+        const groupRaw = (typedRow.group_label ?? typedRow.group ?? typedRow.Group ?? typedRow.GROUP) as
+          | string
+          | undefined;
+
+        const femaleSignalSource = (() => {
+          if (genderInference.sources.includes("fs_column")) return "FS";
+          if (genderInference.sources.includes("headerless_after_name")) return "Headerless";
+          if (genderInference.sources.includes("type_label")) return "Type:FMG";
+          if (genderInference.sources.includes("group_label")) return "Group:FMG";
+          if (genderInference.sources.includes("gender_column")) return "ExplicitGender";
+          return "None";
+        })();
+
+        const ratingValue =
+          (typedRow.rating as unknown) ?? typedRow.rtg ?? (typedRow as any).Rtg ?? (typedRow as any).RTG;
+
+        console.log(
+          `[import.gender-debug] ${JSON.stringify({
+            rank: typedRow.rank ?? null,
+            name: typedRow.name ?? null,
+            rating: ratingValue ?? null,
+            fs_raw: fsRaw ?? null,
+            headerless_gender_raw: headerlessGenderRaw ?? null,
+            type_raw: typeRaw ?? null,
+            group_raw: groupRaw ?? null,
+            gender_normalized: genderInference.gender ?? null,
+            female_signal_source: femaleSignalSource
+          })}`
+        );
+      }
+
       return {
         ...row,
         _gender: genderInference.gender,
