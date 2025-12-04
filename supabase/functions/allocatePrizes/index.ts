@@ -15,6 +15,8 @@ interface AllocatePrizesRequest {
   tieBreakStrategy?: TieBreakStrategy;
 }
 
+const GENDER_DEBUG_TOURNAMENT_ID = '74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15';
+
 type TieBreakField = 'rating' | 'name';
 type TieBreakStrategy = 'rating_then_name' | 'none' | TieBreakField[];
 
@@ -252,6 +254,33 @@ Deno.serve(async (req) => {
     const payload: AllocatePrizesRequest = await req.json();
     const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false, tieBreakStrategy } = payload;
 
+    const genderDebugEnabled = tournamentId === GENDER_DEBUG_TOURNAMENT_ID;
+
+    // TEMP: gender debug logging for tournament 74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15
+    const logGenderEligibility = (
+      category: CategoryRow,
+      player: { name?: string | null; gender?: string | null },
+      evaluation: EligibilityResult
+    ) => {
+      if (!genderDebugEnabled) return;
+
+      const requiredGender = category.criteria_json?.gender?.toUpperCase?.();
+      if (!requiredGender || requiredGender === 'OPEN') return;
+
+      const failReason = evaluation.reasonCodes.find(code => code.startsWith('gender_')) ?? null;
+      const passedGenderCheck = evaluation.passCodes.includes('gender_ok');
+
+      console.log(
+        `[alloc.gender-debug] ${JSON.stringify({
+          category_name: category.name,
+          player_name: player.name ?? null,
+          player_gender: player.gender ?? null,
+          passed_gender_check: passedGenderCheck,
+          fail_reason: failReason
+        })}`
+      );
+    };
+
     console.log(`[allocatePrizes] Starting allocation for tournament ${tournamentId}`);
 
     // 1) Fetch tournament data with start_date
@@ -458,6 +487,10 @@ Deno.serve(async (req) => {
         : null;
       const eligible = evaluation?.eligible === true;
 
+      if (evaluation && prizeContext?.cat) {
+        logGenderEligibility(prizeContext.cat, player, evaluation);
+      }
+
       if (!eligible && !force) {
         const reasons = ['manual_override_ineligible'];
         if (evaluation?.reasonCodes?.length) {
@@ -508,6 +541,7 @@ Deno.serve(async (req) => {
 
       for (const player of playerRows) {
         const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
+        logGenderEligibility(cat, player, evaluation);
         if (rules.verbose_logs) {
           const status = evaluation.eligible ? 'eligible' : 'ineligible';
           const codes = evaluation.eligible
