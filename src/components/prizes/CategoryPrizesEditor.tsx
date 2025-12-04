@@ -30,6 +30,7 @@ export interface CategoryRow {
   is_main: boolean;
   is_active: boolean;
   order_idx: number;
+  category_type?: string | null;
   criteria_json?: any;
   prizes: PrizeRow[];
 }

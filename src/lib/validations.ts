@@ -49,6 +49,7 @@ export const categorySchema = z.object({
   name: z.string().min(1, "Category name is required").max(100, "Name must be less than 100 characters"),
   is_main: z.boolean().default(false),
   order_idx: z.number().optional(),
+  category_type: z.string().optional(),
   criteria_json: z.record(z.any()).optional()
 });
 

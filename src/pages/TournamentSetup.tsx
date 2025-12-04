@@ -66,7 +66,8 @@ export default function TournamentSetup() {
     open: boolean;
     category: any | null;
   }>({ open: false, category: null });
-  const [savedCriteria, setSavedCriteria] = useState<any>(null);
+  const [savedCriteria, setSavedCriteria] = useState<{ criteria: any; category_type: string } | null>(null);
+  const [categoryTypeSelection, setCategoryTypeSelection] = useState<string>('standard');
   // Start with empty arrays - will be populated during hydration
   const [prizes, setPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
   const [initialPrizes, setInitialPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
@@ -306,7 +307,11 @@ export default function TournamentSetup() {
   // Track Criteria sheet dirty state (only when draft differs from saved)
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
-      const isDirty = !deepEqualNormalized(criteriaSheet.category.criteria_json, savedCriteria);
+      const snapshot = {
+        criteria: normalizeCriteria(criteriaSheet.category.criteria_json),
+        category_type: categoryTypeSelection,
+      };
+      const isDirty = !deepEqualNormalized(snapshot, savedCriteria);
       if (isDirty !== lastCriteriaSheetDirty.current) {
         lastCriteriaSheetDirty.current = isDirty;
         setDirty('criteria-sheet', isDirty);
@@ -315,14 +320,35 @@ export default function TournamentSetup() {
       lastCriteriaSheetDirty.current = false;
       resetDirty('criteria-sheet');
     }
-  }, [criteriaSheet, savedCriteria, setDirty, resetDirty]);
+  }, [criteriaSheet, savedCriteria, setDirty, resetDirty, categoryTypeSelection]);
 
   // Initialize savedCriteria when criteria sheet opens (normalize for stable comparison)
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
-      setSavedCriteria(normalizeCriteria(criteriaSheet.category.criteria_json));
+      const nextType = criteriaSheet.category.category_type || 'standard';
+      setCategoryTypeSelection(nextType);
+      setSavedCriteria({
+        criteria: normalizeCriteria(criteriaSheet.category.criteria_json),
+        category_type: nextType,
+      });
     }
-  }, [criteriaSheet.open]);
+  }, [criteriaSheet.open, criteriaSheet.category]);
+
+  useEffect(() => {
+    if (!criteriaSheet.open) return;
+    const genderEl = document.getElementById('criteria-gender') as HTMLSelectElement | null;
+    if (!genderEl) return;
+
+    if (categoryTypeSelection === 'youngest_female') {
+      genderEl.value = 'F';
+    } else if (categoryTypeSelection === 'youngest_male') {
+      genderEl.value = 'M_OR_UNKNOWN';
+    } else if (criteriaSheet.category?.criteria_json) {
+      genderEl.value = criteriaSheet.category.criteria_json.gender || '';
+    } else {
+      genderEl.value = '';
+    }
+  }, [categoryTypeSelection, criteriaSheet]);
 
   // Organizer guard: owner or master
   const isOrganizer = 
@@ -484,10 +510,11 @@ export default function TournamentSetup() {
           tournament_id: id,
           name: values.name,
           is_main: values.is_main,
+          category_type: values.category_type || 'standard',
           criteria_json: values.criteria_json || {},
           order_idx: categories?.length || 0
         })
-        .select('id, name, criteria_json, is_main, order_idx')
+        .select('id, name, criteria_json, is_main, order_idx, category_type')
         .single();
       
       if (error) throw error;
@@ -726,18 +753,24 @@ export default function TournamentSetup() {
     mutationFn: async ({
       categoryId,
       criteria,
+      categoryType,
     }: {
       categoryId: string;
       criteria: any;
+      categoryType: string;
     }) => {
       const { error } = await supabase
         .from('categories')
-        .update({ criteria_json: criteria })
+        .update({ criteria_json: criteria, category_type: categoryType || 'standard' })
         .eq('id', categoryId);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
       console.log('[rules] save ok', { categoryId: variables.categoryId });
+      setSavedCriteria({
+        criteria: normalizeCriteria(variables.criteria),
+        category_type: variables.categoryType,
+      });
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
       toast.info('Rules saved', { duration: 1500 });
       toast.success('Rules saved');
@@ -916,7 +949,7 @@ export default function TournamentSetup() {
     // 1) Fetch source category
     const { data: cats, error: catError } = await supabase
       .from('categories')
-      .select('id, criteria_json, name, order_idx, is_main, tournament_id')
+      .select('id, criteria_json, name, order_idx, is_main, tournament_id, category_type')
       .eq('id', sourceId)
       .single();
 
@@ -936,6 +969,7 @@ export default function TournamentSetup() {
         tournament_id: src.tournament_id,
         name: newName,
         is_main: false,
+        category_type: src.category_type || 'standard',
         criteria_json: criteria,
         order_idx: (src.order_idx ?? 0) + 1,
       })
@@ -1861,6 +1895,23 @@ export default function TournamentSetup() {
           </SheetHeader>
 
           <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label htmlFor="category-type">Category Type</Label>
+              <select
+                id="category-type"
+                className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full"
+                value={categoryTypeSelection}
+                onChange={(e) => setCategoryTypeSelection(e.target.value)}
+              >
+                <option value="standard">Standard</option>
+                <option value="youngest_female">Youngest Female</option>
+                <option value="youngest_male">Youngest Male</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Youngest categories ignore age/rating filters and auto-set gender. Use for global youngest prizes.
+              </p>
+            </div>
+
             {/* Preset Chips */}
             <div className="border-b pb-4 mb-4">
               <Label className="mb-2 block">Quick Presets</Label>
@@ -1970,6 +2021,7 @@ export default function TournamentSetup() {
             {/* Age Range */}
             {(() => {
               const criteria = criteriaSheet.category?.criteria_json as any;
+              const youngestCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male';
               return (
                 <>
                   <div className="grid grid-cols-2 gap-4">
@@ -1981,6 +2033,7 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.max_age ?? ''}
                         placeholder="e.g., 9, 11, 13"
+                        disabled={youngestCategory}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "Under X" categories. E.g., U-9 = max age 9.
@@ -1994,6 +2047,7 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.min_age ?? ''}
                         placeholder="e.g., 60"
+                        disabled={youngestCategory}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "60+ Veteran" categories. Leave empty for no minimum.
@@ -2007,6 +2061,7 @@ export default function TournamentSetup() {
                       <Checkbox
                         id="criteria-unrated-only"
                         defaultChecked={criteria?.unrated_only ?? false}
+                        disabled={youngestCategory}
                         onCheckedChange={(checked) => {
                           // When toggled, we need to update dependent fields visually
                           const minRatingEl = document.getElementById('criteria-min-rating') as HTMLInputElement;
@@ -2052,10 +2107,10 @@ export default function TournamentSetup() {
                         id="criteria-min-rating"
                         type="number"
                         min="0"
-                        defaultValue={criteria?.min_rating}
+                        defaultValue={criteria?.min_rating ?? ''}
                         placeholder="e.g., 1200"
-                        disabled={criteria?.unrated_only === true}
-                        className={criteria?.unrated_only === true ? 'opacity-50' : ''}
+                        disabled={criteria?.unrated_only === true || youngestCategory}
+                        className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
                       />
                     </div>
                     <div>
@@ -2064,10 +2119,10 @@ export default function TournamentSetup() {
                         id="criteria-max-rating"
                         type="number"
                         min="0"
-                        defaultValue={criteria?.max_rating}
+                        defaultValue={criteria?.max_rating ?? ''}
                         placeholder="e.g., 1800"
-                        disabled={criteria?.unrated_only === true}
-                        className={criteria?.unrated_only === true ? 'opacity-50' : ''}
+                        disabled={criteria?.unrated_only === true || youngestCategory}
+                        className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
                       />
                     </div>
                   </div>
@@ -2082,12 +2137,12 @@ export default function TournamentSetup() {
                     <Checkbox
                       id="criteria-include-unrated"
                       defaultChecked={criteria?.unrated_only === true ? true : (criteria?.include_unrated ?? true)}
-                      disabled={criteria?.unrated_only === true}
-                      className={criteria?.unrated_only === true ? 'opacity-50 cursor-not-allowed' : ''}
+                      disabled={criteria?.unrated_only === true || youngestCategory}
+                      className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50 cursor-not-allowed' : ''}
                     />
                     <Label 
                       htmlFor="criteria-include-unrated"
-                      className={criteria?.unrated_only === true ? 'opacity-50' : ''}
+                      className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
                     >
                       Include unrated players
                     </Label>
@@ -2105,10 +2160,12 @@ export default function TournamentSetup() {
                       id="criteria-gender" 
                       className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
                       defaultValue={criteria?.gender || ''}
+                      disabled={youngestCategory}
                     >
                       <option value="">Any</option>
                       <option value="F">Girls Only</option>
                       <option value="M">Boys Only</option>
+                      <option value="M_OR_UNKNOWN">Boys / Unknown (not F)</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       Optional. Restrict eligibility by gender.
@@ -2200,6 +2257,9 @@ export default function TournamentSetup() {
           <SheetFooter>
             <Button
               onClick={() => {
+                const categoryType = categoryTypeSelection || 'standard';
+                const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
+
                 // Age fields (min_age/max_age)
                 const maxAgeRaw = (document.getElementById('criteria-max-age') as HTMLInputElement)?.value;
                 const minAgeRaw = (document.getElementById('criteria-min-age') as HTMLInputElement)?.value;
@@ -2253,25 +2313,31 @@ export default function TournamentSetup() {
 
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
-                const unratedOnly = unratedOnlyEl?.getAttribute('data-state') === 'checked';
+                const unratedOnly = !isYoungest && unratedOnlyEl?.getAttribute('data-state') === 'checked';
 
                 const criteria: any = {};
-                
+
                 // Age fields (used by allocator)
-                if (maxAge != null && !isNaN(maxAge)) criteria.max_age = maxAge;
-                if (minAge != null && !isNaN(minAge)) criteria.min_age = minAge;
-                
+                if (!isYoungest) {
+                  if (maxAge != null && !isNaN(maxAge)) criteria.max_age = maxAge;
+                  if (minAge != null && !isNaN(minAge)) criteria.min_age = minAge;
+                }
+
                 // Only save rating fields if not unrated-only mode
-                if (!unratedOnly) {
+                if (!isYoungest && !unratedOnly) {
                   if (minRating != null && !isNaN(minRating)) criteria.min_rating = minRating;
                   if (maxRating != null && !isNaN(maxRating)) criteria.max_rating = maxRating;
                   criteria.include_unrated = includeUnrated;
                 }
-                
+
                 // Save unrated_only flag
-                criteria.unrated_only = unratedOnly;
-                
-                if (gender) criteria.gender = gender;
+                if (!isYoungest) criteria.unrated_only = unratedOnly;
+
+                if (isYoungest) {
+                  criteria.gender = categoryType === 'youngest_female' ? 'F' : 'M_OR_UNKNOWN';
+                } else if (gender) {
+                  criteria.gender = gender;
+                }
                 if (disability_types.length > 0) criteria.allowed_disabilities = disability_types;
                 if (allowed_cities.length > 0) criteria.allowed_cities = allowed_cities;
                 if (allowed_clubs.length > 0) criteria.allowed_clubs = allowed_clubs;
@@ -2283,6 +2349,7 @@ export default function TournamentSetup() {
                   saveCriteriaMutation.mutate({
                     categoryId: criteriaSheet.category.id,
                     criteria,
+                    categoryType,
                   });
                 }
               }}
