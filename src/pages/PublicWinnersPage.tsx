@@ -15,6 +15,7 @@ import { CeremonyScriptView } from "@/components/final-prize/CeremonyScriptView"
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { formatCurrencyINR } from "@/utils/currency";
+import { BrochureLink } from "@/components/public/BrochureLink";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
@@ -25,7 +26,7 @@ export default function PublicWinnersPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, city, is_published')
+        .select('id, title, start_date, end_date, city, is_published, brochure_url')
         .eq('id', id)
         .maybeSingle();
 
@@ -82,6 +83,9 @@ export default function PublicWinnersPage() {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 print:hidden">
+              <BrochureLink url={tournament.brochure_url} />
+            </div>
             {!tournament.is_published && (
               <Alert className="mb-4">
                 <AlertCircle className="h-4 w-4" />

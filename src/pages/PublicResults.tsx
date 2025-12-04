@@ -8,11 +8,13 @@ import { Trophy, Medal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
+import { BrochureLink } from "@/components/public/BrochureLink";
 
 type PublishedTournamentBasic = {
   id: string;
   title: string;
   slug: string;
+  brochure_url: string | null;
 };
 
 export default function PublicResults() {
@@ -23,7 +25,7 @@ export default function PublicResults() {
     queryFn: async (): Promise<PublishedTournamentBasic | null> => {
       const { data, error } = await supabase
         .from('published_tournaments')
-        .select('id, title, slug')
+        .select('id, title, slug, brochure_url')
         .eq('slug', slug as string)
         .maybeSingle();
 
@@ -170,12 +172,15 @@ export default function PublicResults() {
               <Badge variant="outline" className="mt-2 text-xs">Allocations v{results.version}</Badge>
             )}
           </div>
-          <Button variant="outline" asChild>
-            <Link to={`/p/${slug}/details`}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Details
-              </Link>
-            </Button>
+          <div className="flex items-center gap-2">
+            <BrochureLink url={tournament.brochure_url} />
+            <Button variant="outline" asChild>
+              <Link to={`/p/${slug}/details`}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Details
+                </Link>
+              </Button>
+          </div>
           </div>
         </div>
       </div>
