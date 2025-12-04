@@ -235,6 +235,7 @@ type CategoryRow = {
   is_main: boolean;
   order_idx: number;
   is_active?: boolean;
+  category_type?: string | null;
   criteria_json?: any;
   prizes: PrizeRow[];
 };
@@ -299,7 +300,7 @@ Deno.serve(async (req) => {
     const { data: categories, error: categoriesError } = await supabaseClient
       .from('categories')
       .select(`
-        id, name, is_main, order_idx, is_active, criteria_json,
+        id, name, is_main, order_idx, is_active, category_type, criteria_json,
         prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
       `)
       .eq('tournament_id', tournamentId)
@@ -312,6 +313,7 @@ Deno.serve(async (req) => {
       .filter(c => c.is_active !== false)
       .map(c => ({
         ...c,
+        category_type: c.category_type || 'standard',
         prizes: (c.prizes || []).filter((p: any) => p.is_active !== false)
       })) as CategoryRow[];
 
@@ -534,6 +536,8 @@ Deno.serve(async (req) => {
       // Skip if manually overridden
       if (overrides.find(o => o.prizeId === p.id)) continue;
 
+      const youngestCategory = isYoungestCategory(cat);
+
       // Track eligibility BEFORE one-prize exclusion
       const eligibleBeforeOnePrize: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
@@ -637,31 +641,49 @@ Deno.serve(async (req) => {
       }
 
       // Deterministic tie-breaking based on configured strategy
-      eligible.sort((a, b) => compareEligibleByRankRatingName(a, b, tieBreakFields));
+      if (youngestCategory) {
+        eligible.sort(compareYoungestEligible);
+      } else {
+        eligible.sort((a, b) => compareEligibleByRankRatingName(a, b, tieBreakFields));
+      }
       const winner = eligible[0];
 
       // Compute tie-break reason for logging
       let tieBreak: 'none' | TieBreakField = 'none';
       if (eligible.length > 1) {
-        const r0 = eligible[0].player.rank ?? Number.MAX_SAFE_INTEGER;
-        const r1 = eligible[1].player.rank ?? Number.MAX_SAFE_INTEGER;
-
-        if (r0 === r1) {
-          for (const field of tieBreakFields) {
-            if (field === 'rating') {
-              const rt0 = eligible[0].player.rating ?? 0;
-              const rt1 = eligible[1].player.rating ?? 0;
-              if (rt0 !== rt1) {
-                tieBreak = 'rating';
-                break;
-              }
+        if (youngestCategory) {
+          const first = eligible[0].player;
+          const second = eligible[1].player;
+          const dobFirst = first.dob ? new Date(first.dob).getTime() : Number.NEGATIVE_INFINITY;
+          const dobSecond = second.dob ? new Date(second.dob).getTime() : Number.NEGATIVE_INFINITY;
+          if (dobFirst === dobSecond) {
+            if ((first.rating ?? 0) !== (second.rating ?? 0)) {
+              tieBreak = 'rating';
+            } else if ((first.name ?? '').toString() !== (second.name ?? '').toString()) {
+              tieBreak = 'name';
             }
-            if (field === 'name') {
-              const nameA = (eligible[0].player.name ?? '').toString();
-              const nameB = (eligible[1].player.name ?? '').toString();
-              if (nameA !== nameB) {
-                tieBreak = 'name';
-                break;
+          }
+        } else {
+          const r0 = eligible[0].player.rank ?? Number.MAX_SAFE_INTEGER;
+          const r1 = eligible[1].player.rank ?? Number.MAX_SAFE_INTEGER;
+
+          if (r0 === r1) {
+            for (const field of tieBreakFields) {
+              if (field === 'rating') {
+                const rt0 = eligible[0].player.rating ?? 0;
+                const rt1 = eligible[1].player.rating ?? 0;
+                if (rt0 !== rt1) {
+                  tieBreak = 'rating';
+                  break;
+                }
+              }
+              if (field === 'name') {
+                const nameA = (eligible[0].player.name ?? '').toString();
+                const nameB = (eligible[1].player.name ?? '').toString();
+                if (nameA !== nameB) {
+                  tieBreak = 'name';
+                  break;
+                }
               }
             }
           }
@@ -669,7 +691,13 @@ Deno.serve(async (req) => {
       }
 
       assignedPlayers.add(winner.player.id);
-      const reasonSet = new Set<string>(['auto', 'rank', 'max_cash_priority', ...winner.passCodes, ...winner.warnCodes]);
+      const reasonSet = new Set<string>([
+        'auto',
+        youngestCategory ? 'youngest' : 'rank',
+        'max_cash_priority',
+        ...winner.passCodes,
+        ...winner.warnCodes
+      ]);
       const reasonList = Array.from(reasonSet);
       winners.push({
         prizeId: p.id,
@@ -943,14 +971,27 @@ const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?:
 
 export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
   const c = cat.criteria_json || {};
+  const categoryType = (cat.category_type as string) || 'standard';
+  const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
   const failCodes = new Set<string>();
   const passCodes = new Set<string>();
   const warnCodes = new Set<string>();
 
   // Gender check
-  const reqG = c.gender?.toUpperCase?.() || null; // 'M' | 'F' | 'OPEN' | undefined
+  const reqG = (() => {
+    if (isYoungest) {
+      return categoryType === 'youngest_female' ? 'F' : 'M_OR_UNKNOWN';
+    }
+    return c.gender?.toUpperCase?.() || null;
+  })();
   const pg = normGender(player.gender);
   if (reqG === 'M') {
+    if (pg === 'F') {
+      failCodes.add('gender_mismatch');
+    } else {
+      passCodes.add('gender_ok');
+    }
+  } else if (reqG === 'M_OR_UNKNOWN') {
     if (pg === 'F') {
       failCodes.add('gender_mismatch');
     } else {
@@ -966,6 +1007,10 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
     }
   } else {
     passCodes.add('gender_open');
+  }
+
+  if (isYoungest && !player.dob) {
+    failCodes.add('dob_missing');
   }
 
   // Age (strict ON by default)
@@ -1248,4 +1293,29 @@ export function compareEligibleByRankRatingName(
   }
 
   return 0;
+}
+
+export const getCategoryType = (category: { category_type?: string | null }): string =>
+  category.category_type || 'standard';
+
+export const isYoungestCategory = (category: { category_type?: string | null }): boolean => {
+  const type = getCategoryType(category);
+  return type === 'youngest_female' || type === 'youngest_male';
+};
+
+export function compareYoungestEligible(
+  a: { player: { dob?: string | null; rating?: number | null; name?: string | null } },
+  b: { player: { dob?: string | null; rating?: number | null; name?: string | null } },
+): number {
+  const dobA = a.player.dob ? new Date(a.player.dob).getTime() : Number.NEGATIVE_INFINITY;
+  const dobB = b.player.dob ? new Date(b.player.dob).getTime() : Number.NEGATIVE_INFINITY;
+  if (dobA !== dobB) return dobB - dobA; // newest (most recent dob) first
+
+  const ratingA = a.player.rating ?? 0;
+  const ratingB = b.player.rating ?? 0;
+  if (ratingA !== ratingB) return ratingB - ratingA; // higher rating next
+
+  const nameA = (a.player.name ?? '').toString();
+  const nameB = (b.player.name ?? '').toString();
+  return nameA.localeCompare(nameB);
 }
