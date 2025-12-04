@@ -297,10 +297,11 @@ Deno.serve(async (req) => {
     const tournamentStartDate = tournament.start_date ? new Date(tournament.start_date) : new Date();
 
     // 2) Fetch categories with prizes (order by order_idx for brochure order)
+    // NOTE: category_type is stored in criteria_json.category_type until DB migration adds the column
     const { data: categories, error: categoriesError } = await supabaseClient
       .from('categories')
       .select(`
-        id, name, is_main, order_idx, is_active, category_type, criteria_json,
+        id, name, is_main, order_idx, is_active, criteria_json,
         prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
       `)
       .eq('tournament_id', tournamentId)
@@ -309,13 +310,19 @@ Deno.serve(async (req) => {
     if (categoriesError) throw new Error(`Failed to fetch categories: ${categoriesError.message}`);
 
     // Filter to active categories and prizes
+    // category_type: check both top-level (future) and criteria_json.category_type (current fallback)
     const activeCategories = (categories || [])
       .filter(c => c.is_active !== false)
-      .map(c => ({
-        ...c,
-        category_type: c.category_type || 'standard',
-        prizes: (c.prizes || []).filter((p: any) => p.is_active !== false)
-      })) as CategoryRow[];
+      .map(c => {
+        const catType = (c as any).category_type 
+          ?? c.criteria_json?.category_type 
+          ?? 'standard';
+        return {
+          ...c,
+          category_type: catType,
+          prizes: (c.prizes || []).filter((p: any) => p.is_active !== false)
+        };
+      }) as CategoryRow[];
 
     const activePrizes = activeCategories.flatMap(cat => cat.prizes || []);
 

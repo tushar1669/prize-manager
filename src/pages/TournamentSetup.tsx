@@ -325,7 +325,8 @@ export default function TournamentSetup() {
   // Initialize savedCriteria when criteria sheet opens (normalize for stable comparison)
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
-      const nextType = criteriaSheet.category.category_type || 'standard';
+      // category_type is stored in criteria_json (not as a top-level column)
+      const nextType = criteriaSheet.category.criteria_json?.category_type || 'standard';
       setCategoryTypeSelection(nextType);
       setSavedCriteria({
         criteria: normalizeCriteria(criteriaSheet.category.criteria_json),
@@ -504,21 +505,26 @@ export default function TournamentSetup() {
   // Create category mutation
   const createCategoryMutation = useMutation({
     mutationFn: async (values: CategoryForm) => {
+      // Store category_type inside criteria_json (column doesn't exist in DB yet)
+      const criteriaWithType = {
+        ...(values.criteria_json || {}),
+        category_type: values.category_type || 'standard',
+      };
       const { data: category, error } = await supabase
         .from('categories')
         .insert({
           tournament_id: id,
           name: values.name,
           is_main: values.is_main,
-          category_type: values.category_type || 'standard',
-          criteria_json: values.criteria_json || {},
+          criteria_json: criteriaWithType,
           order_idx: categories?.length || 0
         })
-        .select('id, name, criteria_json, is_main, order_idx, category_type')
+        .select('id, name, criteria_json, is_main, order_idx')
         .single();
       
       if (error) throw error;
-      return category;
+      // Return with category_type extracted from criteria_json for frontend compatibility
+      return { ...category, category_type: criteriaWithType.category_type };
     },
     onSuccess: async (createdCategory) => {
       try {
@@ -759,9 +765,14 @@ export default function TournamentSetup() {
       criteria: any;
       categoryType: string;
     }) => {
+      // Store category_type inside criteria_json (column doesn't exist in DB yet)
+      const criteriaWithType = {
+        ...criteria,
+        category_type: categoryType || 'standard',
+      };
       const { error } = await supabase
         .from('categories')
-        .update({ criteria_json: criteria, category_type: categoryType || 'standard' })
+        .update({ criteria_json: criteriaWithType })
         .eq('id', categoryId);
       if (error) throw error;
     },
@@ -946,10 +957,10 @@ export default function TournamentSetup() {
     sourceId: string;
     newName: string;
   }) => {
-    // 1) Fetch source category
+    // 1) Fetch source category (category_type is stored in criteria_json)
     const { data: cats, error: catError } = await supabase
       .from('categories')
-      .select('id, criteria_json, name, order_idx, is_main, tournament_id, category_type')
+      .select('id, criteria_json, name, order_idx, is_main, tournament_id')
       .eq('id', sourceId)
       .single();
 
@@ -958,10 +969,13 @@ export default function TournamentSetup() {
     if (!src) throw new Error('Source category not found');
 
     // 2) Create new category with cloned criteria (excluding legacy dob_on_or_after)
-    const criteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
-      ? { ...(src.criteria_json as Record<string, any>) }
+    const srcCriteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
+      ? (src.criteria_json as Record<string, any>)
       : {} as Record<string, any>;
+    const criteria = { ...srcCriteria };
     delete criteria.dob_on_or_after;
+    // Preserve category_type in criteria_json
+    criteria.category_type = srcCriteria.category_type || 'standard';
 
     const { data: created, error: createError } = await supabase
       .from('categories')
@@ -969,7 +983,6 @@ export default function TournamentSetup() {
         tournament_id: src.tournament_id,
         name: newName,
         is_main: false,
-        category_type: src.category_type || 'standard',
         criteria_json: criteria,
         order_idx: (src.order_idx ?? 0) + 1,
       })
