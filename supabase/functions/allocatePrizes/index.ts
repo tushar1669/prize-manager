@@ -1216,36 +1216,36 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   };
 };
 
-// Value tier: Cash+Trophy > Cash+Medal > Cash > Trophy > Medal > None
-const valueTier = (p: PrizeRow): number => {
-  const cash = (p.cash_amount ?? 0) > 0;
-  if (cash && p.has_trophy) return 4;     // Cash + Trophy
-  if (cash && p.has_medal) return 3;      // Cash + Medal
-  if (cash) return 2;                     // Cash only
-  if (p.has_trophy) return 1;             // Trophy only
-  if (p.has_medal) return 0;              // Medal only
-  return -1; // no value
-};
-
 export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
+  const cash = p.cash_amount ?? 0;
+  const hasTrophy = !!p.has_trophy;
+  const hasMedal = !!p.has_medal;
+  const noncashBonus = hasTrophy ? 3 : hasMedal ? 2 : 0;
+  const valueScore = cash * 1000 + noncashBonus;
+  const top3Bonus = !cat.is_main && (p.place ?? 9999) <= 3 ? 1 : 0;
+
   return {
-    cash: p.cash_amount ?? 0,                  // PRIMARY: cash DESC (max-cash-per-player)
-    main: cat.is_main ? 1 : 0,                 // DESC (prefer main when cash equal)
+    valueScore,                                // PRIMARY: value score DESC
+    top3Bonus,                                 // SECONDARY: Top-3 non-main override
+    main: cat.is_main ? 1 : 0,                 // DESC (prefer main when equal value/top3)
     order: cat.order_idx ?? 0,                 // brochure order ASC
     place: p.place ?? 9999,                    // ASC (1st, 2nd, 3rd...)
     pid: p.id                                  // ASC (stable tie-breaker)
   };
 };
 
-// Sort comparator: CASH DESC (highest first), main DESC (prefer main when equal), order ASC, place ASC, pid ASC
+// Sort comparator: valueScore DESC, top3Bonus DESC, main DESC, order ASC, place ASC, pid ASC
 // This implements "max-cash-per-player" semantics: each player gets the highest-value prize they're eligible for
 export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
   const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
-  
-  // PRIMARY: Cash amount descending (highest cash first)
-  if (ak.cash !== bk.cash) return bk.cash - ak.cash;
-  
-  // When cash equal, prefer main category
+
+  // PRIMARY: valueScore descending (highest first)
+  if (ak.valueScore !== bk.valueScore) return bk.valueScore - ak.valueScore;
+
+  // SECONDARY: Top-3 bonus for non-main
+  if (ak.top3Bonus !== bk.top3Bonus) return bk.top3Bonus - ak.top3Bonus;
+
+  // When value equal and Top-3 bonus equal, prefer main category
   if (ak.main !== bk.main) return bk.main - ak.main;
   
   // Then brochure order
