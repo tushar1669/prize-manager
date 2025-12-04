@@ -50,8 +50,8 @@ describe('valueNormalizers', () => {
   });
 
   it('parses gender defaults and leaves invalid blank', () => {
-    expect(genderBlankToMF('')).toBe('M');
-    expect(genderBlankToMF(null)).toBe('M');
+    expect(genderBlankToMF('')).toBeNull();
+    expect(genderBlankToMF(null)).toBeNull();
     expect(genderBlankToMF('F')).toBe('F');
     expect(genderBlankToMF('x')).toBeNull();
   });

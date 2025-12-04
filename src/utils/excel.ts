@@ -349,7 +349,7 @@ export function downloadSwissManagerReferenceXlsx() {
     ['• name ← Name (player full name)'],
     ['• rating ← Rtg (current rating; when both Rtg & IRtg exist, we ALWAYS prefer Rtg)'],
     ['• dob ← Birth (supports YYYY/00/00, YYYY, or YYYY-MM-DD formats)'],
-    ['• gender ← fs (F = Female; blank or empty = Male)'],
+    ['• gender ← fs (F = Female; blank or empty = unknown)'],
     ['• fide_id ← Fide-No. (punctuation preserved)'],
     ['• federation ← Federation (country code, e.g., IND)'],
     ['• state ← State (state/province)'],

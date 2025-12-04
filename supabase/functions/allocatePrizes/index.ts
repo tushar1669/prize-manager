@@ -795,8 +795,8 @@ Deno.serve(async (req) => {
 export const normGender = (g?: string | null): string | null => {
   if (!g) return null;
   const s = String(g).trim().toLowerCase();
-  if (['m', 'male', 'boy', 'boys'].includes(s)) return 'M';
-  if (['f', 'female', 'girl', 'girls'].includes(s)) return 'F';
+  if (['m', 'male', 'boy'].includes(s)) return 'M';
+  if (['f', 'female', 'girl'].includes(s)) return 'F';
   return null;
 };
 
@@ -917,9 +917,7 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   const reqG = c.gender?.toUpperCase?.() || null; // 'M' | 'F' | 'OPEN' | undefined
   const pg = normGender(player.gender);
   if (reqG === 'M') {
-    if (!pg) {
-      failCodes.add('gender_missing');
-    } else if (pg !== 'M') {
+    if (pg === 'F') {
       failCodes.add('gender_mismatch');
     } else {
       passCodes.add('gender_ok');

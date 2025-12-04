@@ -103,7 +103,7 @@ import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 import { GenderSummaryChip } from "@/components/import/GenderSummaryChip";
-import { analyzeGenderColumns, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
+import { analyzeGenderColumns, hasFemaleMarker, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
 
 /**
  * Bulk upsert players via PostgREST with precise conflict handling.
@@ -1990,10 +1990,16 @@ export default function PlayerImport() {
 
       const femaleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'F').length;
       const maleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'M').length;
+      let hasFemaleTypeLabel = false;
+      let hasFemaleGroupLabel = false;
       const femaleFromFmg = validPlayers.filter(p => {
-        const typeLabel = String((p as any).type_label ?? p.type ?? '').trim().toUpperCase();
-        const groupLabel = String((p as any).group_label ?? p.gr ?? '').trim().toUpperCase();
-        return typeLabel === 'FMG' || groupLabel === 'FMG';
+        const typeLabel = String((p as any).type_label ?? p.type ?? '').trim();
+        const groupLabel = String((p as any).group_label ?? p.gr ?? '').trim();
+        const typeFemale = hasFemaleMarker(typeLabel);
+        const groupFemale = hasFemaleMarker(groupLabel);
+        if (typeFemale) hasFemaleTypeLabel = true;
+        if (groupFemale) hasFemaleGroupLabel = true;
+        return typeFemale || groupFemale;
       }).length;
       
       // Determine gender sources from config
@@ -2003,7 +2009,8 @@ export default function PlayerImport() {
         genderSources.push(config.preferredSource);
       }
       if (femaleFromFmg > 0) {
-        genderSources.push('type_label');
+        if (hasFemaleTypeLabel) genderSources.push('type_label');
+        if (hasFemaleGroupLabel) genderSources.push('group_label');
       }
       
       setFemaleCountSummary({ femaleFromGender, femaleFromFmg, maleFromGender, genderSources });
