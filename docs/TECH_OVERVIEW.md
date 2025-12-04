@@ -21,6 +21,10 @@
 - **Diagnosis summary:** `supabase/functions/allocatePrizes/index.ts` builds `diagnosis_summary` for zero-candidate categories by inspecting rating/age/gender/location/type/group fail codes.
 - **Coverage data:** Allocation debug entries include candidate counts before/after one-prize enforcement, winner details, `is_unfilled`, `is_blocked_by_one_prize`, `raw_fail_codes`, and `diagnosis_summary`.
 
+## Prize valuation and ordering
+- **Trophy/medal weighting:** `supabase/functions/allocatePrizes/index.ts` assigns a `valueScore = cash * 1000 + bonus`, where `cash` is the numeric cash amount and `bonus` is `3` for trophies or `2` for medals. This encodes the hierarchy cash+trophy > cash+medal > cash > trophy > medal.
+- **Top-3 non-main exception:** A `top3Bonus` is applied to non-main prizes in places 1–3 so they outrank equal-value main prizes. If valueScore and top3Bonus are both equal, main prizes are preferred.
+
 ## Exports
 - **Coverage (.xlsx):** `src/utils/allocationCoverageExport.ts` flattens coverage entries (category/prize, candidate counts, winner info, reason codes, diagnosis summary) and downloads Excel. CSV is not supported.
 - **RCA (.xlsx):** `src/utils/allocationRcaExport.ts` exports engine vs final winners with status (`MATCH`, `OVERRIDDEN`, `NO_ELIGIBLE_WINNER`), override reasons, candidate counts, and diagnostics. CSV is not supported.

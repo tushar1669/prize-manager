@@ -417,6 +417,72 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(unfilled[0].prizeId).toBe('u1600-1');
   });
 
+  it('prefers trophy Top-3 category prize over equal-cash main prize', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Top-3 Trophy', rating: 1700, fide_id: '2001', gender: 'M', dob: '2000-01-01', state: 'MH', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [
+          { id: 'main-8', place: 8, cash_amount: 1000, has_trophy: false, has_medal: false },
+        ],
+      },
+      {
+        id: 'u1800',
+        name: 'Under 1800',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_rating: 1800 },
+        prizes: [
+          { id: 'u1800-3', place: 3, cash_amount: 1000, has_trophy: true, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    expect(winners).toEqual([{ prizeId: 'u1800-3', playerId: 'p1' }]);
+  });
+
+  it('prefers main prize when non-main lacks Top-3 bonus and value is equal', () => {
+    const players = [
+      { id: 'p1', rank: 1, name: 'Main Preference', rating: 1900, fide_id: '3001', gender: 'F', dob: '1995-01-01', state: 'KA', unrated: false },
+    ];
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [
+          { id: 'main-15', place: 15, cash_amount: 1000, has_trophy: false, has_medal: false },
+        ],
+      },
+      {
+        id: 'u2000',
+        name: 'Under 2000',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_rating: 2000 },
+        prizes: [
+          { id: 'u2000-6', place: 6, cash_amount: 1000, has_trophy: false, has_medal: false },
+        ],
+      },
+    ];
+
+    const { winners } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
+
+    expect(winners).toEqual([{ prizeId: 'main-15', playerId: 'p1' }]);
+  });
+
   it('allocates rating prize when higher cash than main, even if main comes first in brochure order', () => {
     const players = [
       { id: 'p1', rank: 1, name: 'Alice', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
