@@ -6,6 +6,8 @@ export type GenderSource = 'gender_column' | 'fs_column' | 'headerless_after_nam
 
 export interface GenderInference {
   gender: Gender;
+  female_signal_source: 'FMG' | 'F_PREFIX' | null;
+  gender_source: GenderSource | null;
   sources: GenderSource[];
   warnings: string[];
 }
@@ -76,7 +78,9 @@ export function analyzeGenderColumns(rows: Array<Record<string, any>>): GenderCo
   };
 }
 
-const FEMALE_MARKER_REGEX = /^F(?:MG|\d+|[-].+)?$/;
+const FEMALE_MARKER_REGEX = /^F\d+/;
+const FEMALE_TOKENS = new Set(['F', 'FEMALE', 'GIRL']);
+const MALE_TOKENS = new Set(['M', 'MALE', 'BOY']);
 const tokenizeLabel = (label?: string | null): string[] =>
   String(label ?? '')
     .trim()
@@ -91,12 +95,31 @@ export const hasFemaleMarker = (label?: string | null): boolean =>
     return FEMALE_MARKER_REGEX.test(upper);
   });
 
-function normalizeGenderValue(value: unknown, source: GenderSource | null): Gender {
-  if (source === 'fs_column' || source === 'headerless_after_name') {
-    return genderBlankToMF(value);
+function normalizeExplicitGender(value: unknown): Gender {
+  const normalized = normalizeGender(value);
+  if (!normalized) return null;
+
+  const upper = String(value ?? '').trim().toUpperCase();
+  if (FEMALE_TOKENS.has(upper)) return 'F';
+  if (MALE_TOKENS.has(upper)) return 'M';
+  return null;
+}
+
+function normalizeFsOrHeaderless(value: unknown): Gender {
+  const normalized = genderBlankToMF(value);
+  if (normalized === 'F') return 'F';
+  return null;
+}
+
+function detectFemaleSignal(label?: string | null): { isFemale: boolean; reason: 'FMG' | 'F_PREFIX' | null } {
+  const tokens = tokenizeLabel(label);
+  for (const token of tokens) {
+    const upper = token.toUpperCase();
+    if (upper.includes('FMG')) return { isFemale: true, reason: 'FMG' };
+    if (FEMALE_MARKER_REGEX.test(upper)) return { isFemale: true, reason: 'F_PREFIX' };
   }
 
-  return normalizeGender(value);
+  return { isFemale: false, reason: null };
 }
 
 export function inferGenderForRow(
@@ -105,51 +128,67 @@ export function inferGenderForRow(
   typeLabel?: string | null,
   groupLabel?: string | null,
 ): GenderInference {
-  const result: GenderInference = { gender: null, sources: [], warnings: [] };
-  const candidates: Array<{ column: string; source: GenderSource }> = [];
-  const seenColumns = new Set<string>();
-
-  const addCandidate = (column: string | null | undefined, source: GenderSource) => {
-    if (!column || seenColumns.has(column)) return;
-    seenColumns.add(column);
-    candidates.push({ column, source });
+  const result: GenderInference = {
+    gender: null,
+    female_signal_source: null,
+    gender_source: null,
+    sources: [],
+    warnings: [],
   };
 
-  if (config?.preferredColumn) {
-    addCandidate(config.preferredColumn, config.preferredSource ?? 'gender_column');
-  }
-  addCandidate(config?.genderColumn, 'gender_column');
-  addCandidate(config?.fsColumn, 'fs_column');
-  addCandidate(config?.headerlessGenderColumn, 'headerless_after_name');
+  const genderColumn = config?.genderColumn ?? (config?.preferredSource === 'gender_column' ? config?.preferredColumn : null);
+  const explicitGenderValue = genderColumn ? row[genderColumn] : 'gender' in row ? row.gender : undefined;
+  const explicitGender = normalizeExplicitGender(explicitGenderValue);
 
-  // Fallback: raw gender column if present
-  if (!config?.preferredColumn && 'gender' in row) {
-    addCandidate('gender', 'gender_column');
+  if (explicitGender) {
+    result.gender = explicitGender;
+    result.sources.push('gender_column');
+    result.gender_source = 'gender_column';
   }
 
-  for (const candidate of candidates) {
-    const value = row[candidate.column];
-    const normalized = normalizeGenderValue(value, candidate.source);
-    if (normalized) {
-      result.gender = normalized;
-      result.sources.push(candidate.source);
-      break;
-    }
+  const fsGender = normalizeFsOrHeaderless(config?.fsColumn ? row[config.fsColumn] : undefined);
+  if (fsGender === 'F') {
+    result.gender = 'F';
+    result.sources.push('fs_column');
+    result.gender_source = 'fs_column';
   }
 
-  const hasFemaleType = hasFemaleMarker(typeLabel);
-  const hasFemaleGroup = hasFemaleMarker(groupLabel);
+  const headerlessGender = normalizeFsOrHeaderless(
+    config?.headerlessGenderColumn ? row[config.headerlessGenderColumn] : undefined,
+  );
+  if (headerlessGender === 'F') {
+    result.gender = 'F';
+    result.sources.push('headerless_after_name');
+    result.gender_source = 'headerless_after_name';
+  }
 
-  if (hasFemaleType || hasFemaleGroup) {
+  const { isFemale: femaleFromType, reason: typeReason } = detectFemaleSignal(typeLabel);
+  const { isFemale: femaleFromGroup, reason: groupReason } = detectFemaleSignal(groupLabel);
+
+  let femaleSignalReason: 'FMG' | 'F_PREFIX' | null = null;
+
+  if (femaleFromType || femaleFromGroup) {
     if (result.gender === 'M') {
-      result.warnings.push('FMG overrides gender');
+      result.warnings.push('female signal overrides explicit male gender');
     }
     result.gender = 'F';
-    if (hasFemaleType) result.sources.push('type_label');
-    if (hasFemaleGroup) result.sources.push('group_label');
+    if (femaleFromType) {
+      result.sources.push('type_label');
+      result.gender_source = 'type_label';
+      femaleSignalReason = femaleSignalReason ?? typeReason ?? null;
+    }
+    if (femaleFromGroup) {
+      result.sources.push('group_label');
+      if (!result.gender_source) result.gender_source = 'group_label';
+      femaleSignalReason = femaleSignalReason ?? groupReason ?? null;
+    }
   }
 
   result.sources = Array.from(new Set(result.sources));
+
+  if (femaleSignalReason) {
+    result.female_signal_source = femaleSignalReason;
+  }
 
   return result;
 }
