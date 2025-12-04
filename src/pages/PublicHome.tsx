@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Calendar, MapPin, ExternalLink, Trophy, FileText, Clock, User, Banknote } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Trophy, Clock, User, Banknote } from "lucide-react";
 import { Link } from "react-router-dom";
 import { classifyTimeControl, type TimeControlCategory } from "@/utils/timeControl";
+import { BrochureLink } from "@/components/public/BrochureLink";
 
 type PublicTournament = {
   id: string;
@@ -269,15 +270,7 @@ export default function PublicHome() {
                           </Link>
                         </Button>
 
-                        {tournament.brochure_url && (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={tournament.brochure_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                              <FileText className="h-4 w-4" />
-                              Brochure
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </Button>
-                        )}
+                        <BrochureLink url={tournament.brochure_url} />
 
                         {tournament.chessresults_url && (
                           <Button variant="outline" size="sm" asChild>

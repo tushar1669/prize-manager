@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trophy, Calendar, MapPin, ExternalLink, FileText } from "lucide-react";
+import { Trophy, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
+import { BrochureLink } from "@/components/public/BrochureLink";
 
 type PublishedTournament = {
   id: string;
@@ -121,15 +122,7 @@ export default function PublicTournament() {
             <Card className="bg-card">
               <CardContent className="pt-6">
                 <div className="flex flex-wrap gap-2">
-                  {tournament.brochure_url && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={tournament.brochure_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                        <FileText className="h-4 w-4" />
-                        Brochure
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </Button>
-                  )}
+                  <BrochureLink url={tournament.brochure_url} />
                   
                   {tournament.chessresults_url && (
                     <Button variant="outline" size="sm" asChild>
