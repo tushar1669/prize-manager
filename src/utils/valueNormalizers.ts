@@ -10,8 +10,8 @@ export function normalizeGender(raw: any): 'M' | 'F' | null {
   if (!s) return null;
 
   const normalized = s.toUpperCase();
-  if (normalized === 'M') return 'M';
-  if (normalized === 'F') return 'F';
+  if (['M', 'MALE', 'BOY'].includes(normalized)) return 'M';
+  if (['F', 'FEMALE', 'GIRL'].includes(normalized)) return 'F';
 
   return null;
 }
@@ -105,9 +105,9 @@ export function inferUnrated(
   return false;
 }
 
-/** Swiss-Manager: blank gender column means Male; 'F' means Female */
+/** Swiss-Manager: 'F' marks Female; blank/other stays unknown */
 export function genderBlankToMF(raw: any): 'M' | 'F' | null {
-  if (raw == null || String(raw).trim() === '') return 'M';
+  if (raw == null || String(raw).trim() === '') return null;
   const s = String(raw).trim().toUpperCase();
   if (s === 'F') return 'F';
   return null;

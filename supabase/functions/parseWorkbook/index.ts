@@ -45,14 +45,14 @@ function normalizeGender(raw: unknown): "M" | "F" | null {
   if (!s) return null;
 
   const normalized = s.toUpperCase();
-  if (normalized === "M") return "M";
-  if (normalized === "F") return "F";
+  if (["M", "MALE", "BOY"].includes(normalized)) return "M";
+  if (["F", "FEMALE", "GIRL"].includes(normalized)) return "F";
 
   return null;
 }
 
 function genderBlankToMF(raw: unknown): "M" | "F" | null {
-  if (raw == null || String(raw).trim() === "") return "M";
+  if (raw == null || String(raw).trim() === "") return null;
   const s = String(raw).trim().toUpperCase();
   if (s === "F") return "F";
   return null;
@@ -120,6 +120,21 @@ function looksLikeGenderValue(value: unknown): boolean {
 
   return false;
 }
+
+const FEMALE_MARKER_REGEX = /^F(?:MG|\d+|[-].+)?$/;
+const tokenizeLabel = (label?: string | null): string[] =>
+  String(label ?? "")
+    .trim()
+    .split(/[\s,;|/]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+
+const hasFemaleMarker = (label?: string | null): boolean =>
+  tokenizeLabel(label).some((token) => {
+    const upper = token.toUpperCase();
+    if (upper.includes("FMG")) return true;
+    return FEMALE_MARKER_REGEX.test(upper);
+  });
 
 function findHeaderlessGenderColumn(
   headers: string[],
@@ -282,13 +297,7 @@ function normalizeGenderValue(value: unknown, source: GenderSource | null): Gend
     return genderBlankToMF(value);
   }
 
-  const normalized = normalizeGender(value);
-  if (normalized) return normalized;
-
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (raw === "other") return "Other";
-
-  return null;
+  return normalizeGender(value);
 }
 
 function inferGenderForRow(
@@ -328,20 +337,16 @@ function inferGenderForRow(
     }
   }
 
-  const normalizedType = typeLabel?.trim().toUpperCase();
-  const normalizedGroup = groupLabel?.trim().toUpperCase();
-  const hasFMGType = normalizedType === "FMG";
-  const hasFMGGroup = normalizedGroup === "FMG";
+  const hasFemaleType = hasFemaleMarker(typeLabel);
+  const hasFemaleGroup = hasFemaleMarker(groupLabel);
 
-  if (hasFMGType || hasFMGGroup) {
-    if (result.gender && result.gender !== "F") {
-      result.warnings.push(
-        "Type/Group label FMG indicates Female; overriding conflicting gender value."
-      );
+  if (hasFemaleType || hasFemaleGroup) {
+    if (result.gender === "M") {
+      result.warnings.push("FMG overrides gender");
     }
     result.gender = "F";
-    if (hasFMGType) result.sources.push("type_label");
-    if (hasFMGGroup) result.sources.push("group_label");
+    if (hasFemaleType) result.sources.push("type_label");
+    if (hasFemaleGroup) result.sources.push("group_label");
   }
 
   result.sources = Array.from(new Set(result.sources));

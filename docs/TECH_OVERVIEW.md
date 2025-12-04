@@ -10,10 +10,10 @@
 ## Gender inference module
 - **File:** `src/utils/genderInference.ts`
 - **Key functions:** `analyzeGenderColumns` (detects gender/fs/headerless columns), `inferGenderForRow` (per-row inference).
-- **Supported sources:** `fs_column`, `headerless_after_name`, `gender_column`, `type_label`, `group_label` with FMG handling.
+- **Supported sources:** `fs_column`, `headerless_after_name`, `gender_column`, `type_label`, `group_label` with FMG/female marker handling.
 - **Behavior:**
-  - Prefers explicit gender column, then `fs`, then headerless-after-name, with FMG override for female labeling.
-  - Uses `genderBlankToMF` and `normalizeGender` to treat blank `fs` as Male and `F` as Female.
+  - Prefers explicit gender column, then `fs`, then headerless-after-name, with FMG/female marker override for female labeling.
+  - Uses `genderBlankToMF` and `normalizeGender` to set `F` from `fs` and leave blanks as unknown.
   - Warnings are attached when FMG conflicts with provided gender.
 
 ## Allocation coverage and diagnosis

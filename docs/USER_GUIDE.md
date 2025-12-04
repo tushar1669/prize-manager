@@ -5,7 +5,7 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
 
 ## Supported inputs (Excel only)
 - **Swiss-Manager interim ranking XLS/XLSX**
-  - Uses the `fs` gender column (`F` = Female; blank = Male) with FMG detection from Type/Group labels.
+  - Uses the `fs` gender column (`F` = Female) with FMG/female-marker detection from Type/Group labels.
   - Reads DOB, rating, `type_label`, `group_label`, club, federation/state/city, and other standard Swiss-Manager columns.
   - FIDE age is computed on the tournament start date.
 - **Manual player template XLSX**
@@ -18,10 +18,10 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
 3. Review inferred player data and warnings before confirming the import.
 
 ### Gender pipeline
-- **Primary:** `fs` column (`F` → Female; blank → Male).
+- **Primary:** `fs` column (`F` → Female; blank stays unknown).
 - **Header-based:** Explicit gender/sex column when mapped or auto-detected.
 - **Headerless after Name:** Infers gender if an unlabeled column immediately follows Name and contains gender-like values.
-- **FMG fallback:** Type/Group labels with `FMG` mark players as Female when explicit gender is missing.
+- **FMG fallback:** Type/Group labels with `FMG`/female markers mark players as Female when explicit gender is missing.
 - **Summary chip:** The Gender Summary badge shows:
   - OK (gender counts align with FMG),
   - Mismatch (soft warning), or
