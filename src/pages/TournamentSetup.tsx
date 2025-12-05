@@ -1929,6 +1929,23 @@ export default function TournamentSetup() {
             <div className="border-b pb-4 mb-4">
               <Label className="mb-2 block">Quick Presets</Label>
               <div className="flex flex-wrap gap-2">
+                {/* Youngest presets - set category type automatically */}
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="bg-emerald-900/50 text-emerald-100 border-emerald-700 hover:bg-emerald-800"
+                  onClick={() => setCategoryTypeSelection('youngest_female')}
+                >
+                  🏆 Youngest Girl
+                </Button>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="bg-emerald-900/50 text-emerald-100 border-emerald-700 hover:bg-emerald-800"
+                  onClick={() => setCategoryTypeSelection('youngest_male')}
+                >
+                  🏆 Youngest Boy
+                </Button>
                 <Button 
                   variant="outline"
                   size="sm"
