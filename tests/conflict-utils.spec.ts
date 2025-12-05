@@ -58,3 +58,25 @@ describe('conflict utils', () => {
     expect(conflicts[0]).toMatchObject({ keyKind: 'sno', reason: 'Duplicate SNo' });
   });
 });
+
+describe('conflict resolution types', () => {
+  it('supports keepBoth resolution for name+dob conflicts', () => {
+    // Verify that name+dob conflicts can be detected even when they are different people
+    const conflicts = detectConflictsInDraft([
+      { name: 'John Smith', dob: '2010-05-15', rank: 1, _originalIndex: 0, rating: 1200 },
+      { name: 'John Smith', dob: '2010-05-15', rank: 2, _originalIndex: 1, rating: 1100 },
+    ]);
+    
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({ 
+      keyKind: 'nameDob', 
+      reason: 'Same name+dob' 
+    });
+    
+    // When keepBoth is selected, both rows should be preserved (tested in component)
+    // This test documents that same name+dob creates a conflict that can be resolved 
+    // by keeping both players when the user determines they are different people
+    expect(conflicts[0].a).toMatchObject({ rating: 1200 });
+    expect(conflicts[0].b).toMatchObject({ rating: 1100 });
+  });
+});
