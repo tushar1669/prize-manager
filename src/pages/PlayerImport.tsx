@@ -653,7 +653,7 @@ export default function PlayerImport() {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
         {CONFLICT_FIELD_DEFS.map(field => (
           <div key={field.key}>
-            <dt className="font-semibold text-muted-foreground">{field.label}</dt>
+            <dt className="font-semibold text-gray-600">{field.label}</dt>
             <dd className="text-sm text-foreground">
               {formatFieldValue(row[field.key] as unknown)}
             </dd>
@@ -2422,7 +2422,7 @@ export default function PlayerImport() {
                         {unresolvedCount > 0 ? `${unresolvedCount} unresolved` : 'All conflicts resolved'}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-amber-800">
                       Resolve each conflict before importing. Keep A keeps the first occurrence, Keep B keeps the incoming row, and Merge selects the richer record.
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -2460,11 +2460,11 @@ export default function PlayerImport() {
                                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                     <div className="flex-1 space-y-3">
                                       <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Existing / A</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">Existing / A</p>
                                         {renderConflictDetails(pair.a)}
                                       </div>
                                       <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incoming / B</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">Incoming / B</p>
                                         {renderConflictDetails(pair.b)}
                                       </div>
                                     </div>
@@ -2511,7 +2511,7 @@ export default function PlayerImport() {
                                       </label>
                                     </div>
                                   </div>
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-xs text-gray-600">
                                     Reason: {pair.reason} • Key: {pair.key}
                                   </p>
                                 </div>
