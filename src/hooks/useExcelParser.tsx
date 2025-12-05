@@ -18,6 +18,14 @@ export type ParseResult = {
   mode: "local" | "server";
   source?: "swiss-manager" | "organizer-template" | "unknown";
   fallback?: "local-error" | "local-timeout" | "server-error";
+  /** Server-computed gender column config (only from server mode) */
+  genderConfig?: {
+    genderColumn: string | null;
+    fsColumn: string | null;
+    headerlessGenderColumn: string | null;
+    preferredColumn: string | null;
+    preferredSource: string | null;
+  } | null;
 };
 
 export type ParseFileOptions = {
@@ -198,7 +206,8 @@ export function useExcelParser() {
       headerRow: payload?.headerRow ?? 1,
       fileHash: payload?.fileHash ?? opts.hash ?? null,
       mode: "server",
-      source: payload?.source ?? "unknown"
+      source: payload?.source ?? "unknown",
+      genderConfig: payload?.genderConfig ?? null
     };
   }, []);
 

@@ -602,7 +602,11 @@ Deno.serve(async (req) => {
 
   const tournamentId = req.headers.get("x-tournament-id") ?? "";
   const providedHash = req.headers.get("x-sha256") ?? "";
-  const genderDebugTournamentId = "74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15";
+  // Debug tournament IDs for gender detection logging
+  const genderDebugTournamentIds = new Set([
+    "74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15", // Road to GCL
+    "0d54de9f-242a-41bd-a2ad-a70f712c3fd7"  // Jaipur
+  ]);
 
   try {
     const start = performance.now();
@@ -639,6 +643,12 @@ Deno.serve(async (req) => {
     }) as Record<string, unknown>[];
 
     const genderConfig = analyzeGenderColumns(dataRows as Record<string, unknown>[]);
+    
+    // Log gender config for debug tournaments
+    if (genderDebugTournamentIds.has(tournamentId)) {
+      console.log(`[import.gender-config] ${JSON.stringify(genderConfig)}`);
+    }
+    
     const rowsWithGender = dataRows.map((row) => {
       const typedRow = row as Record<string, unknown>;
       const typeRaw = (typedRow.type_label ?? typedRow.type ?? typedRow.Type ?? typedRow.TYPE) as
@@ -650,8 +660,8 @@ Deno.serve(async (req) => {
 
       const genderInference = inferGenderForRow(typedRow, genderConfig, typeRaw ?? null, groupRaw ?? null);
 
-      // TEMP: gender debug logging for tournament 74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15
-      if (tournamentId === genderDebugTournamentId) {
+      // TEMP: gender debug logging for tracked tournaments
+      if (genderDebugTournamentIds.has(tournamentId)) {
         const fsRaw = genderConfig.fsColumn ? typedRow[genderConfig.fsColumn] : undefined;
         const headerlessGenderRaw = genderConfig.headerlessGenderColumn
           ? typedRow[genderConfig.headerlessGenderColumn]
