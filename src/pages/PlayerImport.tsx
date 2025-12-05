@@ -1602,7 +1602,8 @@ export default function PlayerImport() {
         fileHash,
         mode,
         source,
-        fallback
+        fallback,
+        genderConfig: serverGenderConfig
       } = result;
       setLastParseMode(mode);
       setParsedData(data);
@@ -1610,9 +1611,17 @@ export default function PlayerImport() {
       setParseError(null); // Clear any previous error
       setParseStatus('ok');
 
-      genderConfigRef.current = data?.length
-        ? analyzeGenderColumns(data as Record<string, any>[])
-        : null;
+      // Use server's genderConfig if available (more reliable - scans full dataset)
+      // Fall back to local analysis only if server didn't provide config
+      if (serverGenderConfig && mode === 'server') {
+        genderConfigRef.current = serverGenderConfig as import("@/utils/genderInference").GenderColumnConfig;
+        console.log('[import.gender] Using server-provided genderConfig:', serverGenderConfig);
+      } else {
+        genderConfigRef.current = data?.length
+          ? analyzeGenderColumns(data as Record<string, any>[])
+          : null;
+        console.log('[import.gender] Using local genderConfig analysis:', genderConfigRef.current);
+      }
 
       if (fallback === 'server-error') {
         toast.error('Server parsing failed. Local parser used instead.');
@@ -1853,27 +1862,51 @@ export default function PlayerImport() {
       player.group_label = grInfo.group_label;
       player.type_label = typeLabel;
 
-      const genderInference = inferGenderForRow(
-        row,
-        genderConfigRef.current,
-        typeLabel,
-        grInfo.group_label
-      );
+      // Prioritize server's pre-computed gender if available (more reliable - scans full dataset)
+      // Server adds _gender, _gender_source, _genderSources, _genderWarnings to each row
+      const serverGender = row._gender as string | null | undefined;
+      const serverGenderSource = row._gender_source as string | null | undefined;
+      const serverGenderSources = row._genderSources as string[] | undefined;
+      const serverGenderWarnings = row._genderWarnings as string[] | undefined;
+      
+      if (serverGender !== undefined) {
+        // Use server's pre-computed gender
+        if (serverGender !== null) {
+          player.gender = serverGender as 'M' | 'F';
+        }
+        if (serverGenderSource) {
+          (player as any).gender_source = serverGenderSource;
+        }
+        if (serverGenderSources?.length) {
+          player._genderSources = serverGenderSources as import("@/utils/genderInference").GenderSource[];
+        }
+        if (serverGenderWarnings?.length) {
+          player._genderWarnings = serverGenderWarnings;
+        }
+      } else {
+        // Fall back to local inference
+        const genderInference = inferGenderForRow(
+          row,
+          genderConfigRef.current,
+          typeLabel,
+          grInfo.group_label
+        );
 
-      if (genderInference.gender !== null) {
-        player.gender = genderInference.gender;
-      }
+        if (genderInference.gender !== null) {
+          player.gender = genderInference.gender;
+        }
 
-      if (genderInference.gender_source) {
-        (player as any).gender_source = genderInference.gender_source;
-      }
+        if (genderInference.gender_source) {
+          (player as any).gender_source = genderInference.gender_source;
+        }
 
-      if (genderInference.sources.length) {
-        player._genderSources = genderInference.sources;
-      }
+        if (genderInference.sources.length) {
+          player._genderSources = genderInference.sources;
+        }
 
-      if (genderInference.warnings.length) {
-        player._genderWarnings = genderInference.warnings;
+        if (genderInference.warnings.length) {
+          player._genderWarnings = genderInference.warnings;
+        }
       }
 
       return player as ParsedPlayer;
