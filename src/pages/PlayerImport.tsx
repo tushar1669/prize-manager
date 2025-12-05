@@ -469,7 +469,7 @@ export default function PlayerImport() {
   }>>([]);
 
   const [conflicts, setConflicts] = useState<ConflictPair[]>([]);
-  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'keepA' | 'keepB' | 'merge'>>({});
+  const [conflictResolutions, setConflictResolutions] = useState<Record<string, 'keepA' | 'keepB' | 'merge' | 'keepBoth'>>({});
   const [fileHash, setFileHash] = useState<string | null>(null);
   
   const importDraftKey = makeKey(`t:${id}:import`);
@@ -559,6 +559,11 @@ export default function PlayerImport() {
           return;
         }
 
+        if (resolution === 'keepBoth') {
+          // Keep both rows - don't remove either
+          return;
+        }
+
         const aIndex = extractIndex(pair.a);
         const bIndex = extractIndex(pair.b);
         const winner = pickMergeWinner(pair);
@@ -609,13 +614,13 @@ export default function PlayerImport() {
     }, { fide: [], nameDob: [], sno: [] });
   }, [conflicts]);
 
-  const updateResolution = useCallback((key: string, value: 'keepA' | 'keepB' | 'merge') => {
+  const updateResolution = useCallback((key: string, value: 'keepA' | 'keepB' | 'merge' | 'keepBoth') => {
     setConflictResolutions(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const handleAcceptFirstOccurrence = useCallback(() => {
     setConflictResolutions(() => {
-      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      const next: Record<string, 'keepA' | 'keepB' | 'merge' | 'keepBoth'> = {};
       conflicts.forEach((pair, index) => {
         next[conflictKeyForIndex(pair, index)] = 'keepA';
       });
@@ -625,7 +630,7 @@ export default function PlayerImport() {
 
   const handlePreferRichestRow = useCallback(() => {
     setConflictResolutions(() => {
-      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      const next: Record<string, 'keepA' | 'keepB' | 'merge' | 'keepBoth'> = {};
       conflicts.forEach((pair, index) => {
         next[conflictKeyForIndex(pair, index)] = 'merge';
       });
@@ -1469,7 +1474,7 @@ export default function PlayerImport() {
     try {
       const raw = window.localStorage.getItem(conflictStorageKey);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, 'keepA' | 'keepB' | 'merge'>;
+      const parsed = JSON.parse(raw) as Record<string, 'keepA' | 'keepB' | 'merge' | 'keepBoth'>;
       setConflictResolutions(prev => {
         const keys = Object.keys(parsed);
         if (
@@ -2139,7 +2144,7 @@ export default function PlayerImport() {
 
     setConflicts(detectedConflicts);
     setConflictResolutions(prev => {
-      const next: Record<string, 'keepA' | 'keepB' | 'merge'> = {};
+      const next: Record<string, 'keepA' | 'keepB' | 'merge' | 'keepBoth'> = {};
       detectedConflicts.forEach((pair, index) => {
         const key = conflictKeyForIndex(pair, index);
         if (prev[key]) {
@@ -2493,6 +2498,16 @@ export default function PlayerImport() {
                                           onChange={() => updateResolution(resolutionKey, 'merge')}
                                         />
                                         Merge (richest)
+                                      </label>
+                                      <label className="inline-flex items-center gap-2 text-blue-600">
+                                        <input
+                                          type="radio"
+                                          name={`conflict-${resolutionKey}`}
+                                          value="keepBoth"
+                                          checked={selected === 'keepBoth'}
+                                          onChange={() => updateResolution(resolutionKey, 'keepBoth')}
+                                        />
+                                        Keep both players
                                       </label>
                                     </div>
                                   </div>
