@@ -656,7 +656,8 @@ Deno.serve(async (req) => {
       const winner = eligible[0];
 
       // Compute tie-break reason for logging
-      let tieBreak: 'none' | TieBreakField = 'none';
+      let tieBreak: 'none' | TieBreakField | 'rank' = 'none';
+      let dobTiePlayers: string[] = [];
       if (eligible.length > 1) {
         if (youngestCategory) {
           const first = eligible[0].player;
@@ -664,7 +665,22 @@ Deno.serve(async (req) => {
           const dobFirst = first.dob ? new Date(first.dob).getTime() : Number.NEGATIVE_INFINITY;
           const dobSecond = second.dob ? new Date(second.dob).getTime() : Number.NEGATIVE_INFINITY;
           if (dobFirst === dobSecond) {
-            if ((first.rating ?? 0) !== (second.rating ?? 0)) {
+            // Log all players with identical DOB for debugging
+            dobTiePlayers = eligible
+              .filter(e => {
+                const d = e.player.dob ? new Date(e.player.dob).getTime() : Number.NEGATIVE_INFINITY;
+                return d === dobFirst;
+              })
+              .map(e => `${e.player.name}(rank=${e.player.rank ?? '?'})`);
+            
+            if (dobTiePlayers.length > 1) {
+              console.log(`[alloc.youngest.dob_tie] prize=${p.id} DOB tie among: ${dobTiePlayers.join(', ')}`);
+            }
+            
+            // Tie-break order: rank → rating → name
+            if ((first.rank ?? Number.MAX_SAFE_INTEGER) !== (second.rank ?? Number.MAX_SAFE_INTEGER)) {
+              tieBreak = 'rank';
+            } else if ((first.rating ?? 0) !== (second.rating ?? 0)) {
               tieBreak = 'rating';
             } else if ((first.name ?? '').toString() !== (second.name ?? '').toString()) {
               tieBreak = 'name';
@@ -1311,17 +1327,25 @@ export const isYoungestCategory = (category: { category_type?: string | null }):
 };
 
 export function compareYoungestEligible(
-  a: { player: { dob?: string | null; rating?: number | null; name?: string | null } },
-  b: { player: { dob?: string | null; rating?: number | null; name?: string | null } },
+  a: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
+  b: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
 ): number {
+  // Primary: youngest first (most recent DOB = larger timestamp = sorted first)
   const dobA = a.player.dob ? new Date(a.player.dob).getTime() : Number.NEGATIVE_INFINITY;
   const dobB = b.player.dob ? new Date(b.player.dob).getTime() : Number.NEGATIVE_INFINITY;
-  if (dobA !== dobB) return dobB - dobA; // newest (most recent dob) first
+  if (dobA !== dobB) return dobB - dobA;
 
+  // Secondary: tournament rank (lower = better, same as standard categories)
+  const rankA = a.player.rank ?? Number.MAX_SAFE_INTEGER;
+  const rankB = b.player.rank ?? Number.MAX_SAFE_INTEGER;
+  if (rankA !== rankB) return rankA - rankB;
+
+  // Tertiary: rating descending (higher = better) as final tie-breaker
   const ratingA = a.player.rating ?? 0;
   const ratingB = b.player.rating ?? 0;
-  if (ratingA !== ratingB) return ratingB - ratingA; // higher rating next
+  if (ratingA !== ratingB) return ratingB - ratingA;
 
+  // Final: name alphabetically for stability
   const nameA = (a.player.name ?? '').toString();
   const nameB = (b.player.name ?? '').toString();
   return nameA.localeCompare(nameB);
