@@ -113,7 +113,8 @@ export function findHeaderlessGenderColumn(
 
   registerCandidate(headers[nameIndex + 1]);
 
-  const sampleLimit = Math.min(sampleRows.length, 25);
+  // Scan ALL rows (or up to 500) to catch female markers appearing late in the list
+  const sampleLimit = Math.min(sampleRows.length, 500);
   for (let i = 0; i < sampleLimit; i += 1) {
     const row = sampleRows[i];
     if (!row || typeof row !== 'object') continue;
@@ -151,22 +152,15 @@ export function findHeaderlessGenderColumn(
     }
   }
 
+  // Pick candidate with highest matches, as long as matches > 0
+  // No longer require ≥3 matches - even 1 female marker is valid
   let bestKey: string | null = null;
-  let bestRatio = 0;
+  let bestMatches = 0;
   for (const [key, stats] of candidateStats.entries()) {
     if (stats.matches === 0) continue;
-    if (stats.total === 0) continue;
-
-    const ratio = stats.matches / stats.total;
-    // Require at least 3 matches OR all values match (for small samples)
-    if (
-      stats.matches >= 3 ||
-      (stats.total <= 3 && stats.matches === stats.total && stats.total >= 2)
-    ) {
-      if (ratio > bestRatio) {
-        bestKey = key;
-        bestRatio = ratio;
-      }
+    if (stats.matches > bestMatches) {
+      bestKey = key;
+      bestMatches = stats.matches;
     }
   }
 
