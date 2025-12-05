@@ -62,14 +62,33 @@ interface CoverageItem {
   is_blocked_by_one_prize: boolean;
   raw_fail_codes: string[];
   diagnosis_summary: string | null;
+  
+  // Prize priority hierarchy explanation
+  priority_explanation: string;
+  has_trophy: boolean;
+  has_medal: boolean;
 }
 
-// Helper to derive prize type
+// Helper to derive prize type for display (uses cash as primary if present)
 function derivePrizeType(p: PrizeRow): 'cash' | 'trophy' | 'medal' | 'other' {
   if ((p.cash_amount ?? 0) > 0) return 'cash';
   if (p.has_trophy) return 'trophy';
   if (p.has_medal) return 'medal';
   return 'other';
+}
+
+// Build priority explanation string for debug output
+function buildPriorityExplanation(cat: CategoryRow, p: PrizeRow): string {
+  const parts: string[] = [];
+  const cash = p.cash_amount ?? 0;
+  
+  parts.push(`cash=₹${cash}`);
+  parts.push(`type=${p.has_trophy ? 'trophy' : p.has_medal ? 'medal' : 'none'}`);
+  parts.push(`main=${cat.is_main ? 'yes' : 'no'}`);
+  parts.push(`place=${p.place}`);
+  parts.push(`order=${cat.order_idx ?? 0}`);
+  
+  return parts.join(', ');
 }
 
 // Helper to derive reason code
@@ -639,7 +658,12 @@ Deno.serve(async (req) => {
           is_unfilled: true,
           is_blocked_by_one_prize: isBlockedByOnePrize,
           raw_fail_codes: rawFailCodes,
-          diagnosis_summary: diagnosisSummary
+          diagnosis_summary: diagnosisSummary,
+          
+          // Prize priority hierarchy
+          priority_explanation: buildPriorityExplanation(cat, p),
+          has_trophy: !!p.has_trophy,
+          has_medal: !!p.has_medal
         });
         
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
@@ -765,7 +789,12 @@ Deno.serve(async (req) => {
         is_unfilled: false,
         is_blocked_by_one_prize: false,
         raw_fail_codes: [],
-        diagnosis_summary: null
+        diagnosis_summary: null,
+        
+        // Prize priority hierarchy
+        priority_explanation: buildPriorityExplanation(cat, p),
+        has_trophy: !!p.has_trophy,
+        has_medal: !!p.has_medal
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
@@ -1239,45 +1268,87 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   };
 };
 
+/**
+ * Prize type hierarchy score: higher = more prestigious
+ * Trophy (3) > Medal (2) > Certificate/None (0)
+ */
+export const getPrizeTypeScore = (p: PrizeRow): number => {
+  if (p.has_trophy) return 3;
+  if (p.has_medal) return 2;
+  return 0;
+};
+
+/**
+ * Human-readable prize type label for debug output
+ */
+export const getPrizeTypeLabel = (p: PrizeRow): string => {
+  if (p.has_trophy) return 'trophy';
+  if (p.has_medal) return 'medal';
+  return 'other';
+};
+
+/**
+ * Computes a composite key for prize ranking.
+ * 
+ * PRIZE PRIORITY HIERARCHY (documented for debug output):
+ * ─────────────────────────────────────────────────────────
+ * 1. CASH AMOUNT (higher = better)
+ *    - A ₹1000 prize always beats a ₹500 prize
+ * 
+ * 2. PRIZE TYPE when cash is equal (trophy > medal > none)
+ *    - Trophy (+3) beats Medal (+2) beats Certificate/None (+0)
+ * 
+ * 3. MAIN CATEGORY when cash+type equal
+ *    - Main category prizes preferred over subcategory prizes
+ * 
+ * 4. PLACE NUMBER when still tied (1st > 2nd > 3rd)
+ *    - 1st place is more prestigious than 2nd place
+ * 
+ * 5. CATEGORY ORDER (brochure order, lower = earlier = better)
+ *    - Categories listed first in brochure take precedence
+ * 
+ * 6. PRIZE ID (stable tie-breaker for determinism)
+ */
 export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
   const cash = p.cash_amount ?? 0;
-  const hasTrophy = !!p.has_trophy;
-  const hasMedal = !!p.has_medal;
-  const noncashBonus = hasTrophy ? 3 : hasMedal ? 2 : 0;
-  const valueScore = cash * 1000 + noncashBonus;
-  const top3Bonus = !cat.is_main && (p.place ?? 9999) <= 3 ? 1 : 0;
-
+  const prizeTypeScore = getPrizeTypeScore(p);
+  
   return {
-    valueScore,                                // PRIMARY: value score DESC
-    top3Bonus,                                 // SECONDARY: Top-3 non-main override
-    main: cat.is_main ? 1 : 0,                 // DESC (prefer main when equal value/top3)
-    order: cat.order_idx ?? 0,                 // brochure order ASC
-    place: p.place ?? 9999,                    // ASC (1st, 2nd, 3rd...)
-    pid: p.id                                  // ASC (stable tie-breaker)
+    cash,                                      // 1. Cash amount DESC
+    prizeTypeScore,                            // 2. Prize type DESC (trophy > medal > none)
+    main: cat.is_main ? 1 : 0,                 // 3. Main category DESC
+    place: p.place ?? 9999,                    // 4. Place ASC (1st > 2nd > 3rd)
+    order: cat.order_idx ?? 0,                 // 5. Category order ASC
+    pid: p.id                                  // 6. Stable tie-breaker
   };
 };
 
-// Sort comparator: valueScore DESC, top3Bonus DESC, main DESC, order ASC, place ASC, pid ASC
-// This implements "max-cash-per-player" semantics: each player gets the highest-value prize they're eligible for
-export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }) => {
+/**
+ * Comparator for prize priority queue.
+ * Implements the hierarchy documented in prizeKey().
+ * 
+ * Returns negative if 'a' should come first (higher priority),
+ * positive if 'b' should come first.
+ */
+export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
   const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
 
-  // PRIMARY: valueScore descending (highest first)
-  if (ak.valueScore !== bk.valueScore) return bk.valueScore - ak.valueScore;
+  // 1. Cash amount: higher wins
+  if (ak.cash !== bk.cash) return bk.cash - ak.cash;
 
-  // SECONDARY: Top-3 bonus for non-main
-  if (ak.top3Bonus !== bk.top3Bonus) return bk.top3Bonus - ak.top3Bonus;
+  // 2. Prize type: trophy > medal > none
+  if (ak.prizeTypeScore !== bk.prizeTypeScore) return bk.prizeTypeScore - ak.prizeTypeScore;
 
-  // When value equal and Top-3 bonus equal, prefer main category
+  // 3. Main category preferred
   if (ak.main !== bk.main) return bk.main - ak.main;
   
-  // Then brochure order
-  if (ak.order !== bk.order) return ak.order - bk.order;
-  
-  // Then place within category
+  // 4. Place number: 1st > 2nd > 3rd (lower place = higher priority)
   if (ak.place !== bk.place) return ak.place - bk.place;
   
-  // Finally stable by prize ID
+  // 5. Category brochure order
+  if (ak.order !== bk.order) return ak.order - bk.order;
+  
+  // 6. Stable tie-breaker by prize ID
   return String(ak.pid).localeCompare(String(bk.pid));
 };
 
