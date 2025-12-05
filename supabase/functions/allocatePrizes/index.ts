@@ -1282,9 +1282,19 @@ export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: Categor
 };
 
 /**
- * Deterministic comparator for eligible players.
+ * Deterministic comparator for eligible players (standard categories).
+ * 
+ * INVARIANT: For any prize in a standard category, the winner MUST be the
+ * best-ranked (lowest rank number) eligible player who hasn't already won a prize.
+ * No unassigned player with a better rank should ever be skipped.
+ * 
  * Sort order: rank ASC → configurable tie-breaks (rating DESC, name ASC)
  * Exported for testing.
+ * 
+ * Priority order for standard categories:
+ * 1. Main tournament rank (ascending - lower = better)
+ * 2. Rating (descending - higher = better, for ties)
+ * 3. Name (alphabetical, for final stability)
  */
 export function compareEligibleByRankRatingName(
   a: { player: { rank?: number | null; rating?: number | null; name?: string | null } },
@@ -1326,6 +1336,19 @@ export const isYoungestCategory = (category: { category_type?: string | null }):
   return type === 'youngest_female' || type === 'youngest_male';
 };
 
+/**
+ * Deterministic comparator for eligible players (youngest categories).
+ * 
+ * INVARIANT: For youngest categories, the winner MUST be the youngest
+ * (most recent DOB) eligible player who hasn't already won a prize.
+ * Ties broken by: rank → rating → name.
+ * 
+ * Priority order for youngest categories:
+ * 1. DOB (descending - most recent = youngest = best)
+ * 2. Main tournament rank (ascending - lower = better, for DOB ties)
+ * 3. Rating (descending - higher = better)
+ * 4. Name (alphabetical, for final stability)
+ */
 export function compareYoungestEligible(
   a: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
   b: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
