@@ -222,6 +222,67 @@ describe('headerless gender column detection', () => {
     const result = findHeaderlessGenderColumn(headers, rows);
     expect(result).toBe('__EMPTY_COL_1');
   });
+
+  it('detects headerless gender column even when F values appear late in the list (Jaipur-style)', () => {
+    // Simulate a 100-row tournament where the only female appears at row 50
+    const headers = ['Rank', 'SNo.', '__EMPTY_COL_2', 'Name', 'Name', '__EMPTY_COL_5', 'Rtg'];
+    const rows: Record<string, string>[] = [];
+    
+    // First 49 rows: all blanks in the headerless column
+    for (let i = 1; i <= 49; i++) {
+      rows.push({
+        Rank: String(i),
+        'SNo.': String(i),
+        __EMPTY_COL_2: '',
+        Name: `Player ${i}`,
+        __EMPTY_COL_5: '',  // blank - no gender marker
+        Rtg: String(1500 + i),
+      });
+    }
+    
+    // Row 50: female player with F in headerless column
+    rows.push({
+      Rank: '50',
+      'SNo.': '50',
+      __EMPTY_COL_2: '',
+      Name: 'Female Player',
+      __EMPTY_COL_5: 'F',  // FEMALE marker
+      Rtg: '1600',
+    });
+    
+    // Rows 51-100: more blank gender values
+    for (let i = 51; i <= 100; i++) {
+      rows.push({
+        Rank: String(i),
+        'SNo.': String(i),
+        __EMPTY_COL_2: '',
+        Name: `Player ${i}`,
+        __EMPTY_COL_5: '',
+        Rtg: String(1400 + i),
+      });
+    }
+    
+    // The detection should now scan up to 500 rows and find the single F at row 50
+    const result = findHeaderlessGenderColumn(headers, rows);
+    expect(result).toBe('__EMPTY_COL_5');
+  });
+
+  it('detects headerless gender column with only 1 female marker in large dataset', () => {
+    const headers = ['Name', '__EMPTY_COL_1', 'Rtg'];
+    const rows: Record<string, string>[] = [];
+    
+    // 99 blank rows
+    for (let i = 0; i < 99; i++) {
+      rows.push({ Name: `Player ${i}`, __EMPTY_COL_1: '', Rtg: '1500' });
+    }
+    
+    // 1 female at the end
+    rows.push({ Name: 'Female Player', __EMPTY_COL_1: 'F', Rtg: '1600' });
+    
+    const result = findHeaderlessGenderColumn(headers, rows);
+    // With the new logic (matches > 0 is sufficient), this should be detected
+    expect(result).toBe('__EMPTY_COL_1');
+  });
 });
 
 describe('Jaipur-style tournament simulation', () => {
