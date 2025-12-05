@@ -27,23 +27,13 @@ const SWISS_SIGNATURE_HEADERS = ['rank', 'sno', 'rtg', 'fideno'];
 const TEMPLATE_SIGNATURE_HEADERS = ['rank', 'name', 'rating', 'dob'];
 
 const HEADERLESS_KEY_PATTERN = /^__empty/i;
-const GENDER_VALUE_TOKENS = new Set([
-  'm',
-  'f',
-  'male',
-  'female',
-  'boy',
-  'girl',
-  'boys',
-  'girls',
-  'men',
-  'women',
-  'other',
-  'w',
-  'g',
-  'b',
-  'o'
-]);
+
+/**
+ * Strict single-letter gender tokens for headerless column detection
+ * Only accept: F, M, B, G (case-insensitive)
+ * This prevents false positives from short name columns like "K. Arun"
+ */
+const STRICT_SINGLE_LETTER_GENDER = new Set(['f', 'm', 'b', 'g']);
 
 function isHeaderlessKey(key: string | undefined): key is string {
   if (key === undefined) return false;
@@ -51,24 +41,40 @@ function isHeaderlessKey(key: string | undefined): key is string {
   return HEADERLESS_KEY_PATTERN.test(key);
 }
 
-function looksLikeGenderValue(value: unknown): boolean {
+/**
+ * Check if a value looks like a gender marker for headerless column detection
+ * STRICT: Only accepts single letters F, M, B, G (case-insensitive)
+ * Does NOT accept words like "Male", "Female", "Boy", "Girl"
+ * This prevents short name columns like "K. Arun" from being misidentified
+ */
+function looksLikeStrictGenderValue(value: unknown): boolean {
   if (value == null) return false;
-  const normalized = String(value)
-    .trim()
-    .toLowerCase();
-  if (!normalized) return false;
-
-  const alphaOnly = normalized.replace(/[^a-z]/g, '');
-  if (GENDER_VALUE_TOKENS.has(alphaOnly)) return true;
-  if (alphaOnly === 'mf' || alphaOnly === 'fm') return true;
-
-  return false;
+  const trimmed = String(value).trim().toLowerCase();
+  if (!trimmed) return false;
+  
+  // Must be exactly one letter
+  if (trimmed.length !== 1) return false;
+  
+  return STRICT_SINGLE_LETTER_GENDER.has(trimmed);
 }
 
 const NORMALIZED_NAME_HEADERS = new Set(
   HEADER_ALIASES.name.map(normalizeHeaderForMatching)
 );
 
+/**
+ * Find a headerless gender column (empty header) adjacent to the Name column
+ * 
+ * Detection criteria:
+ * 1. Column header must be empty (or __EMPTY_COL_*)
+ * 2. Column must be immediately after the Name column
+ * 3. At least one non-empty value must be a SINGLE letter in {F, M, B, G}
+ * 4. Majority of non-empty values should match the strict pattern
+ * 
+ * This strict detection prevents false positives from:
+ * - Short name columns (e.g., "K. Arun", "R. Sangma")
+ * - Title columns (e.g., "FM", "IM", "GM")
+ */
 export function findHeaderlessGenderColumn(
   headers: string[],
   sampleRows: Array<Record<string, any>> = []
@@ -138,7 +144,8 @@ export function findHeaderlessGenderColumn(
       if (!str) continue;
 
       stats.total += 1;
-      if (looksLikeGenderValue(str)) {
+      // Use strict single-letter detection
+      if (looksLikeStrictGenderValue(str)) {
         stats.matches += 1;
       }
     }
@@ -151,6 +158,7 @@ export function findHeaderlessGenderColumn(
     if (stats.total === 0) continue;
 
     const ratio = stats.matches / stats.total;
+    // Require at least 3 matches OR all values match (for small samples)
     if (
       stats.matches >= 3 ||
       (stats.total <= 3 && stats.matches === stats.total && stats.total >= 2)

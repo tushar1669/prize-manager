@@ -1,12 +1,13 @@
+// src/utils/genderInference.ts
+// Gender inference logic for player import
 import { HEADER_ALIASES, normalizeHeaderForMatching, findHeaderlessGenderColumn } from './importSchema';
-import { genderBlankToMF, normalizeGender } from './valueNormalizers';
 
 export type Gender = 'M' | 'F' | 'Other' | null;
 export type GenderSource = 'gender_column' | 'fs_column' | 'headerless_after_name' | 'type_label' | 'group_label';
 
 export interface GenderInference {
   gender: Gender;
-  female_signal_source: 'FMG' | 'F_PREFIX' | null;
+  female_signal_source: 'FMG' | 'F_PREFIX' | 'FS_SIGNAL' | 'TITLE' | 'GIRL_TOKEN' | null;
   gender_source: GenderSource | null;
   sources: GenderSource[];
   warnings: string[];
@@ -78,9 +79,23 @@ export function analyzeGenderColumns(rows: Array<Record<string, any>>): GenderCo
   };
 }
 
-const FEMALE_MARKER_REGEX = /^F\d+/;
-const FEMALE_TOKENS = new Set(['F', 'FEMALE', 'GIRL']);
-const MALE_TOKENS = new Set(['M', 'MALE', 'BOY']);
+// Female markers in Type/Group labels
+const FEMALE_MARKER_FMG = /FMG/i;
+const FEMALE_MARKER_F_PREFIX = /^F\d{1,2}$/; // F9, F13, etc.
+const FEMALE_TOKENS = new Set(['GIRL', 'GIRLS']);
+
+// Explicit gender column values
+const EXPLICIT_FEMALE_TOKENS = new Set(['F', 'FEMALE', 'GIRL', 'GIRLS']);
+const EXPLICIT_MALE_TOKENS = new Set(['M', 'MALE', 'BOY', 'BOYS']);
+
+// FS/Headerless female signals (female-only column)
+// Includes: F, G, W, GIRL, GIRLS, WFM, WIM, WGM, WCM
+const FS_FEMALE_EXACT = new Set(['F', 'G', 'W', 'GIRL', 'GIRLS']);
+const FS_FEMALE_TITLE_PREFIXES = ['WFM', 'WIM', 'WGM', 'WCM'];
+
+// Chess title prefixes that are NOT gender markers (avoid false positives)
+const NON_GENDER_TITLES = new Set(['FM', 'IM', 'GM', 'CM', 'AGM', 'AFM', 'NM', 'AM']);
+
 const tokenizeLabel = (label?: string | null): string[] =>
   String(label ?? '')
     .trim()
@@ -91,37 +106,106 @@ const tokenizeLabel = (label?: string | null): string[] =>
 export const hasFemaleMarker = (label?: string | null): boolean =>
   tokenizeLabel(label).some(token => {
     const upper = token.toUpperCase();
-    if (upper.includes('FMG')) return true;
-    return FEMALE_MARKER_REGEX.test(upper);
+    if (FEMALE_MARKER_FMG.test(upper)) return true;
+    if (FEMALE_MARKER_F_PREFIX.test(upper)) return true;
+    if (FEMALE_TOKENS.has(upper)) return true;
+    return false;
   });
 
+/**
+ * Normalize explicit gender column value to M/F
+ * Handles: M, MALE, BOY, BOYS, F, FEMALE, GIRL, GIRLS
+ */
 function normalizeExplicitGender(value: unknown): Gender {
-  const normalized = normalizeGender(value);
-  if (!normalized) return null;
+  if (value == null) return null;
+  const upper = String(value).trim().toUpperCase();
+  if (!upper) return null;
 
-  const upper = String(value ?? '').trim().toUpperCase();
-  if (FEMALE_TOKENS.has(upper)) return 'F';
-  if (MALE_TOKENS.has(upper)) return 'M';
+  if (EXPLICIT_FEMALE_TOKENS.has(upper)) return 'F';
+  if (EXPLICIT_MALE_TOKENS.has(upper)) return 'M';
   return null;
 }
 
-function normalizeFsOrHeaderless(value: unknown): Gender {
-  const normalized = genderBlankToMF(value);
-  if (normalized === 'F') return 'F';
-  return null;
+/**
+ * Check if FS/headerless column value indicates female
+ * Swiss-Manager FS column: F means female, blank means unknown (not male)
+ * Also handles: G, W, GIRL, GIRLS, WFM, WIM, WGM, WCM prefixes
+ * NEVER treats FM, IM, GM, CM, AGM, AFM as gender
+ */
+function isFsOrHeaderlessFemale(value: unknown): { isFemale: boolean; reason: 'FS_SIGNAL' | 'TITLE' | null } {
+  if (value == null) return { isFemale: false, reason: null };
+  const trimmed = String(value).trim();
+  if (!trimmed) return { isFemale: false, reason: null };
+  
+  const upper = trimmed.toUpperCase();
+  
+  // Check exact matches first (F, G, W, GIRL, GIRLS)
+  if (FS_FEMALE_EXACT.has(upper)) {
+    return { isFemale: true, reason: 'FS_SIGNAL' };
+  }
+  
+  // Check title prefixes (WFM, WIM, WGM, WCM)
+  for (const prefix of FS_FEMALE_TITLE_PREFIXES) {
+    if (upper.startsWith(prefix)) {
+      return { isFemale: true, reason: 'TITLE' };
+    }
+  }
+  
+  // Explicitly reject non-gender chess titles to avoid false positives
+  for (const title of NON_GENDER_TITLES) {
+    if (upper === title || upper.startsWith(title + ' ')) {
+      return { isFemale: false, reason: null };
+    }
+  }
+  
+  return { isFemale: false, reason: null };
 }
 
-function detectFemaleSignal(label?: string | null): { isFemale: boolean; reason: 'FMG' | 'F_PREFIX' | null } {
+/**
+ * Detect female signal from Type or Group label
+ * Returns reason: FMG, F_PREFIX, or GIRL_TOKEN
+ */
+function detectFemaleSignalFromLabel(label?: string | null): { 
+  isFemale: boolean; 
+  reason: 'FMG' | 'F_PREFIX' | 'GIRL_TOKEN' | null 
+} {
   const tokens = tokenizeLabel(label);
   for (const token of tokens) {
     const upper = token.toUpperCase();
-    if (upper.includes('FMG')) return { isFemale: true, reason: 'FMG' };
-    if (FEMALE_MARKER_REGEX.test(upper)) return { isFemale: true, reason: 'F_PREFIX' };
+    
+    // FMG marker
+    if (FEMALE_MARKER_FMG.test(upper)) {
+      return { isFemale: true, reason: 'FMG' };
+    }
+    
+    // F prefix (F9, F13, etc.)
+    if (FEMALE_MARKER_F_PREFIX.test(upper)) {
+      return { isFemale: true, reason: 'F_PREFIX' };
+    }
+    
+    // GIRL/GIRLS token
+    if (FEMALE_TOKENS.has(upper)) {
+      return { isFemale: true, reason: 'GIRL_TOKEN' };
+    }
   }
 
   return { isFemale: false, reason: null };
 }
 
+/**
+ * Infer gender for a player row using all available signals
+ * 
+ * Priority (strongest to weakest source):
+ * 1. Explicit gender column (F/M/FEMALE/MALE/GIRL/BOY/GIRLS/BOYS)
+ * 2. FS column / headerless gender column (F, G, W, WFM, WIM, WGM, WCM, GIRL, GIRLS)
+ * 3. Type/Group female markers (FMG, F9, F13, GIRL, GIRLS)
+ * 
+ * Rules:
+ * - Any female signal → return F
+ * - Only explicit male (M, MALE, BOY, BOYS) → return M
+ * - Otherwise → return null (unknown)
+ * - Female signals override explicit male (with warning)
+ */
 export function inferGenderForRow(
   row: Record<string, any>,
   config?: GenderColumnConfig | null,
@@ -136,60 +220,80 @@ export function inferGenderForRow(
     warnings: [],
   };
 
+  let explicitMale = false;
+
+  // 1. Check explicit gender column
   const genderColumn = config?.genderColumn ?? (config?.preferredSource === 'gender_column' ? config?.preferredColumn : null);
-  const explicitGenderValue = genderColumn ? row[genderColumn] : 'gender' in row ? row.gender : undefined;
+  const explicitGenderValue = genderColumn ? row[genderColumn] : ('gender' in row ? row.gender : undefined);
   const explicitGender = normalizeExplicitGender(explicitGenderValue);
 
-  if (explicitGender) {
-    result.gender = explicitGender;
+  if (explicitGender === 'F') {
+    result.gender = 'F';
+    result.sources.push('gender_column');
+    result.gender_source = 'gender_column';
+  } else if (explicitGender === 'M') {
+    explicitMale = true;
+    result.gender = 'M';
     result.sources.push('gender_column');
     result.gender_source = 'gender_column';
   }
 
-  const fsGender = normalizeFsOrHeaderless(config?.fsColumn ? row[config.fsColumn] : undefined);
-  if (fsGender === 'F') {
-    result.gender = 'F';
-    result.sources.push('fs_column');
-    result.gender_source = 'fs_column';
-  }
-
-  const headerlessGender = normalizeFsOrHeaderless(
-    config?.headerlessGenderColumn ? row[config.headerlessGenderColumn] : undefined,
-  );
-  if (headerlessGender === 'F') {
-    result.gender = 'F';
-    result.sources.push('headerless_after_name');
-    result.gender_source = 'headerless_after_name';
-  }
-
-  const { isFemale: femaleFromType, reason: typeReason } = detectFemaleSignal(typeLabel);
-  const { isFemale: femaleFromGroup, reason: groupReason } = detectFemaleSignal(groupLabel);
-
-  let femaleSignalReason: 'FMG' | 'F_PREFIX' | null = null;
-
-  if (femaleFromType || femaleFromGroup) {
-    if (result.gender === 'M') {
+  // 2. Check FS column (female-only signal)
+  const fsValue = config?.fsColumn ? row[config.fsColumn] : undefined;
+  const { isFemale: fsFemale, reason: fsReason } = isFsOrHeaderlessFemale(fsValue);
+  if (fsFemale) {
+    if (explicitMale) {
       result.warnings.push('female signal overrides explicit male gender');
     }
     result.gender = 'F';
-    if (femaleFromType) {
-      result.sources.push('type_label');
+    result.sources.push('fs_column');
+    result.gender_source = 'fs_column';
+    result.female_signal_source = result.female_signal_source ?? fsReason;
+  }
+
+  // 3. Check headerless gender column (female-only signal)
+  const headerlessValue = config?.headerlessGenderColumn ? row[config.headerlessGenderColumn] : undefined;
+  const { isFemale: headerlessFemale, reason: headerlessReason } = isFsOrHeaderlessFemale(headerlessValue);
+  if (headerlessFemale) {
+    if (result.gender === 'M' && !result.sources.includes('fs_column')) {
+      result.warnings.push('female signal overrides explicit male gender');
+    }
+    result.gender = 'F';
+    result.sources.push('headerless_after_name');
+    result.gender_source = 'headerless_after_name';
+    result.female_signal_source = result.female_signal_source ?? headerlessReason;
+  }
+
+  // 4. Check Type label for female markers
+  const { isFemale: femaleFromType, reason: typeReason } = detectFemaleSignalFromLabel(typeLabel);
+  if (femaleFromType) {
+    if (result.gender === 'M' && !result.sources.includes('fs_column') && !result.sources.includes('headerless_after_name')) {
+      result.warnings.push('female signal overrides explicit male gender');
+    }
+    result.gender = 'F';
+    result.sources.push('type_label');
+    if (!result.gender_source || result.gender_source === 'gender_column') {
       result.gender_source = 'type_label';
-      femaleSignalReason = femaleSignalReason ?? typeReason ?? null;
     }
-    if (femaleFromGroup) {
-      result.sources.push('group_label');
-      if (!result.gender_source) result.gender_source = 'group_label';
-      femaleSignalReason = femaleSignalReason ?? groupReason ?? null;
-    }
+    result.female_signal_source = result.female_signal_source ?? typeReason;
   }
 
+  // 5. Check Group label for female markers
+  const { isFemale: femaleFromGroup, reason: groupReason } = detectFemaleSignalFromLabel(groupLabel);
+  if (femaleFromGroup) {
+    if (result.gender === 'M' && !result.sources.includes('fs_column') && !result.sources.includes('headerless_after_name') && !result.sources.includes('type_label')) {
+      result.warnings.push('female signal overrides explicit male gender');
+    }
+    result.gender = 'F';
+    result.sources.push('group_label');
+    if (!result.gender_source || result.gender_source === 'gender_column') {
+      result.gender_source = 'group_label';
+    }
+    result.female_signal_source = result.female_signal_source ?? groupReason;
+  }
+
+  // Dedupe sources
   result.sources = Array.from(new Set(result.sources));
-
-  if (femaleSignalReason) {
-    result.female_signal_source = femaleSignalReason;
-  }
 
   return result;
 }
-
