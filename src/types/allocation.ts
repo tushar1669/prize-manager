@@ -59,8 +59,14 @@ export interface AllocationCoverageEntry {
   // Raw failure codes from evaluateEligibility
   raw_fail_codes: string[];
   
-  // Diagnosis summary for 0-candidate categories (Task 4)
+  // Diagnosis summary for 0-candidate categories
   diagnosis_summary?: string | null;
+  
+  // Prize priority hierarchy explanation
+  // Format: "cash=₹1000, type=trophy, main=yes, place=1, order=0"
+  priority_explanation?: string;
+  has_trophy?: boolean;
+  has_medal?: boolean;
 }
 
 /**
