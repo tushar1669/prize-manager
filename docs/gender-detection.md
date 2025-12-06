@@ -11,6 +11,10 @@ Swiss-Manager exports player data in XLS/XLSX format with a specific column stru
 3. **Headerless gender column** (between Name and Rating columns)
 4. **Type/Group labels** (e.g., `FMG`, `F13`, `GIRL`)
 
+## One-Sentence Summary
+
+> Prize-Manager reads gender from explicit gender columns, the FS column, headerless F markers between Name and Rating, and girl-specific groups like FMG/F13.
+
 ## The Name-Rtg Gap Rule (Swiss-Manager Headerless Column)
 
 ### Problem
@@ -71,6 +75,46 @@ Female signals from any source override explicit male gender (with a warning).
 - Multi-character abbreviations: `K. Arun`, `P. Singh` (short names, NOT gender)
 - Numbers: `1`, `2`, `1500` (ratings, ranks)
 
+## In-App Warnings
+
+Prize-Manager displays warnings to help arbiters catch potential gender data issues before allocation.
+
+### "No female players detected" Warning
+
+This warning appears on the Import Players screen when **0 players** are marked as female after parsing the ranking file.
+
+#### High-Severity Warning (Error Style)
+Shown when `femaleCount === 0` AND the tournament has at least one female/girl category configured.
+
+**Example message:**
+> **No female players detected**
+> This ranking list has 0 players marked as female, but your prize structure includes girl/women categories.
+> Double-check the Swiss-Manager export: make sure the gender column (F), FS column, or girl groups (FMG, F9, F13…) are filled.
+
+#### Low-Severity Warning (Info Style)
+Shown when `femaleCount === 0` but there are no female categories configured.
+
+**Example message:**
+> **No female players detected**
+> This ranking list has 0 players marked as female.
+> If this looks wrong, check that your Swiss-Manager file includes an F in the gender/FS column or a girl/women group (FMG, F9, F13, etc.), then re-upload.
+
+### What Arbiters Should Check
+
+If the warning appears unexpectedly:
+
+1. **Gender column**: Ensure the export includes a gender column with `F` for females
+2. **FS column**: Check if the FS column has `F` values (not just blank)
+3. **Headerless column**: Look for a column between Name and Rating with `F` markers
+4. **Type/Group**: Check if FMG, F9, F13, GIRL, etc. appear in Type or Gr columns
+5. **Re-export**: If data is truly missing, update Swiss-Manager and re-export
+
+### Important Notes
+
+- The warning **does not block** the import or prize allocation workflow
+- It only flags potential issues for manual review
+- If the tournament genuinely has no female participants, the info-level warning can be safely ignored
+
 ## Troubleshooting
 
 ### No females detected but prizes exist
@@ -90,5 +134,7 @@ Female signals from any source override explicit male gender (with a warning).
 
 - `src/utils/importSchema.ts` - `findHeaderlessGenderColumn()` function
 - `src/utils/genderInference.ts` - `inferGenderForRow()`, `analyzeGenderColumns()`
+- `src/components/import/MissingGenderWarning.tsx` - Warning component
+- `src/components/import/GenderSummaryChip.tsx` - Gender summary badge
 - `supabase/functions/parseWorkbook/index.ts` - Server-side parsing with same logic
 - `tests/gender-logic.spec.ts` - Unit tests for gender detection
