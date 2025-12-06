@@ -87,6 +87,9 @@ const HEADERLESS_KEY_PATTERN = /^__empty/i;
 // Only F, M, B, G - prevents false positives from short name columns
 const STRICT_SINGLE_LETTER_GENDER = new Set(["f", "m", "b", "g"]);
 
+// Rating column headers to detect the Name-Rtg gap region
+const RATING_HEADERS = new Set(["rtg", "irtg", "nrtg", "rating", "elo", "std"]);
+
 const NAME_ALIASES = ["name", "player_name", "full_name", "player", "playername", "participant"];
 const NORMALIZED_NAME_HEADERS = new Set(NAME_ALIASES.map((alias) => normalizeForMatching(alias)));
 
@@ -214,6 +217,22 @@ function detectFemaleSignalFromLabel(label?: string | null): {
   return { isFemale: false, reason: null };
 }
 
+/**
+ * Find a headerless gender column in Swiss-Manager files.
+ * 
+ * Swiss-Manager ranking lists often have this structure:
+ *   Rank | SNo | [Title] | Name | Name | [HEADERLESS F/blank] | Rtg | ...
+ * 
+ * The key insight is that the gender column is headerless (empty header)
+ * and located BETWEEN the last Name column and the first Rating column.
+ * 
+ * Detection algorithm:
+ * 1. Find the LAST Name column index (there may be multiple "Name" columns)
+ * 2. Find the FIRST Rating column index (Rtg, IRtg, NRtg, Rating, etc.)
+ * 3. Scan all columns between lastNameIndex and firstRatingIndex
+ * 4. For each headerless column in that region, score by counting F/M/B/G values
+ * 5. Pick the column with the highest score (any matches > 0)
+ */
 function findHeaderlessGenderColumn(
   headers: string[],
   sampleRows: Array<Record<string, unknown>> = []
@@ -227,20 +246,34 @@ function findHeaderlessGenderColumn(
   }
 
   const normalizedHeaders = headers.map((header) => normalizeForMatching(header));
-  let nameIndex = -1;
+  
+  // Step 1: Find the LAST Name column index (Swiss-Manager often has 2 Name columns)
+  let lastNameIndex = -1;
   for (let i = 0; i < normalizedHeaders.length; i += 1) {
     if (NORMALIZED_NAME_HEADERS.has(normalizedHeaders[i])) {
-      nameIndex = i;
-      break;
+      lastNameIndex = i;  // Don't break - keep going to find the LAST one
     }
   }
 
-  if (nameIndex === -1) {
+  if (lastNameIndex === -1) {
     return null;
   }
 
-  const nameHeader = headers[nameIndex];
-  const normalizedNameHeader = normalizeForMatching(nameHeader);
+  // Step 2: Find the FIRST Rating column index
+  let firstRatingIndex = -1;
+  for (let i = 0; i < normalizedHeaders.length; i += 1) {
+    if (RATING_HEADERS.has(normalizedHeaders[i])) {
+      firstRatingIndex = i;
+      break;  // Stop at FIRST rating column
+    }
+  }
+
+  // Step 3: Determine the search region for headerless gender columns
+  const searchEndIndex = firstRatingIndex > lastNameIndex 
+    ? firstRatingIndex 
+    : headers.length;
+
+  // Step 4: Collect candidate headerless columns in the Name-Rtg gap
   const candidateStats = new Map<string, { total: number; matches: number }>();
 
   const registerCandidate = (key: string | undefined) => {
@@ -250,9 +283,12 @@ function findHeaderlessGenderColumn(
     }
   };
 
-  registerCandidate(headers[nameIndex + 1]);
+  // Register all headerless columns between lastNameIndex and firstRatingIndex
+  for (let i = lastNameIndex + 1; i < searchEndIndex; i += 1) {
+    registerCandidate(headers[i]);
+  }
 
-  // Scan ALL rows (or up to 500) to catch female markers appearing late in the list
+  // Also check row keys for any headerless columns in that region
   const sampleLimit = Math.min(sampleRows.length, 500);
   for (let i = 0; i < sampleLimit; i += 1) {
     const row = sampleRows[i];
@@ -261,18 +297,38 @@ function findHeaderlessGenderColumn(
     const keys = Object.keys(row);
     if (keys.length === 0) continue;
 
-    const nameKeyIndex = keys.findIndex(
-      (key) => normalizeForMatching(key) === normalizedNameHeader
-    );
-    if (nameKeyIndex === -1) continue;
+    // Find the last name key index in this row's keys
+    let rowLastNameIndex = -1;
+    for (let j = 0; j < keys.length; j += 1) {
+      if (NORMALIZED_NAME_HEADERS.has(normalizeForMatching(keys[j]))) {
+        rowLastNameIndex = j;
+      }
+    }
 
-    registerCandidate(keys[nameKeyIndex + 1]);
+    // Find the first rating key index in this row's keys
+    let rowFirstRatingIndex = -1;
+    for (let j = 0; j < keys.length; j += 1) {
+      if (RATING_HEADERS.has(normalizeForMatching(keys[j]))) {
+        rowFirstRatingIndex = j;
+        break;
+      }
+    }
+
+    // Register headerless columns in the gap
+    const rowSearchEnd = rowFirstRatingIndex > rowLastNameIndex 
+      ? rowFirstRatingIndex 
+      : keys.length;
+    
+    for (let j = rowLastNameIndex + 1; j < rowSearchEnd; j += 1) {
+      registerCandidate(keys[j]);
+    }
   }
 
   if (candidateStats.size === 0) {
     return null;
   }
 
+  // Step 5: Score each candidate by counting gender-looking values
   for (let i = 0; i < sampleLimit; i += 1) {
     const row = sampleRows[i];
     if (!row || typeof row !== "object") continue;
@@ -291,8 +347,7 @@ function findHeaderlessGenderColumn(
     }
   }
 
-  // Pick candidate with highest matches, as long as matches > 0
-  // No longer require ≥3 matches - even 1 female marker is valid
+  // Step 6: Pick the best candidate (highest match count, matches > 0)
   let bestKey: string | null = null;
   let bestMatches = 0;
   for (const [key, stats] of candidateStats.entries()) {
