@@ -118,6 +118,13 @@ export function GenderSummaryChip({
   };
 
   const renderHoverContent = () => {
+    const detectionExplanation = (
+      <p className="text-xs text-muted-foreground border-t pt-2 mt-2">
+        Prize-Manager reads gender from explicit gender columns, the FS column, 
+        headerless F markers between Name and Rating, and girl-specific groups like FMG/F13.
+      </p>
+    );
+
     switch (status) {
       case 'ok':
         return (
@@ -138,6 +145,7 @@ export function GenderSummaryChip({
                 </div>
               )}
             </div>
+            {detectionExplanation}
           </div>
         );
       case 'soft_warning':
@@ -154,6 +162,7 @@ export function GenderSummaryChip({
             <p className="text-sm text-muted-foreground">
               Please double-check your gender and Type/Group column mapping.
             </p>
+            {detectionExplanation}
           </div>
         );
       case 'hard_warning':
@@ -171,6 +180,7 @@ export function GenderSummaryChip({
               This may cause female categories to fail during allocation.
               Check your column mapping or ensure the gender column is populated.
             </p>
+            {detectionExplanation}
           </div>
         );
     }

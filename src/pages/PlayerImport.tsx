@@ -103,6 +103,7 @@ import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 import { GenderSummaryChip } from "@/components/import/GenderSummaryChip";
+import { MissingGenderWarning, checkHasFemaleCategories } from "@/components/import/MissingGenderWarning";
 import { analyzeGenderColumns, hasFemaleMarker, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
 
 /**
@@ -1340,6 +1341,27 @@ export default function PlayerImport() {
     },
     enabled: !!id,
   });
+
+  // Fetch categories to check for female/girl categories
+  const { data: categories } = useQuery({
+    queryKey: ['categories', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('categories')
+        .select('name, criteria_json')
+        .eq('tournament_id', id)
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!id,
+  });
+
+  // Compute whether tournament has female/girl categories
+  const hasFemaleCategories = useMemo(() => {
+    return checkHasFemaleCategories(categories as Parameters<typeof checkHasFemaleCategories>[0]);
+  }, [categories]);
 
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
   const tournamentSlug = (tournament as { slug?: string } | null | undefined)?.slug ?? 'tournament';
@@ -2594,6 +2616,15 @@ export default function PlayerImport() {
                   totalPlayers={mappedPlayers.length}
                 />
               </div>
+            )}
+
+            {/* Missing gender warning - shown when no females detected */}
+            {mappedPlayers.length > 0 && femaleCountSummary && (
+              <MissingGenderWarning
+                femaleCount={femaleCountSummary.femaleFromGender + femaleCountSummary.femaleFromFmg}
+                totalPlayers={mappedPlayers.length}
+                hasFemaleCategories={hasFemaleCategories}
+              />
             )}
             
             <Card>
