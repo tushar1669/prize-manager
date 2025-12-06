@@ -283,6 +283,88 @@ describe('headerless gender column detection', () => {
     // With the new logic (matches > 0 is sufficient), this should be detected
     expect(result).toBe('__EMPTY_COL_1');
   });
+
+  describe('Swiss-Manager Name-Rtg gap detection', () => {
+    it('detects headerless column AFTER second Name column (Swiss-Manager pattern)', () => {
+      // Swiss-Manager structure: Rank | SNo | Title | Name | Name | [F/blank] | Rtg
+      const headers = ['Rank', 'SNo', 'Title', 'Name', 'Name', '__EMPTY_COL_5', 'Rtg', 'NRtg', 'Fed'];
+      const rows = [
+        { Rank: '1', SNo: '1', Title: '', Name: 'Player A', __EMPTY_COL_5: '', Rtg: '1800', NRtg: '1750', Fed: 'IND' },
+        { Rank: '2', SNo: '2', Title: 'FM', Name: 'Player B', __EMPTY_COL_5: '', Rtg: '2200', NRtg: '2100', Fed: 'IND' },
+        { Rank: '3', SNo: '3', Title: '', Name: 'Female Player', __EMPTY_COL_5: 'F', Rtg: '1600', NRtg: '1550', Fed: 'IND' },
+        { Rank: '4', SNo: '4', Title: '', Name: 'Player D', __EMPTY_COL_5: '', Rtg: '1500', NRtg: '1450', Fed: 'IND' },
+      ];
+      
+      const result = findHeaderlessGenderColumn(headers, rows);
+      expect(result).toBe('__EMPTY_COL_5');
+    });
+
+    it('finds headerless gender column in Jaipur-style structure', () => {
+      // Actual Jaipur structure: Rank | SNo | [empty] | Name | Name | [F/blank] | Rtg | ...
+      const headers = ['Rank', 'SNo.', '__EMPTY_COL_2', 'Name', 'Name', '__EMPTY_COL_5', 'Rtg', 'NRtg', 'IRtg'];
+      const rows: Record<string, string>[] = [];
+      
+      // 50 male players (blank in gender column)
+      for (let i = 1; i <= 50; i++) {
+        rows.push({
+          Rank: String(i),
+          'SNo.': String(i),
+          __EMPTY_COL_2: '',
+          Name: `Player ${i}`,
+          __EMPTY_COL_5: '',
+          Rtg: String(1500 + i * 10),
+          NRtg: String(1500 + i * 10),
+          IRtg: String(1500 + i * 10),
+        });
+      }
+      
+      // 3 female players with F marker
+      rows[10].__EMPTY_COL_5 = 'F';
+      rows[25].__EMPTY_COL_5 = 'F';
+      rows[40].__EMPTY_COL_5 = 'F';
+      
+      const result = findHeaderlessGenderColumn(headers, rows);
+      expect(result).toBe('__EMPTY_COL_5');
+    });
+
+    it('does NOT mistake first Name column position for gender', () => {
+      // Ensure we look AFTER the LAST Name column, not the first
+      const headers = ['Rank', 'Name', 'Name', '__EMPTY_COL_3', 'Rtg'];
+      const rows = [
+        { Rank: '1', Name: 'Player A Full Name', __EMPTY_COL_3: 'F', Rtg: '1500' },
+        { Rank: '2', Name: 'Player B Full Name', __EMPTY_COL_3: '', Rtg: '1600' },
+      ];
+      
+      const result = findHeaderlessGenderColumn(headers, rows);
+      // Should find __EMPTY_COL_3 which is AFTER the second Name column
+      expect(result).toBe('__EMPTY_COL_3');
+    });
+
+    it('handles empty region between Name and Rtg with no headerless columns', () => {
+      const headers = ['Rank', 'Name', 'Name', 'Federation', 'Rtg'];
+      const rows = [
+        { Rank: '1', Name: 'Player A', Federation: 'IND', Rtg: '1500' },
+      ];
+      
+      const result = findHeaderlessGenderColumn(headers, rows);
+      // No headerless columns in the gap, should return null
+      expect(result).toBeNull();
+    });
+
+    it('prefers column with more gender matches when multiple headerless columns exist', () => {
+      const headers = ['Rank', 'Name', 'Name', '__EMPTY_COL_3', '__EMPTY_COL_4', 'Rtg'];
+      const rows = [
+        { Rank: '1', Name: 'P1', __EMPTY_COL_3: '', __EMPTY_COL_4: 'F', Rtg: '1500' },
+        { Rank: '2', Name: 'P2', __EMPTY_COL_3: '', __EMPTY_COL_4: 'F', Rtg: '1600' },
+        { Rank: '3', Name: 'P3', __EMPTY_COL_3: '', __EMPTY_COL_4: '', Rtg: '1700' },
+        { Rank: '4', Name: 'P4', __EMPTY_COL_3: 'M', __EMPTY_COL_4: 'F', Rtg: '1800' },
+      ];
+      
+      const result = findHeaderlessGenderColumn(headers, rows);
+      // __EMPTY_COL_4 has 3 F values, __EMPTY_COL_3 has 1 M value
+      expect(result).toBe('__EMPTY_COL_4');
+    });
+  });
 });
 
 describe('Jaipur-style tournament simulation', () => {
