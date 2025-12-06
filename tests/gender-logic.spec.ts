@@ -480,3 +480,100 @@ describe('gender eligibility', () => {
     expect(female.reasonCodes).toContain('gender_mismatch');
   });
 });
+
+describe('Real tournament file integration tests', () => {
+  /**
+   * These tests verify the Name-Rtg gap gender detection works on real Swiss-Manager files
+   * from actual tournaments. The files have:
+   * - Two "Name" columns (full name + abbreviated name)
+   * - Headerless F/blank column AFTER the second Name column
+   * - The F marker in that column indicates female players
+   */
+
+  it('detects headerless gender column in Swiss-Manager structure with two Name columns', () => {
+    // Simulating the exact structure from Jaipur/Shahdol tournaments
+    const headers = ['Rank', 'SNo.', '__EMPTY_COL_2', 'Name', 'Name', '__EMPTY_COL_5', 'Rtg', 'NRtg', 'IRtg', 'Fed', 'FS', 'Type', 'Gr'];
+    const rows: Record<string, string>[] = [];
+    
+    // 100 players, with 3 females marked with 'F' in the headerless column
+    for (let i = 1; i <= 100; i++) {
+      rows.push({
+        Rank: String(i),
+        'SNo.': String(i),
+        __EMPTY_COL_2: '',
+        Name: `Player ${i}`,
+        __EMPTY_COL_5: '',  // Most are blank (unknown/male)
+        Rtg: String(1500 + i),
+        NRtg: String(1500 + i),
+        IRtg: String(1500 + i),
+        Fed: 'IND',
+        FS: '',
+        Type: 'U13',
+        Gr: '',
+      });
+    }
+    
+    // Mark 3 females in the headerless column
+    rows[10].__EMPTY_COL_5 = 'F';  // Player 11
+    rows[38].__EMPTY_COL_5 = 'F';  // Player 39 (like Pal Vedika in Jaipur)
+    rows[75].__EMPTY_COL_5 = 'F';  // Player 76
+    
+    const result = findHeaderlessGenderColumn(headers, rows);
+    expect(result).toBe('__EMPTY_COL_5');
+    
+    // Verify gender inference for the female rows
+    const config: GenderColumnConfig = {
+      genderColumn: null,
+      fsColumn: 'FS',
+      headerlessGenderColumn: '__EMPTY_COL_5',
+      preferredColumn: '__EMPTY_COL_5',
+      preferredSource: 'headerless_after_name',
+    };
+    
+    // Female player (has F in headerless column)
+    const femaleRow = { ...rows[38], Name: 'Pal Vedika' };
+    const femaleInference = inferGenderForRow(femaleRow, config);
+    expect(femaleInference.gender).toBe('F');
+    expect(femaleInference.sources).toContain('headerless_after_name');
+    
+    // Male/unknown player (blank in headerless column)
+    const maleRow = { ...rows[0], Name: 'Male Player' };
+    const maleInference = inferGenderForRow(maleRow, config);
+    expect(maleInference.gender).toBeNull();  // Blank = unknown, not male
+  });
+
+  it('counts correct number of females from headerless F column', () => {
+    const headers = ['Rank', 'Name', 'Name', '__EMPTY_COL_3', 'Rtg'];
+    const rows: Record<string, string>[] = [];
+    
+    // Create 50 players, 5 female
+    for (let i = 1; i <= 50; i++) {
+      rows.push({
+        Rank: String(i),
+        Name: `Player ${i}`,
+        __EMPTY_COL_3: i % 10 === 0 ? 'F' : '',  // Every 10th player is female
+        Rtg: String(1500 + i),
+      });
+    }
+    
+    const headerlessCol = findHeaderlessGenderColumn(headers, rows);
+    expect(headerlessCol).toBe('__EMPTY_COL_3');
+    
+    // Count females using gender inference
+    const config: GenderColumnConfig = {
+      genderColumn: null,
+      fsColumn: null,
+      headerlessGenderColumn: headerlessCol,
+      preferredColumn: headerlessCol,
+      preferredSource: 'headerless_after_name',
+    };
+    
+    let femaleCount = 0;
+    for (const row of rows) {
+      const inference = inferGenderForRow(row, config);
+      if (inference.gender === 'F') femaleCount++;
+    }
+    
+    expect(femaleCount).toBe(5);  // Rows 10, 20, 30, 40, 50
+  });
+});
