@@ -2231,9 +2231,14 @@ export default function PlayerImport() {
     setMappedPlayers(valid);
     await runDedupe(valid, { autoOpen: true });
 
-    // Set parseStatus
-    if (errors.length === 0 && detectedConflicts.length === 0) {
-      toast.success(`${valid.length} players ready to import`);
+    // Set parseStatus - conflicts are separate resolvable state, not errors
+    // Only treat validation errors as actual parse errors
+    if (errors.length === 0) {
+      if (detectedConflicts.length === 0) {
+        toast.success(`${valid.length} players ready to import`);
+      } else {
+        toast.info(`${valid.length} players mapped. ${detectedConflicts.length} conflict${detectedConflicts.length === 1 ? '' : 's'} to resolve.`);
+      }
       setParseStatus('ok');
     } else {
       setParseStatus('error');
