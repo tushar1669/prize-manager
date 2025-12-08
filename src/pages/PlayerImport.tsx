@@ -78,6 +78,8 @@ import {
   buildNameDobKey,
   buildSnoKey,
   isRankOnlyCollision,
+  shouldGroupAsNameDobConflict,
+  formatConflictReason,
 } from '@/utils/conflictUtils';
 import {
   runDedupPass,
@@ -280,7 +282,7 @@ async function detectAppendModeConflicts(
         conflicts.push({
           keyKind: 'fide',
           key: fideKey,
-          reason: 'Same FIDE id',
+          reason: 'Same FIDE ID',
           a: existingRow,
           b: draftRow,
         });
@@ -292,14 +294,19 @@ async function detectAppendModeConflicts(
     if (nameDobKey) {
       const existingRow = seenByNameDob.get(nameDobKey);
       if (existingRow && !isRankOnlyCollision(existingRow, draftRow)) {
-        conflicts.push({
-          keyKind: 'nameDob',
-          key: nameDobKey,
-          reason: 'Same name+dob',
-          a: existingRow,
-          b: draftRow,
-        });
-        continue;
+        // Check if we should treat this as a conflict (different FIDE IDs = different players)
+        const { shouldConflict, reason } = shouldGroupAsNameDobConflict(existingRow, draftRow);
+        if (shouldConflict) {
+          conflicts.push({
+            keyKind: 'nameDob',
+            key: nameDobKey,
+            reason,
+            a: existingRow,
+            b: draftRow,
+          });
+          continue;
+        }
+        // Different FIDE IDs → not a conflict, treat as separate players
       }
     }
 
@@ -2533,8 +2540,8 @@ export default function PlayerImport() {
                                       </label>
                                     </div>
                                   </div>
-                                  <p className="text-xs text-gray-600">
-                                    Reason: {pair.reason} • Key: {pair.key}
+                                  <p className="text-sm text-foreground mt-2 pt-2 border-t border-border">
+                                    {formatConflictReason(pair.keyKind, pair.key, pair.reason)}
                                   </p>
                                 </div>
                               </div>

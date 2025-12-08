@@ -6,6 +6,8 @@ import {
   buildSnoKey,
   normName,
   normDob,
+  shouldGroupAsNameDobConflict,
+  formatConflictReason,
 } from '../src/utils/conflictUtils';
 
 describe('conflict utils', () => {
@@ -29,7 +31,7 @@ describe('conflict utils', () => {
       { name: 'Bob', fide_id: '111222', rank: 2 },
     ]);
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ keyKind: 'fide', reason: 'Same FIDE id' });
+    expect(conflicts[0]).toMatchObject({ keyKind: 'fide', reason: 'Same FIDE ID' });
   });
 
   it('detects name+dob duplicates when FIDE is absent', () => {
@@ -38,7 +40,7 @@ describe('conflict utils', () => {
       { name: '  carla lopez ', dob: 'July 12 2000', rank: 5 },
     ]);
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ keyKind: 'nameDob', reason: 'Same name+dob' });
+    expect(conflicts[0]).toMatchObject({ keyKind: 'nameDob', reason: 'Same name + DOB' });
   });
 
   it('ignores rank-only ties', () => {
@@ -55,7 +57,102 @@ describe('conflict utils', () => {
       { name: 'Player B', sno: '5', rank: 2 },
     ]);
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ keyKind: 'sno', reason: 'Duplicate SNo' });
+    expect(conflicts[0]).toMatchObject({ keyKind: 'sno', reason: 'Duplicate serial number' });
+  });
+});
+
+describe('FIDE ID conflict precedence', () => {
+  it('does NOT create name+dob conflict when FIDE IDs differ', () => {
+    // Two different players with same name+dob but different FIDE IDs
+    const conflicts = detectConflictsInDraft([
+      { name: 'John Smith', dob: '2010-05-15', fide_id: '123456', rank: 1 },
+      { name: 'John Smith', dob: '2010-05-15', fide_id: '789012', rank: 2 },
+    ]);
+    // Should be zero conflicts - different FIDE IDs mean different players
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('creates name+dob conflict when FIDE IDs are the same', () => {
+    const conflicts = detectConflictsInDraft([
+      { name: 'John Smith', dob: '2010-05-15', fide_id: '123456', rank: 1 },
+      { name: 'John Smith', dob: '2010-05-15', fide_id: '123456', rank: 2 },
+    ]);
+    // Should detect as FIDE conflict (first in precedence), not name+dob
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].keyKind).toBe('fide');
+  });
+
+  it('creates name+dob conflict when one record has FIDE and one does not', () => {
+    const conflicts = detectConflictsInDraft([
+      { name: 'John Smith', dob: '2010-05-15', fide_id: '123456', rank: 1 },
+      { name: 'John Smith', dob: '2010-05-15', rank: 2 }, // no FIDE
+    ]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].keyKind).toBe('nameDob');
+    expect(conflicts[0].reason).toBe('Same name + DOB (one record missing FIDE ID)');
+  });
+
+  it('creates name+dob conflict when both records have no FIDE ID', () => {
+    const conflicts = detectConflictsInDraft([
+      { name: 'John Smith', dob: '2010-05-15', rank: 1 },
+      { name: 'John Smith', dob: '2010-05-15', rank: 2 },
+    ]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].keyKind).toBe('nameDob');
+    expect(conflicts[0].reason).toBe('Same name + DOB');
+  });
+});
+
+describe('shouldGroupAsNameDobConflict', () => {
+  it('returns false when both have different FIDE IDs', () => {
+    const result = shouldGroupAsNameDobConflict(
+      { fide_id: '123456' },
+      { fide_id: '789012' }
+    );
+    expect(result.shouldConflict).toBe(false);
+  });
+
+  it('returns true with special reason when same FIDE ID', () => {
+    const result = shouldGroupAsNameDobConflict(
+      { fide_id: '123456' },
+      { fide_id: '123456' }
+    );
+    expect(result.shouldConflict).toBe(true);
+    expect(result.reason).toBe('Same name + DOB (same FIDE ID)');
+  });
+
+  it('returns true with special reason when one FIDE missing', () => {
+    const result = shouldGroupAsNameDobConflict(
+      { fide_id: '123456' },
+      {}
+    );
+    expect(result.shouldConflict).toBe(true);
+    expect(result.reason).toBe('Same name + DOB (one record missing FIDE ID)');
+  });
+
+  it('returns true with standard reason when both have no FIDE', () => {
+    const result = shouldGroupAsNameDobConflict({}, {});
+    expect(result.shouldConflict).toBe(true);
+    expect(result.reason).toBe('Same name + DOB');
+  });
+});
+
+describe('formatConflictReason', () => {
+  it('formats FIDE conflicts', () => {
+    const result = formatConflictReason('fide', '123456');
+    expect(result).toBe('Same FIDE ID: 123456');
+  });
+
+  it('formats name+dob conflicts with human-readable output', () => {
+    const result = formatConflictReason('nameDob', 'john smith::2010-05-15', 'Same name + DOB');
+    expect(result).toContain('John Smith');
+    expect(result).toContain('2010-05-15');
+    expect(result).toContain('Same name + DOB');
+  });
+
+  it('formats sno conflicts', () => {
+    const result = formatConflictReason('sno', '42');
+    expect(result).toBe('Duplicate serial number: 42');
   });
 });
 
@@ -70,7 +167,7 @@ describe('conflict resolution types', () => {
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0]).toMatchObject({ 
       keyKind: 'nameDob', 
-      reason: 'Same name+dob' 
+      reason: 'Same name + DOB' 
     });
     
     // When keepBoth is selected, both rows should be preserved (tested in component)
