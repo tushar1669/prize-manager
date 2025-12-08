@@ -12,7 +12,7 @@ import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, FileText, AlertCircle, CheckCircle2, IdCard, Users, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -658,11 +658,11 @@ export default function PlayerImport() {
 
   const renderConflictDetails = useCallback(
     (row: Record<string, unknown>) => (
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         {CONFLICT_FIELD_DEFS.map(field => (
           <div key={field.key}>
-            <dt className="font-semibold text-gray-600">{field.label}</dt>
-            <dd className="text-sm text-foreground">
+            <dt className="font-semibold text-foreground">{field.label}</dt>
+            <dd className="text-foreground/80">
               {formatFieldValue(row[field.key] as unknown)}
             </dd>
           </div>
@@ -2468,12 +2468,17 @@ export default function PlayerImport() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {CONFLICT_ORDER.map(kind => {
+                {CONFLICT_ORDER.map(kind => {
                     const items = conflictGroups[kind];
                     if (!items || items.length === 0) return null;
+                    
+                    // Get appropriate icon for conflict type
+                    const ConflictIcon = kind === 'fide' ? IdCard : kind === 'nameDob' ? Users : Hash;
+                    
                     return (
                       <div key={kind} className="space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ConflictIcon className="h-4 w-4 text-destructive" />
                           <h3 className="text-sm font-semibold text-foreground">
                             {CONFLICT_LABELS[kind]} Conflicts ({items.length})
                           </h3>
@@ -2483,22 +2488,24 @@ export default function PlayerImport() {
                             const globalIndex = conflictIndexMap.get(pair) ?? 0;
                             const resolutionKey = conflictKeyForIndex(pair, globalIndex);
                             const selected = conflictResolutions[resolutionKey] ?? '';
+                            const ItemIcon = pair.keyKind === 'fide' ? IdCard : pair.keyKind === 'nameDob' ? Users : Hash;
+                            
                             return (
-                              <div key={resolutionKey} className="rounded-md border bg-white p-4 shadow-sm">
+                              <div key={resolutionKey} className="rounded-md border-2 border-destructive/30 bg-destructive/5 p-4 shadow-sm">
                                 <div className="flex flex-col gap-3">
                                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                     <div className="flex-1 space-y-3">
                                       <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">Existing / A</p>
+                                        <p className="text-xs font-bold uppercase tracking-wide text-foreground">Existing / A</p>
                                         {renderConflictDetails(pair.a)}
                                       </div>
                                       <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">Incoming / B</p>
+                                        <p className="text-xs font-bold uppercase tracking-wide text-foreground">Incoming / B</p>
                                         {renderConflictDetails(pair.b)}
                                       </div>
                                     </div>
                                     <div className="flex flex-col gap-2 text-sm md:w-44">
-                                      <label className="inline-flex items-center gap-2">
+                                      <label className="inline-flex items-center gap-2 cursor-pointer text-foreground">
                                         <input
                                           type="radio"
                                           name={`conflict-${resolutionKey}`}
@@ -2508,7 +2515,7 @@ export default function PlayerImport() {
                                         />
                                         Keep A
                                       </label>
-                                      <label className="inline-flex items-center gap-2">
+                                      <label className="inline-flex items-center gap-2 cursor-pointer text-foreground">
                                         <input
                                           type="radio"
                                           name={`conflict-${resolutionKey}`}
@@ -2518,7 +2525,7 @@ export default function PlayerImport() {
                                         />
                                         Keep B
                                       </label>
-                                      <label className="inline-flex items-center gap-2">
+                                      <label className="inline-flex items-center gap-2 cursor-pointer text-foreground">
                                         <input
                                           type="radio"
                                           name={`conflict-${resolutionKey}`}
@@ -2528,7 +2535,7 @@ export default function PlayerImport() {
                                         />
                                         Merge (richest)
                                       </label>
-                                      <label className="inline-flex items-center gap-2 text-blue-600">
+                                      <label className="inline-flex items-center gap-2 cursor-pointer text-primary font-medium">
                                         <input
                                           type="radio"
                                           name={`conflict-${resolutionKey}`}
@@ -2540,9 +2547,13 @@ export default function PlayerImport() {
                                       </label>
                                     </div>
                                   </div>
-                                  <p className="text-sm text-foreground mt-2 pt-2 border-t border-border">
-                                    {formatConflictReason(pair.keyKind, pair.key, pair.reason)}
-                                  </p>
+                                  {/* Reason line with icon and high-contrast text */}
+                                  <div className="flex items-start gap-2 mt-2 pt-3 border-t border-destructive/20 bg-background/50 -mx-4 -mb-4 px-4 py-3 rounded-b-md">
+                                    <ItemIcon className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                    <p className="text-sm font-medium text-foreground">
+                                      {formatConflictReason(pair.keyKind, pair.key, pair.reason)}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
                             );
