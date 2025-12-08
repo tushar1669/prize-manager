@@ -2272,7 +2272,9 @@ export default function PlayerImport() {
   const hasData = mappedPlayers.length > 0;
   const validationErrorCount = validationErrors.length;
   const hasValidationErrors = validationErrorCount > 0;
-  const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0;
+  const hasUnresolvedConflicts = conflicts.length > 0 && unresolvedCount > 0;
+  const allConflictsResolved = conflicts.length === 0 || unresolvedCount === 0;
+  const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0 && allConflictsResolved;
 
   return (
     <div className="min-h-screen bg-background">
@@ -2916,24 +2918,79 @@ export default function PlayerImport() {
               </Card>
             )}
             
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => {
-                if (!id) {
-                  toast.error('Tournament ID missing');
-                  navigate('/dashboard');
-                  return;
-                }
-                navigate(`/t/${id}/setup?tab=prizes`);
-              }}>
-                Back
-              </Button>
-              <Button
-                onClick={startImportFlow}
-                disabled={!canProceed || importPlayersMutation.isPending || isParsing}
-              >
-                {isParsing ? "Processing..." : importPlayersMutation.isPending ? "Importing..." : `Next: Review & Allocate`}
-              </Button>
-            </div>
+            {/* Import status and proceed section */}
+            <Card className={`border-2 ${canProceed ? 'border-emerald-300 bg-emerald-50/50' : hasUnresolvedConflicts ? 'border-amber-300 bg-amber-50/50' : hasValidationErrors ? 'border-destructive/30 bg-destructive/5' : 'border-muted'}`}>
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {canProceed ? (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {conflicts.length > 0 
+                              ? `All ${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'} resolved`
+                              : 'Ready to import'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Click "Import players & continue" to proceed to allocation
+                          </p>
+                        </div>
+                      </>
+                    ) : hasUnresolvedConflicts ? (
+                      <>
+                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {unresolvedCount} conflict{unresolvedCount === 1 ? '' : 's'} remaining
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Resolve all conflicts above to proceed
+                          </p>
+                        </div>
+                      </>
+                    ) : hasValidationErrors ? (
+                      <>
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {validationErrorCount} validation error{validationErrorCount === 1 ? '' : 's'}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Fix errors above or download the error Excel
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Processing player data...</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 shrink-0">
+                    <Button variant="outline" onClick={() => {
+                      if (!id) {
+                        toast.error('Tournament ID missing');
+                        navigate('/dashboard');
+                        return;
+                      }
+                      navigate(`/t/${id}/setup?tab=prizes`);
+                    }}>
+                      Back
+                    </Button>
+                    <Button
+                      onClick={startImportFlow}
+                      disabled={!canProceed || importPlayersMutation.isPending || isParsing}
+                    >
+                      {isParsing 
+                        ? "Processing..." 
+                        : importPlayersMutation.isPending 
+                          ? "Importing..." 
+                          : "Import players & continue"}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
