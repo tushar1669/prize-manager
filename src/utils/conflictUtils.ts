@@ -107,6 +107,54 @@ export function buildSnoKey(row: MaybeRow): string {
   return String(Math.trunc(parsed));
 }
 
+/**
+ * Check if two rows should be treated as a Name+DOB conflict.
+ * Returns false (skip conflict) if both have different non-empty FIDE IDs.
+ * Returns a reason string describing the conflict type if they should be grouped.
+ */
+export function shouldGroupAsNameDobConflict(a: MaybeRow, b: MaybeRow): { shouldConflict: boolean; reason: string } {
+  const fideA = buildFideKey(a);
+  const fideB = buildFideKey(b);
+
+  // If both have FIDE IDs and they differ → different players, no conflict
+  if (fideA && fideB && fideA !== fideB) {
+    return { shouldConflict: false, reason: '' };
+  }
+
+  // If both have same FIDE ID (and it's non-empty) → conflict (same person)
+  if (fideA && fideB && fideA === fideB) {
+    return { shouldConflict: true, reason: 'Same name + DOB (same FIDE ID)' };
+  }
+
+  // If one has FIDE and one doesn't → potential match, flag with special reason
+  if ((fideA && !fideB) || (!fideA && fideB)) {
+    return { shouldConflict: true, reason: 'Same name + DOB (one record missing FIDE ID)' };
+  }
+
+  // Both have no FIDE ID → standard name+dob conflict
+  return { shouldConflict: true, reason: 'Same name + DOB' };
+}
+
+/**
+ * Format a human-readable conflict reason with the key.
+ */
+export function formatConflictReason(keyKind: ConflictKeyKind, key: string, customReason?: string): string {
+  switch (keyKind) {
+    case 'fide':
+      return `Same FIDE ID: ${key}`;
+    case 'nameDob': {
+      const [name, dob] = key.split('::');
+      const formattedName = name ? name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+      const label = customReason || 'Same name + DOB';
+      return `${label} ("${formattedName}", ${dob || 'unknown'})`;
+    }
+    case 'sno':
+      return `Duplicate serial number: ${key}`;
+    default:
+      return `${customReason || 'Conflict'}: ${key}`;
+  }
+}
+
 const hasKeySignal = (row: MaybeRow): boolean => {
   return Boolean(buildFideKey(row) || buildNameDobKey(row) || buildSnoKey(row));
 };
@@ -141,6 +189,7 @@ const pushConflict = (
 
 /**
  * Detect intra-file conflicts with precedence: FIDE → Name+DOB → SNo.
+ * Name+DOB conflicts are skipped if both rows have different FIDE IDs.
  */
 export function detectConflictsInDraft(rows: MaybeRow[]): ConflictPair[] {
   const conflicts: ConflictPair[] = [];
@@ -155,7 +204,7 @@ export function detectConflictsInDraft(rows: MaybeRow[]): ConflictPair[] {
     if (fideKey) {
       const existing = byFide.get(fideKey);
       if (existing) {
-        pushConflict(conflicts, 'fide', fideKey, 'Same FIDE id', existing, row);
+        pushConflict(conflicts, 'fide', fideKey, 'Same FIDE ID', existing, row);
         continue;
       }
       byFide.set(fideKey, row);
@@ -165,8 +214,14 @@ export function detectConflictsInDraft(rows: MaybeRow[]): ConflictPair[] {
     if (nameDobKey) {
       const existing = byNameDob.get(nameDobKey);
       if (existing) {
-        pushConflict(conflicts, 'nameDob', nameDobKey, 'Same name+dob', existing, row);
-        continue;
+        // Check if we should actually treat this as a conflict
+        const { shouldConflict, reason } = shouldGroupAsNameDobConflict(existing, row);
+        if (shouldConflict) {
+          pushConflict(conflicts, 'nameDob', nameDobKey, reason, existing, row);
+          continue;
+        }
+        // Different FIDE IDs → not a conflict, treat as different players
+        // Don't add to map again to preserve first occurrence tracking
       }
       byNameDob.set(nameDobKey, row);
     }
@@ -175,7 +230,7 @@ export function detectConflictsInDraft(rows: MaybeRow[]): ConflictPair[] {
     if (snoKey) {
       const existing = bySno.get(snoKey);
       if (existing) {
-        pushConflict(conflicts, 'sno', snoKey, 'Duplicate SNo', existing, row);
+        pushConflict(conflicts, 'sno', snoKey, 'Duplicate serial number', existing, row);
         continue;
       }
       bySno.set(snoKey, row);
