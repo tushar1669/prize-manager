@@ -33,16 +33,16 @@ function getSourceLabel(sources: GenderSource[]): string {
 
 function getStatus(femaleFromGender: number, femaleFromFmg: number): GenderDetectionStatus {
   // Hard warning: gender column shows 0 females but FMG shows some
+  // This means gender detection failed but female sections exist
   if (femaleFromGender === 0 && femaleFromFmg > 0) {
     return 'hard_warning';
   }
   
-  // Soft warning: both present but differ significantly (> 2)
-  if (femaleFromGender > 0 && femaleFromFmg > 0) {
-    const diff = Math.abs(femaleFromGender - femaleFromFmg);
-    if (diff > 2) {
-      return 'soft_warning';
-    }
+  // Soft warning: FMG count EXCEEDS gender count (likely mapping error)
+  // When genderF >= fmgF, it's normal: some females play in open sections
+  // Only warn if fmgF > genderF (more in female sections than detected females)
+  if (femaleFromFmg > femaleFromGender && femaleFromGender > 0) {
+    return 'soft_warning';
   }
   
   return 'ok';
@@ -153,14 +153,14 @@ export function GenderSummaryChip({
           <div className="space-y-2">
             <h4 className="text-sm font-semibold flex items-center gap-1.5">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              Gender counts differ
+              More female sections than detected females
             </h4>
             <p className="text-sm text-muted-foreground">
-              The gender column shows <strong>{femaleFromGender}</strong> females, 
-              but FMG labels in Type/Gr indicate <strong>{femaleFromFmg}</strong>.
+              FMG labels in Type/Gr indicate <strong>{femaleFromFmg}</strong> players in female sections, 
+              but only <strong>{femaleFromGender}</strong> females detected in the gender column.
             </p>
             <p className="text-sm text-muted-foreground">
-              Please double-check your gender and Type/Group column mapping.
+              This may indicate a column mapping issue. Please check that the correct gender column is selected.
             </p>
             {detectionExplanation}
           </div>

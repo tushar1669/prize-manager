@@ -22,12 +22,12 @@ export function ImportSummaryBar({
   const femaleFromFmgCount = femaleFromFmg ?? 0;
 
   const hasFemaleCounts = femaleFromGender != null && femaleFromFmg != null;
-  const femaleDifference = Math.abs(femaleFromGenderCount - femaleFromFmgCount);
+  // Only warn if FMG count EXCEEDS gender count - this indicates a mapping problem
+  // When genderF >= fmgF, it's normal (females playing in open sections)
   const hasFemaleMismatch =
     hasFemaleCounts &&
     femaleFromGenderCount > 0 &&
-    femaleFromFmgCount > 0 &&
-    femaleDifference > 1;
+    femaleFromFmgCount > femaleFromGenderCount; // FMG exceeds detected females
   const hasMissingGender = hasFemaleCounts && femaleFromGenderCount === 0 && femaleFromFmgCount > 0;
 
   return (
@@ -76,12 +76,14 @@ export function ImportSummaryBar({
             <AlertTriangle className="mt-0.5 h-4 w-4" />
             <div className="space-y-1">
               <div className="font-semibold">
-                {hasMissingGender ? 'Gender column missing female values' : 'Female counts look mismatched'}
+                {hasMissingGender ? 'Gender column missing female values' : 'More female sections than detected females'}
               </div>
               <div className="text-xs sm:text-sm">
-                Gender column shows <strong>{femaleFromGenderCount}</strong> female
-                {femaleFromGenderCount === 1 ? '' : 's'}, Type/Gr (FMG) shows <strong>{femaleFromFmgCount}</strong>.
-                {hasFemaleMismatch && !hasMissingGender && ' Please double-check your gender and Type/Group mapping.'}
+                {hasMissingGender ? (
+                  <>Gender column shows <strong>0</strong> females, but Type/Gr (FMG) shows <strong>{femaleFromFmgCount}</strong>.</>
+                ) : (
+                  <>FMG shows <strong>{femaleFromFmgCount}</strong> in female sections, but only <strong>{femaleFromGenderCount}</strong> detected via gender column. Check your column mapping.</>
+                )}
               </div>
             </div>
           </div>
