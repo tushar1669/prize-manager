@@ -81,8 +81,17 @@ export function buildSupabasePlayerPayload(
   const unrated = getAliasedValue('unrated');
   const federation = getAliasedValue('federation') ?? player.federation;
   const ident = getAliasedValue('ident');
-  const grInfo = normalizeGrColumn(getAliasedValue('gr'));
-  const typeLabel = normalizeTypeColumn(getAliasedValue('type'));
+  // PREFER already-computed group_label/type_label from PlayerImport.tsx
+  // Only recalculate from raw 'gr'/'type' aliases if player fields are missing
+  const existingGroupLabel = (player as any).group_label;
+  const existingTypeLabel = (player as any).type_label;
+  
+  const grInfo = existingGroupLabel !== undefined 
+    ? { disability: existingGroupLabel?.toUpperCase?.() === 'PC' ? 'PC' : null, tags: existingGroupLabel?.toUpperCase?.() === 'PC' ? ['PC'] : [], group_label: existingGroupLabel }
+    : normalizeGrColumn(getAliasedValue('gr'));
+  const typeLabel = existingTypeLabel !== undefined 
+    ? existingTypeLabel 
+    : normalizeTypeColumn(getAliasedValue('type'));
 
   if ((!state || String(state).trim() === '') && ident) {
     const extracted = extractStateFromIdent(String(ident));
