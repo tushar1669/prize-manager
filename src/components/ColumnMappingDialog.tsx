@@ -49,6 +49,8 @@ const optionalFields = [
   { key: 'state', label: 'State', description: 'Player state/province' },
   { key: 'city', label: 'City', description: 'Player city' },
   { key: 'club', label: 'Club', description: 'Chess club or organization' },
+  { key: 'gr', label: 'Group (Gr)', description: 'Swiss-Manager Gr column for category grouping (e.g., PC for differently-abled)' },
+  { key: 'type', label: 'Type', description: 'Swiss-Manager Type column for section/category codes (U14, F11, S55, etc.)' },
   { key: 'disability', label: 'Disability', description: 'Disability type (e.g., Hearing, Visual)' },
   { key: 'special_notes', label: 'Special Notes', description: 'Special requirements or accommodations' },
   { key: 'unrated', label: 'Unrated', description: 'Whether player is unrated (Y/N)' }

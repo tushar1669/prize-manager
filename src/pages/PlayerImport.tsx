@@ -1888,10 +1888,16 @@ export default function PlayerImport() {
         }
       );
 
-      const grValue = mapping.gr ? row[mapping.gr] : player.gr;
+      // Extract Gr and Type columns - check both mapping and direct row access
+      const grValue = mapping.gr ? row[mapping.gr] : (row['Gr'] ?? row['gr'] ?? player.gr);
       const grInfo = normalizeGrColumn(grValue);
-      const typeValue = mapping.type ? row[mapping.type] : player.type;
+      const typeValue = mapping.type ? row[mapping.type] : (row['Type'] ?? row['type'] ?? player.type);
       const typeLabel = normalizeTypeColumn(typeValue);
+
+      // Debug: log first few PC players to verify mapping
+      if (grInfo.group_label?.toUpperCase() === 'PC' && idx < 5) {
+        console.log(`[import.gr] PC player detected: rank=${player.rank}, name=${player.name}, grValue=${grValue}, group_label=${grInfo.group_label}`);
+      }
 
       player.group_label = grInfo.group_label;
       player.type_label = typeLabel;
