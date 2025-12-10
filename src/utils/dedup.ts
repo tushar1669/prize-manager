@@ -240,6 +240,12 @@ export async function fetchDedupCandidates(
     }
 
     if (!Array.isArray(data)) {
+      if (data && typeof data === "object" && (data as { status?: string }).status === "ok") {
+        // When replace mode will wipe the tournament, the RPC may only return summary metadata.
+        // Treat this as "no matches" without logging a warning so we can safely continue.
+        return [];
+      }
+
       console.warn("[dedup] RPC returned unexpected payload", data);
       return [];
     }
@@ -292,14 +298,46 @@ export async function runDedupPass({
   incomingPlayers,
   existingPlayers = [],
   mergePolicy = IMPORT_MERGE_POLICY_DEFAULTS,
+  replaceExisting = false,
 }: {
   client: SupabaseClient;
   tournamentId: string;
   incomingPlayers: DedupIncomingPlayer[];
   existingPlayers?: DedupExistingPlayer[];
   mergePolicy?: MergePolicy;
+  replaceExisting?: boolean;
 }): Promise<DedupPassResult> {
   console.log(`[dedup] start pass count=${incomingPlayers.length}`);
+
+  if (replaceExisting) {
+    console.log("[dedup] replace mode enabled - skipping RPC deduplication because existing players will be wiped");
+
+    const candidates: DedupCandidate[] = incomingPlayers.map(player => ({
+      row: player._originalIndex,
+      incoming: player,
+      matches: [],
+      bestMatch: undefined,
+      defaultAction: "create",
+    }));
+
+    const decisions: DedupDecision[] = incomingPlayers.map(player => ({
+      row: player._originalIndex,
+      action: "create",
+    }));
+
+    const summary: DedupSummary = {
+      totalCandidates: candidates.length,
+      matchedCandidates: 0,
+      defaultCreates: decisions.length,
+      defaultUpdates: 0,
+      defaultSkips: 0,
+      scoreThreshold: SCORE_THRESHOLD,
+    };
+
+    console.log("[dedup] summary", summary);
+
+    return { candidates, decisions, summary };
+  }
 
   const rpcMatches = await fetchDedupCandidates(client, tournamentId, incomingPlayers);
 
