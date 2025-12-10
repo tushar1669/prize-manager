@@ -226,4 +226,86 @@ test.describe('Import deduplication heuristics', () => {
     expect(result.decisions).toEqual([{ row: 5, action: 'create' }]);
     expect(result.candidates[0].matches).toEqual([]);
   });
+
+  test('replace mode always yields create-only decisions, even when existing players match', async () => {
+    const incoming = [
+      buildIncoming({ _originalIndex: 3, fide_id: '321321' }),
+      buildIncoming({
+        _originalIndex: 4,
+        name: 'Existing Person',
+        dob: '1990-02-02',
+        dob_raw: '1990-02-02',
+        rating: 1450,
+      }),
+    ];
+
+    const existing = [
+      buildExisting({ id: 'existing-fide', fide_id: '321321', rating: 1470 }),
+      buildExisting({ id: 'existing-dob', name: 'Existing Person', dob: '1990-02-02', rating: 1500 }),
+    ];
+
+    const client = createStubClient({
+      3: [existing[0]],
+      4: [existing[1]],
+    });
+
+    const result = await runDedupPass({
+      client,
+      tournamentId: 'stub',
+      incomingPlayers: incoming,
+      existingPlayers: existing,
+      replaceExisting: true,
+    });
+
+    expect(result.decisions).toEqual([
+      { row: 3, action: 'create' },
+      { row: 4, action: 'create' },
+    ]);
+    expect(result.summary).toMatchObject({ matchedCandidates: 0, defaultCreates: 2 });
+    result.candidates.forEach(candidate => {
+      expect(candidate.matches).toEqual([]);
+      expect(candidate.bestMatch).toBeUndefined();
+      expect(candidate.defaultAction).toBe('create');
+    });
+  });
+
+  test('append mode still surfaces dedup candidates when matches exist', async () => {
+    const incoming = [
+      buildIncoming({ _originalIndex: 10, fide_id: '999999' }),
+      buildIncoming({
+        _originalIndex: 11,
+        name: 'Duplicate Name',
+        dob: '1988-03-03',
+        dob_raw: '1988-03-03',
+      }),
+    ];
+
+    const existing = [
+      buildExisting({ id: 'existing-fide', fide_id: '999999', rating: 1500 }),
+      buildExisting({ id: 'existing-dob', name: 'Duplicate Name', dob: '1988-03-03' }),
+    ];
+
+    let rpcCalls = 0;
+    const client = createStubClientFromData([], () => {
+      rpcCalls += 1;
+    });
+
+    const result = await runDedupPass({
+      client,
+      tournamentId: 'stub',
+      incomingPlayers: incoming,
+      existingPlayers: existing,
+    });
+
+    expect(rpcCalls).toBe(1);
+    expect(result.summary.matchedCandidates).toBe(2);
+    expect(result.summary.defaultCreates).toBe(0);
+    expect(result.summary.defaultSkips).toBe(2);
+
+    const [fideCandidate, dobCandidate] = result.candidates;
+    expect(fideCandidate.bestMatch?.existing.id).toBe('existing-fide');
+    expect(fideCandidate.bestMatch?.reason).toBe('Matched on FIDE ID');
+    expect(dobCandidate.bestMatch?.existing.id).toBe('existing-dob');
+    expect(dobCandidate.bestMatch?.reason).toBe('Matched on name + DOB');
+  });
 });
