@@ -4,18 +4,20 @@ When a player qualifies for multiple prizes, the allocation algorithm must decid
 
 ## Priority Order (highest to lowest)
 
+Global ordering is preserved. Within that ordering, the comparator now evaluates prizes using the following hierarchy:
+
 | Priority | Field | Direction | Description |
 |----------|-------|-----------|-------------|
 | **1** | Cash Amount | Higher wins | ₹1000 beats ₹500 |
 | **2** | Prize Type | Trophy > Medal > None | Trophy (+3) beats Medal (+2) beats Certificate/None (+0) |
 | **3** | Place Number | Lower wins | 1st place beats 2nd place, **even across categories** |
-| **4** | Main Category | Main > Subcategory | Main prizes preferred when cash, type, AND place are equal |
-| **5** | Category Order | Lower wins | Earlier in brochure = higher priority |
+| **4** | Main Category | Main > Subcategory | Main prizes preferred when cash, type, **and place** are equal |
+| **5** | Category Order (brochure) | Lower wins | Earlier in brochure = higher priority |
 | **6** | Prize ID | Alphabetical | Stable tie-breaker for determinism |
 
 ## Key Change: Place Before Main
 
-The hierarchy now prioritizes **place number before main vs subcategory**. This means:
+The hierarchy prioritizes **place number before main vs subcategory**. This means:
 
 - A **1st place** prize in a subcategory beats a **2nd place** prize in the Main category (when cash and trophy/medal are equal)
 - The player gets the prize where their placing is better, regardless of which category it's in
@@ -41,6 +43,8 @@ This is more intuitive: "I'd rather be 1st in something than 8th in Main."
 - **Prize B**: ₹8500 cash, trophy, subcategory (rating band), 1st place
 
 **Winner**: Prize B (1st place beats 8th place, even though A is Main category)
+
+**Concrete tie-break example:** Main 8th vs Rating 1st with equal cash and trophy → **Rating 1st wins** because 1st place outranks 8th place.
 
 ### Example 4: Main 6th vs Rating 7th (equal cash & type)
 - **Prize A**: ₹8500 cash, trophy, main category, 6th place
@@ -85,7 +89,7 @@ if (ak.place !== bk.place) return ak.place - bk.place;
 // 4. Main category preferred (when cash, type, AND place are equal)
 if (ak.main !== bk.main) return bk.main - ak.main;
 
-// 5. Category brochure order
+// 5. Category brochure order (global prize ordering)
 if (ak.order !== bk.order) return ak.order - bk.order;
 
 // 6. Stable tie-breaker by prize ID

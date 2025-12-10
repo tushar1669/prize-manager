@@ -180,6 +180,12 @@ if (category.gender) {
 ```
 
 ### 2. Age Range (on Tournament Start Date)
+
+Age checks respect the tournament `age_band_policy`:
+
+- **`non_overlapping` (default for new tournaments):** Derives adjacent ranges from Under-X bands. For U8/U11/U14/U17 this becomes [0–8], [9–11], [12–14], [15–17]. A 10-year-old is only considered for U11.
+- **`overlapping` (legacy for migrated tournaments):** Treats each Under-X as an independent [min_age, max_age] filter; a 10-year-old can qualify for U11, U14, and U17 if configured.
+
 ```typescript
 const age = yearsOn(player.date_of_birth, tournament.start_date);
 if (category.min_age && age < category.min_age) {
