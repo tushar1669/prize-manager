@@ -422,6 +422,8 @@ Deno.serve(async (req) => {
       category_priority_order: ['main', 'others'],
       tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
+      // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
+      age_band_policy: 'non_overlapping' as 'non_overlapping' | 'overlapping',
     };
 
     const rules = {
@@ -440,7 +442,56 @@ Deno.serve(async (req) => {
 
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
 
-    console.log(`[alloc] tid=${tournamentId} players=${playerRows.length} categories=${activeCategories.length} prizes=${activePrizes.length}`);
+    // Determine age band policy
+    const ageBandPolicy = (rules.age_band_policy ?? 'non_overlapping') as 'non_overlapping' | 'overlapping';
+    console.log(`[alloc] tid=${tournamentId} players=${playerRows.length} categories=${activeCategories.length} prizes=${activePrizes.length} ageBandPolicy=${ageBandPolicy}`);
+
+    // 4.5) Compute effective age bands for non-overlapping policy
+    // This transforms overlapping Under-X categories into disjoint age bands
+    // EffectiveAgeBand type is defined near evaluateEligibility at module level
+    const effectiveAgeBands = new Map<string, { category_id: string; effective_min_age: number; effective_max_age: number }>();
+
+    if (ageBandPolicy === 'non_overlapping') {
+      // Find all categories with max_age defined (typical Under-X categories)
+      const ageCats = activeCategories
+        .filter(c => c.criteria_json?.max_age != null)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          max_age: Number(c.criteria_json.max_age),
+          min_age: c.criteria_json.min_age != null ? Number(c.criteria_json.min_age) : null,
+        }))
+        .sort((a, b) => a.max_age - b.max_age);
+
+      // Derive disjoint bands: U8=[0,8], U11=[9,11], U14=[12,14], U17=[15,17]
+      let prevMaxAge = -1;
+      for (const cat of ageCats) {
+        // If the category already has a min_age set, respect it
+        const explicitMinAge = cat.min_age;
+        const derivedMinAge = prevMaxAge + 1;
+        
+        // Use explicit min_age if set and larger than derived, else use derived
+        const effectiveMin = explicitMinAge != null ? Math.max(explicitMinAge, derivedMinAge) : derivedMinAge;
+        
+        effectiveAgeBands.set(cat.id, {
+          category_id: cat.id,
+          effective_min_age: effectiveMin,
+          effective_max_age: cat.max_age,
+        });
+        
+        prevMaxAge = cat.max_age;
+      }
+
+      if (effectiveAgeBands.size > 0) {
+        console.log(`[alloc.ageBands] non_overlapping mode: derived ${effectiveAgeBands.size} disjoint bands`);
+        for (const [catId, band] of effectiveAgeBands) {
+          const catName = activeCategories.find(c => c.id === catId)?.name ?? catId;
+          console.log(`[alloc.ageBands]   ${catName}: age ${band.effective_min_age}-${band.effective_max_age}`);
+        }
+      }
+    } else {
+      console.log(`[alloc.ageBands] overlapping mode: using raw min_age/max_age from criteria`);
+    }
 
     // Pre-flight field coverage check
     if (playerRows.length > 0) {
@@ -511,7 +562,7 @@ Deno.serve(async (req) => {
       const force = override.force === true;
 
       const evaluation = (prizeContext && player)
-        ? evaluateEligibility(player, prizeContext.cat, rules, tournamentStartDate)
+        ? evaluateEligibility(player, prizeContext.cat, rules, tournamentStartDate, effectiveAgeBands)
         : null;
       const eligible = evaluation?.eligible === true;
 
@@ -570,7 +621,7 @@ Deno.serve(async (req) => {
       const failCodes = new Set<string>();
 
       for (const player of playerRows) {
-        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
+        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate, effectiveAgeBands);
         logGenderEligibility(cat, player, evaluation);
         if (rules.verbose_logs) {
           const status = evaluation.eligible ? 'eligible' : 'ineligible';
@@ -807,7 +858,7 @@ Deno.serve(async (req) => {
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
     for (const { cat, p } of prizeQueue) {
       for (const player of playerRows) {
-        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate);
+        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate, effectiveAgeBands);
         if (evaluation.eligible) {
           if (!playerEligiblePrizes.has(player.id)) {
             playerEligiblePrizes.set(player.id, []);
@@ -1021,7 +1072,16 @@ const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?:
   return allowedSet.has(canonical);
 };
 
-export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, onDate: Date): EligibilityResult => {
+// Effective age band type for non-overlapping mode
+type EffectiveAgeBand = { category_id: string; effective_min_age: number; effective_max_age: number };
+
+export const evaluateEligibility = (
+  player: any,
+  cat: CategoryRow,
+  rules: any,
+  onDate: Date,
+  effectiveAgeBands?: Map<string, EffectiveAgeBand>
+): EligibilityResult => {
   const c = cat.criteria_json || {};
   const categoryType = (cat.category_type as string) || 'standard';
   const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
@@ -1066,6 +1126,7 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
   }
 
   // Age (strict ON by default)
+  // If effectiveAgeBands is provided and this category has an entry, use the effective bounds
   const strict = rules?.strict_age !== false;
   const allowMissingDob = c.allow_missing_dob_for_age != null
     ? !!c.allow_missing_dob_for_age
@@ -1074,7 +1135,14 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
     ? !!c.max_age_inclusive
     : rules?.max_age_inclusive ?? true;
   const age = yearsOn(player.dob ?? null, onDate);
-  const hasAgeRule = strict && (c.max_age != null || c.min_age != null);
+
+  // Determine the actual age bounds to use
+  // Priority: effectiveAgeBands (non-overlapping) > criteria_json (raw)
+  const effectiveBand = effectiveAgeBands?.get(cat.id);
+  const effectiveMinAge = effectiveBand?.effective_min_age ?? (c.min_age != null ? Number(c.min_age) : null);
+  const effectiveMaxAge = effectiveBand?.effective_max_age ?? (c.max_age != null ? Number(c.max_age) : null);
+  
+  const hasAgeRule = strict && (effectiveMaxAge != null || effectiveMinAge != null);
   let ageOk = true;
   if (hasAgeRule) {
     if (age == null) {
@@ -1085,15 +1153,15 @@ export const evaluateEligibility = (player: any, cat: CategoryRow, rules: any, o
         ageOk = false;
       }
     } else {
-      if (c.max_age != null) {
-        const maxAge = Number(c.max_age);
-        const exceeds = maxAgeInclusive ? age > maxAge : age >= maxAge;
+      if (effectiveMaxAge != null) {
+        const exceeds = maxAgeInclusive ? age > effectiveMaxAge : age >= effectiveMaxAge;
         if (exceeds) {
           failCodes.add('age_above_max');
           ageOk = false;
         }
       }
-      if (c.min_age != null && age < Number(c.min_age)) {
+      // NEW: Also check min_age (from effective bands for non-overlapping policy)
+      if (effectiveMinAge != null && age < effectiveMinAge) {
         failCodes.add('age_below_min');
         ageOk = false;
       }
