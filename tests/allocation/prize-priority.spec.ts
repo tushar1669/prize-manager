@@ -105,18 +105,20 @@ describe('Prize Priority Hierarchy', () => {
       expect(allocator.cmpPrize(medal, nothing)).toBeLessThan(0); // medal wins
     });
 
-    it('3. main category beats subcategory when cash and type are equal', () => {
-      const main = makeEntry({ is_main: true }, { cash_amount: 500, has_trophy: true });
-      const sub = makeEntry({ is_main: false }, { cash_amount: 500, has_trophy: true });
+    // NEW: Place is now priority 3, BEFORE main vs subcategory
+    it('3. lower place number wins EVEN when main vs subcategory differs (place before main)', () => {
+      const sub1st = makeEntry({ is_main: false }, { place: 1, cash_amount: 500, has_trophy: true });
+      const main2nd = makeEntry({ is_main: true }, { place: 2, cash_amount: 500, has_trophy: true });
       
-      expect(allocator.cmpPrize(main, sub)).toBeLessThan(0); // main wins
+      // Place 1 beats Place 2, even though main=true on the 2nd place prize
+      expect(allocator.cmpPrize(sub1st, main2nd)).toBeLessThan(0); // 1st place wins
     });
 
-    it('4. lower place number wins when cash, type, and main are equal', () => {
-      const first = makeEntry({ is_main: true }, { place: 1, cash_amount: 500, has_trophy: true });
-      const second = makeEntry({ is_main: true }, { place: 2, cash_amount: 500, has_trophy: true });
+    it('4. main category beats subcategory when cash, type, AND place are equal', () => {
+      const main = makeEntry({ is_main: true }, { place: 1, cash_amount: 500, has_trophy: true });
+      const sub = makeEntry({ is_main: false }, { place: 1, cash_amount: 500, has_trophy: true });
       
-      expect(allocator.cmpPrize(first, second)).toBeLessThan(0); // 1st wins
+      expect(allocator.cmpPrize(main, sub)).toBeLessThan(0); // main wins (same place)
     });
 
     it('5. earlier category order wins when all else is equal', () => {
@@ -134,8 +136,139 @@ describe('Prize Priority Hierarchy', () => {
     });
   });
 
+  /**
+   * NEW TEST SECTION: "Place before Main" scenarios
+   * 
+   * These test the updated priority hierarchy where place number
+   * is compared BEFORE main vs subcategory when cash + trophy/medal are equal.
+   */
+  describe('Place before Main scenarios (updated hierarchy)', () => {
+    const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
+      cat: {
+        id: cat.id ?? 'cat-1',
+        name: cat.name ?? 'Test',
+        is_main: cat.is_main ?? false,
+        order_idx: cat.order_idx ?? 0,
+        criteria_json: cat.criteria_json ?? {},
+        prizes: []
+      } as Category,
+      p: {
+        id: prize.id ?? 'prize-1',
+        place: prize.place ?? 1,
+        cash_amount: prize.cash_amount ?? 0,
+        has_trophy: prize.has_trophy ?? false,
+        has_medal: prize.has_medal ?? false,
+        is_active: true
+      } as Prize
+    });
+
+    it('Main 8th vs Rating 1st (equal cash+trophy) → Rating 1st wins', () => {
+      // This is the "Abhinav scenario" - player should get Rating 1st, not Main 8th
+      const main8th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-8', place: 8, cash_amount: 8500, has_trophy: true }
+      );
+      const rating1st = makeEntry(
+        { is_main: false, name: 'Rating 1551-1701' },
+        { id: 'rating-1', place: 1, cash_amount: 8500, has_trophy: true }
+      );
+
+      const entries = [main8th, rating1st];
+      entries.sort(allocator.cmpPrize);
+
+      // Rating 1st should come first (place 1 < place 8)
+      expect(entries[0].p.id).toBe('rating-1');
+      expect(entries[0].p.place).toBe(1);
+    });
+
+    it('Main 6th vs Rating 7th (equal cash+trophy) → Main 6th wins', () => {
+      const main6th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-6', place: 6, cash_amount: 8500, has_trophy: true }
+      );
+      const rating7th = makeEntry(
+        { is_main: false, name: 'Rating 1551-1701' },
+        { id: 'rating-7', place: 7, cash_amount: 8500, has_trophy: true }
+      );
+
+      const entries = [rating7th, main6th];
+      entries.sort(allocator.cmpPrize);
+
+      // Main 6th should come first (place 6 < place 7)
+      expect(entries[0].p.id).toBe('main-6');
+      expect(entries[0].p.place).toBe(6);
+    });
+
+    it('Main 9th vs Rating 8th (equal cash+trophy) → Rating 8th wins', () => {
+      const main9th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-9', place: 9, cash_amount: 8500, has_trophy: true }
+      );
+      const rating8th = makeEntry(
+        { is_main: false, name: 'Rating 1551-1701' },
+        { id: 'rating-8', place: 8, cash_amount: 8500, has_trophy: true }
+      );
+
+      const entries = [main9th, rating8th];
+      entries.sort(allocator.cmpPrize);
+
+      // Rating 8th should come first (place 8 < place 9)
+      expect(entries[0].p.id).toBe('rating-8');
+      expect(entries[0].p.place).toBe(8);
+    });
+
+    it('When place AND is_main are the same, still falls through correctly', () => {
+      // Two 1st place prizes in different subcategories
+      const ratingA1st = makeEntry(
+        { is_main: false, name: 'Rating Band A', order_idx: 1 },
+        { id: 'rating-a-1', place: 1, cash_amount: 5000, has_trophy: true }
+      );
+      const ratingB1st = makeEntry(
+        { is_main: false, name: 'Rating Band B', order_idx: 2 },
+        { id: 'rating-b-1', place: 1, cash_amount: 5000, has_trophy: true }
+      );
+
+      const entries = [ratingB1st, ratingA1st];
+      entries.sort(allocator.cmpPrize);
+
+      // Rating A should come first (lower order_idx = earlier in brochure)
+      expect(entries[0].p.id).toBe('rating-a-1');
+    });
+  });
+
   describe('Scenario: Equal-cash trophies in different categories', () => {
-    it('player gets 1st place trophy in main over 1st place trophy in subcategory', () => {
+    it('player gets 1st place in sub over 2nd place in main (place now beats main)', () => {
+      const mainCat: Category = {
+        id: 'cat-main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [{ id: 'main-2', place: 2, cash_amount: 500, has_trophy: true }]
+      };
+      
+      const subCat: Category = {
+        id: 'cat-sub',
+        name: 'Under 1600',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: {},
+        prizes: [{ id: 'sub-1', place: 1, cash_amount: 500, has_trophy: true }]
+      };
+      
+      const entries = [
+        { cat: mainCat, p: mainCat.prizes[0] },
+        { cat: subCat, p: subCat.prizes[0] }
+      ];
+      
+      entries.sort(allocator.cmpPrize);
+      
+      // 1st place in subcategory should beat 2nd place in main (place before main)
+      expect(entries[0].cat.name).toBe('Under 1600');
+      expect(entries[0].p.place).toBe(1);
+    });
+
+    it('player gets 1st place main over 1st place sub (when place is equal, main wins)', () => {
       const mainCat: Category = {
         id: 'cat-main',
         name: 'Main',
@@ -155,13 +288,13 @@ describe('Prize Priority Hierarchy', () => {
       };
       
       const entries = [
-        { cat: mainCat, p: mainCat.prizes[0] },
-        { cat: subCat, p: subCat.prizes[0] }
+        { cat: subCat, p: subCat.prizes[0] },
+        { cat: mainCat, p: mainCat.prizes[0] }
       ];
       
       entries.sort(allocator.cmpPrize);
       
-      // Main category should come first
+      // When both are 1st place, main should win
       expect(entries[0].cat.name).toBe('Main');
     });
 

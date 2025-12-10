@@ -1298,11 +1298,13 @@ export const getPrizeTypeLabel = (p: PrizeRow): string => {
  * 2. PRIZE TYPE when cash is equal (trophy > medal > none)
  *    - Trophy (+3) beats Medal (+2) beats Certificate/None (+0)
  * 
- * 3. MAIN CATEGORY when cash+type equal
- *    - Main category prizes preferred over subcategory prizes
+ * 3. PLACE NUMBER (1st > 2nd > 3rd) - BEFORE main!
+ *    - When cash + trophy/medal are equal, player prefers the prize
+ *      where their placing is better, regardless of Main vs Subcategory.
+ *    - Example: Rating 1st (₹8.5k, trophy) beats Main 8th (₹8.5k, trophy)
  * 
- * 4. PLACE NUMBER when still tied (1st > 2nd > 3rd)
- *    - 1st place is more prestigious than 2nd place
+ * 4. MAIN CATEGORY when cash+type+place equal
+ *    - Main category prizes preferred over subcategory prizes
  * 
  * 5. CATEGORY ORDER (brochure order, lower = earlier = better)
  *    - Categories listed first in brochure take precedence
@@ -1316,8 +1318,8 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
   return {
     cash,                                      // 1. Cash amount DESC
     prizeTypeScore,                            // 2. Prize type DESC (trophy > medal > none)
-    main: cat.is_main ? 1 : 0,                 // 3. Main category DESC
-    place: p.place ?? 9999,                    // 4. Place ASC (1st > 2nd > 3rd)
+    place: p.place ?? 9999,                    // 3. Place ASC (1st > 2nd > 3rd) - BEFORE main!
+    main: cat.is_main ? 1 : 0,                 // 4. Main category DESC
     order: cat.order_idx ?? 0,                 // 5. Category order ASC
     pid: p.id                                  // 6. Stable tie-breaker
   };
@@ -1326,6 +1328,8 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
 /**
  * Comparator for prize priority queue.
  * Implements the hierarchy documented in prizeKey().
+ * 
+ * Priority: cash → trophy/medal → place → main vs sub → brochure order → prize id
  * 
  * Returns negative if 'a' should come first (higher priority),
  * positive if 'b' should come first.
@@ -1339,11 +1343,11 @@ export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: Categor
   // 2. Prize type: trophy > medal > none
   if (ak.prizeTypeScore !== bk.prizeTypeScore) return bk.prizeTypeScore - ak.prizeTypeScore;
 
-  // 3. Main category preferred
-  if (ak.main !== bk.main) return bk.main - ak.main;
-  
-  // 4. Place number: 1st > 2nd > 3rd (lower place = higher priority)
+  // 3. Place number: 1st > 2nd > 3rd (lower place = higher priority) - BEFORE main!
   if (ak.place !== bk.place) return ak.place - bk.place;
+  
+  // 4. Main category preferred (when cash, type, AND place are equal)
+  if (ak.main !== bk.main) return bk.main - ak.main;
   
   // 5. Category brochure order
   if (ak.order !== bk.order) return ak.order - bk.order;
