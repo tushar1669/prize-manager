@@ -29,7 +29,8 @@ export default function Settings() {
       max_age_inclusive: true,
       prefer_main_on_equal_value: true,
       prefer_category_rank_on_tie: false,
-      category_priority_order: []
+      category_priority_order: [],
+      age_band_policy: 'non_overlapping' as const
     }
   });
 
@@ -58,7 +59,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -80,7 +81,8 @@ export default function Settings() {
           max_age_inclusive: data.max_age_inclusive,
           prefer_main_on_equal_value: data.prefer_main_on_equal_value,
           prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
-          category_priority_order: data.category_priority_order as string[] || []
+          category_priority_order: data.category_priority_order as string[] || [],
+          age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping'
         });
       }
       return data;
@@ -265,6 +267,30 @@ export default function Settings() {
                         <Switch
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="age_band_policy"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between py-2">
+                      <div>
+                        <FormLabel className="text-foreground font-medium">
+                          Age Band Policy
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          <strong>Non-overlapping (default):</strong> Each child qualifies for only their age band (U8=0-8, U11=9-11, etc.)<br/>
+                          <strong>Overlapping:</strong> Child can qualify for multiple Under-X bands simultaneously
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value === 'overlapping'}
+                          onCheckedChange={(checked) => field.onChange(checked ? 'overlapping' : 'non_overlapping')}
                         />
                       </FormControl>
                     </FormItem>

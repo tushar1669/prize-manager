@@ -472,6 +472,7 @@ export type Database = {
       }
       rule_config: {
         Row: {
+          age_band_policy: string | null
           allow_missing_dob_for_age: boolean | null
           allow_unrated_in_rating: boolean | null
           category_priority_order: Json | null
@@ -484,6 +485,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          age_band_policy?: string | null
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
@@ -496,6 +498,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          age_band_policy?: string | null
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null

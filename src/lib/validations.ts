@@ -39,7 +39,9 @@ export const ruleConfigSchema = z.object({
   max_age_inclusive: z.boolean(),
   prefer_main_on_equal_value: z.boolean(),
   prefer_category_rank_on_tie: z.boolean(),
-  category_priority_order: z.array(z.string()).optional()
+  category_priority_order: z.array(z.string()).optional(),
+  // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
+  age_band_policy: z.enum(['non_overlapping', 'overlapping']).optional()
 });
 
 export type RuleConfigForm = z.infer<typeof ruleConfigSchema>;
