@@ -1,6 +1,6 @@
 # Age Eligibility Rules
 
-This document describes how age-based eligibility is configured and evaluated in Prize-Manager.
+This document describes how age-based eligibility is configured and evaluated in Prize-Manager, including the configurable age band policies.
 
 ## Configuration
 
@@ -32,6 +32,15 @@ Age rules are configured in `criteria_json` using two numeric fields:
 ```json
 { "min_age": 40, "max_age": 60 }
 ```
+
+## Age Band Policies (`age_band_policy`)
+
+Each tournament has an `age_band_policy` that controls how children are matched to Under-X categories:
+
+- **`non_overlapping` (default for new tournaments):** Age bands are split into adjacent ranges. For Under-8/11/14/17, the ranges become **[0–8]**, **[9–11]**, **[12–14]**, **[15–17]**. A 10-year-old will normally only be considered for **U11** under this policy.
+- **`overlapping` (legacy/compatibility):** Under-X categories are independent range checks. With max_age 8/11/14/17, a 10-year-old is technically eligible for **U11, U14, and U17** simultaneously.
+
+Tournament Directors can switch between these modes in **Edit Rules → Age Band Policy** (toggle). New tournaments default to `non_overlapping`. Existing tournaments that predate the switch retain `overlapping` to preserve historical allocations.
 
 ## Evaluation Logic
 

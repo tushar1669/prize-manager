@@ -11,6 +11,8 @@ Prize-Manager helps chess arbiters allocate prizes for Swiss-Manager style tourn
 - **Public Tournament Pages** – Publish a public listing and winners page for external viewers.
 - **Exports (Coverage & RCA)** – Download Excel coverage and RCA reports for auditing.
 
+Prize allocation always hands out the **best overall prize first** using a global comparator (cash ↓, trophy/medal power ↓, place ↑, main vs sub, brochure order ↑, prize ID) to keep results deterministic. Age eligibility follows a configurable `age_band_policy`: new tournaments default to **non-overlapping** Under-X bands (one age band per child), while migrated tournaments keep **overlapping** Under-X ranges until the director toggles the policy in Edit Rules.
+
 ## Quick Start (for organizers)
 1. Create a tournament.
 2. Fill the Tournament Setup form (dates, venue, time control, arbiter/director, fees).

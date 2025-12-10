@@ -22,8 +22,13 @@
 - **Coverage data:** Allocation debug entries include candidate counts before/after one-prize enforcement, winner details, `is_unfilled`, `is_blocked_by_one_prize`, `raw_fail_codes`, and `diagnosis_summary`.
 
 ## Prize valuation and ordering
-- **Trophy/medal weighting:** `supabase/functions/allocatePrizes/index.ts` assigns a `valueScore = cash * 1000 + bonus`, where `cash` is the numeric cash amount and `bonus` is `3` for trophies or `2` for medals. This encodes the hierarchy cash+trophy > cash+medal > cash > trophy > medal.
-- **Top-3 non-main exception:** A `top3Bonus` is applied to non-main prizes in places 1–3 so they outrank equal-value main prizes. If valueScore and top3Bonus are both equal, main prizes are preferred.
+- **Global comparator:** Prizes are globally sorted by **cash ↓**, **trophy/medal power ↓ (trophy > medal > none)**, **place ↑ (1st before 2nd…)**, **main vs sub ↑**, **category brochure order ↑**, then **prize ID** for stability. The allocator always hands out the best prize first.
+- **Why:** Keeps deterministic ordering across all categories and aligns with arbiter intuition (a 1st place with the same cash/type outranks an 8th place even if that 8th is in Main).
+
+## Age eligibility policy
+- **Config:** Each tournament has `age_band_policy` with `non_overlapping` (default for new events) and `overlapping` (legacy) options.
+- **Behavior:** `non_overlapping` builds adjacent ranges from Under-X bands (U8/U11/U14/U17 → [0–8], [9–11], [12–14], [15–17]; a 10-year-old only sits in U11). `overlapping` treats each Under-X as an independent [min_age, max_age] filter (same 10-year-old qualifies for U11, U14, U17).
+- **UI:** Toggle in **Edit Rules → Age Band Policy**. Legacy tournaments keep `overlapping` until explicitly switched.
 
 ## Exports
 - **Coverage (.xlsx):** `src/utils/allocationCoverageExport.ts` flattens coverage entries (category/prize, candidate counts, winner info, reason codes, diagnosis summary) and downloads Excel. CSV is not supported.

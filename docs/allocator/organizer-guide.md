@@ -42,19 +42,16 @@ When you click "Allocate Prizes," the system uses:
 
 ### Step 1: We Sort All Your Prizes
 
-Before we start assigning prizes, we put them in order based on:
+Before we start assigning prizes, we build one global list of prizes sorted by:
 
-1. **Brochure order** (most important!)
-   - The order you arranged your categories in your prize brochure
-   - Example: If "Open Championship" is first, its prizes come before "Girls Under 14"
+1. **Cash amount** (higher wins)
+2. **Trophy/medal power** (trophy > medal > none)
+3. **Place number** (1st beats 2nd beats 3rd… even across categories)
+4. **Main vs subcategory** (main wins when cash, type, and place are equal)
+5. **Category brochure order** (earlier categories break ties)
+6. **Prize ID** (stable, deterministic tiebreak)
 
-2. **Value of the prize**
-   - Cash + Trophy beats Cash + Medal beats Cash-only beats Trophy-only beats Medal-only
-
-3. **Which place**
-   - 1st place comes before 2nd place, etc.
-
-**Why this matters:** The system goes through prizes in this order. Once a player wins a prize, they're usually out of the running for later prizes (unless you've configured "allow multiple prizes" mode).
+**Why this matters:** The system hands out the **best overall prize first**. Once a player wins a prize, they're usually out of the running for later prizes (unless you've configured "allow multiple prizes" mode).
 
 ---
 
@@ -74,6 +71,8 @@ Now the system goes through each prize in order and asks:
    - Right rating range? ✓
    - City/state/club matches (if required)? ✓
    - Hasn't already won a prize? ✓
+
+   **Age band policy:** In **Edit Rules → Age Band Policy**, choose whether Under-X categories should be **Non-overlapping (default for new tournaments)** or **Overlapping (legacy)**. Non-overlapping keeps children in a single age band (U8/U11/U14/U17 becomes [0–8], [9–11], [12–14], [15–17]); overlapping lets a 10-year-old qualify for U11, U14, and U17.
 
 2. **If multiple people are eligible, who wins?**
 
