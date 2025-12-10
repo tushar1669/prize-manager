@@ -686,15 +686,20 @@ export default function PlayerImport() {
       players: ParsedPlayer[],
       options: { autoOpen?: boolean; policy?: MergePolicy; allowMerge?: boolean } = {},
     ) => {
-      const applyFallback = () => {
+      const applyFallback = (forceCloseDialog = false) => {
         const fallbackDecisions = players.map(player => ({ row: player._originalIndex, action: 'create' as const }));
         setDedupeState(null);
         setDedupeDecisions(fallbackDecisions);
         setDedupeReviewed(true);
-        if (options.autoOpen) {
+        if (options.autoOpen || forceCloseDialog) {
           setShowDuplicateDialog(false);
         }
       };
+
+      if (replaceExisting) {
+        applyFallback(true);
+        return;
+      }
 
       if (!IMPORT_DEDUP_ENABLED || !id || players.length === 0) {
         applyFallback();
