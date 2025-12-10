@@ -697,7 +697,18 @@ export default function PlayerImport() {
       };
 
       if (replaceExisting) {
-        applyFallback(true);
+        const result = await runDedupPass({
+          client: supabase,
+          tournamentId: id,
+          incomingPlayers: players as DedupIncomingPlayer[],
+          mergePolicy: options.policy ?? importConfig.mergePolicy,
+          replaceExisting: true,
+        });
+
+        setDedupeState(result);
+        setDedupeDecisions(result.decisions);
+        setDedupeReviewed(true);
+        setShowDuplicateDialog(false);
         return;
       }
 

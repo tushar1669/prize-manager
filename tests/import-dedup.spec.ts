@@ -20,6 +20,18 @@ function createStubClient(matchMap: Record<number, DedupExistingPlayer[]>): Supa
   } as unknown as SupabaseClient;
 }
 
+function createStubClientFromData(
+  data: unknown,
+  onCall?: () => void,
+): SupabaseClient {
+  return {
+    rpc: async (_fn: string, _payload: Record<string, unknown>) => {
+      onCall?.();
+      return { data, error: null } as { data: unknown; error: null };
+    },
+  } as unknown as SupabaseClient;
+}
+
 function buildIncoming(overrides: Partial<DedupIncomingPlayer> = {}): DedupIncomingPlayer {
   return {
     _originalIndex: overrides._originalIndex ?? 1,
@@ -170,5 +182,48 @@ test.describe('Import deduplication heuristics', () => {
 
     expect(conservative.candidates[0].bestMatch?.merge.changedFields).toEqual([]);
     expect(conservative.decisions[0]).toMatchObject({ action: 'skip', existingId: 'existing-policy' });
+  });
+
+  test('treats summary-only RPC payloads as no matches without warnings', async () => {
+    const incoming = [buildIncoming({ _originalIndex: 1 })];
+    const client = createStubClientFromData({ status: 'ok', total: 0 });
+
+    const result = await runDedupPass({
+      client,
+      tournamentId: 'stub',
+      incomingPlayers: incoming,
+    });
+
+    expect(result.summary.defaultCreates).toBe(1);
+    expect(result.candidates[0].matches).toEqual([]);
+  });
+
+  test('skips RPC work entirely when replaceExisting is enabled', async () => {
+    const incoming = [buildIncoming({ _originalIndex: 5 })];
+    let rpcCalls = 0;
+    const client = createStubClientFromData(
+      [{ row: 5, matches: [buildExisting({ id: 'should-not-be-used' })] }],
+      () => {
+        rpcCalls += 1;
+      },
+    );
+
+    const result = await runDedupPass({
+      client,
+      tournamentId: 'stub',
+      incomingPlayers: incoming,
+      replaceExisting: true,
+    });
+
+    expect(rpcCalls).toBe(0);
+    expect(result.summary).toMatchObject({
+      totalCandidates: 1,
+      matchedCandidates: 0,
+      defaultCreates: 1,
+      defaultUpdates: 0,
+      defaultSkips: 0,
+    });
+    expect(result.decisions).toEqual([{ row: 5, action: 'create' }]);
+    expect(result.candidates[0].matches).toEqual([]);
   });
 });
