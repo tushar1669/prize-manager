@@ -506,9 +506,10 @@ export default function TournamentSetup() {
   const createCategoryMutation = useMutation({
     mutationFn: async (values: CategoryForm) => {
       // Store category_type inside criteria_json (column doesn't exist in DB yet)
+      const categoryType = values.criteria_json?.category_type || values.category_type || 'standard';
       const criteriaWithType = {
         ...(values.criteria_json || {}),
-        category_type: values.category_type || 'standard',
+        category_type: categoryType,
       };
       const { data: category, error } = await supabase
         .from('categories')
@@ -1908,45 +1909,11 @@ export default function TournamentSetup() {
           </SheetHeader>
 
           <div className="space-y-6 py-6">
-            <div className="space-y-2">
-              <Label htmlFor="category-type">Category Type</Label>
-              <select
-                id="category-type"
-                className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full"
-                value={categoryTypeSelection}
-                onChange={(e) => setCategoryTypeSelection(e.target.value)}
-              >
-                <option value="standard">Standard</option>
-                <option value="youngest_female">Youngest Female</option>
-                <option value="youngest_male">Youngest Male</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Youngest categories ignore age/rating filters and auto-set gender. Use for global youngest prizes.
-              </p>
-            </div>
-
             {/* Preset Chips */}
             <div className="border-b pb-4 mb-4">
               <Label className="mb-2 block">Quick Presets</Label>
               <div className="flex flex-wrap gap-2">
-                {/* Youngest presets - set category type automatically */}
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-emerald-900/50 text-emerald-100 border-emerald-700 hover:bg-emerald-800"
-                  onClick={() => setCategoryTypeSelection('youngest_female')}
-                >
-                  🏆 Youngest Girl
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-emerald-900/50 text-emerald-100 border-emerald-700 hover:bg-emerald-800"
-                  onClick={() => setCategoryTypeSelection('youngest_male')}
-                >
-                  🏆 Youngest Boy
-                </Button>
-                <Button 
+                <Button
                   variant="outline"
                   size="sm"
                   className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
