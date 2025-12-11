@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
+vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as any)) }), { virtual: true });
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -80,14 +82,16 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
       for (const groupMaxAge of sortedMaxAges) {
         const group = groupsByMaxAge.get(groupMaxAge)!;
         const derivedMinAge = prevMaxAge + 1;
-        
+
         const explicitMins = group
           .map(c => c.min_age)
           .filter((m): m is number => m != null);
-        
-        const effectiveMin = explicitMins.length > 0
+
+        const candidateMin = explicitMins.length > 0
           ? Math.max(derivedMinAge, Math.min(...explicitMins))
           : derivedMinAge;
+
+        const effectiveMin = Math.min(candidateMin, groupMaxAge);
 
         for (const cat of group) {
           effectiveAgeBands.set(cat.id, {
@@ -96,7 +100,7 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
             effective_max_age: groupMaxAge,
           });
         }
-        
+
         prevMaxAge = groupMaxAge;
       }
     }
@@ -116,7 +120,6 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
       const failCodes = new Set<string>();
 
       for (const player of players) {
-        if (assigned.has(player.id)) continue;
         const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate, effectiveAgeBands);
         eligibilityLog.push({
           playerId: player.id,
@@ -124,6 +127,7 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
           eligible: evaluation.eligible,
           reasonCodes: evaluation.reasonCodes,
         });
+        if (assigned.has(player.id)) continue;
         if (evaluation.eligible) {
           eligible.push({ player });
         } else {
@@ -179,6 +183,23 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
     for (const [catId, band] of effectiveAgeBands) {
       expect(band.effective_min_age).toBeLessThanOrEqual(band.effective_max_age);
     }
+  });
+
+  it('clamps effective_min_age when explicit mins overshoot the band', () => {
+    const categories = [
+      { id: 'u8-boy', name: 'Under 8 Boy', is_main: false, order_idx: 0, criteria_json: { min_age: 10, max_age: 8, gender: 'M' }, prizes: [{ id: 'u8b-1', place: 1, cash_amount: 500, has_trophy: true, has_medal: false }] },
+      { id: 'u8-girl', name: 'Under 8 Girl', is_main: false, order_idx: 1, criteria_json: { min_age: 10, max_age: 8, gender: 'F' }, prizes: [{ id: 'u8g-1', place: 1, cash_amount: 500, has_trophy: true, has_medal: false }] },
+      { id: 'u11', name: 'Under 11', is_main: false, order_idx: 2, criteria_json: { max_age: 11 }, prizes: [{ id: 'u11-1', place: 1, cash_amount: 500, has_trophy: true, has_medal: false }] },
+    ];
+
+    const { effectiveAgeBands } = runAllocationWithAgeBands(categories, [], defaultRules, new Date('2024-05-01'));
+
+    // Explicit min_age=10 should be clamped to the max_age=8 for the U8 pair
+    expect(effectiveAgeBands.get('u8-boy')).toEqual({ category_id: 'u8-boy', effective_min_age: 8, effective_max_age: 8 });
+    expect(effectiveAgeBands.get('u8-girl')).toEqual({ category_id: 'u8-girl', effective_min_age: 8, effective_max_age: 8 });
+
+    // Downstream band should start after the previous max (non-overlapping)
+    expect(effectiveAgeBands.get('u11')).toEqual({ category_id: 'u11', effective_min_age: 9, effective_max_age: 11 });
   });
 
   it('Girls in each age band are correctly eligible for their category', () => {

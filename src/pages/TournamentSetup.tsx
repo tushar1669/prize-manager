@@ -345,7 +345,8 @@ export default function TournamentSetup() {
     } else if (categoryTypeSelection === 'youngest_male') {
       genderEl.value = 'M_OR_UNKNOWN';
     } else if (criteriaSheet.category?.criteria_json) {
-      genderEl.value = criteriaSheet.category.criteria_json.gender || '';
+      const storedGender = criteriaSheet.category.criteria_json.gender;
+      genderEl.value = storedGender === 'M' ? 'M_OR_UNKNOWN' : (storedGender || '');
     } else {
       genderEl.value = '';
     }
@@ -2272,7 +2273,8 @@ export default function TournamentSetup() {
 
                 const includeUnratedEl = document.getElementById('criteria-include-unrated');
                 const includeUnrated = includeUnratedEl?.getAttribute('data-state') === 'checked';
-                const gender = (document.getElementById('criteria-gender') as HTMLSelectElement)?.value || '';
+                const rawGender = (document.getElementById('criteria-gender') as HTMLSelectElement)?.value || '';
+                const gender = rawGender === 'M' ? 'M_OR_UNKNOWN' : rawGender;
                 
                 const disabilityStr = (document.getElementById('criteria-disability') as HTMLInputElement)?.value || '';
                 const disability_types = disabilityStr

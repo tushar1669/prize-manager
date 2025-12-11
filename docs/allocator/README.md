@@ -171,19 +171,15 @@ After processing all prizes:
 A player is eligible for a category prize if **all** of the following conditions are met:
 
 ### 1. Gender Match
-```typescript
-if (category.gender) {
-  if (normalize(player.gender) !== normalize(category.gender)) {
-    return { eligible: false, reason: 'gender_mismatch' };
-  }
-}
-```
+- **Girls Only (`F`):** requires explicit `F` on the player.
+- **Boys / not-F (`M_OR_UNKNOWN` or legacy `M`):** excludes explicit `F`, allows `M` and unknown/null.
+- **Any:** empty/null gender criteria; everyone passes this check.
 
 ### 2. Age Range (on Tournament Start Date)
 
 Age checks respect the tournament `age_band_policy`:
 
-- **`non_overlapping` (default for new tournaments):** Derives adjacent ranges from Under-X bands. For U8/U11/U14/U17 this becomes [0–8], [9–11], [12–14], [15–17]. A 10-year-old is only considered for U11.
+- **`non_overlapping` (default for new tournaments):** Derives adjacent ranges from Under-X bands. For U8/U11/U14/U17 this becomes [0–8], [9–11], [12–14], [15–17]. A 10-year-old is only considered for U11. Categories sharing the same `max_age` share the same derived band (e.g., Boy/Girl pairs), and effective mins are clamped so we never produce `effective_min_age > effective_max_age`.
 - **`overlapping` (legacy for migrated tournaments):** Treats each Under-X as an independent [min_age, max_age] filter; a 10-year-old can qualify for U11, U14, and U17 if configured.
 
 ```typescript

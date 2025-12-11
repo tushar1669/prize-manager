@@ -22,6 +22,7 @@ When you click "Allocate Prizes," the system uses:
 2. **Categories You Created**
    - Age groups, gender groups, rating bands, etc.
    - The **order** you set in your brochure matters (see below!)
+   - **Category Type** (youngest girl/boy) stays internal: the allocator still honors `youngest_female`/`youngest_male`, but the React form hides this field to prevent accidental edits.
 
 3. **Prizes You Defined**
    - Cash amounts, trophies, medals for each category
@@ -71,6 +72,11 @@ Now the system goes through each prize in order and asks:
    - Right rating range? ✓
    - City/state/club matches (if required)? ✓
    - Hasn't already won a prize? ✓
+
+   **Gender options in the form:**
+   - **Any:** Leave blank; no filter.
+   - **Girls Only (`F`):** Requires explicit `F`.
+   - **Boys (not F):** Uses `M_OR_UNKNOWN` (and legacy `M`) to mean "not F" — males and unknowns pass, explicit females fail. The old "Boys Only" toggle is gone; new configurations only save `F`, `M_OR_UNKNOWN`, or blank.
 
    **Age band policy:** In **Edit Rules → Age Band Policy**, choose whether Under-X categories should be **Non-overlapping (default for new tournaments)** or **Overlapping (legacy)**. Non-overlapping keeps children in a single age band (U8/U11/U14/U17 becomes [0–8], [9–11], [12–14], [15–17]); overlapping lets a 10-year-old qualify for U11, U14, and U17.
 

@@ -27,8 +27,12 @@
 
 ## Age eligibility policy
 - **Config:** Each tournament has `age_band_policy` with `non_overlapping` (default for new events) and `overlapping` (legacy) options.
-- **Behavior:** `non_overlapping` builds adjacent ranges from Under-X bands (U8/U11/U14/U17 → [0–8], [9–11], [12–14], [15–17]; a 10-year-old only sits in U11). `overlapping` treats each Under-X as an independent [min_age, max_age] filter (same 10-year-old qualifies for U11, U14, U17).
+- **Behavior:** `non_overlapping` builds adjacent ranges from Under-X bands (U8/U11/U14/U17 → [0–8], [9–11], [12–14], [15–17]; a 10-year-old only sits in U11). Categories sharing the same `max_age` (e.g., boy/girl pairs) share the same derived band, and effective mins are clamped so we never produce `effective_min_age > effective_max_age`. `overlapping` treats each Under-X as an independent [min_age, max_age] filter (same 10-year-old qualifies for U11, U14, U17).
 - **UI:** Toggle in **Edit Rules → Age Band Policy**. Legacy tournaments keep `overlapping` until explicitly switched.
+
+## Gender filters
+- **Options:** blank (**Any**), `F` (**Girls Only**), and `M_OR_UNKNOWN` (**Boys / not-F**). Legacy `M` is treated the same as `M_OR_UNKNOWN` (allows male or unknown, blocks explicit `F`).
+- **UI:** The React form no longer shows a separate "Boys Only" toggle and only saves `F`, `M_OR_UNKNOWN`, or blank. Category type (`youngest_female`/`youngest_male`) stays internal-only but the allocator still honors it.
 
 ## Exports
 - **Coverage (.xlsx):** `src/utils/allocationCoverageExport.ts` flattens coverage entries (category/prize, candidate counts, winner info, reason codes, diagnosis summary) and downloads Excel. CSV is not supported.
