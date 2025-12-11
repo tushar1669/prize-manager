@@ -483,16 +483,26 @@ Deno.serve(async (req) => {
       for (const groupMaxAge of sortedMaxAges) {
         const group = groupsByMaxAge.get(groupMaxAge)!;
         const derivedMinAge = prevMaxAge + 1;
-        
+
         // Collect explicit min_age values from group members (if any)
         const explicitMins = group
           .map(c => c.min_age)
           .filter((m): m is number => m != null);
-        
+
         // If any category in the group has explicit min_age, use the smallest but respect derived min
-        const effectiveMin = explicitMins.length > 0
+        const candidateMin = explicitMins.length > 0
           ? Math.max(derivedMinAge, Math.min(...explicitMins))
           : derivedMinAge;
+
+        // Guard against invalid ranges: never let effective_min_age exceed effective_max_age
+        const effectiveMin = Math.min(candidateMin, groupMaxAge);
+        if (candidateMin > groupMaxAge) {
+          console.warn('[alloc.ageBands] clamped effective_min_age to avoid inverted band', {
+            groupMaxAge,
+            derivedMinAge,
+            candidateMin,
+          });
+        }
 
         // Assign the same band to ALL categories in this group
         for (const cat of group) {
@@ -502,7 +512,7 @@ Deno.serve(async (req) => {
             effective_max_age: groupMaxAge,
           });
         }
-        
+
         prevMaxAge = groupMaxAge;
       }
 

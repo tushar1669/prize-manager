@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
+vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as any)) }), { virtual: true });
+
 /**
  * Tests for unified gender filtering logic.
  * 
