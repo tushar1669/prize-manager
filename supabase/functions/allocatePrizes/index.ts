@@ -1114,6 +1114,8 @@ export const evaluateEligibility = (
   const warnCodes = new Set<string>();
 
   // Gender check
+  // Unified logic: 'M' and 'M_OR_UNKNOWN' both mean "not F" (boys + unknown)
+  // This ensures backwards compatibility with old configs using gender='M'
   const reqG = (() => {
     if (isYoungest) {
       return categoryType === 'youngest_female' ? 'F' : 'M_OR_UNKNOWN';
@@ -1121,19 +1123,19 @@ export const evaluateEligibility = (
     return c.gender?.toUpperCase?.() || null;
   })();
   const pg = normGender(player.gender);
-  if (reqG === 'M') {
-    if (pg === 'F') {
-      failCodes.add('gender_mismatch');
-    } else {
-      passCodes.add('gender_ok');
-    }
-  } else if (reqG === 'M_OR_UNKNOWN') {
+  
+  // Unified "boys" mode: both 'M' and 'M_OR_UNKNOWN' treat as "not F"
+  const isBoysMode = reqG === 'M' || reqG === 'M_OR_UNKNOWN';
+  
+  if (isBoysMode) {
+    // Boys mode: exclude explicit females, allow males and unknowns
     if (pg === 'F') {
       failCodes.add('gender_mismatch');
     } else {
       passCodes.add('gender_ok');
     }
   } else if (reqG === 'F') {
+    // Girls only: require explicit F
     if (!pg) {
       failCodes.add('gender_missing');
     } else if (pg !== 'F') {
@@ -1142,6 +1144,7 @@ export const evaluateEligibility = (
       passCodes.add('gender_ok');
     }
   } else {
+    // Open/any gender
     passCodes.add('gender_open');
   }
 

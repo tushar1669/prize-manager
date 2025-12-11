@@ -1963,10 +1963,10 @@ export default function TournamentSetup() {
                   className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
                   onClick={() => {
                     const el = document.getElementById('criteria-gender') as HTMLSelectElement;
-                    if (el) el.value = 'M';
+                    if (el) el.value = 'M_OR_UNKNOWN';
                   }}
                 >
-                  Boys Only
+                  Boys (not F)
                 </Button>
                 <Button 
                   variant="outline"
@@ -2189,16 +2189,18 @@ export default function TournamentSetup() {
                     <select 
                       id="criteria-gender" 
                       className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
-                      defaultValue={criteria?.gender || ''}
+                      defaultValue={
+                        // Normalize legacy 'M' to 'M_OR_UNKNOWN' for display
+                        criteria?.gender === 'M' ? 'M_OR_UNKNOWN' : (criteria?.gender || '')
+                      }
                       disabled={youngestCategory}
                     >
                       <option value="">Any</option>
                       <option value="F">Girls Only</option>
-                      <option value="M">Boys Only</option>
-                      <option value="M_OR_UNKNOWN">Boys / Unknown (not F)</option>
+                      <option value="M_OR_UNKNOWN">Boys (not F)</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Optional. Restrict eligibility by gender.
+                      Boys includes males and unknown gender. Girls requires explicit F.
                     </p>
                   </div>
 
