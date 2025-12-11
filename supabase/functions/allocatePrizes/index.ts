@@ -453,37 +453,61 @@ Deno.serve(async (req) => {
 
     if (ageBandPolicy === 'non_overlapping') {
       // Find all categories with max_age defined (typical Under-X categories)
-      const ageCats = activeCategories
+      type AgeCatInfo = { id: string; name: string; max_age: number; min_age: number | null };
+      
+      const ageCats: AgeCatInfo[] = activeCategories
         .filter(c => c.criteria_json?.max_age != null)
         .map(c => ({
           id: c.id,
           name: c.name,
           max_age: Number(c.criteria_json.max_age),
           min_age: c.criteria_json.min_age != null ? Number(c.criteria_json.min_age) : null,
-        }))
-        .sort((a, b) => a.max_age - b.max_age);
+        }));
 
-      // Derive disjoint bands: U8=[0,8], U11=[9,11], U14=[12,14], U17=[15,17]
-      let prevMaxAge = -1;
+      // FIX: Group categories by max_age so that Boy/Girl pairs sharing same max_age get same band
+      // e.g., U08 Boy + U08 Girl both have max_age=8 → both get [0, 8]
+      // Previously, iterating one-by-one caused the second category to get [9, 8] which is invalid
+      const groupsByMaxAge = new Map<number, AgeCatInfo[]>();
       for (const cat of ageCats) {
-        // If the category already has a min_age set, respect it
-        const explicitMinAge = cat.min_age;
+        const group = groupsByMaxAge.get(cat.max_age) ?? [];
+        group.push(cat);
+        groupsByMaxAge.set(cat.max_age, group);
+      }
+
+      // Sort groups by max_age ascending
+      const sortedMaxAges = Array.from(groupsByMaxAge.keys()).sort((a, b) => a - b);
+
+      // Derive disjoint bands per group: U8=[0,8], U11=[9,11], U14=[12,14], U17=[15,17]
+      // All categories in the same group (same max_age) share the same effective band
+      let prevMaxAge = -1;
+      for (const groupMaxAge of sortedMaxAges) {
+        const group = groupsByMaxAge.get(groupMaxAge)!;
         const derivedMinAge = prevMaxAge + 1;
         
-        // Use explicit min_age if set and larger than derived, else use derived
-        const effectiveMin = explicitMinAge != null ? Math.max(explicitMinAge, derivedMinAge) : derivedMinAge;
+        // Collect explicit min_age values from group members (if any)
+        const explicitMins = group
+          .map(c => c.min_age)
+          .filter((m): m is number => m != null);
         
-        effectiveAgeBands.set(cat.id, {
-          category_id: cat.id,
-          effective_min_age: effectiveMin,
-          effective_max_age: cat.max_age,
-        });
+        // If any category in the group has explicit min_age, use the smallest but respect derived min
+        const effectiveMin = explicitMins.length > 0
+          ? Math.max(derivedMinAge, Math.min(...explicitMins))
+          : derivedMinAge;
+
+        // Assign the same band to ALL categories in this group
+        for (const cat of group) {
+          effectiveAgeBands.set(cat.id, {
+            category_id: cat.id,
+            effective_min_age: effectiveMin,
+            effective_max_age: groupMaxAge,
+          });
+        }
         
-        prevMaxAge = cat.max_age;
+        prevMaxAge = groupMaxAge;
       }
 
       if (effectiveAgeBands.size > 0) {
-        console.log(`[alloc.ageBands] non_overlapping mode: derived ${effectiveAgeBands.size} disjoint bands`);
+        console.log(`[alloc.ageBands] non_overlapping mode: derived ${effectiveAgeBands.size} disjoint bands from ${sortedMaxAges.length} age groups`);
         for (const [catId, band] of effectiveAgeBands) {
           const catName = activeCategories.find(c => c.id === catId)?.name ?? catId;
           console.log(`[alloc.ageBands]   ${catName}: age ${band.effective_min_age}-${band.effective_max_age}`);
