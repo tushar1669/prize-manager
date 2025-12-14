@@ -282,9 +282,21 @@ export default function Settings() {
                         <FormLabel className="text-foreground font-medium">
                           Age Band Policy
                         </FormLabel>
-                        <FormDescription className="text-sm text-muted-foreground mt-1">
-                          <strong>Non-overlapping (default):</strong> Each child qualifies for only their age band (U8=0-8, U11=9-11, etc.)<br/>
-                          <strong>Overlapping:</strong> Child can qualify for multiple Under-X bands simultaneously
+                        <FormDescription className="text-sm text-muted-foreground mt-1 space-y-2">
+                          <div>
+                            <strong>Non-overlapping (recommended):</strong> Each child fits exactly one Under-X band.
+                            <ul className="list-disc ml-5 mt-1 text-xs">
+                              <li>U8 = ages 0–8</li>
+                              <li>U11 = ages 9–11</li>
+                              <li>U14 = ages 12–14</li>
+                              <li>U17 = ages 15–17</li>
+                            </ul>
+                            <span className="text-xs">Best when you want one age prize per child.</span>
+                          </div>
+                          <div>
+                            <strong>Overlapping:</strong> A child can qualify for multiple Under-X bands at once.
+                            <span className="text-xs block mt-1">Example: A 10-year-old is eligible for U11, U14, and U17 simultaneously.</span>
+                          </div>
                         </FormDescription>
                       </div>
                       <FormControl>

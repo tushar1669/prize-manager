@@ -2163,13 +2163,15 @@ export default function TournamentSetup() {
                       }
                       disabled={youngestCategory}
                     >
-                      <option value="">Any</option>
-                      <option value="F">Girls Only</option>
-                      <option value="M_OR_UNKNOWN">Boys (not F)</option>
+                      <option value="">Any – No gender restriction</option>
+                      <option value="F">Girls Only – Requires explicit F</option>
+                      <option value="M_OR_UNKNOWN">Boys (not F) – M or unknown</option>
                     </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Boys includes males and unknown gender. Girls requires explicit F.
-                    </p>
+                    <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                      <p><strong>Any:</strong> Both boys and girls can win this prize.</p>
+                      <p><strong>Girls Only:</strong> Only players marked as Female (F) are eligible. Players with missing or unknown gender are excluded.</p>
+                      <p><strong>Boys (not F):</strong> Excludes players marked as Female. Male players and those with missing/unknown gender are treated as eligible.</p>
+                    </div>
                   </div>
 
                   {/* Disability Types */}
