@@ -22,6 +22,7 @@ import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 import { AllocationDebugReport } from "@/components/allocation/AllocationDebugReport";
+import { AllocationOverviewPanel } from "@/components/allocation/AllocationOverviewPanel";
 import { formatReasonCode } from "@/utils/reasonCodeLabels";
 import type { AllocationCoverageEntry } from "@/types/allocation";
 
@@ -110,7 +111,7 @@ export default function ConflictReview() {
       
       const { data, count, usedColumns } = await safeSelectPlayersByTournament(
         id,
-        ['id', 'name', 'rank', 'dob', 'dob_raw', 'rating'],
+        ['id', 'name', 'rank', 'dob', 'dob_raw', 'rating', 'gender'],
         { column: 'rank', ascending: true, nullsFirst: false }
       );
       
@@ -532,6 +533,19 @@ export default function ConflictReview() {
             Commit Allocation
           </Button>
         </div>
+
+        {/* Allocation Overview Panel - informational only */}
+        <AllocationOverviewPanel
+          ruleConfig={ruleConfig}
+          players={playersList?.map(p => ({
+            id: p.id,
+            dob: p.dob,
+            dob_raw: (p as any).dob_raw,
+            gender: (p as any).gender,
+            rating: p.rating,
+          }))}
+          className="mb-6"
+        />
 
         <Alert className="mb-6 border-primary/30 bg-primary/10 text-primary">
           <AlertCircle className="h-4 w-4" />
