@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useDirty } from '@/contexts/DirtyContext';
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
+import { CategoryCriteriaChips } from './CategoryCriteriaChips';
 
 export interface PrizeRow {
   id?: string;
@@ -324,48 +325,54 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
 
   return (
     <Card className="mb-6" data-testid="category-card">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Checkbox
-            checked={category.is_active}
-            onCheckedChange={(val: boolean) => onToggleCategory(category.id, !!val)}
-            aria-label={`Include ${category.name}`}
-          />
-          <CardTitle className="text-lg flex items-center gap-2">
-            {category.name}
-            {category.is_main && (
-              <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5">Main</span>
+      <CardHeader className="flex flex-col gap-2">
+        <div className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Checkbox
+              checked={category.is_active}
+              onCheckedChange={(val: boolean) => onToggleCategory(category.id, !!val)}
+              aria-label={`Include ${category.name}`}
+            />
+            <CardTitle className="text-lg flex items-center gap-2">
+              {category.name}
+              {hasDirty && (
+                <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-amber-100 text-amber-700 border border-amber-200">
+                  Unsaved
+                </span>
+              )}
+            </CardTitle>
+            {!category.is_main && onEditRules && isOrganizer && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('[rules] opening criteria sheet', { categoryId: category.id });
+                  onEditRules(category);
+                }}
+              >
+                Edit Rules
+              </Button>
             )}
-            {hasDirty && (
-              <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-amber-100 text-amber-700 border border-amber-200">
-                Unsaved
-              </span>
+            {!category.is_main && onDeleteCategory && isOrganizer && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => onDeleteCategory(category)}
+                title="Delete category"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             )}
-          </CardTitle>
-          {!category.is_main && onEditRules && isOrganizer && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                console.log('[rules] opening criteria sheet', { categoryId: category.id });
-                onEditRules(category);
-              }}
-            >
-              Edit Rules
-            </Button>
-          )}
-          {!category.is_main && onDeleteCategory && isOrganizer && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => onDeleteCategory(category)}
-              title="Delete category"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+          </div>
         </div>
+        {/* Criteria summary chips */}
+        <CategoryCriteriaChips
+          isMain={category.is_main}
+          criteria={category.criteria_json}
+          categoryType={category.category_type}
+          className="ml-8"
+        />
       </CardHeader>
       <CardContent className="space-y-4">
         <ErrorPanel error={error} onDismiss={() => clearError()} />
