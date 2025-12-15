@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { Trash2, Plus, Save, Trophy, Medal, Check, X } from 'lucide-react';
+import { Trash2, Plus, Save, Trophy, Medal, Check, X, Copy, CopyPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,11 +58,12 @@ interface Props {
   onToggleCategory: (categoryId: string, isActive: boolean) => void;
   onEditRules?: (category: CategoryRow) => void;
   onDeleteCategory?: (category: CategoryRow) => void;
+  onDuplicateCategory?: (category: CategoryRow) => void;
   isOrganizer: boolean;
 }
 
 const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
-  ({ category, onSave, onToggleCategory, onEditRules, onDeleteCategory, isOrganizer }, ref) => {
+  ({ category, onSave, onToggleCategory, onEditRules, onDeleteCategory, onDuplicateCategory, isOrganizer }, ref) => {
   const [draft, setDraft] = useState<PrizeRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
@@ -160,6 +161,20 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     setDraft(prev => [...prev, row]);
     // focus the new place input on next tick
     setTimeout(() => newRowFocusRef.current?.focus(), 0);
+  };
+
+  const handleDuplicateRow = (sourceRow: PrizeRow) => {
+    const newRow: PrizeRow = {
+      _tempId: crypto.randomUUID(),
+      _status: 'new',
+      place: nextPlace,
+      cash_amount: sourceRow.cash_amount ?? 0,
+      has_trophy: sourceRow.has_trophy ?? false,
+      has_medal: sourceRow.has_medal ?? false,
+      is_active: sourceRow.is_active ?? true,
+    };
+    console.log('[prizes-cat] duplicate row', { categoryId: category.id, sourcePlace: sourceRow.place, newPlace: newRow.place });
+    setDraft(prev => [...prev, newRow]);
   };
 
   const markDirty = (idx: number, patch: Partial<PrizeRow>) => {
@@ -360,6 +375,16 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                 Edit Rules
               </Button>
             )}
+            {!category.is_main && onDuplicateCategory && isOrganizer && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDuplicateCategory(category)}
+                title="Duplicate category"
+              >
+                <CopyPlus className="h-4 w-4" />
+              </Button>
+            )}
             {!category.is_main && onDeleteCategory && isOrganizer && (
               <Button
                 variant="ghost"
@@ -502,15 +527,26 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                         </div>
                       </td>
                       <td className="py-2 pl-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Delete prize place ${row.place}`}
-                          title={`Delete prize place ${row.place}`}
-                          onClick={() => handleRemove(rowIndex)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Duplicate prize place ${row.place}`}
+                            title={`Duplicate prize (as place ${nextPlace})`}
+                            onClick={() => handleDuplicateRow(row)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Delete prize place ${row.place}`}
+                            title={`Delete prize place ${row.place}`}
+                            onClick={() => handleRemove(rowIndex)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
