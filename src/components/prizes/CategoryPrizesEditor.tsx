@@ -373,12 +373,17 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
             )}
           </div>
         </div>
-        {/* Criteria summary chips */}
+        {/* Criteria summary chips - interactive when Edit Rules is available */}
         <CategoryCriteriaChips
           isMain={category.is_main}
           criteria={category.criteria_json}
           categoryType={category.category_type}
           className="ml-8"
+          onEditRules={
+            !category.is_main && onEditRules && isOrganizer
+              ? () => onEditRules(category)
+              : undefined
+          }
         />
       </CardHeader>
       <CardContent className="space-y-4">
