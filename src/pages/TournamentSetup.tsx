@@ -76,6 +76,8 @@ export default function TournamentSetup() {
   const [initialPrizes, setInitialPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
   const [includeCriteriaOnCopy, setIncludeCriteriaOnCopy] = useState(true);
+  // Prize mode toggle: 'individual' (default) vs 'team' (institution prizes)
+  const [prizeMode, setPrizeMode] = useState<'individual' | 'team'>('individual');
   const [dupDialog, setDupDialog] = useState<{
     open: boolean;
     sourceId: string | null;
@@ -1459,288 +1461,286 @@ export default function TournamentSetup() {
 
           <TabsContent value="prizes" className="space-y-6">
             {/* Prize Mode Toggle */}
-            {(() => {
-              const [prizeMode, setPrizeMode] = React.useState<'individual' | 'team'>('individual');
-              
-              return (
-                <>
-                  <div className="flex items-center gap-4 p-4 rounded-lg border bg-muted/30">
-                    <span className="text-sm font-medium">Prize Mode:</span>
-                    <div className="flex rounded-lg border p-1 bg-background">
-                      <button
-                        className={cn(
-                          "px-4 py-1.5 text-sm rounded-md transition-colors",
-                          prizeMode === 'individual' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                        )}
-                        onClick={() => setPrizeMode('individual')}
-                      >
-                        Individual Prizes
-                      </button>
-                      <button
-                        className={cn(
-                          "px-4 py-1.5 text-sm rounded-md transition-colors",
-                          prizeMode === 'team' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                        )}
-                        onClick={() => setPrizeMode('team')}
-                      >
-                        Team / Institution Prizes
-                      </button>
-                    </div>
-                  </div>
-
-                  {prizeMode === 'team' ? (
-                    <TeamPrizesEditor tournamentId={id || ''} isOrganizer={isOrganizer} />
-                  ) : (
-                    <>
-                      {mainPrizesRestore && activeTab === 'prizes' && (
-                        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  dlog('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
-                                  setPrizes(mainPrizesRestore.data || []);
-                                  setInitialPrizes(mainPrizesRestore.data || []);
-                                  setMainPrizesRestore(null);
-                                  setHasPendingDraft(false);
-                                  setHasHydratedPrizes(true);
-                                }}
-                              >
-                                Restore draft
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  dlog('[draft] discarding draft');
-                                  clearDraft(mainPrizesDraftKey);
-                                  setMainPrizesRestore(null);
-                                  setHasPendingDraft(false);
-                                }}
-                              >
-                                Discard
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-            <Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Category Prizes</CardTitle>
-                    <CardDescription>Age, rating, and special categories</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isOrganizer && (
-                      <>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          disabled={savingAll || !categories?.some(c => !c.is_main)}
-                          onClick={handleSaveAllCategories}
-                          title="Saves all edited category prizes in one go"
-                        >
-                          {savingAll ? (
-                            <>
-                              <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
-                                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
-                              </svg>
-                              Saving All…
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4 mr-2" />
-                              {(() => {
-                                const dirtyCount = Array.from(editorRefs.current.values())
-                                  .filter(ref => ref.current?.hasDirty())
-                                  .length;
-                                return dirtyCount > 0 
-                                  ? `Save All Categories (${dirtyCount})` 
-                                  : 'Save All Categories';
-                              })()}
-                            </>
-                          )}
-                        </Button>
-                        <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                          <DialogTrigger asChild>
-                            <Button size="sm" variant="outline" className="gap-2">
-                              <Plus className="h-4 w-4" />
-                              Add Category
-                            </Button>
-                          </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Category</DialogTitle>
-                        <DialogDescription>Create a new prize category</DialogDescription>
-                      </DialogHeader>
-                      <Form {...categoryForm}>
-                        <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
-                          <FormField
-                            control={categoryForm.control}
-                            name="name"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Category Name</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <div>
-                            <Label htmlFor="copy-from">Copy prize structure from</Label>
-                            <select
-                              id="copy-from"
-                              className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
-                              value={copyFromCategoryId || ''}
-                              onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
-                            >
-                              <option value="">Do not copy</option>
-                              {Array.isArray(categories) &&
-                                categories.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name} ({c.prizes?.length || 0} prizes)
-                                  </option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Optional. Saves time when multiple categories share the same prize structure.
-                            </p>
-                            {copyFromCategoryId && (
-                              <div className="flex items-center gap-2 mt-3">
-                                <Checkbox 
-                                  checked={includeCriteriaOnCopy}
-                                  onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
-                                />
-                                <Label htmlFor="copy-criteria-checkbox">
-                                  Include Rules (criteria)
-                                </Label>
-                              </div>
-                            )}
-                          </div>
-                          <DialogFooter>
-                            <Button type="submit" disabled={createCategoryMutation.isPending}>
-                              {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {categoriesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                  </div>
-                ) : categories && categories.length > 0 ? (
-                  <div className="space-y-4">
-                {sortedCategories.map((cat) => (
-                  <div key={cat.id} data-category-id={cat.id}>
-                    <CategoryPrizesEditor
-                      ref={getEditorRef(cat.id)}
-                      category={cat}
-                      onEditRules={(category) => setCriteriaSheet({ open: true, category })}
-                      onSave={(categoryId, delta) => 
-                        saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
-                      }
-                      onToggleCategory={toggleCategoryActive}
-                      isOrganizer={isOrganizer}
-                      onDeleteCategory={(category) => {
-                        setCatDelete({ 
-                          open: true, 
-                          id: category.id, 
-                          name: category.name, 
-                          prizeCount: category.prizes?.length ?? 0 
-                        });
-                      }}
-                      onDuplicateCategory={(category) => {
-                        setDupDialog({ open: true, sourceId: category.id });
-                      }}
-                    />
-                  </div>
-                ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">
-                    No categories added yet
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Allocation Rules</CardTitle>
-                    <CardDescription>Default rules for prize allocation</CardDescription>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate(`/t/${id}/settings`)}
-                  >
-                    Edit Rules
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  <RuleChip icon="lock" locked>One-Prize Rule</RuleChip>
-                  <RuleChip icon="trend">Main Priority</RuleChip>
-                  <RuleChip icon="alert">Strict Age: ON</RuleChip>
-                  <RuleChip>Unrated in Rating: OFF</RuleChip>
-                  <RuleChip>Tie Rule: Prefer Main</RuleChip>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={handleCancel}>Cancel</Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate(`/t/${id}/order-review`)}
+            <div className="flex items-center gap-4 p-4 rounded-lg border bg-muted/30">
+              <span className="text-sm font-medium">Prize Mode:</span>
+              <div className="flex rounded-lg border p-1 bg-background">
+                <button
+                  type="button"
+                  className={cn(
+                    "px-4 py-1.5 text-sm rounded-md transition-colors",
+                    prizeMode === 'individual' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  )}
+                  onClick={() => setPrizeMode('individual')}
                 >
-                  Review Category Order
-                </Button>
-                <Button
-                  onClick={() => {
-                    console.log('[nav] next clicked', { playerCount, canProceed });
-                    if (playerCount > 0) {
-                      navigate(`/t/${id}/review`);
-                    } else {
-                      navigate(`/t/${id}/import`);
-                    }
-                  }}
-                  disabled={loadingPlayerCount || !canProceed}
-                  className="gap-2"
-                  title={!canProceed ? "Please save main prizes before continuing" : undefined}
+                  Individual Prizes
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-4 py-1.5 text-sm rounded-md transition-colors",
+                    prizeMode === 'team' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  )}
+                  onClick={() => setPrizeMode('team')}
                 >
-                  {loadingPlayerCount
-                    ? '...'
-                    : playerCount > 0
-                      ? 'Next: Review & Allocate'
-                      : 'Next: Import Players'}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
+                  Team / Institution Prizes
+                </button>
               </div>
             </div>
+
+            {prizeMode === 'team' ? (
+              <TeamPrizesEditor tournamentId={id || ''} isOrganizer={isOrganizer} />
+            ) : (
+              <>
+                {mainPrizesRestore && activeTab === 'prizes' && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            dlog('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
+                            setPrizes(mainPrizesRestore.data || []);
+                            setInitialPrizes(mainPrizesRestore.data || []);
+                            setMainPrizesRestore(null);
+                            setHasPendingDraft(false);
+                            setHasHydratedPrizes(true);
+                          }}
+                        >
+                          Restore draft
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            dlog('[draft] discarding draft');
+                            clearDraft(mainPrizesDraftKey);
+                            setMainPrizesRestore(null);
+                            setHasPendingDraft(false);
+                          }}
+                        >
+                          Discard
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Category Prizes</CardTitle>
+                        <CardDescription>Age, rating, and special categories</CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isOrganizer && (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              disabled={savingAll || !categories?.some(c => !c.is_main)}
+                              onClick={handleSaveAllCategories}
+                              title="Saves all edited category prizes in one go"
+                            >
+                              {savingAll ? (
+                                <>
+                                  <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                                    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                                  </svg>
+                                  Saving All…
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="h-4 w-4 mr-2" />
+                                  {(() => {
+                                    const dirtyCount = Array.from(editorRefs.current.values())
+                                      .filter(ref => ref.current?.hasDirty())
+                                      .length;
+                                    return dirtyCount > 0 
+                                      ? `Save All Categories (${dirtyCount})` 
+                                      : 'Save All Categories';
+                                  })()}
+                                </>
+                              )}
+                            </Button>
+                            <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline" className="gap-2">
+                                  <Plus className="h-4 w-4" />
+                                  Add Category
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Add Category</DialogTitle>
+                                  <DialogDescription>Create a new prize category</DialogDescription>
+                                </DialogHeader>
+                                <Form {...categoryForm}>
+                                  <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
+                                    <FormField
+                                      control={categoryForm.control}
+                                      name="name"
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>Category Name</FormLabel>
+                                          <FormControl>
+                                            <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                    <div>
+                                      <Label htmlFor="copy-from">Copy prize structure from</Label>
+                                      <select
+                                        id="copy-from"
+                                        className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
+                                        value={copyFromCategoryId || ''}
+                                        onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
+                                      >
+                                        <option value="">Do not copy</option>
+                                        {Array.isArray(categories) &&
+                                          categories.map((c) => (
+                                            <option key={c.id} value={c.id}>
+                                              {c.name} ({c.prizes?.length || 0} prizes)
+                                            </option>
+                                          ))}
+                                      </select>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Optional. Saves time when multiple categories share the same prize structure.
+                                      </p>
+                                      {copyFromCategoryId && (
+                                        <div className="flex items-center gap-2 mt-3">
+                                          <Checkbox 
+                                            checked={includeCriteriaOnCopy}
+                                            onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
+                                          />
+                                          <Label htmlFor="copy-criteria-checkbox">
+                                            Include Rules (criteria)
+                                          </Label>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <DialogFooter>
+                                      <Button type="submit" disabled={createCategoryMutation.isPending}>
+                                        {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
+                                      </Button>
+                                    </DialogFooter>
+                                  </form>
+                                </Form>
+                              </DialogContent>
+                            </Dialog>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {categoriesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      </div>
+                    ) : categories && categories.length > 0 ? (
+                      <div className="space-y-4">
+                        {sortedCategories.map((cat) => (
+                          <div key={cat.id} data-category-id={cat.id}>
+                            <CategoryPrizesEditor
+                              ref={getEditorRef(cat.id)}
+                              category={cat}
+                              onEditRules={(category) => setCriteriaSheet({ open: true, category })}
+                              onSave={(categoryId, delta) => 
+                                saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
+                              }
+                              onToggleCategory={toggleCategoryActive}
+                              isOrganizer={isOrganizer}
+                              onDeleteCategory={(category) => {
+                                setCatDelete({ 
+                                  open: true, 
+                                  id: category.id, 
+                                  name: category.name, 
+                                  prizeCount: category.prizes?.length ?? 0 
+                                });
+                              }}
+                              onDuplicateCategory={(category) => {
+                                setDupDialog({ open: true, sourceId: category.id });
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">
+                        No categories added yet
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Allocation Rules</CardTitle>
+                        <CardDescription>Default rules for prize allocation</CardDescription>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate(`/t/${id}/settings`)}
+                      >
+                        Edit Rules
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      <RuleChip icon="lock" locked>One-Prize Rule</RuleChip>
+                      <RuleChip icon="trend">Main Priority</RuleChip>
+                      <RuleChip icon="alert">Strict Age: ON</RuleChip>
+                      <RuleChip>Unrated in Rating: OFF</RuleChip>
+                      <RuleChip>Tie Rule: Prefer Main</RuleChip>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-between">
+                  <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => navigate(`/t/${id}/order-review`)}
+                    >
+                      Review Category Order
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        console.log('[nav] next clicked', { playerCount, canProceed });
+                        if (playerCount > 0) {
+                          navigate(`/t/${id}/review`);
+                        } else {
+                          navigate(`/t/${id}/import`);
+                        }
+                      }}
+                      disabled={loadingPlayerCount || !canProceed}
+                      className="gap-2"
+                      title={!canProceed ? "Please save main prizes before continuing" : undefined}
+                    >
+                      {loadingPlayerCount
+                        ? '...'
+                        : playerCount > 0
+                          ? 'Next: Review & Allocate'
+                          : 'Next: Import Players'}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>
