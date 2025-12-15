@@ -1748,6 +1748,9 @@ export default function TournamentSetup() {
                           prizeCount: category.prizes?.length ?? 0 
                         });
                       }}
+                      onDuplicateCategory={(category) => {
+                        setDupDialog({ open: true, sourceId: category.id });
+                      }}
                     />
                   </div>
                 ))}
