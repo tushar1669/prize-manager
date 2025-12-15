@@ -440,6 +440,13 @@ for (const category of categories) {
 
 ---
 
+## Golden fixtures
+
+- **New Delhi Below-1800** regression test enforces full prize coverage, girls age-group coverage, best-female gender correctness, and main-category rank ordering.
+- **Khasdar Chashak 2025** regression test ensures rating-band allocations respect bounds and that main-category winners stay ordered by rank.
+
+---
+
 ## Change Log
 
 ### v1.1 (2025-11-07)

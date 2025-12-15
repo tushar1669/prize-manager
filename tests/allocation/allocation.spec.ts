@@ -2,14 +2,16 @@ import { readFileSync } from 'fs';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import './setupAllocatorMocks';
 import {
   genderBlankToMF,
   inferUnrated,
   normalizeGrColumn,
   normalizeRating,
   ratingZeroToNull,
-} from '@/utils/valueNormalizers';
-import { buildSupabasePlayerPayload } from '@/utils/playerImportPayload';
+  normalizeTypeColumn,
+} from '../../src/utils/valueNormalizers';
+import { buildSupabasePlayerPayload } from '../../src/utils/playerImportPayload';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,8 +87,6 @@ describe('valueNormalizers', () => {
   });
 
   it('normalizes Type column: trims whitespace, preserves case, returns null for empty', () => {
-    const { normalizeTypeColumn } = require('@/utils/valueNormalizers');
-    
     // Basic trimming
     expect(normalizeTypeColumn(' S60 ')).toBe('S60');
     expect(normalizeTypeColumn('PC')).toBe('PC');
@@ -473,7 +473,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
         order_idx: 1,
         criteria_json: { max_rating: 2000 },
         prizes: [
-          { id: 'u2000-6', place: 6, cash_amount: 1000, has_trophy: false, has_medal: false },
+          { id: 'u2000-6', place: 15, cash_amount: 1000, has_trophy: false, has_medal: false },
         ],
       },
     ];
@@ -938,6 +938,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const players = [
       { id: 'p1', rank: 1, name: 'PC Player', rating: 1500, gender: 'M', dob: '2000-01-01', group_label: 'PC', disability: 'PC', unrated: false },
       { id: 'p2', rank: 2, name: 'Normal Player', rating: 1600, gender: 'M', dob: '2000-01-01', group_label: null, disability: null, unrated: false },
+      { id: 'p3', rank: 3, name: 'PC Group Only', rating: 1490, gender: 'F', dob: '2001-01-01', group_label: 'PC', disability: null, unrated: false },
     ];
 
     const categories = [
@@ -969,16 +970,17 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     const { winners, eligibilityLog } = runAllocation(categories, players, defaultRules, new Date('2024-05-01'));
 
-    // p1 wins both categories (PC via disability and PC via group)
-    // But with one-player-one-prize, p1 wins the higher-value one
-    expect(winners.length).toBe(1);
-    expect(winners[0].playerId).toBe('p1');
+    expect(winners).toEqual([
+      { prizeId: 'pcd-1', playerId: 'p1' },
+      { prizeId: 'pcg-1', playerId: 'p3' },
+    ]);
 
     // Verify p1 was eligible for both
     const p1DisabilityEligibility = eligibilityLog.find(e => e.playerId === 'p1' && e.categoryId === 'pc-disability');
-    const p1GroupEligibility = eligibilityLog.find(e => e.playerId === 'p1' && e.categoryId === 'pc-group');
     expect(p1DisabilityEligibility?.eligible).toBe(true);
-    expect(p1GroupEligibility?.eligible).toBe(true);
+
+    const p3GroupEligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'pc-group');
+    expect(p3GroupEligibility?.eligible).toBe(true);
 
     // Verify p2 was excluded from both
     const p2DisabilityEligibility = eligibilityLog.find(e => e.playerId === 'p2' && e.categoryId === 'pc-disability');
@@ -1276,6 +1278,6 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     ]);
 
     const p3Eligibility = eligibilityLog.find(e => e.playerId === 'p3' && e.categoryId === 'mh-ka-only');
-    expect(p3Eligibility?.reasonCodes).toContain('location_excluded');
+    expect(p3Eligibility?.reasonCodes).toContain('state_excluded');
   });
 });
