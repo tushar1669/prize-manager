@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import './setupAllocatorMocks';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
+import { runAllocation } from './helpers';
 
 let allocator: typeof AllocatorModule;
 
@@ -515,5 +517,63 @@ describe('Rank Invariant Tests', () => {
     expect(result.violations.length).toBeGreaterThan(0);
     expect(result.violations[0]).toContain('Alice');
     expect(result.violations[0]).toContain('better rank');
+  });
+
+  it('keeps main prizes monotone by rank when multiple awards are present', () => {
+    const categories: Category[] = [
+      {
+        id: 'main',
+        name: 'Open',
+        is_main: true,
+        order_idx: 0,
+        prizes: [
+          { id: 'm1', place: 1, cash_amount: 5000 },
+          { id: 'm2', place: 2, cash_amount: 3000 },
+          { id: 'm3', place: 3, cash_amount: 2000 },
+        ],
+      },
+    ];
+
+    const players: Player[] = [
+      { id: 'p1', name: 'Top Seed', rank: 1, rating: 2100 },
+      { id: 'p2', name: 'Second Seed', rank: 2, rating: 2050 },
+      { id: 'p3', name: 'Third Seed', rank: 3, rating: 1900 },
+      { id: 'p4', name: 'Fourth Seed', rank: 4, rating: 1800 },
+    ];
+
+    const { winners } = runAllocation(allocator, categories, players, defaultRules, new Date('2024-01-01'));
+    const ordered = winners.sort((a, b) => (a.prizeId > b.prizeId ? 1 : -1));
+    const ranks = ordered.map(w => players.find(p => p.id === w.playerId)?.rank ?? Infinity);
+
+    expect(ranks).toEqual([1, 2, 3]);
+  });
+
+  it('orders rating-group prizes by rank before considering rating/name tie-breaks', () => {
+    const categories: Category[] = [
+      {
+        id: 'rg',
+        name: '1600-1800',
+        is_main: false,
+        order_idx: 0,
+        criteria_json: { min_rating: 1600, max_rating: 1800 },
+        prizes: [
+          { id: 'rg-1', place: 1, cash_amount: 2500 },
+          { id: 'rg-2', place: 2, cash_amount: 1500 },
+        ],
+      },
+    ];
+
+    const players: Player[] = [
+      { id: 'p1', name: 'Lower Rating Better Rank', rank: 5, rating: 1620 },
+      { id: 'p2', name: 'Higher Rating Lower Rank', rank: 6, rating: 1780 },
+      { id: 'p3', name: 'Backup', rank: 7, rating: 1700 },
+    ];
+
+    const { winners } = runAllocation(allocator, categories, players, defaultRules, new Date('2024-01-01'));
+    const ordered = winners.sort((a, b) => (a.prizeId > b.prizeId ? 1 : -1));
+    const ranks = ordered.map(w => players.find(p => p.id === w.playerId)?.rank ?? Infinity);
+
+    // Rank should win over higher rating for the first prize
+    expect(ranks).toEqual([5, 6]);
   });
 });

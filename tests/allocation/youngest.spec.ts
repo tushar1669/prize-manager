@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import './setupAllocatorMocks';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
 let allocator: typeof AllocatorModule;
