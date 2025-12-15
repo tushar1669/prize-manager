@@ -65,7 +65,7 @@ export default function Settings() {
         .from('rule_config')
         .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
-        .maybeSingle();
+        .maybeSingle() as { data: any; error: any };
       
       console.log('[settings] load rules', { id, found: !!data });
       
