@@ -288,6 +288,104 @@ export type Database = {
           },
         ]
       }
+      institution_prize_groups: {
+        Row: {
+          created_at: string | null
+          female_slots: number
+          group_by: string
+          id: string
+          is_active: boolean
+          male_slots: number
+          name: string
+          scoring_mode: string
+          team_size: number
+          tournament_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          female_slots?: number
+          group_by: string
+          id?: string
+          is_active?: boolean
+          male_slots?: number
+          name: string
+          scoring_mode?: string
+          team_size: number
+          tournament_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          female_slots?: number
+          group_by?: string
+          id?: string
+          is_active?: boolean
+          male_slots?: number
+          name?: string
+          scoring_mode?: string
+          team_size?: number
+          tournament_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_prize_groups_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_prize_groups_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      institution_prizes: {
+        Row: {
+          cash_amount: number
+          created_at: string | null
+          group_id: string
+          has_medal: boolean
+          has_trophy: boolean
+          id: string
+          is_active: boolean
+          place: number
+        }
+        Insert: {
+          cash_amount?: number
+          created_at?: string | null
+          group_id: string
+          has_medal?: boolean
+          has_trophy?: boolean
+          id?: string
+          is_active?: boolean
+          place: number
+        }
+        Update: {
+          cash_amount?: number
+          created_at?: string | null
+          group_id?: string
+          has_medal?: boolean
+          has_trophy?: boolean
+          id?: string
+          is_active?: boolean
+          place?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_prizes_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "institution_prize_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           city: string | null
