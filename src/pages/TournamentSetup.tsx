@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
 import { tournamentDetailsSchema, TournamentDetailsForm, categorySchema, CategoryForm } from "@/lib/validations";
 import { classifyTimeControl } from "@/utils/timeControl";
+import { cn } from "@/lib/utils";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +84,12 @@ export default function TournamentSetup() {
   
   // Category delete dialog state
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
+
+  // Criteria validation errors (for blocking save)
+  const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
+  
+  // Track selected gender in criteria sheet for reactive warning
+  const [criteriaGenderSelection, setCriteriaGenderSelection] = useState<string>('');
 
   // Delete category mutation (non-main only). FK CASCADE deletes prizes automatically.
   const deleteCategoryMutation = useMutation({
@@ -333,6 +340,9 @@ export default function TournamentSetup() {
         criteria: normalizeCriteria(criteriaSheet.category.criteria_json),
         category_type: nextType,
       });
+      // Initialize gender selection for reactive warning
+      const storedGender = criteriaSheet.category.criteria_json?.gender;
+      setCriteriaGenderSelection(storedGender === 'M' ? 'M_OR_UNKNOWN' : (storedGender || ''));
     }
   }, [criteriaSheet.open, criteriaSheet.category]);
 
@@ -343,8 +353,10 @@ export default function TournamentSetup() {
 
     if (categoryTypeSelection === 'youngest_female') {
       genderEl.value = 'F';
+      setCriteriaGenderSelection('F');
     } else if (categoryTypeSelection === 'youngest_male') {
       genderEl.value = 'M_OR_UNKNOWN';
+      setCriteriaGenderSelection('M_OR_UNKNOWN');
     } else if (criteriaSheet.category?.criteria_json) {
       const storedGender = criteriaSheet.category.criteria_json.gender;
       genderEl.value = storedGender === 'M' ? 'M_OR_UNKNOWN' : (storedGender || '');
@@ -1878,9 +1890,11 @@ export default function TournamentSetup() {
       {/* Criteria Editor Sheet */}
       <Sheet
         open={criteriaSheet.open}
-        onOpenChange={(open) =>
-          setCriteriaSheet({ open, category: criteriaSheet.category })
-        }
+        onOpenChange={(open) => {
+          setCriteriaSheet({ open, category: criteriaSheet.category });
+          // Clear validation errors when closing sheet
+          if (!open) setCriteriaErrors({});
+        }}
       >
         {/* Key forces re-render when category changes, ensuring defaultChecked/defaultValue are applied fresh */}
         <SheetContent key={criteriaSheet.category?.id || 'new'} className="w-full sm:max-w-xl overflow-y-auto">
@@ -2016,6 +2030,8 @@ export default function TournamentSetup() {
                         defaultValue={criteria?.max_age ?? ''}
                         placeholder="e.g., 9, 11, 13"
                         disabled={youngestCategory}
+                        className={criteriaErrors.ageRange ? 'border-destructive' : ''}
+                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }))}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "Under X" categories. E.g., U-9 = max age 9.
@@ -2030,12 +2046,17 @@ export default function TournamentSetup() {
                         defaultValue={criteria?.min_age ?? ''}
                         placeholder="e.g., 60"
                         disabled={youngestCategory}
+                        className={criteriaErrors.ageRange ? 'border-destructive' : ''}
+                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }))}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "60+ Veteran" categories. Leave empty for no minimum.
                       </p>
                     </div>
                   </div>
+                  {criteriaErrors.ageRange && (
+                    <p className="text-sm text-destructive font-medium">{criteriaErrors.ageRange}</p>
+                  )}
 
                   {/* Unrated-only Category */}
                   <div className="flex flex-col gap-1">
@@ -2092,7 +2113,11 @@ export default function TournamentSetup() {
                         defaultValue={criteria?.min_rating ?? ''}
                         placeholder="e.g., 1200"
                         disabled={criteria?.unrated_only === true || youngestCategory}
-                        className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
+                        className={cn(
+                          criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : '',
+                          criteriaErrors.ratingRange ? 'border-destructive' : ''
+                        )}
+                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ratingRange: undefined }))}
                       />
                     </div>
                     <div>
@@ -2104,10 +2129,17 @@ export default function TournamentSetup() {
                         defaultValue={criteria?.max_rating ?? ''}
                         placeholder="e.g., 1800"
                         disabled={criteria?.unrated_only === true || youngestCategory}
-                        className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
+                        className={cn(
+                          criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : '',
+                          criteriaErrors.ratingRange ? 'border-destructive' : ''
+                        )}
+                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ratingRange: undefined }))}
                       />
                     </div>
                   </div>
+                  {criteriaErrors.ratingRange && (
+                    <p className="text-sm text-destructive font-medium">{criteriaErrors.ratingRange}</p>
+                  )}
                   {criteria?.unrated_only && (
                     <p className="text-xs text-amber-500">
                       Rating range is ignored when "Unrated-only" is enabled.
@@ -2146,6 +2178,7 @@ export default function TournamentSetup() {
                         criteria?.gender === 'M' ? 'M_OR_UNKNOWN' : (criteria?.gender || '')
                       }
                       disabled={youngestCategory}
+                      onChange={(e) => setCriteriaGenderSelection(e.target.value)}
                     >
                       <option value="">Any – No gender restriction</option>
                       <option value="F">Girls Only – Requires explicit F</option>
@@ -2156,6 +2189,13 @@ export default function TournamentSetup() {
                       <p><strong>Girls Only:</strong> Only players marked as Female (F) are eligible. Players with missing or unknown gender are excluded.</p>
                       <p><strong>Boys (not F):</strong> Excludes players marked as Female. Male players and those with missing/unknown gender are treated as eligible.</p>
                     </div>
+                    {/* Gender warning for Girls Only */}
+                    {criteriaGenderSelection === 'F' && (
+                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <strong>Reminder:</strong> Ensure your player import file has female players marked with gender=F. 
+                        Otherwise these prizes will stay unfilled.
+                      </div>
+                    )}
                   </div>
 
                   {/* Disability Types */}
@@ -2301,6 +2341,29 @@ export default function TournamentSetup() {
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
                 const unratedOnly = !isYoungest && unratedOnlyEl?.getAttribute('data-state') === 'checked';
+
+                // === VALIDATION GUARDRAILS ===
+                const validationErrors: { ageRange?: string; ratingRange?: string } = {};
+
+                // Age range validation: min_age > max_age is impossible
+                if (minAge != null && maxAge != null && !isNaN(minAge) && !isNaN(maxAge) && minAge > maxAge) {
+                  validationErrors.ageRange = `Min age (${minAge}) cannot be greater than max age (${maxAge}).`;
+                }
+
+                // Rating range validation: min_rating > max_rating is impossible
+                if (minRating != null && maxRating != null && !isNaN(minRating) && !isNaN(maxRating) && minRating > maxRating) {
+                  validationErrors.ratingRange = `Min rating (${minRating}) cannot be greater than max rating (${maxRating}).`;
+                }
+
+                // Block save if there are validation errors
+                if (validationErrors.ageRange || validationErrors.ratingRange) {
+                  setCriteriaErrors(validationErrors);
+                  toast.error('Please fix the errors before saving.');
+                  return;
+                }
+
+                // Clear any previous errors
+                setCriteriaErrors({});
 
                 const criteria: any = {};
 

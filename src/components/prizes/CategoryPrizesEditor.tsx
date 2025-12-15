@@ -253,6 +253,29 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     if (duplicates.length > 0) {
       return `Duplicate places: ${duplicates.sort((a, b) => a - b).join(', ')}. Each place must be unique within the category.`;
     }
+
+    // Check for empty prize rows (no cash, no trophy, no medal)
+    const emptyRows: number[] = [];
+    for (const row of activeRows) {
+      const cashAmount = Number(row.cash_amount) || 0;
+      const hasTrophy = !!row.has_trophy;
+      const hasMedal = !!row.has_medal;
+      
+      if (cashAmount === 0 && !hasTrophy && !hasMedal) {
+        emptyRows.push(row.place);
+        // Mark empty rows with error
+        setDraft(prev => prev.map(p => 
+          (p.id === row.id || p._tempId === row._tempId) 
+            ? { ...p, _error: 'Empty prize' }
+            : p
+        ));
+      }
+    }
+
+    if (emptyRows.length > 0) {
+      return `Empty prize(s) at place ${emptyRows.join(', ')}: Add cash, trophy, or medal – or delete the row.`;
+    }
+
     return null;
   };
 
@@ -481,7 +504,13 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                   const rowIndex = draft.findIndex(p => (p.id || p._tempId) === (row.id || row._tempId));
                   const onFirst = idx === visibleRows.length - 1 && row._status === 'new';
                   return (
-                    <tr key={row.id || row._tempId} className={cn('border-t')}>
+                    <tr 
+                      key={row.id || row._tempId} 
+                      className={cn(
+                        'border-t',
+                        row._error === 'Empty prize' && 'bg-amber-50/50 dark:bg-amber-950/20'
+                      )}
+                    >
                       <td className="py-2 pr-4">
                         <div className="space-y-1">
                           <Input
@@ -493,7 +522,11 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                             className={cn("w-20", row._error && "border-destructive focus-visible:ring-destructive")}
                           />
                           {row._error && (
-                            <p className="text-xs text-destructive">{row._error}</p>
+                            <p className="text-xs text-destructive">
+                              {row._error === 'Empty prize' 
+                                ? 'Add cash, trophy, or medal' 
+                                : row._error}
+                            </p>
                           )}
                         </div>
                       </td>
@@ -503,7 +536,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                           min={0}
                           value={row.cash_amount ?? 0}
                           onChange={(e) => markDirty(rowIndex, { cash_amount: parseInt(e.target.value || '0', 10) })}
-                          className="w-40"
+                          className={cn("w-40", row._error === 'Empty prize' && "border-amber-500")}
                         />
                       </td>
                       <td className="py-2 pr-4">
