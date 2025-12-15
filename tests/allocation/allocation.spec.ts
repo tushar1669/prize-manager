@@ -167,10 +167,11 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     allow_missing_dob_for_age: false,
     max_age_inclusive: true,
     prefer_category_rank_on_tie: false,
-    prefer_main_on_equal_value: true,
-    category_priority_order: ['main', 'others'],
-    tie_break_strategy: 'rating_then_name' as const,
-    verbose_logs: false,
+  prefer_main_on_equal_value: true,
+  category_priority_order: ['main', 'others'],
+  tie_break_strategy: 'rating_then_name' as const,
+  verbose_logs: false,
+  multi_prize_policy: 'single' as const,
   };
 
   const runAllocation = (
