@@ -19,6 +19,7 @@ const GENDER_DEBUG_TOURNAMENT_ID = '74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15';
 
 type TieBreakField = 'rating' | 'name';
 type TieBreakStrategy = 'rating_then_name' | 'none' | TieBreakField[];
+export type MultiPrizePolicy = 'single' | 'main_plus_one_side' | 'unlimited';
 
 export function normalizeTieBreakStrategy(strategy: TieBreakStrategy | undefined): TieBreakField[] {
   if (Array.isArray(strategy)) return strategy.filter((s): s is TieBreakField => s === 'rating' || s === 'name');
@@ -259,6 +260,39 @@ type CategoryRow = {
   prizes: PrizeRow[];
 };
 
+type AssignedPrizeInfo = { category: CategoryRow; prize: PrizeRow };
+
+// Legacy behaviour kept: default policy is single-prize-per-player unless a tournament opts in.
+export function canPlayerTakePrize(opts: {
+  policy: MultiPrizePolicy;
+  category: CategoryRow;
+  playerId: string;
+  assignments: Map<string, AssignedPrizeInfo[]>;
+}): boolean {
+  const { policy, category, playerId, assignments } = opts;
+  const existing = assignments.get(playerId) ?? [];
+
+  if (policy === 'unlimited') return true;
+  if (policy === 'single') return existing.length === 0;
+
+  const mainCount = existing.filter(a => a.category.is_main).length;
+  const sideCount = existing.length - mainCount;
+  const isMain = category.is_main === true;
+
+  if (isMain) return mainCount === 0 && existing.length < 2;
+  return sideCount === 0 && existing.length < 2;
+}
+
+function recordAssignment(
+  assignments: Map<string, AssignedPrizeInfo[]>,
+  playerId: string,
+  entry: AssignedPrizeInfo
+) {
+  const list = assignments.get(playerId) ?? [];
+  list.push(entry);
+  assignments.set(playerId, list);
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -424,6 +458,8 @@ Deno.serve(async (req) => {
       verbose_logs: envVerbose,
       // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
       age_band_policy: 'non_overlapping' as 'non_overlapping' | 'overlapping',
+      // NEW: Per-player prize cap policy (defaults to legacy single-prize behaviour)
+      multi_prize_policy: 'single' as MultiPrizePolicy,
     };
 
     const rules = {
@@ -441,6 +477,8 @@ Deno.serve(async (req) => {
     const tieBreakFields = normalizeTieBreakStrategy(rules.tie_break_strategy);
 
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
+    const multiPrizePolicy: MultiPrizePolicy = (rules.multi_prize_policy ?? 'single') as MultiPrizePolicy;
+    rules.multi_prize_policy = multiPrizePolicy;
 
     // Determine age band policy
     const ageBandPolicy = (rules.age_band_policy ?? 'non_overlapping') as 'non_overlapping' | 'overlapping';
@@ -569,7 +607,7 @@ Deno.serve(async (req) => {
       reasons: string[];
       isManual: boolean;
     }> = [];
-    const assignedPlayers = new Set<string>();
+    const assignments = new Map<string, AssignedPrizeInfo[]>();
     const conflicts: Array<{
       id: string;
       type: string;
@@ -627,7 +665,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      assignedPlayers.add(override.playerId);
+      if (prizeContext?.cat && prizeContext?.p) {
+        recordAssignment(assignments, override.playerId, { category: prizeContext.cat, prize: prizeContext.p });
+      }
       const reasons = new Set<string>([
         force && !eligible ? 'manual_override_forced' : 'manual_override',
         ...(evaluation?.passCodes || []),
@@ -649,7 +689,7 @@ Deno.serve(async (req) => {
 
       const youngestCategory = isYoungestCategory(cat);
 
-      // Track eligibility BEFORE one-prize exclusion
+      // Track eligibility BEFORE prize-cap exclusion
       const eligibleBeforeOnePrize: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
@@ -666,8 +706,14 @@ Deno.serve(async (req) => {
         }
         if (evaluation.eligible) {
           eligibleBeforeOnePrize.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
-          // Only add to eligible pool if not already assigned
-          if (!assignedPlayers.has(player.id)) {
+          const canTakePrize = canPlayerTakePrize({
+            policy: multiPrizePolicy,
+            category: cat,
+            playerId: player.id,
+            assignments,
+          });
+
+          if (canTakePrize) {
             eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
           }
         } else {
@@ -687,7 +733,7 @@ Deno.serve(async (req) => {
         const categoryName = cat.name;
         const prizePlace = p.place;
         const totalPlayers = playerRows.length;
-        const alreadyAssigned = assignedPlayers.size;
+        const alreadyAssigned = assignments.size;
         const availablePool = totalPlayers - alreadyAssigned;
         
         console.log(`[allocation.coverage] category="${categoryName}" place=${prizePlace} eligible=0 picked=0 availablePool=${availablePool} reasons=${reasonList.join(',')}`);
@@ -822,7 +868,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      assignedPlayers.add(winner.player.id);
+      recordAssignment(assignments, winner.player.id, { category: cat, prize: p });
       const reasonSet = new Set<string>([
         'auto',
         youngestCategory ? 'youngest' : 'rank',

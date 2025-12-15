@@ -10,6 +10,7 @@ export const defaultRules = {
   category_priority_order: ['main', 'others'],
   tie_break_strategy: 'rating_then_name' as const,
   verbose_logs: false,
+  multi_prize_policy: 'single' as AllocatorModule.MultiPrizePolicy,
 };
 
 export type TestPlayer = {
@@ -61,16 +62,23 @@ export function runAllocation(
 
   const winners: AllocationResult['winners'] = [];
   const unfilled: AllocationResult['unfilled'] = [];
-  const assignedPlayers = new Set<string>();
+  const assignments = new Map<string, Array<{ category: TestCategory; prize: TestPrize }>>();
 
   for (const { cat, p } of prizeQueue) {
     const eligible: Array<{ player: TestPlayer; passCodes: string[]; warnCodes: string[] }> = [];
 
     for (const player of players) {
-      if (assignedPlayers.has(player.id)) continue;
-
       const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate);
-      if (evaluation.eligible) {
+      if (!evaluation.eligible) continue;
+
+      const canTake = allocator.canPlayerTakePrize({
+        policy: rules.multi_prize_policy ?? 'single',
+        category: cat as any,
+        playerId: player.id,
+        assignments: assignments as any,
+      });
+
+      if (canTake) {
         eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
       }
     }
@@ -95,7 +103,9 @@ export function runAllocation(
       isManual: false,
       categoryId: cat.id,
     });
-    assignedPlayers.add(winner.player.id);
+    const playerAssignments = assignments.get(winner.player.id) ?? [];
+    playerAssignments.push({ category: cat, prize: p });
+    assignments.set(winner.player.id, playerAssignments);
   }
 
   return { winners, unfilled };

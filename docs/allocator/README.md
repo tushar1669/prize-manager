@@ -30,6 +30,16 @@ The Prize Allocation Algorithm is the deterministic engine that assigns prizes t
 - **Real-time allocation** (runs as batch operation triggered by organizer)
 - **Prize splitting** (one player gets one prize)
 
+### Multi-prize policies
+
+Each tournament can choose how many prizes a single player may win. The default is **single**, which matches the legacy golden fixtures (New Delhi Below-1800, Khasdar 2025).
+
+| Policy | Behaviour | Recommended for |
+| --- | --- | --- |
+| `single` | One prize total per player | Most classical open events |
+| `main_plus_one_side` | One main-category prize **and** one side-category prize per player (max two total) | Opens that want a bonus side prize without sweeping |
+| `unlimited` | No global cap; players can collect every eligible prize | Special events; use with care |
+
 ---
 
 ## Inputs
