@@ -38,6 +38,7 @@ import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
+import { TeamPrizesEditor } from '@/components/team-prizes';
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -1457,171 +1458,78 @@ export default function TournamentSetup() {
           </TabsContent>
 
           <TabsContent value="prizes" className="space-y-6">
-            {mainPrizesRestore && activeTab === 'prizes' && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        dlog('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
-                        setPrizes(mainPrizesRestore.data || []);
-                        setInitialPrizes(mainPrizesRestore.data || []);
-                        setMainPrizesRestore(null);
-                        setHasPendingDraft(false);
-                        setHasHydratedPrizes(true);
-                      }}
-                    >
-                      Restore draft
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        dlog('[draft] discarding draft');
-                        clearDraft(mainPrizesDraftKey);
-                        setMainPrizesRestore(null);
-                        setHasPendingDraft(false);
-                      }}
-                    >
-                      Discard
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div>
-                      <CardTitle>Main Prizes (Open)</CardTitle>
-                      <CardDescription>Define prizes for top finishers</CardDescription>
-                    </div>
-                    {isMainPrizesDirty && (
-                      <Badge variant="secondary" className="text-xs">
-                        Unsaved changes
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      Prize allocation rules are configured in{" "}
-                      <button 
-                        className="underline hover:no-underline text-primary font-medium" 
-                        onClick={() => navigate(`/t/${id}/settings`)}
-                      >
-                        Settings
-                      </button>
-                    </p>
-                    {isOrganizer && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => savePrizesMutation.mutate({ shouldNavigate: false })}
-                        disabled={!isMainPrizesDirty || savePrizesMutation.isPending}
-                        className="gap-2"
-                      >
-                        {savePrizesMutation.isPending ? (
-                          <>
-                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
-                              <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
-                            </svg>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4" />
-                            Save Main Prizes
-                          </>
+            {/* Prize Mode Toggle */}
+            {(() => {
+              const [prizeMode, setPrizeMode] = React.useState<'individual' | 'team'>('individual');
+              
+              return (
+                <>
+                  <div className="flex items-center gap-4 p-4 rounded-lg border bg-muted/30">
+                    <span className="text-sm font-medium">Prize Mode:</span>
+                    <div className="flex rounded-lg border p-1 bg-background">
+                      <button
+                        className={cn(
+                          "px-4 py-1.5 text-sm rounded-md transition-colors",
+                          prizeMode === 'individual' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                         )}
-                      </Button>
-                    )}
+                        onClick={() => setPrizeMode('individual')}
+                      >
+                        Individual Prizes
+                      </button>
+                      <button
+                        className={cn(
+                          "px-4 py-1.5 text-sm rounded-md transition-colors",
+                          prizeMode === 'team' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                        )}
+                        onClick={() => setPrizeMode('team')}
+                      >
+                        Team / Institution Prizes
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-border">
-                      <TableHead className="w-20">Place</TableHead>
-                      <TableHead>Cash Amount</TableHead>
-                      <TableHead className="w-24">Trophy</TableHead>
-                      <TableHead className="w-24">Medal</TableHead>
-                      <TableHead className="w-16"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {prizes.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          No prizes defined yet. Click "Add Prize Row" to start.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      prizes.map((prize, index) => (
-                        <TableRow key={index} className="border-border" data-testid="prize-row">
-                          <TableCell className="font-medium">{prize.place}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={prize.cash_amount}
-                              onChange={(e) => {
-                                const newPrizes = [...prizes];
-                                newPrizes[index].cash_amount = parseInt(e.target.value) || 0;
-                                setPrizes(newPrizes);
-                              }}
-                              className="w-32"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Checkbox
-                              checked={prize.has_trophy}
-                              onCheckedChange={(checked) => {
-                                const newPrizes = [...prizes];
-                                newPrizes[index].has_trophy = checked as boolean;
-                                setPrizes(newPrizes);
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Checkbox
-                              checked={prize.has_medal}
-                              onCheckedChange={(checked) => {
-                                const newPrizes = [...prizes];
-                                newPrizes[index].has_medal = checked as boolean;
-                                setPrizes(newPrizes);
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {prizes.length > 1 && (
+
+                  {prizeMode === 'team' ? (
+                    <TeamPrizesEditor tournamentId={id || ''} isOrganizer={isOrganizer} />
+                  ) : (
+                    <>
+                      {mainPrizesRestore && activeTab === 'prizes' && (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
+                            </div>
+                            <div className="flex gap-2">
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                onClick={() => handleRemovePrize(index)}
+                                onClick={() => {
+                                  dlog('[draft] restoring draft', { count: mainPrizesRestore.data?.length });
+                                  setPrizes(mainPrizesRestore.data || []);
+                                  setInitialPrizes(mainPrizesRestore.data || []);
+                                  setMainPrizesRestore(null);
+                                  setHasPendingDraft(false);
+                                  setHasHydratedPrizes(true);
+                                }}
                               >
-                                <X className="h-4 w-4" />
+                                Restore draft
                               </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                <Button variant="outline" size="sm" onClick={handleAddPrize} className="mt-4 gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Prize Row
-                </Button>
-              </CardContent>
-            </Card>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  dlog('[draft] discarding draft');
+                                  clearDraft(mainPrizesDraftKey);
+                                  setMainPrizesRestore(null);
+                                  setHasPendingDraft(false);
+                                }}
+                              >
+                                Discard
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+            <Card>
 
             <Card>
               <CardHeader>
