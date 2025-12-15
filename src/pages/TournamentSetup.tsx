@@ -31,6 +31,7 @@ import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
+import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext";
 import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/autosave';
@@ -671,17 +672,15 @@ export default function TournamentSetup() {
   // Save category prizes mutation
   const saveCategoryPrizesMutation = useMutation({
     mutationFn: async ({ categoryId, delta }: { categoryId: string; delta: PrizeDelta }) => {
-      console.log('[prizes-cat] save category', { 
-        categoryId, 
-        inserts: delta.inserts.length, 
-        updates: delta.updates.length, 
-        deletes: delta.deletes.length 
+      const { validInserts, validUpdates, upsertRows } = prepareCategoryPrizeUpsertRows(categoryId, delta);
+
+      console.log('[prizes-cat] save category', {
+        categoryId,
+        inserts: delta.inserts.length,
+        updates: delta.updates.length,
+        deletes: delta.deletes.length
       });
 
-      // Preflight: filter valid places (positive int only)
-      const validInserts = delta.inserts.filter(p => Number.isInteger(p.place) && p.place > 0);
-      const validUpdates = delta.updates.filter(p => Number.isInteger(p.place) && p.place > 0);
-      
       console.log('[prizes-cat.preflight]', {
         categoryId,
         inserts: validInserts.length,
@@ -705,27 +704,6 @@ export default function TournamentSetup() {
         ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
       }
 
-      // Use upsert for inserts + updates combined (with onConflict)
-      const upsertRows = [
-        ...validUpdates.map(p => ({
-          id: p.id,
-          category_id: categoryId,
-          place: p.place,
-          cash_amount: p.cash_amount,
-          has_trophy: p.has_trophy,
-          has_medal: p.has_medal,
-          is_active: p.is_active ?? true
-        })),
-        ...validInserts.map(p => ({
-          category_id: categoryId,
-          place: p.place,
-          cash_amount: p.cash_amount,
-          has_trophy: p.has_trophy,
-          has_medal: p.has_medal,
-          is_active: p.is_active ?? true
-        }))
-      ];
-
       if (upsertRows.length > 0) {
         ops.push(
           supabase
@@ -742,6 +720,9 @@ export default function TournamentSetup() {
           const msg = r.error.message || 'Unknown error';
           if (String(msg).includes('prizes_category_id_place_key') || r.error.code === '23505') {
             throw new Error('Each place must be unique within the category.');
+          }
+          if (r.error.code === '23502' && msg.toLowerCase().includes('column "id"')) {
+            throw new Error('Internal error: prize row saved without an ID (violates NOT NULL). Please contact support.');
           }
           throw new Error(msg);
         }
