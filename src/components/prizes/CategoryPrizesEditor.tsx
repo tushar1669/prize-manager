@@ -242,26 +242,33 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   };
 
   const computeDelta = (): PrizeDelta => {
-    const inserts = draft
-      .filter(p => p._status === 'new' && !p.id)
-      .map(p => ({
-        place: Number(p.place) || 0,
-        cash_amount: Number(p.cash_amount) || 0,
-        has_trophy: !!p.has_trophy,
-        has_medal: !!p.has_medal,
-        is_active: !!p.is_active,
-      }));
+    const inserts: PrizeDelta['inserts'] = [];
+    const updates: PrizeDelta['updates'] = [];
 
-    const updates = draft
-      .filter(p => p._status === 'dirty' && !!p.id)
-      .map(p => ({
-        id: p.id!,
+    draft.forEach(p => {
+      const base = {
         place: Number(p.place) || 0,
         cash_amount: Number(p.cash_amount) || 0,
         has_trophy: !!p.has_trophy,
         has_medal: !!p.has_medal,
         is_active: !!p.is_active,
-      }));
+      };
+
+      if (p._status === 'new') {
+        // New rows should never carry an id so DB defaults can populate it
+        inserts.push(base);
+        return;
+      }
+
+      if (p._status === 'dirty') {
+        if (p.id) {
+          updates.push({ ...base, id: p.id });
+          return;
+        }
+        // If a row was marked dirty but lost its id (e.g., stale draft), treat it as an insert
+        inserts.push(base);
+      }
+    });
 
     const deletes = draft.filter(p => p._status === 'deleted' && !!p.id).map(p => p.id!) || [];
 
