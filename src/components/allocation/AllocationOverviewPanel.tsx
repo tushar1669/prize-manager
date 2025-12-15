@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 interface RuleConfig {
   age_band_policy?: string | null;
+  multi_prize_policy?: string | null;
   strict_age?: boolean;
   allow_missing_dob_for_age?: boolean;
   max_age_inclusive?: boolean;
@@ -144,6 +145,13 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
 
   const rc = ruleConfig || {};
   const ageBandPolicy = rc.age_band_policy || 'non_overlapping';
+  const multiPrizePolicy = rc.multi_prize_policy || 'single';
+  
+  const prizeStackingLabel = multiPrizePolicy === 'unlimited' 
+    ? 'Unlimited stacking' 
+    : multiPrizePolicy === 'main_plus_one_side' 
+      ? 'Main + one extra prize' 
+      : 'One prize per player';
 
   return (
     <Card className={cn('border-muted', className)}>
@@ -191,6 +199,26 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Boys (not F) includes males and unknown gender
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <span className="text-muted-foreground">Prize Stacking</span>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={multiPrizePolicy === 'single' ? 'default' : 'secondary'} 
+                      className="text-xs"
+                    >
+                      {prizeStackingLabel}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {multiPrizePolicy === 'single' 
+                      ? 'Each player receives at most one prize'
+                      : multiPrizePolicy === 'main_plus_one_side'
+                        ? 'Player can win one main + one side prize'
+                        : 'No limit on prizes per player'
+                    }
                   </p>
                 </div>
                 

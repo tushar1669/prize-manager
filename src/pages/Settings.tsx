@@ -4,6 +4,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { ruleConfigSchema, RuleConfigForm } from "@/lib/validations";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +33,8 @@ export default function Settings() {
       prefer_main_on_equal_value: true,
       prefer_category_rank_on_tie: false,
       category_priority_order: [],
-      age_band_policy: 'non_overlapping' as const
+      age_band_policy: 'non_overlapping' as const,
+      multi_prize_policy: 'single' as const
     }
   });
 
@@ -59,7 +63,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -82,7 +86,8 @@ export default function Settings() {
           prefer_main_on_equal_value: data.prefer_main_on_equal_value,
           prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
           category_priority_order: data.category_priority_order as string[] || [],
-          age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping'
+          age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping',
+          multi_prize_policy: (data.multi_prize_policy as 'single' | 'main_plus_one_side' | 'unlimited') || 'single'
         });
       }
       return data;
@@ -308,6 +313,79 @@ export default function Settings() {
                     </FormItem>
                   )}
                 />
+
+                <div className="border-t pt-6 mt-6">
+                  <FormField
+                    control={form.control}
+                    name="multi_prize_policy"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-medium text-base">
+                          Prize Stacking Policy
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1 mb-4">
+                          Controls how many prizes a single player can receive
+                        </FormDescription>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value || 'single'}
+                            onValueChange={field.onChange}
+                            className="space-y-3"
+                          >
+                            <div className="flex items-start space-x-3">
+                              <RadioGroupItem value="single" id="policy-single" className="mt-1" />
+                              <div className="space-y-1">
+                                <Label htmlFor="policy-single" className="font-medium cursor-pointer">
+                                  Strict – One prize per player
+                                  <span className="ml-2 text-xs text-muted-foreground font-normal">(recommended)</span>
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                  Each player receives at most one prize in this tournament. Best for maximizing distinct winners.
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start space-x-3">
+                              <RadioGroupItem value="main_plus_one_side" id="policy-main-plus-one" className="mt-1" />
+                              <div className="space-y-1">
+                                <Label htmlFor="policy-main-plus-one" className="font-medium cursor-pointer">
+                                  Main + one extra prize
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                  A player can win one main prize plus one side prize (rating, age, best female, etc.).
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-start space-x-3">
+                              <RadioGroupItem value="unlimited" id="policy-unlimited" className="mt-1" />
+                              <div className="space-y-1">
+                                <Label htmlFor="policy-unlimited" className="font-medium cursor-pointer">
+                                  Unlimited stacking
+                                  <span className="ml-2 text-xs text-muted-foreground font-normal">(advanced)</span>
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                  No cap. If a player is best in multiple categories, they can receive multiple prizes.
+                                </p>
+                              </div>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                        
+                        {/* Warning for non-strict modes */}
+                        {(field.value === 'main_plus_one_side' || field.value === 'unlimited') && (
+                          <div className="mt-4 flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Allowing multiple prizes per player reduces the number of distinct winners. 
+                              Use only when the brochure explicitly allows prize stacking.
+                            </span>
+                          </div>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -323,9 +401,13 @@ export default function Settings() {
                   <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
-                  
                   <li>Prefer Main on Equal Value: <strong>{form.watch('prefer_main_on_equal_value') ? 'ON' : 'OFF'}</strong></li>
                   <li>Prefer Category Rank on Tie: <strong>{form.watch('prefer_category_rank_on_tie') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Prize Stacking: <strong>
+                    {form.watch('multi_prize_policy') === 'unlimited' ? 'Unlimited' :
+                     form.watch('multi_prize_policy') === 'main_plus_one_side' ? 'Main + one extra' :
+                     'One prize per player'}
+                  </strong></li>
                 </ul>
                 <div className="mt-4 text-sm text-muted-foreground">
                   💡 For per-category eligibility (age/rating/gender etc.), use <strong>Prize Structure → Edit Rules</strong> on each category.

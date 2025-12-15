@@ -477,7 +477,6 @@ export type Database = {
           allow_unrated_in_rating: boolean | null
           category_priority_order: Json | null
           created_at: string | null
-          multi_prize_policy: string | null
           max_age_inclusive: boolean | null
           prefer_category_rank_on_tie: boolean | null
           prefer_main_on_equal_value: boolean | null
@@ -491,7 +490,6 @@ export type Database = {
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
-          multi_prize_policy?: string | null
           max_age_inclusive?: boolean | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
@@ -505,7 +503,6 @@ export type Database = {
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
-          multi_prize_policy?: string | null
           max_age_inclusive?: boolean | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
