@@ -44,6 +44,8 @@ import { TeamPrizesEditor } from '@/components/team-prizes';
 const DEBUG = false;
 const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
 
+const MAIN_CATEGORY_NAME = 'Main Prize';
+
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -93,6 +95,7 @@ export default function TournamentSetup() {
   
   // Track selected gender in criteria sheet for reactive warning
   const [criteriaGenderSelection, setCriteriaGenderSelection] = useState<string>('');
+  const ensuringMainCategory = useRef(false);
 
   // Delete category mutation (non-main only). FK CASCADE deletes prizes automatically.
   const deleteCategoryMutation = useMutation({
@@ -394,13 +397,47 @@ export default function TournamentSetup() {
     refetchOnWindowFocus: false
   });
 
+  // Ensure Main Prize category exists for individual prize mode
+  useEffect(() => {
+    if (prizeMode !== 'individual') return;
+    if (!id || !categories || categoriesLoading) return;
+
+    const hasMainCategory = categories.some((c) => c.is_main);
+    if (hasMainCategory) return;
+
+    if (ensuringMainCategory.current) return;
+    ensuringMainCategory.current = true;
+
+    (async () => {
+      try {
+        const { error } = await supabase
+          .from('categories')
+          .insert({
+            tournament_id: id,
+            name: MAIN_CATEGORY_NAME,
+            is_main: true,
+            criteria_json: {},
+            order_idx: 0,
+          });
+
+        if (error) throw error;
+        await queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      } catch (err) {
+        console.error('[prizes] failed to ensure main category', err);
+        ensuringMainCategory.current = false;
+      }
+    })();
+  }, [categories, categoriesLoading, id, prizeMode, queryClient]);
+
   // UI-only sort for Setup page: show newest categories at top for better editing UX
   // (CategoryOrderReview still uses order_idx ASC for brochure order)
   const sortedCategories = useMemo(() => {
     if (!categories) return [];
-    return categories
+    const mainCategory = categories.find((c) => c.is_main);
+    const otherCategories = categories
       .filter(c => !c.is_main)
       .sort((a, b) => (b.order_idx ?? 0) - (a.order_idx ?? 0)); // DESC = newest first
+    return mainCategory ? [mainCategory, ...otherCategories] : otherCategories;
   }, [categories]);
 
   // Hydrate main prizes from DB when categories load
@@ -595,7 +632,7 @@ export default function TournamentSetup() {
           .from('categories')
           .insert({
             tournament_id: id,
-            name: 'Main (Open)',
+            name: MAIN_CATEGORY_NAME,
             is_main: true,
             criteria_json: {},
             order_idx: 0

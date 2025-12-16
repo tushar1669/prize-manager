@@ -375,7 +375,12 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
           <div className="flex items-center gap-3">
             <Checkbox
               checked={category.is_active}
-              onCheckedChange={(val: boolean) => onToggleCategory(category.id, !!val)}
+              disabled={category.is_main}
+              onCheckedChange={
+                category.is_main
+                  ? undefined
+                  : (val: boolean) => onToggleCategory(category.id, !!val)
+              }
               aria-label={`Include ${category.name}`}
             />
             <CardTitle className="text-lg flex items-center gap-2">
