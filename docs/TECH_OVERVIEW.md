@@ -37,3 +37,33 @@
 ## Exports
 - **Coverage (.xlsx):** `src/utils/allocationCoverageExport.ts` flattens coverage entries (category/prize, candidate counts, winner info, reason codes, diagnosis summary) and downloads Excel. CSV is not supported.
 - **RCA (.xlsx):** `src/utils/allocationRcaExport.ts` exports engine vs final winners with status (`MATCH`, `OVERRIDDEN`, `NO_ELIGIBLE_WINNER`), override reasons, candidate counts, and diagnostics. CSV is not supported.
+
+## Team / Institution Prizes (Phase 2)
+
+### Architecture
+- **Isolation:** Team prizes are completely separate from individual allocation. `allocatePrizes` is untouched; `allocateInstitutionPrizes` runs independently.
+- **Policy independence:** `multi_prize_policy` is ignored for team prizes. Players can win both individual and team awards simultaneously.
+
+### Database tables
+- **`institution_prize_groups`**: `id`, `tournament_id`, `name`, `group_by` (club/city/state/group_label/type_label), `team_size`, `female_slots`, `male_slots`, `scoring_mode` (default: `by_top_k_score`), `is_active`.
+- **`institution_prizes`**: `id`, `group_id`, `place`, `cash_amount`, `has_trophy`, `has_medal`, `is_active`.
+- **Constraint:** `female_slots + male_slots <= team_size` enforced at DB level.
+
+### Edge function: allocateInstitutionPrizes
+- **File:** `supabase/functions/allocateInstitutionPrizes/index.ts`
+- **Scoring:** Rank points = `(max_rank + 1 - player_rank)`. Team total is sum of best `team_size` players.
+- **Gender slots:** Fills `female_slots` with gender=F players first, then `male_slots` with not-F, then remaining boards.
+- **Tie-breaks:** `total_points` DESC → `rank_sum` ASC → `best_individual_rank` ASC → institution name ASC.
+- **Ineligibility:** Teams failing gender/size requirements are tracked with counts and sample reasons.
+
+### UI components
+- **`TeamPrizesEditor.tsx`**: Main editor with memoized `prizesByGroup` for stable array references.
+- **`TeamGroupPrizesTable.tsx`**: Prize table with hydration gating via `serverVersionKey` to prevent clobbering local edits.
+- **`TeamPrizeRulesSheet.tsx`**: Modal for group configuration (name, group_by, team_size, gender slots).
+- **`useInstitutionPrizes.ts`**: Data fetching and mutations with RLS-safe error handling.
+- **`useTeamPrizeResults.ts`**: Shared hook for fetching team allocation results (used by ConflictReview, Finalize, PDF).
+
+### Result surfaces
+- **ConflictReview:** `TeamPrizeResultsPanel` renders after individual preview completes when `hasTeamPrizes=true`.
+- **Finalize:** Fetches and displays team results when active groups exist.
+- **PDF:** `generatePdf` calls `allocateInstitutionPrizes` and adds a team section (with error handling if allocation fails).

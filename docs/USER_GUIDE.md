@@ -45,6 +45,29 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
   - Allowed when only non-critical prizes remain unfilled. Critical missing fields block commit until resolved.
   - Committing locks winners and updates the public winners page.
 
+## Team / Institution Prizes
+Team prizes (Best School, Best Academy, Best City, etc.) are configured separately from individual prizes.
+
+### Configuration
+1. Navigate to **Tournament Setup → Team / Institution Prizes** tab.
+2. Click **Add Team Prize Group** to create a new group:
+   - **Group Name**: Label shown in outputs (e.g., "Best School").
+   - **Group Players By**: Select `club`, `city`, `state`, `group_label`, or `type_label`.
+   - **Team Size**: Number of players counted per team.
+   - **Gender Requirements** (optional): Set female_slots and/or male_slots; totals cannot exceed team_size.
+3. Expand the group → **Add Prize** rows with place, cash amount, trophy, and medal options.
+4. Save changes before leaving the page.
+
+### How team allocation works
+- **Isolation**: Team prizes are completely separate from individual prizes. Players can win both.
+- **Scoring**: Teams are ranked by total rank points (higher is better). Tie-breaks: total points → rank sum → best individual rank → institution name.
+- **Gender slots**: `female_slots` require gender = F; `male_slots` accept not-F (male or unknown).
+
+### Where team results appear
+- **Conflict Review**: After individual preview completes, team results appear in a separate panel.
+- **Finalize**: Team winners shown alongside individual winners.
+- **PDF Export**: Includes a "Team / Institution Prizes" section at the end.
+
 ## Public pages
 - **Public home listing:** Shows the newest published tournaments first with time-control badge (BLITZ/RAPID/CLASSICAL), arbiter/director names, entry fees, cash prize totals, city/venue, brochure and ChessResults/public-result links when provided.
 - **Public tournament detail & winners:** Displays event summary, schedule, external links, and final winners/allocations for viewers without organizer access.
