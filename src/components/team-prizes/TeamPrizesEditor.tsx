@@ -32,7 +32,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   // Fetch groups and prizes
   const { data: groups, isLoading: loadingGroups } = useInstitutionPrizeGroups(tournamentId);
   const groupIds = useMemo(() => (groups || []).map(g => g.id), [groups]);
-  const { data: allPrizes, isLoading: loadingPrizes } = useInstitutionPrizes(groupIds);
+  const { data: allPrizes, isLoading: loadingPrizes } = useInstitutionPrizes(tournamentId, groupIds);
 
   // Mutations
   const createGroup = useCreateInstitutionGroup();
@@ -89,7 +89,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   };
 
   const handleSavePrizes = async (groupId: string, delta: any) => {
-    await savePrizes.mutateAsync({ groupId, delta });
+    await savePrizes.mutateAsync({ groupId, tournamentId, delta });
   };
 
   const getGroupByLabel = (value: string) => {
