@@ -12,34 +12,48 @@ interface Props {
   groupId: string;
   prizes: InstitutionPrize[];
   onSave: (groupId: string, delta: InstitutionPrizeDelta) => Promise<void>;
+  canEdit?: boolean;
 }
 
-export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, onSave }: Props) {
+export default function TeamGroupPrizesTable({
+  groupId,
+  prizes: initialPrizes,
+  onSave,
+  canEdit = false,
+}: Props) {
   const [draft, setDraft] = useState<InstitutionPrize[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Initialize from props
   useEffect(() => {
-    const base = initialPrizes.map(p => ({ ...p, _status: 'clean' as const }));
+    const base = initialPrizes.map((p) => ({ ...p, _status: 'clean' as const }));
     setDraft(base);
   }, [initialPrizes]);
 
   const visibleRows = useMemo(
-    () => draft.filter(p => p._status !== 'deleted').sort((a, b) => a.place - b.place),
+    () => draft.filter((p) => p._status !== 'deleted').sort((a, b) => a.place - b.place),
     [draft]
   );
 
   const hasDirty = useMemo(
-    () => draft.some(p => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted'),
+    () => draft.some((p) => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted'),
     [draft]
   );
 
   const nextPlace = useMemo(() => {
-    const places = draft.filter(p => p._status !== 'deleted').map(p => p.place || 0);
+    const places = draft.filter((p) => p._status !== 'deleted').map((p) => p.place || 0);
     return (places.length ? Math.max(...places) : 0) + 1;
   }, [draft]);
 
+  const requireEdit = useCallback(() => {
+    if (canEdit) return true;
+    toast.error('You do not have permission to edit team prizes for this tournament.');
+    return false;
+  }, [canEdit]);
+
   const handleAddRow = () => {
+    if (!requireEdit()) return;
+
     const row: InstitutionPrize = {
       _tempId: crypto.randomUUID(),
       _status: 'new',
@@ -50,10 +64,12 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
       has_medal: false,
       is_active: true,
     };
-    setDraft(prev => [...prev, row]);
+    setDraft((prev) => [...prev, row]);
   };
 
   const handleDuplicateRow = (sourceRow: InstitutionPrize) => {
+    if (!requireEdit()) return;
+
     const newRow: InstitutionPrize = {
       _tempId: crypto.randomUUID(),
       _status: 'new',
@@ -64,15 +80,17 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
       has_medal: sourceRow.has_medal,
       is_active: true,
     };
-    setDraft(prev => [...prev, newRow]);
+    setDraft((prev) => [...prev, newRow]);
   };
 
   const markDirty = (idx: number, patch: Partial<InstitutionPrize>) => {
-    setDraft(prev => {
+    if (!requireEdit()) return;
+
+    setDraft((prev) => {
       const next = [...prev];
-      next[idx] = { 
-        ...next[idx], 
-        ...patch, 
+      next[idx] = {
+        ...next[idx],
+        ...patch,
         _status: next[idx]._status === 'new' ? 'new' : 'dirty',
         _error: undefined,
       };
@@ -81,7 +99,9 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
   };
 
   const handleRemove = (idx: number) => {
-    setDraft(prev => {
+    if (!requireEdit()) return;
+
+    setDraft((prev) => {
       const next = [...prev];
       const row = next[idx];
       if (row.id) {
@@ -94,9 +114,9 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
   };
 
   const validate = useCallback((): string | null => {
-    const activeRows = draft.filter(p => p._status !== 'deleted');
+    const activeRows = draft.filter((p) => p._status !== 'deleted');
     const placeSet = new Set<number>();
-    
+
     for (const row of activeRows) {
       if (!Number.isInteger(row.place) || row.place < 1) {
         return `Invalid place: ${row.place}. Place must be a positive integer.`;
@@ -105,13 +125,13 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
         return `Duplicate place: ${row.place}. Each place must be unique within the group.`;
       }
       placeSet.add(row.place);
-      
+
       // Check for empty prizes
       if (row.cash_amount === 0 && !row.has_trophy && !row.has_medal) {
         return `Empty prize at place ${row.place}: Add cash, trophy, or medal.`;
       }
     }
-    
+
     return null;
   }, [draft]);
 
@@ -149,6 +169,8 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
   }, [draft, groupId]);
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
+
     const error = validate();
     if (error) {
       toast.error(error);
@@ -164,12 +186,14 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
     try {
       setSaving(true);
       await onSave(groupId, delta);
-      // Reset statuses
-      setDraft(prev => 
+
+      // Mark local rows clean; authoritative state comes from refetch (react-query invalidation)
+      setDraft((prev) =>
         prev
-          .filter(p => p._status !== 'deleted')
-          .map(p => ({ ...p, _status: 'clean' as const }))
+          .filter((p) => p._status !== 'deleted')
+          .map((p) => ({ ...p, _status: 'clean' as const }))
       );
+
       toast.success('Prizes saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save prizes');
@@ -181,16 +205,16 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" onClick={handleAddRow}>
+        <Button variant="secondary" size="sm" onClick={handleAddRow} disabled={!canEdit}>
           <Plus className="h-4 w-4 mr-1" />
           Add Prize
         </Button>
-        <Button size="sm" onClick={handleSave} disabled={saving || !hasDirty}>
+        <Button size="sm" onClick={handleSave} disabled={!canEdit || saving || !hasDirty}>
           {saving ? (
             <>
               <svg className="h-4 w-4 mr-1 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
-                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75" />
               </svg>
               Saving…
             </>
@@ -201,9 +225,7 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
             </>
           )}
         </Button>
-        {hasDirty && (
-          <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
-        )}
+        {hasDirty && <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>}
       </div>
 
       <Table>
@@ -229,13 +251,13 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
               </TableCell>
             </TableRow>
           ) : (
-            visibleRows.map((row, idx) => {
-              const realIdx = draft.findIndex(p => (p.id || p._tempId) === (row.id || row._tempId));
+            visibleRows.map((row) => {
+              const realIdx = draft.findIndex((p) => (p.id || p._tempId) === (row.id || row._tempId));
               const isEmpty = row.cash_amount === 0 && !row.has_trophy && !row.has_medal;
-              
+
               return (
-                <TableRow 
-                  key={row.id || row._tempId} 
+                <TableRow
+                  key={row.id || row._tempId}
                   className={cn(
                     isEmpty && 'bg-amber-50 dark:bg-amber-950/30',
                     row._status === 'new' && 'bg-green-50/50 dark:bg-green-950/20',
@@ -249,6 +271,7 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
                       value={row.place}
                       onChange={(e) => markDirty(realIdx, { place: parseInt(e.target.value) || 1 })}
                       className="w-16"
+                      disabled={!canEdit}
                     />
                   </TableCell>
                   <TableCell>
@@ -258,42 +281,48 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
                       value={row.cash_amount}
                       onChange={(e) => markDirty(realIdx, { cash_amount: parseInt(e.target.value) || 0 })}
                       className="w-24"
+                      disabled={!canEdit}
                     />
                   </TableCell>
                   <TableCell>
                     <Checkbox
                       checked={row.has_trophy}
                       onCheckedChange={(checked) => markDirty(realIdx, { has_trophy: !!checked })}
+                      disabled={!canEdit}
                     />
                   </TableCell>
                   <TableCell>
                     <Checkbox
                       checked={row.has_medal}
                       onCheckedChange={(checked) => markDirty(realIdx, { has_medal: !!checked })}
+                      disabled={!canEdit}
                     />
                   </TableCell>
                   <TableCell>
                     <Checkbox
                       checked={row.is_active}
                       onCheckedChange={(checked) => markDirty(realIdx, { is_active: !!checked })}
+                      disabled={!canEdit}
                     />
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleDuplicateRow(row)}
                         title="Duplicate row"
+                        disabled={!canEdit}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleRemove(realIdx)}
                         className="text-destructive hover:text-destructive"
                         title="Delete row"
+                        disabled={!canEdit}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -305,8 +334,8 @@ export default function TeamGroupPrizesTable({ groupId, prizes: initialPrizes, o
           )}
         </TableBody>
       </Table>
-      
-      {visibleRows.some(r => r.cash_amount === 0 && !r.has_trophy && !r.has_medal) && (
+
+      {visibleRows.some((r) => r.cash_amount === 0 && !r.has_trophy && !r.has_medal) && (
         <p className="text-xs text-amber-600">
           Some prizes have no value. Add cash, trophy, or medal before saving.
         </p>
