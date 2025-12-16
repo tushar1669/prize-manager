@@ -26,6 +26,8 @@ import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
+import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
+import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 
 interface Winner {
   prizeId: string;
@@ -95,6 +97,14 @@ export default function Finalize() {
   const [isExportingPrint, setIsExportingPrint] = useState(false);
   const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
+
+  // Team prize results - always enabled in Finalize since allocations are finalized
+  const {
+    hasTeamPrizes,
+    data: teamPrizeResults,
+    isLoading: teamPrizeLoading,
+    error: teamPrizeError,
+  } = useTeamPrizeResults(id, { enabled: true });
 
   // Fetch players and prizes to show winner details
   const { data: playersList } = useQuery({
@@ -552,6 +562,19 @@ export default function Finalize() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Team / Institution Prizes - only shown when configured */}
+          {hasTeamPrizes && (
+            <Card>
+              <CardContent className="pt-6">
+                <TeamPrizeResultsPanel
+                  data={teamPrizeResults}
+                  isLoading={teamPrizeLoading}
+                  error={teamPrizeError}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

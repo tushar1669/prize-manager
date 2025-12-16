@@ -24,6 +24,7 @@ import { IneligibilityTooltip } from "@/components/allocation/IneligibilityToolt
 import { AllocationDebugReport } from "@/components/allocation/AllocationDebugReport";
 import { AllocationOverviewPanel } from "@/components/allocation/AllocationOverviewPanel";
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
+import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { formatReasonCode } from "@/utils/reasonCodeLabels";
 import type { AllocationCoverageEntry } from "@/types/allocation";
 
@@ -168,53 +169,13 @@ export default function ConflictReview() {
     enabled: !!id
   });
 
-  // Check if team prize groups exist for this tournament
-  const { data: hasTeamPrizes } = useQuery({
-    queryKey: ['has-team-prizes', id],
-    queryFn: async () => {
-      if (!id) return false;
-      const { count, error } = await supabase
-        .from('institution_prize_groups')
-        .select('*', { count: 'exact', head: true })
-        .eq('tournament_id', id)
-        .eq('is_active', true);
-      if (error) throw error;
-      return (count || 0) > 0;
-    },
-    enabled: !!id,
-  });
-
-  // Team prize allocation state
-  const [teamPrizeResults, setTeamPrizeResults] = useState<any>(null);
-  const [teamPrizeError, setTeamPrizeError] = useState<string | null>(null);
-  const [teamPrizeLoading, setTeamPrizeLoading] = useState(false);
-
-  // Fetch team prize allocation when preview completes
-  useEffect(() => {
-    if (!id || !hasTeamPrizes || !previewCompleted) return;
-    
-    const fetchTeamPrizes = async () => {
-      setTeamPrizeLoading(true);
-      setTeamPrizeError(null);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const { data, error } = await supabase.functions.invoke('allocateInstitutionPrizes', {
-          body: { tournament_id: id },
-          headers: { Authorization: `Bearer ${session?.access_token}` }
-        });
-        if (error) throw error;
-        console.log('[review] Team prize results:', data);
-        setTeamPrizeResults(data);
-      } catch (err: any) {
-        console.error('[review] Team prize allocation error:', err);
-        setTeamPrizeError(err?.message || 'Failed to allocate team prizes');
-      } finally {
-        setTeamPrizeLoading(false);
-      }
-    };
-    
-    fetchTeamPrizes();
-  }, [id, hasTeamPrizes, previewCompleted]);
+  // Use shared hook for team prize results
+  const {
+    hasTeamPrizes,
+    data: teamPrizeResults,
+    isLoading: teamPrizeLoading,
+    error: teamPrizeError,
+  } = useTeamPrizeResults(id, { enabled: previewCompleted });
 
   const allocateMutation = useMutation({
     mutationFn: async (options?: { ruleOverride?: any; overrides?: { prizeId: string; playerId: string }[]; dryRun?: boolean }) => {
