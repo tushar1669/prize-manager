@@ -1,10 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Loader2, Users } from 'lucide-react';
 import { useFinalPrizeData, FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { useTeamPrizeResults, GroupResponse } from '@/components/team-prizes/useTeamPrizeResults';
 import { formatCurrencyINR } from '@/utils/currency';
+
+const STORAGE_KEY = 'pm.ceremony.announceSmallestToBiggest';
 
 interface CeremonyScriptViewProps {
   tournamentId: string;
@@ -170,6 +174,23 @@ function renderPlace(place: number, isMain: boolean) {
   return `${place}th Place`;
 }
 
+function getStoredPreference(): boolean {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function setStoredPreference(value: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(value));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
   const { data, isLoading, error } = useFinalPrizeData(tournamentId);
   const { 
@@ -178,11 +199,19 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
     isLoading: teamLoading 
   } = useTeamPrizeResults(tournamentId, { enabled: true });
 
+  const [announceSmallestFirst, setAnnounceSmallestFirst] = useState(getStoredPreference);
+
+  useEffect(() => {
+    setStoredPreference(announceSmallestFirst);
+  }, [announceSmallestFirst]);
+
   const ceremonyItems = useMemo(() => {
     const winners = data?.winners ?? [];
     const teamGroups = teamData?.groups ?? [];
-    return buildCeremonyScript(winners, teamGroups);
-  }, [data?.winners, teamData?.groups]);
+    const items = buildCeremonyScript(winners, teamGroups);
+    // If toggle OFF, reverse the entire list (Champion first)
+    return announceSmallestFirst ? items : [...items].reverse();
+  }, [data?.winners, teamData?.groups, announceSmallestFirst]);
 
   if (isLoading || teamLoading) {
     return (
@@ -213,10 +242,33 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
   return (
     <div className="mx-auto mt-8 max-w-5xl px-6 pb-16 print:mt-3 print:px-0 print:pb-4">
       <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4 print:mb-3 print:p-2">
-        <h3 className="text-sm font-semibold text-foreground print:text-xs">Ceremony Order</h3>
-        <p className="mt-1 text-sm text-muted-foreground print:text-xs">
-          Prizes are announced from lowest to highest. Champion is announced last.
-          {hasTeamPrizes && ' Team prizes are announced between category prizes and main prizes.'}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground print:text-xs">Ceremony Order</h3>
+            <p className="mt-1 text-sm text-muted-foreground print:text-xs">
+              {announceSmallestFirst 
+                ? 'Prizes are announced from lowest to highest. Champion is announced last.'
+                : 'Prizes are announced from highest to lowest. Champion is announced first.'}
+              {hasTeamPrizes && ' Team prizes are included.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 print:hidden">
+            <Switch
+              id="ceremony-order-toggle"
+              checked={announceSmallestFirst}
+              onCheckedChange={setAnnounceSmallestFirst}
+              aria-describedby="ceremony-order-help"
+            />
+            <Label 
+              htmlFor="ceremony-order-toggle" 
+              className="cursor-pointer text-sm font-medium whitespace-nowrap"
+            >
+              Smallest → biggest
+            </Label>
+          </div>
+        </div>
+        <p id="ceremony-order-help" className="mt-2 text-xs text-muted-foreground/80 print:hidden">
+          When ON, Champion is announced last.
         </p>
       </div>
       <ol className="ceremony-script flex flex-col gap-5 text-foreground print:gap-2.5 print:text-black">
