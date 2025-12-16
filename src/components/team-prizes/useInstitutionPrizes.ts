@@ -129,21 +129,17 @@ export function useSaveInstitutionPrizes() {
       tournamentId,
       delta,
     }: { groupId: string; tournamentId: string; delta: InstitutionPrizeDelta }) => {
-      console.log('[institution-prizes] saving', { groupId, tournamentId, delta });
-      
       // Deletes first to free up place constraints
       if (delta.deletes.length > 0) {
-        console.log('[institution-prizes] deleting', delta.deletes);
         const { error } = await supabase
           .from('institution_prizes')
           .delete()
           .in('id', delta.deletes);
         if (error) {
-          console.error('[institution-prizes] delete error', error);
           throw new Error(`Delete failed: ${error.message}`);
         }
       }
-      
+
       // Inserts
       if (delta.inserts.length > 0) {
         const insertRows = delta.inserts.map(p => ({
@@ -154,31 +150,30 @@ export function useSaveInstitutionPrizes() {
           has_medal: p.has_medal,
           is_active: p.is_active,
         }));
-        
-        console.log('[institution-prizes] inserting', insertRows);
+
         const { data, error } = await supabase
           .from('institution_prizes')
           .insert(insertRows)
           .select();
-        
+
         if (error) {
-          console.error('[institution-prizes] insert error', error);
-          throw new Error(`Insert failed: ${error.message}`);
+          // Include key identifiers for RCA/debugging
+          throw new Error(
+            `Insert failed (status=${(error as any).status ?? 'n/a'} code=${(error as any).code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId})`
+          );
         }
-        
-        console.log('[institution-prizes] insert result', data);
-        
+
         if (!data || data.length === 0) {
-          console.warn('[institution-prizes] insert returned no rows - possible RLS issue');
-          throw new Error('Insert succeeded but no rows returned. Check permissions.');
+          throw new Error(
+            `Insert succeeded but returned no rows. This usually indicates missing SELECT permission on institution_prizes (tournamentId=${tournamentId} group_id=${groupId}).`
+          );
         }
       }
-      
+
       // Updates
       if (delta.updates.length > 0) {
-        console.log('[institution-prizes] updating', delta.updates);
         for (const update of delta.updates) {
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from('institution_prizes')
             .update({
               place: update.place,
@@ -187,36 +182,29 @@ export function useSaveInstitutionPrizes() {
               has_medal: update.has_medal,
               is_active: update.is_active,
             })
-            .eq('id', update.id)
-            .select();
-          
+            .eq('id', update.id);
+
           if (error) {
-            console.error('[institution-prizes] update error', error);
-            throw new Error(`Update failed: ${error.message}`);
+            throw new Error(
+              `Update failed (status=${(error as any).status ?? 'n/a'} code=${(error as any).code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId} id=${update.id})`
+            );
           }
-          
-          console.log('[institution-prizes] update result', data);
         }
       }
 
-      console.log('[institution-prizes] save complete for group', groupId);
       return { groupId, tournamentId };
     },
     onSuccess: (_data, variables) => {
-      console.log('[institution-prizes] invalidating queries for tournament', variables.tournamentId);
       // Invalidate all institution_prizes queries for this tournament
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          query.queryKey[0] === 'institution_prizes' && 
-          query.queryKey[1] === variables.tournamentId 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'institution_prizes' &&
+          query.queryKey[1] === variables.tournamentId,
       });
       // Also invalidate groups to refresh prize counts
-      queryClient.invalidateQueries({ 
-        queryKey: ['institution_prize_groups', variables.tournamentId] 
-      });
+      queryClient.invalidateQueries({ queryKey: ['institution_prize_groups', variables.tournamentId] });
     },
     onError: (error: any) => {
-      console.error('[institution-prizes] mutation error', error);
       const message = error?.message || 'Failed to save institution prizes';
       toast.error(message);
     },

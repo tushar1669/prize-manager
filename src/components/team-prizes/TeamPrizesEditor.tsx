@@ -89,14 +89,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   };
 
   const handleSavePrizes = async (groupId: string, delta: any) => {
-    console.log('[team-prizes-editor] handleSavePrizes called', { groupId, tournamentId, delta });
-    try {
-      await savePrizes.mutateAsync({ groupId, tournamentId, delta });
-      console.log('[team-prizes-editor] save mutation completed successfully');
-    } catch (err) {
-      console.error('[team-prizes-editor] save mutation failed', err);
-      throw err; // Re-throw to let TeamGroupPrizesTable handle it
-    }
+    await savePrizes.mutateAsync({ groupId, tournamentId, delta });
   };
 
   const getGroupByLabel = (value: string) => {
@@ -242,6 +235,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                         groupId={group.id}
                         prizes={groupPrizes}
                         onSave={handleSavePrizes}
+                        canEdit={isOrganizer}
                       />
                     </CardContent>
                   </CollapsibleContent>
