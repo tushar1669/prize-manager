@@ -13,12 +13,14 @@ import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import { CeremonyScriptView } from '@/components/final-prize/CeremonyScriptView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import { ArbiterSheetView } from '@/components/final-prize/ArbiterSheetView';
+import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
 
 const VIEW_TABS = [
   { id: 'v1', label: 'Category Cards' },
   { id: 'v2', label: 'Ceremony Script' },
   { id: 'v3', label: 'Poster Grid' },
   { id: 'v4', label: 'Arbiter Sheet' },
+  { id: 'v5', label: 'Team Prizes' },
 ] as const;
 
 type FinalViewId = (typeof VIEW_TABS)[number]['id'];
@@ -51,6 +53,9 @@ export default function FinalPrizeView() {
   const { data, isLoading, error, grouped } = useFinalPrizeData(id);
 
   const dateRange = useMemo(() => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date), [data?.tournament]);
+
+  // Team Prizes tab can show even without individual winners
+  const showContent = data && (data.winners.length > 0 || normalized === 'v5');
 
   return (
     <div className="min-h-screen bg-background text-foreground print:bg-white print:text-black">
@@ -97,13 +102,13 @@ export default function FinalPrizeView() {
                   <AlertDescription>Showing allocations version v{data.version}</AlertDescription>
                 </Alert>
               )}
-              {!isLoading && !error && data && data.winners.length === 0 && (
+              {!isLoading && !error && data && data.winners.length === 0 && normalized !== 'v5' && (
                 <Alert className="mx-auto max-w-3xl">
                   <AlertDescription>No winners have been allocated yet.</AlertDescription>
                 </Alert>
               )}
             </div>
-            {data && data.winners.length > 0 && (
+            {showContent && (
               <>
                 <TabsContent value="v1" className={`m-0 ${normalized !== 'v1' ? 'print:hidden' : ''}`}>
                   <CategoryCardsView groups={grouped.groups} />
@@ -116,6 +121,9 @@ export default function FinalPrizeView() {
                 </TabsContent>
                 <TabsContent value="v4" className={`m-0 ${normalized !== 'v4' ? 'print:hidden' : ''}`}>
                   <ArbiterSheetView winners={data.winners} tournamentId={id as string} />
+                </TabsContent>
+                <TabsContent value="v5" className={`m-0 ${normalized !== 'v5' ? 'print:hidden' : ''}`}>
+                  <TeamPrizesTabView tournamentId={id as string} />
                 </TabsContent>
               </>
             )}
