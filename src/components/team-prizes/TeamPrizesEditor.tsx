@@ -96,9 +96,18 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
     return GROUP_BY_OPTIONS.find(o => o.value === value)?.label || value;
   };
 
-  const getPrizesForGroup = (groupId: string) => {
-    return (allPrizes || []).filter(p => p.group_id === groupId);
-  };
+  // RCA fix: Memoize prizes-by-group map so array references are stable across renders.
+  // Without this, .filter() inside render creates new array every time, triggering
+  // useEffect([initialPrizes]) in TeamGroupPrizesTable and clobbering local draft state.
+  const prizesByGroup = useMemo(() => {
+    const map = new Map<string, typeof allPrizes>();
+    for (const p of allPrizes || []) {
+      const list = map.get(p.group_id) || [];
+      list.push(p);
+      map.set(p.group_id, list);
+    }
+    return map;
+  }, [allPrizes]);
 
   const isLoading = loadingGroups || loadingPrizes;
 
@@ -160,7 +169,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
         <div className="space-y-4">
           {groups.map((group) => {
             const isExpanded = expandedGroups.has(group.id);
-            const groupPrizes = getPrizesForGroup(group.id);
+            const groupPrizes = prizesByGroup.get(group.id) ?? [];
             const totalCash = groupPrizes.reduce((sum, p) => sum + (p.cash_amount || 0), 0);
 
             return (
