@@ -217,8 +217,8 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             <p className="text-xs text-muted-foreground">
               {SCORING_MODE_OPTIONS.find(o => o.value === scoringMode)?.description}
             </p>
-            <p className="text-xs text-amber-600">
-              Additional scoring modes coming soon.
+            <p className="text-xs text-muted-foreground">
+              More scoring modes can be added later (Phase 2.2).
             </p>
           </div>
         </div>
