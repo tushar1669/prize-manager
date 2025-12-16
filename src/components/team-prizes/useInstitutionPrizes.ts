@@ -176,7 +176,12 @@ export function useSaveInstitutionPrizes() {
       return { groupId };
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['institution_prizes', variables.tournamentId] });
+      // Invalidate all institution_prizes queries for this tournament (partial match)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === 'institution_prizes' && 
+          query.queryKey[1] === variables.tournamentId 
+      });
     },
     onError: (error: any) => {
       const message = error?.message || 'Failed to save institution prizes';
