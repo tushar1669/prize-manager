@@ -34,9 +34,20 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md)
 - [State Code Auto-Extraction](./docs/import-state-extraction.md)
 
+## Team / Institution Prizes (Phase 2)
+- **What**: A separate Phase-2 module for Best School/Academy/City/State teams. Uses dedicated `institution_prize_groups` and `institution_prizes` tables and the `allocateInstitutionPrizes` edge function (distinct from `allocatePrizes`). Players can win both individual and team prizes; multi_prize_policy is ignored for team awards.
+- **Where to configure**: Tournament Setup → Team / Institution Prizes panel. Add a group (choose grouping column, team size, gender slots, scoring mode) then add prizes per place. See [docs/team-prizes.md](./docs/team-prizes.md) for a full walkthrough.
+- **Outputs**: Team prize winners render in Conflict Review (after preview finishes), Finalize, and the PDF export (`generatePdf` calls `allocateInstitutionPrizes` when active groups exist).
+- **Current scoring**: Rank-points sum of top-K players (higher points = better); tie-breaks on rank_sum then best individual rank (see allocator code for details). Future scoring modes are planned for Phase 2.2.
+- **Isolation from main allocator**: Team prizes do not affect individual allocations, eligibility, or prize ordering; they simply display alongside the main results.
+
 ## Testing
 
 ```bash
 npm run test
 npm run build
 ```
+
+## Troubleshooting
+- **Main Prize missing (individual mode)**: TournamentSetup auto-creates a `Main Prize` category if none exists when prize_mode = individual, and CategoryPrizesEditor prevents disabling/deleting the main category. If the main category is missing, reload Setup to trigger the ensure step and re-run allocations.
+- **Add Prize not saving (team prizes)**: Draft rows could be overwritten by refetch hydration when array references changed. The TeamPrizesEditor now memoizes `prizesByGroup` and TeamGroupPrizesTable gates hydration while edits are dirty. If rows disappear, ensure you saved changes (watch for the “Unsaved changes” hint) and that the refetch completed.
