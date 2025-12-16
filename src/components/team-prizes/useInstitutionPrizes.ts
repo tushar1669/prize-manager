@@ -129,15 +129,19 @@ export function useSaveInstitutionPrizes() {
       tournamentId,
       delta,
     }: { groupId: string; tournamentId: string; delta: InstitutionPrizeDelta }) => {
-      console.log('[institution-prizes] saving', { groupId, delta });
+      console.log('[institution-prizes] saving', { groupId, tournamentId, delta });
       
       // Deletes first to free up place constraints
       if (delta.deletes.length > 0) {
+        console.log('[institution-prizes] deleting', delta.deletes);
         const { error } = await supabase
           .from('institution_prizes')
           .delete()
           .in('id', delta.deletes);
-        if (error) throw error;
+        if (error) {
+          console.error('[institution-prizes] delete error', error);
+          throw new Error(`Delete failed: ${error.message}`);
+        }
       }
       
       // Inserts
@@ -151,39 +155,68 @@ export function useSaveInstitutionPrizes() {
           is_active: p.is_active,
         }));
         
-        const { error } = await supabase
+        console.log('[institution-prizes] inserting', insertRows);
+        const { data, error } = await supabase
           .from('institution_prizes')
           .insert(insertRows)
           .select();
-        if (error) throw error;
+        
+        if (error) {
+          console.error('[institution-prizes] insert error', error);
+          throw new Error(`Insert failed: ${error.message}`);
+        }
+        
+        console.log('[institution-prizes] insert result', data);
+        
+        if (!data || data.length === 0) {
+          console.warn('[institution-prizes] insert returned no rows - possible RLS issue');
+          throw new Error('Insert succeeded but no rows returned. Check permissions.');
+        }
       }
       
       // Updates
-      for (const update of delta.updates) {
-        const { error } = await supabase
-          .from('institution_prizes')
-          .update({
-            place: update.place,
-            cash_amount: update.cash_amount,
-            has_trophy: update.has_trophy,
-            has_medal: update.has_medal,
-            is_active: update.is_active,
-          })
-          .eq('id', update.id);
-        if (error) throw error;
+      if (delta.updates.length > 0) {
+        console.log('[institution-prizes] updating', delta.updates);
+        for (const update of delta.updates) {
+          const { data, error } = await supabase
+            .from('institution_prizes')
+            .update({
+              place: update.place,
+              cash_amount: update.cash_amount,
+              has_trophy: update.has_trophy,
+              has_medal: update.has_medal,
+              is_active: update.is_active,
+            })
+            .eq('id', update.id)
+            .select();
+          
+          if (error) {
+            console.error('[institution-prizes] update error', error);
+            throw new Error(`Update failed: ${error.message}`);
+          }
+          
+          console.log('[institution-prizes] update result', data);
+        }
       }
 
-      return { groupId };
+      console.log('[institution-prizes] save complete for group', groupId);
+      return { groupId, tournamentId };
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all institution_prizes queries for this tournament (partial match)
+      console.log('[institution-prizes] invalidating queries for tournament', variables.tournamentId);
+      // Invalidate all institution_prizes queries for this tournament
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           query.queryKey[0] === 'institution_prizes' && 
           query.queryKey[1] === variables.tournamentId 
       });
+      // Also invalidate groups to refresh prize counts
+      queryClient.invalidateQueries({ 
+        queryKey: ['institution_prize_groups', variables.tournamentId] 
+      });
     },
     onError: (error: any) => {
+      console.error('[institution-prizes] mutation error', error);
       const message = error?.message || 'Failed to save institution prizes';
       toast.error(message);
     },

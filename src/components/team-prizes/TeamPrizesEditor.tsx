@@ -89,7 +89,14 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   };
 
   const handleSavePrizes = async (groupId: string, delta: any) => {
-    await savePrizes.mutateAsync({ groupId, tournamentId, delta });
+    console.log('[team-prizes-editor] handleSavePrizes called', { groupId, tournamentId, delta });
+    try {
+      await savePrizes.mutateAsync({ groupId, tournamentId, delta });
+      console.log('[team-prizes-editor] save mutation completed successfully');
+    } catch (err) {
+      console.error('[team-prizes-editor] save mutation failed', err);
+      throw err; // Re-throw to let TeamGroupPrizesTable handle it
+    }
   };
 
   const getGroupByLabel = (value: string) => {
