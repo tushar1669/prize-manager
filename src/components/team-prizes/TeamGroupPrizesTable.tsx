@@ -24,21 +24,35 @@ export default function TeamGroupPrizesTable({
   const [draft, setDraft] = useState<InstitutionPrize[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Initialize from props
+  // RCA fix: Track server version key so we only re-hydrate when server data actually changes,
+  // and never while we have local dirty edits or are mid-save.
+  const serverVersionKey = useMemo(
+    () => initialPrizes.map((p) => `${p.id}:${p.place}:${p.cash_amount}`).sort().join('|'),
+    [initialPrizes]
+  );
+
+  const hasDirtyRows = useMemo(
+    () => draft.some((p) => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted'),
+    [draft]
+  );
+
+  // Hydrate draft from server ONLY when server data changes AND we have no local edits AND not saving
   useEffect(() => {
+    if (saving || hasDirtyRows) {
+      // Skip hydration to preserve local edits
+      return;
+    }
     const base = initialPrizes.map((p) => ({ ...p, _status: 'clean' as const }));
     setDraft(base);
-  }, [initialPrizes]);
+  }, [serverVersionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleRows = useMemo(
     () => draft.filter((p) => p._status !== 'deleted').sort((a, b) => a.place - b.place),
     [draft]
   );
 
-  const hasDirty = useMemo(
-    () => draft.some((p) => p._status === 'new' || p._status === 'dirty' || p._status === 'deleted'),
-    [draft]
-  );
+  // Use hasDirtyRows computed above for UI (button enable/disable, badge)
+  const hasDirty = hasDirtyRows;
 
   const nextPlace = useMemo(() => {
     const places = draft.filter((p) => p._status !== 'deleted').map((p) => p.place || 0);
