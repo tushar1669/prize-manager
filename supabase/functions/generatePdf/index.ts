@@ -10,6 +10,73 @@ interface GeneratePdfRequest {
   version: number;
 }
 
+// Team prize types matching allocateInstitutionPrizes response
+interface TeamPlayerInfo {
+  player_id: string;
+  name: string;
+  rank: number;
+  points: number;
+  gender: string | null;
+}
+
+interface WinnerInstitution {
+  key: string;
+  label: string;
+  total_points: number;
+  rank_sum: number;
+  best_individual_rank: number;
+  players: TeamPlayerInfo[];
+}
+
+interface GroupConfig {
+  group_by: string;
+  team_size: number;
+  female_slots: number;
+  male_slots: number;
+  scoring_mode: string;
+}
+
+interface PrizeWithWinner {
+  id: string;
+  place: number;
+  cash_amount: number;
+  has_trophy: boolean;
+  has_medal: boolean;
+  is_active: boolean;
+  winner_institution: WinnerInstitution | null;
+}
+
+interface GroupResponse {
+  group_id: string;
+  name: string;
+  config: GroupConfig;
+  prizes: PrizeWithWinner[];
+  eligible_institutions: number;
+  ineligible_institutions: number;
+  ineligible_reasons: string[];
+}
+
+interface TeamPrizeResults {
+  groups: GroupResponse[];
+  players_loaded: number;
+  max_rank: number;
+}
+
+const GROUP_BY_LABELS: Record<string, string> = {
+  club: 'School / Academy / Club',
+  city: 'City',
+  state: 'State',
+  group_label: 'Swiss Group (Gr)',
+  type_label: 'Swiss Type',
+};
+
+function getPlaceOrdinal(place: number): string {
+  if (place === 1) return '1st';
+  if (place === 2) return '2nd';
+  if (place === 3) return '3rd';
+  return `${place}th`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -51,17 +118,49 @@ Deno.serve(async (req) => {
 
     if (allocationsError) throw new Error(`Failed to fetch allocations: ${allocationsError.message}`);
 
-    // 3) Generate HTML report
-    const htmlContent = generateHtmlReport(tournament, allocations, version);
+    // 3) Check for team prizes and fetch results
+    let teamPrizeResults: TeamPrizeResults | null = null;
+    let teamPrizeError: string | null = null;
 
-    // 4) Return allocation data as JSON for client-side Excel generation
-    // (per guardrail: avoid edge function bloat with xlsx bundling)
+    try {
+      // Check if team prize groups exist
+      const { count, error: countError } = await supabaseClient
+        .from('institution_prize_groups')
+        .select('*', { count: 'exact', head: true })
+        .eq('tournament_id', tournamentId)
+        .eq('is_active', true);
+
+      if (countError) {
+        console.error('[generatePdf] Error checking team prizes:', countError);
+      } else if ((count || 0) > 0) {
+        console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
+        
+        // Call the team prize allocator function
+        const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
+          'allocateInstitutionPrizes',
+          { body: { tournament_id: tournamentId } }
+        );
+
+        if (teamError) {
+          console.error('[generatePdf] Team prize allocation error:', teamError);
+          teamPrizeError = teamError.message || 'Unknown error';
+        } else {
+          teamPrizeResults = teamData as TeamPrizeResults;
+          console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
+        }
+      } else {
+        console.log('[generatePdf] No active team prize groups');
+      }
+    } catch (e: any) {
+      console.error('[generatePdf] Exception loading team prizes:', e);
+      teamPrizeError = e?.message || 'Unknown error';
+    }
+
+    // 4) Generate HTML report
+    const htmlContent = generateHtmlReport(tournament, allocations, version, teamPrizeResults, teamPrizeError);
+
+    // 5) Return allocation data as JSON for client-side Excel generation
     const pdfDataUrl = `data:text/html;base64,${btoa(htmlContent)}`;
-
-    // TODO: Upload to storage/exports bucket and return signed URLs
-    // const { data: pdfUpload } = await supabaseClient.storage
-    //   .from('exports')
-    //   .upload(`${tournamentId}/v${version}/report.pdf`, pdfBlob);
 
     console.log(`[generatePdf] Report generated successfully for tournament ${tournamentId}`);
 
@@ -70,7 +169,8 @@ Deno.serve(async (req) => {
         pdfUrlSigned: pdfDataUrl,
         allocations,
         tournament,
-        version 
+        version,
+        teamPrizes: teamPrizeResults,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -84,7 +184,91 @@ Deno.serve(async (req) => {
   }
 });
 
-function generateHtmlReport(tournament: any, allocations: any[], version: number): string {
+function generateHtmlReport(
+  tournament: any,
+  allocations: any[],
+  version: number,
+  teamPrizes: TeamPrizeResults | null,
+  teamPrizeError: string | null
+): string {
+  // Generate team prizes section HTML
+  let teamPrizesHtml = '';
+  
+  if (teamPrizeError) {
+    teamPrizesHtml = `
+      <div style="page-break-before: always;"></div>
+      <h2>Team / Institution Prizes</h2>
+      <p class="meta" style="color: #c53030;">
+        Team prizes could not be included due to an error: ${teamPrizeError}<br>
+        Please check the online Team Prizes view.
+      </p>
+    `;
+  } else if (teamPrizes && teamPrizes.groups.length > 0) {
+    teamPrizesHtml = `
+      <div style="page-break-before: always;"></div>
+      <h2>Team / Institution Prizes</h2>
+      <p class="meta">Team prizes are allocated separately from individual prizes. Players may win both individual and team prizes.</p>
+      ${teamPrizes.groups.map(group => {
+        const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
+        const groupByLabel = GROUP_BY_LABELS[group.config.group_by] || group.config.group_by;
+        
+        let genderReq = '';
+        if (group.config.female_slots > 0 || group.config.male_slots > 0) {
+          const parts = [];
+          if (group.config.female_slots > 0) parts.push(`${group.config.female_slots}F`);
+          if (group.config.male_slots > 0) parts.push(`${group.config.male_slots}M`);
+          genderReq = ` (${parts.join(' + ')} required)`;
+        }
+
+        return `
+          <h3>${group.name}</h3>
+          <p class="meta">
+            ${groupByLabel} • Teams of ${group.config.team_size}${genderReq}
+            • ${group.eligible_institutions} eligible institution${group.eligible_institutions !== 1 ? 's' : ''}
+          </p>
+          ${filledPrizes.length > 0 ? `
+            <table>
+              <thead>
+                <tr>
+                  <th>Place</th>
+                  <th>Institution</th>
+                  <th>Points</th>
+                  <th>Prize</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filledPrizes.map(prize => {
+                  const winner = prize.winner_institution!;
+                  const prizeText = [
+                    prize.cash_amount > 0 ? `₹${prize.cash_amount}` : '',
+                    prize.has_trophy ? '🏆' : '',
+                    prize.has_medal ? '🥇' : '',
+                  ].filter(Boolean).join(' ') || '—';
+                  
+                  return `
+                    <tr>
+                      <td>${getPlaceOrdinal(prize.place)}</td>
+                      <td>
+                        <strong>${winner.label}</strong>
+                        <div style="font-size: 11px; color: #666;">
+                          ${winner.players.map(p => `${p.name} (#${p.rank})`).join(', ')}
+                        </div>
+                      </td>
+                      <td>${winner.total_points}</td>
+                      <td>${prizeText}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          ` : `
+            <p class="meta">No eligible institutions for this group.</p>
+          `}
+        `;
+      }).join('')}
+    `;
+  }
+
   return `
 <!DOCTYPE html>
 <html>
@@ -93,10 +277,17 @@ function generateHtmlReport(tournament: any, allocations: any[], version: number
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
     h1 { color: #1F6E5B; }
+    h2 { color: #1F6E5B; margin-top: 30px; border-bottom: 2px solid #1F6E5B; padding-bottom: 5px; }
+    h3 { color: #333; margin-top: 20px; }
     table { width: 100%; border-collapse: collapse; margin: 20px 0; }
     th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
     th { background-color: #1F6E5B; color: white; }
     .meta { color: #666; margin: 10px 0; }
+    @media print {
+      body { margin: 20px; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -107,7 +298,7 @@ function generateHtmlReport(tournament: any, allocations: any[], version: number
     <p><strong>Version:</strong> ${version}</p>
   </div>
   
-  <h2>Prize Allocations</h2>
+  <h2>Individual Prize Allocations</h2>
   <table>
     <thead>
       <tr>
@@ -134,6 +325,8 @@ function generateHtmlReport(tournament: any, allocations: any[], version: number
       `).join('')}
     </tbody>
   </table>
+  
+  ${teamPrizesHtml}
   
   <p class="meta">Generated on ${new Date().toLocaleDateString()}</p>
 </body>

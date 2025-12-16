@@ -19,57 +19,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
-// Types matching the edge function response
-interface TeamPlayerInfo {
-  player_id: string;
-  name: string;
-  rank: number;
-  points: number;
-  gender: string | null;
-}
+// Re-export types from shared hook for convenience
+export type {
+  TeamPlayerInfo,
+  WinnerInstitution,
+  GroupConfig,
+  PrizeWithWinner,
+  GroupResponse,
+  TeamPrizeResultsResponse,
+} from '@/components/team-prizes/useTeamPrizeResults';
 
-interface WinnerInstitution {
-  key: string;
-  label: string;
-  total_points: number;
-  rank_sum: number;
-  best_individual_rank: number;
-  players: TeamPlayerInfo[];
-}
-
-interface GroupConfig {
-  group_by: string;
-  team_size: number;
-  female_slots: number;
-  male_slots: number;
-  scoring_mode: string;
-}
-
-interface PrizeWithWinner {
-  id: string;
-  place: number;
-  cash_amount: number;
-  has_trophy: boolean;
-  has_medal: boolean;
-  is_active: boolean;
-  winner_institution: WinnerInstitution | null;
-}
-
-interface GroupResponse {
-  group_id: string;
-  name: string;
-  config: GroupConfig;
-  prizes: PrizeWithWinner[];
-  eligible_institutions: number;
-  ineligible_institutions: number;
-  ineligible_reasons: string[];
-}
-
-interface TeamPrizeResultsResponse {
-  groups: GroupResponse[];
-  players_loaded: number;
-  max_rank: number;
-}
+import type {
+  TeamPrizeResultsResponse,
+  GroupResponse,
+} from '@/components/team-prizes/useTeamPrizeResults';
 
 interface TeamPrizeResultsPanelProps {
   data: TeamPrizeResultsResponse | null;
