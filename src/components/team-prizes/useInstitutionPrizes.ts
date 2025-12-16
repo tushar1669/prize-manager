@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { InstitutionPrizeGroup, InstitutionPrize, InstitutionPrizeDelta } from './types';
 
 /**
@@ -27,9 +28,9 @@ export function useInstitutionPrizeGroups(tournamentId: string | undefined) {
 /**
  * Hook to fetch institution prizes for specific groups
  */
-export function useInstitutionPrizes(groupIds: string[]) {
+export function useInstitutionPrizes(tournamentId: string | undefined, groupIds: string[]) {
   return useQuery({
-    queryKey: ['institution_prizes', groupIds],
+    queryKey: ['institution_prizes', tournamentId, groupIds],
     queryFn: async () => {
       if (!groupIds.length) return [];
       
@@ -42,7 +43,7 @@ export function useInstitutionPrizes(groupIds: string[]) {
       if (error) throw error;
       return (data || []) as InstitutionPrize[];
     },
-    enabled: groupIds.length > 0,
+    enabled: !!tournamentId && groupIds.length > 0,
   });
 }
 
@@ -121,9 +122,13 @@ export function useDeleteInstitutionGroup() {
  */
 export function useSaveInstitutionPrizes() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async ({ groupId, delta }: { groupId: string; delta: InstitutionPrizeDelta }) => {
+    mutationFn: async ({
+      groupId,
+      tournamentId,
+      delta,
+    }: { groupId: string; tournamentId: string; delta: InstitutionPrizeDelta }) => {
       console.log('[institution-prizes] saving', { groupId, delta });
       
       // Deletes first to free up place constraints
@@ -167,11 +172,15 @@ export function useSaveInstitutionPrizes() {
           .eq('id', update.id);
         if (error) throw error;
       }
-      
+
       return { groupId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['institution_prizes'] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['institution_prizes', variables.tournamentId] });
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Failed to save institution prizes';
+      toast.error(message);
     },
   });
 }
