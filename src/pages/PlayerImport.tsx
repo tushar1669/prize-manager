@@ -172,6 +172,7 @@ const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
 
 const RICHNESS_FIELDS = [
   'name',
+  'full_name',
   'dob',
   'dob_raw',
   'rating',
@@ -1214,6 +1215,7 @@ export default function PlayerImport() {
           original: {
             rank: f.player.rank,
             name: f.player.name,
+            full_name: (f.player as any).full_name,
             rating: f.player.rating,
             dob: f.player.dob,
             gender: f.player.gender,
@@ -1727,6 +1729,7 @@ export default function PlayerImport() {
 
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
+    const nameCandidates: string[] = [];
 
     const genderConfig = genderConfigRef.current;
     const headerlessGender = genderConfig?.headerlessGenderColumn;
@@ -1757,7 +1760,31 @@ export default function PlayerImport() {
           break;
         }
       }
+
+      if (normalizedAliases.name?.includes(normalized)) {
+        nameCandidates.push(h);
+      }
     });
+
+    if (!autoMapping.full_name) {
+      const explicitFullName = headers.find(h =>
+        normalizedAliases.full_name?.includes(normalizeHeaderForMatching(h))
+      );
+      if (explicitFullName) {
+        autoMapping.full_name = explicitFullName;
+      }
+    }
+
+    if (!autoMapping.full_name && nameCandidates.length > 1) {
+      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
+      if (duplicateName) {
+        autoMapping.full_name = duplicateName;
+      }
+    }
+
+    if (!autoMapping.name && autoMapping.full_name) {
+      autoMapping.name = autoMapping.full_name;
+    }
 
     console.log('[import] Auto-mapped fields:', autoMapping);
     console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
@@ -1912,7 +1939,7 @@ export default function PlayerImport() {
 
       // Debug: log first few PC players to verify mapping
       if (grInfo.group_label?.toUpperCase() === 'PC' && idx < 5) {
-        console.log(`[import.gr] PC player detected: rank=${player.rank}, name=${player.name}, grValue=${grValue}, group_label=${grInfo.group_label}`);
+        console.log(`[import.gr] PC player detected: rank=${player.rank}, name=${player.full_name ?? player.name}, grValue=${grValue}, group_label=${grInfo.group_label}`);
       }
 
       player.group_label = grInfo.group_label;
@@ -1973,7 +2000,7 @@ export default function PlayerImport() {
     fillSingleGapRanksInPlace(mapped);
 
     // Phase 6b: Auto-fill missing ranks for named rows after preserving existing numbers
-    const rowsWithNames = mapped.filter(player => String(player.name ?? '').trim().length > 0);
+    const rowsWithNames = mapped.filter(player => String(player.full_name ?? player.name ?? '').trim().length > 0);
     const maxRank = rowsWithNames.reduce((max, player) => {
       const rankNum = Number(player.rank);
       return Number.isFinite(rankNum) && rankNum >= 1 ? Math.max(max, rankNum) : max;
@@ -2024,7 +2051,7 @@ export default function PlayerImport() {
           
           // Collect sample rows (max 3 per reason)
           if (skippedBreakdown[reason].sample.length < 3) {
-            skippedBreakdown[reason].sample.push(`Row ${player._originalIndex}: ${player.name || 'N/A'}`);
+            skippedBreakdown[reason].sample.push(`Row ${player._originalIndex}: ${player.full_name || player.name || 'N/A'}`);
           }
         });
         
@@ -2768,7 +2795,7 @@ export default function PlayerImport() {
                               <TableCell>
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
-                                    {player.name ?? ''}
+                                    {player.full_name ?? player.name ?? ''}
                                     {hasConflict && (
                                       <span className="text-xs text-amber-600" title="Conflict detected">⚠️</span>
                                     )}

@@ -16,6 +16,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ALLOC_VERBOSE_LOGS } from "@/utils/featureFlags";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { getPlayerDisplayName } from "@/utils/playerName";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
@@ -644,7 +645,7 @@ export default function ConflictReview() {
                                 <CardContent className="space-y-2">
                                   {player && (
                                     <p className="text-sm">
-                                      <strong>Player:</strong> {player.name} (Rating: {player.rating || 'N/A'})
+                                      <strong>Player:</strong> {getPlayerDisplayName(player)} (Rating: {player.rating || 'N/A'})
                                     </p>
                                   )}
                                   {prize && (
@@ -763,7 +764,7 @@ export default function ConflictReview() {
                                 {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${winner.prizeId}`}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {player ? player.name : `Player ${winner.playerId}`}
+                                {player ? getPlayerDisplayName(player) : `Player ${winner.playerId}`}
                               </div>
                               {winner.reasons.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
@@ -896,7 +897,7 @@ export default function ConflictReview() {
                   {(playersList || []).map(player => (
                     <SelectItem key={player.id} value={player.id}>
                       <div className="flex items-center gap-2">
-                        {player.name} (Rating: {player.rating || 'N/A'}, DOB: {player.dob || 'N/A'})
+                        {getPlayerDisplayName(player)} (Rating: {player.rating || 'N/A'}, DOB: {player.dob || 'N/A'})
                         {player.dob_raw && player.dob_raw !== player.dob && (
                           <span 
                             className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground border border-border"

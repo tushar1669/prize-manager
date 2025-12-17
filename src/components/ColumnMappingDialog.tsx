@@ -42,6 +42,7 @@ const requiredFields = [
 
 const optionalFields = [
   { key: 'sno', label: 'Start Number (SNo)', description: 'Initial seed/start number (distinct from final rank)' },
+  { key: 'full_name', label: 'Full Name', description: 'Unabridged player name (used for display)' },
   { key: 'rating', label: 'Rating', description: 'Player rating (Rtg preferred over IRtg)' },
   { key: 'dob', label: 'Date of Birth', description: 'Accepts: YYYY-MM-DD (full), YYYY/00/00 (year only), or YYYY. Partial dates assume Jan 1 for eligibility.' },
   { key: 'gender', label: 'Gender', description: 'M, F, or Other' },
@@ -91,6 +92,7 @@ export function ColumnMappingDialog({
     console.log('[ColumnMapping] Initializing auto-map for', detectedColumns.length, 'columns');
     
     const autoMapping: Record<string, string> = {};
+    const nameCandidates: string[] = [];
 
     // Rating priority (Phase 3)
     if (isFeatureEnabled('RATING_PRIORITY')) {
@@ -133,7 +135,31 @@ export function ColumnMappingDialog({
           autoMapping[field] = col;
         }
       });
+
+      if (normalizedAliases.name?.includes(normalized)) {
+        nameCandidates.push(col);
+      }
     });
+
+    if (!autoMapping.full_name) {
+      const explicitFullName = detectedColumns.find(col =>
+        normalizedAliases.full_name?.includes(normalizeHeaderForMatching(col))
+      );
+      if (explicitFullName) {
+        autoMapping.full_name = explicitFullName;
+      }
+    }
+
+    if (!autoMapping.full_name && nameCandidates.length > 1) {
+      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
+      if (duplicateName) {
+        autoMapping.full_name = duplicateName;
+      }
+    }
+
+    if (!autoMapping.name && autoMapping.full_name) {
+      autoMapping.name = autoMapping.full_name;
+    }
     
     console.log('[ColumnMapping] Auto-mapped fields:', autoMapping);
     console.log('[ColumnMapping] Mapped field count:', Object.keys(autoMapping).length);

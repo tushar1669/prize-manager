@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPlayerDisplayName, nameNeedsTruncation } from '../utils/playerName';
+import { getPlayerDisplayName, nameNeedsTruncation } from '@/utils/playerName';
 
 describe('getPlayerDisplayName', () => {
   it('returns full name without abbreviation', () => {
@@ -13,6 +13,11 @@ describe('getPlayerDisplayName', () => {
     expect(getPlayerDisplayName(undefined)).toBe('Unknown Player');
     expect(getPlayerDisplayName('')).toBe('Unknown Player');
     expect(getPlayerDisplayName('  ')).toBe('Unknown Player');
+  });
+
+  it('prefers full_name when provided and falls back to name', () => {
+    expect(getPlayerDisplayName({ full_name: 'Prakhar Tripathi', name: 'T. Prakhar' })).toBe('Prakhar Tripathi');
+    expect(getPlayerDisplayName({ name: 'Only Short' })).toBe('Only Short');
   });
 
   it('uses custom fallback when provided', () => {

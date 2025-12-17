@@ -4,12 +4,13 @@ import type { Database } from "@/integrations/supabase/types";
 import { PUBLIC_DOB_MASKING } from "@/utils/featureFlags";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { getPlayerDisplayName } from "@/utils/playerName";
 
 const LOG_PREFIX = "[export.pdf]";
 
 type PlayersRow = Pick<
   Database["public"]["Tables"]["players"]["Row"],
-  "rank" | "name" | "rating" | "dob" | "gender" | "state" | "city" | "club"
+  "rank" | "name" | "full_name" | "rating" | "dob" | "gender" | "state" | "city" | "club"
 >;
 
 type TournamentMeta = Pick<
@@ -160,7 +161,7 @@ export async function downloadPlayersPdf({
         {(players ?? []).map((player: PlayersRow, index) => (
           <View key={`${player.rank}-${index}`} style={styles.tableRow}>
             <Text style={[styles.cell, styles.cellSmall]}>{player.rank ?? ""}</Text>
-            <Text style={[styles.cell, styles.cellLarge]}>{player.name}</Text>
+            <Text style={[styles.cell, styles.cellLarge]}>{getPlayerDisplayName(player)}</Text>
             <Text style={[styles.cell, styles.cellSmall]}>{player.rating ?? ""}</Text>
             <Text style={[styles.cell, styles.cellMedium]}>{maskDobForPublic(player.dob, maskDob)}</Text>
             <Text style={[styles.cell, styles.cellSmall]}>{player.gender ?? ""}</Text>

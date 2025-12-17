@@ -12,6 +12,11 @@ export interface PlayerNameOptions {
   fallback?: string;
 }
 
+export interface PlayerNameSource {
+  full_name?: string | null;
+  name?: string | null;
+}
+
 /**
  * Get the display name for a player.
  * 
@@ -23,12 +28,16 @@ export interface PlayerNameOptions {
  * @returns Full name or fallback
  */
 export function getPlayerDisplayName(
-  name: string | null | undefined,
+  source: string | PlayerNameSource | null | undefined,
   options: PlayerNameOptions = {}
 ): string {
   const { maxLength = 0, fallback = 'Unknown Player' } = options;
-  
-  const fullName = name?.trim() || fallback;
+
+  const rawName = typeof source === 'string'
+    ? source
+    : source?.full_name ?? source?.name;
+
+  const fullName = rawName?.trim() || fallback;
   
   if (maxLength > 0 && fullName.length > maxLength) {
     return fullName.slice(0, maxLength - 1) + '…';
@@ -42,8 +51,12 @@ export function getPlayerDisplayName(
  * Useful for determining whether to show a tooltip.
  */
 export function nameNeedsTruncation(
-  name: string | null | undefined,
+  source: string | PlayerNameSource | null | undefined,
   maxLength: number
 ): boolean {
-  return (name?.trim()?.length ?? 0) > maxLength;
+  const rawName = typeof source === 'string'
+    ? source
+    : source?.full_name ?? source?.name;
+
+  return (rawName?.trim()?.length ?? 0) > maxLength;
 }

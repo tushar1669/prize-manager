@@ -8,6 +8,7 @@ export type SupabasePlayerPayload = {
   rank: number;
   sno: string | null;
   name: string;
+  full_name: string | null;
   rating: number | null;
   dob: string | null;
   dob_raw: string | null;
@@ -29,6 +30,7 @@ export type SupabasePlayerPayload = {
 
 export interface ParsedPlayer extends PlayerImportRow {
   _originalIndex: number;
+  full_name?: string | null;
   fide_id?: string | null;
   federation?: string | null;
   dob_raw?: string | null;
@@ -68,6 +70,7 @@ export function buildSupabasePlayerPayload(
   const rank = getAliasedValue('rank') ?? player.rank;
   const sno = getAliasedValue('sno') ?? player.sno;
   const name = getAliasedValue('name') ?? player.name;
+  const fullNameRaw = getAliasedValue('full_name') ?? player.full_name;
   const ratingValue = getAliasedValue('rating') ?? player.rating;
   const dob = getAliasedValue('dob') ?? player.dob;
   const dobRaw = getAliasedValue('dob_raw') ?? player.dob_raw ?? dob;
@@ -106,6 +109,16 @@ export function buildSupabasePlayerPayload(
     && Number.isFinite(finalRatingCandidate)
     ? finalRatingCandidate
     : null;
+
+  const finalFullName = (() => {
+    if (fullNameRaw != null && String(fullNameRaw).trim() !== '') {
+      return String(fullNameRaw);
+    }
+    if (name != null && String(name).trim() !== '') {
+      return String(name);
+    }
+    return null;
+  })();
   const normalizedUnrated = finalRating != null && finalRating > 0
     ? false
     : (typeof unrated === 'boolean'
@@ -140,6 +153,7 @@ export function buildSupabasePlayerPayload(
     rank: Number(rank),
     sno: sno != null ? String(sno) : null,
     name: String(name || ''),
+    full_name: finalFullName,
     rating: finalRating,
     dob: dob || null,
     dob_raw: dobRaw || null,

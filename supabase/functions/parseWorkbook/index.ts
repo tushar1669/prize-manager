@@ -90,7 +90,18 @@ const STRICT_SINGLE_LETTER_GENDER = new Set(["f", "m", "b", "g"]);
 // Rating column headers to detect the Name-Rtg gap region
 const RATING_HEADERS = new Set(["rtg", "irtg", "nrtg", "rating", "elo", "std"]);
 
-const NAME_ALIASES = ["name", "player_name", "full_name", "player", "playername", "participant"];
+const NAME_ALIASES = [
+  "name",
+  "player_name",
+  "full_name",
+  "full name",
+  "fullname",
+  "name.1",
+  "name_1",
+  "player",
+  "playername",
+  "participant"
+];
 const NORMALIZED_NAME_HEADERS = new Set(NAME_ALIASES.map((alias) => normalizeForMatching(alias)));
 
 function isHeaderlessKey(key: string | undefined): key is string {

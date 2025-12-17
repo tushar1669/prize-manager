@@ -9,7 +9,8 @@ export const ALIASES: Record<string, string[]> = {
   // Rating with priority (Rtg preferred over IRtg for Swiss-Manager)
   rating: ['rtg', 'irtg', 'nrtg', 'rating', 'elo', 'fide_rating', 'std', 'standard'],
 
-  name: ['name', 'player_name', 'full_name', 'player', 'playername', 'participant'],
+  name: ['name', 'player_name', 'player', 'playername', 'participant'],
+  full_name: ['full_name', 'full name', 'fullname', 'name.1', 'name_1', 'name1', 'name (full)'],
 
   // Swiss-Manager uses "Birth" header (not "DOB")
   dob: ['birth', 'dob', 'date_of_birth', 'birth_date', 'birthdate', 'd.o.b', 'd_o_b'],
