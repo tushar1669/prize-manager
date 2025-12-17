@@ -2,6 +2,7 @@
 // Excel template and error export utilities for player import
 
 import * as XLSX from 'xlsx';
+import { getPlayerDisplayName } from './playerName';
 
 type ImportSource = 'swiss-manager' | 'template' | 'unknown';
 
@@ -122,7 +123,7 @@ export function downloadPlayersXlsx(
     return [
       player.rank != null ? Number(player.rank) : null,
       player.sno != null && player.sno !== '' ? Number(player.sno) : null,
-      player.name ?? '',
+      getPlayerDisplayName(player as { full_name?: string | null; name?: string | null }),
       player.rating != null && player.rating !== '' ? Number(player.rating) : null,
       unratedValue == null ? null : Boolean(unratedValue),
       dobDate,
@@ -545,7 +546,7 @@ export function downloadCleanedPlayersXlsx(
     return [
       player.rank != null ? Number(player.rank) : null,
       player.sno != null && player.sno !== '' ? Number(player.sno) : null,
-      player.name ?? '',
+      getPlayerDisplayName(player as { full_name?: string | null; name?: string | null }),
       player.rating != null && player.rating !== '' ? Number(player.rating) : null,
       player.unrated != null ? Boolean(player.unrated) : null,
       dobDate,

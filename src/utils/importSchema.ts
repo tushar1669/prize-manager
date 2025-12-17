@@ -64,7 +64,7 @@ function looksLikeStrictGenderValue(value: unknown): boolean {
 }
 
 const NORMALIZED_NAME_HEADERS = new Set(
-  HEADER_ALIASES.name.map(normalizeHeaderForMatching)
+  [...HEADER_ALIASES.name, ...(HEADER_ALIASES.full_name ?? [])].map(normalizeHeaderForMatching)
 );
 
 /**

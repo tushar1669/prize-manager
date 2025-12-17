@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
+import { getPlayerDisplayName } from "@/utils/playerName";
 
 type PublishedTournamentBasic = {
   id: string;
@@ -52,7 +53,7 @@ export default function PublicResults() {
       const playerIds = allocations.map(a => a.player_id);
       const { data: players, count, usedColumns } = await safeSelectPlayersByIds(
         playerIds,
-        ['id', 'name', 'rank', 'rating', 'state']
+        ['id', 'name', 'full_name', 'rank', 'rating', 'state']
       );
 
       if (players.length === 0 && playerIds.length > 0) {
@@ -86,7 +87,7 @@ export default function PublicResults() {
 
         return {
           prize_id: alloc.prize_id,
-          playerName: player?.name || 'Unknown',
+          playerName: getPlayerDisplayName(player),
           rank: player?.rank || 0,
           rating: player?.rating,
           state: player?.state,

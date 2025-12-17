@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { safeSelectPlayersByIds } from '@/utils/safeSelectPlayers';
 import { byMainOrderPlace } from '@/utils/sortWinners';
 import { getLatestAllocations } from '@/utils/getLatestAllocations';
+import { getPlayerDisplayName } from '@/utils/playerName';
 
 export interface FinalPrizeWinnerRow {
   prizeId: string;
@@ -118,6 +119,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
   const { data: players } = await safeSelectPlayersByIds(playerIds, [
     'id',
     'name',
+    'full_name',
     'rank',
     'sno',
     'club',
@@ -144,7 +146,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
         hasTrophy: !!prize.has_trophy,
         hasMedal: !!prize.has_medal,
         playerId: player.id,
-        playerName: player.name || 'Unknown Player',
+        playerName: getPlayerDisplayName(player),
         sno: player.sno,
         rank: player.rank,
         club: player.club,
