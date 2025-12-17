@@ -62,6 +62,15 @@ interface TeamPrizeResults {
   max_rank: number;
 }
 
+type CachedTeamPrizes = {
+  data: TeamPrizeResults | null;
+  error: string | null;
+  expiresAt: number;
+};
+
+const TEAM_PRIZE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const teamPrizeCache = new Map<string, CachedTeamPrizes>();
+
 const GROUP_BY_LABELS: Record<string, string> = {
   club: 'School / Academy / Club',
   city: 'City',
@@ -75,6 +84,61 @@ function getPlaceOrdinal(place: number): string {
   if (place === 2) return '2nd';
   if (place === 3) return '3rd';
   return `${place}th`;
+}
+
+async function loadTeamPrizes(supabaseClient: any, tournamentId: string) {
+  const cacheKey = `${tournamentId}:latest`;
+  const now = Date.now();
+  const cached = teamPrizeCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > now) {
+    return cached;
+  }
+
+  let teamPrizeResults: TeamPrizeResults | null = null;
+  let teamPrizeError: string | null = null;
+
+  try {
+    const { count, error: countError } = await supabaseClient
+      .from('institution_prize_groups')
+      .select('*', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .eq('is_active', true);
+
+    if (countError) {
+      console.error('[generatePdf] Error checking team prizes:', countError);
+      teamPrizeError = countError.message || 'Unknown error';
+    } else if ((count || 0) > 0) {
+      console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
+
+      const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
+        'allocateInstitutionPrizes',
+        { body: { tournament_id: tournamentId } }
+      );
+
+      if (teamError) {
+        console.error('[generatePdf] Team prize allocation error:', teamError);
+        teamPrizeError = teamError.message || 'Unknown error';
+      } else {
+        teamPrizeResults = teamData as TeamPrizeResults;
+        console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
+      }
+    } else {
+      console.log('[generatePdf] No active team prize groups');
+    }
+  } catch (e: any) {
+    console.error('[generatePdf] Exception loading team prizes:', e);
+    teamPrizeError = e?.message || 'Unknown error';
+  }
+
+  const cacheEntry: CachedTeamPrizes = {
+    data: teamPrizeResults,
+    error: teamPrizeError,
+    expiresAt: now + TEAM_PRIZE_CACHE_TTL_MS,
+  };
+
+  teamPrizeCache.set(cacheKey, cacheEntry);
+  return cacheEntry;
 }
 
 Deno.serve(async (req) => {
@@ -119,42 +183,10 @@ Deno.serve(async (req) => {
     if (allocationsError) throw new Error(`Failed to fetch allocations: ${allocationsError.message}`);
 
     // 3) Check for team prizes and fetch results
-    let teamPrizeResults: TeamPrizeResults | null = null;
-    let teamPrizeError: string | null = null;
-
-    try {
-      // Check if team prize groups exist
-      const { count, error: countError } = await supabaseClient
-        .from('institution_prize_groups')
-        .select('*', { count: 'exact', head: true })
-        .eq('tournament_id', tournamentId)
-        .eq('is_active', true);
-
-      if (countError) {
-        console.error('[generatePdf] Error checking team prizes:', countError);
-      } else if ((count || 0) > 0) {
-        console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
-        
-        // Call the team prize allocator function
-        const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
-          'allocateInstitutionPrizes',
-          { body: { tournament_id: tournamentId } }
-        );
-
-        if (teamError) {
-          console.error('[generatePdf] Team prize allocation error:', teamError);
-          teamPrizeError = teamError.message || 'Unknown error';
-        } else {
-          teamPrizeResults = teamData as TeamPrizeResults;
-          console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
-        }
-      } else {
-        console.log('[generatePdf] No active team prize groups');
-      }
-    } catch (e: any) {
-      console.error('[generatePdf] Exception loading team prizes:', e);
-      teamPrizeError = e?.message || 'Unknown error';
-    }
+    const { data: teamPrizeResults, error: teamPrizeError } = await loadTeamPrizes(
+      supabaseClient,
+      tournamentId
+    );
 
     // 4) Generate HTML report
     const htmlContent = generateHtmlReport(tournament, allocations, version, teamPrizeResults, teamPrizeError);
