@@ -46,6 +46,48 @@ const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
 
 const MAIN_CATEGORY_NAME = 'Main Prize';
 
+export async function ensureMainCategoryExists({
+  prizeMode,
+  categories,
+  categoriesLoading,
+  tournamentId,
+  supabaseClient,
+  queryClient,
+  ensuringRef,
+}: {
+  prizeMode: 'individual' | 'team';
+  categories: Array<{ is_main?: boolean }> | null | undefined;
+  categoriesLoading: boolean;
+  tournamentId?: string;
+  supabaseClient: typeof supabase;
+  queryClient: ReturnType<typeof useQueryClient>;
+  ensuringRef: React.MutableRefObject<boolean>;
+}) {
+  if (prizeMode !== 'individual') return false;
+  if (!tournamentId || !categories || categoriesLoading) return false;
+
+  const hasMainCategory = categories.some((c) => c.is_main);
+  if (hasMainCategory || ensuringRef.current) return false;
+
+  ensuringRef.current = true;
+
+  const { error } = await supabaseClient.from('categories').insert({
+    tournament_id: tournamentId,
+    name: MAIN_CATEGORY_NAME,
+    is_main: true,
+    criteria_json: {},
+    order_idx: 0,
+  });
+
+  if (error) {
+    ensuringRef.current = false;
+    throw error;
+  }
+
+  await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
+  return true;
+}
+
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -399,34 +441,19 @@ export default function TournamentSetup() {
 
   // Ensure Main Prize category exists for individual prize mode
   useEffect(() => {
-    if (prizeMode !== 'individual') return;
-    if (!id || !categories || categoriesLoading) return;
-
-    const hasMainCategory = categories.some((c) => c.is_main);
-    if (hasMainCategory) return;
-
-    if (ensuringMainCategory.current) return;
-    ensuringMainCategory.current = true;
-
-    (async () => {
-      try {
-        const { error } = await supabase
-          .from('categories')
-          .insert({
-            tournament_id: id,
-            name: MAIN_CATEGORY_NAME,
-            is_main: true,
-            criteria_json: {},
-            order_idx: 0,
-          });
-
-        if (error) throw error;
-        await queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      } catch (err) {
+    ensureMainCategoryExists({
+      prizeMode,
+      categories,
+      categoriesLoading,
+      tournamentId: id,
+      supabaseClient: supabase,
+      queryClient,
+      ensuringRef: ensuringMainCategory,
+    }).catch((err) => {
+      if (err) {
         console.error('[prizes] failed to ensure main category', err);
-        ensuringMainCategory.current = false;
       }
-    })();
+    });
   }, [categories, categoriesLoading, id, prizeMode, queryClient]);
 
   // UI-only sort for Setup page: show newest categories at top for better editing UX
