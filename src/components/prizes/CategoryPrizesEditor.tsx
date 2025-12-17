@@ -385,6 +385,11 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
             />
             <CardTitle className="text-lg flex items-center gap-2">
               {category.name}
+              {category.is_main && (
+                <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-primary/10 text-primary border border-primary/20">
+                  Required
+                </span>
+              )}
               {hasDirty && (
                 <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-amber-100 text-amber-700 border border-amber-200">
                   Unsaved

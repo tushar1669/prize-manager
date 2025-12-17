@@ -56,7 +56,7 @@ export async function ensureMainCategoryExists({
   ensuringRef,
 }: {
   prizeMode: 'individual' | 'team';
-  categories: Array<{ is_main?: boolean }> | null | undefined;
+  categories: Array<{ is_main?: boolean; [key: string]: unknown }> | null | undefined;
   categoriesLoading: boolean;
   tournamentId?: string;
   supabaseClient: typeof supabase;

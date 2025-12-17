@@ -13,6 +13,7 @@ interface Props {
   prizes: InstitutionPrize[];
   onSave: (groupId: string, delta: InstitutionPrizeDelta) => Promise<void>;
   canEdit?: boolean;
+  onSaveSuccess?: () => void;
 }
 
 export default function TeamGroupPrizesTable({
@@ -20,6 +21,7 @@ export default function TeamGroupPrizesTable({
   prizes: initialPrizes,
   onSave,
   canEdit = false,
+  onSaveSuccess,
 }: Props) {
   const [draft, setDraft] = useState<InstitutionPrize[]>([]);
   const [saving, setSaving] = useState(false);
@@ -209,6 +211,7 @@ export default function TeamGroupPrizesTable({
       );
 
       toast.success('Prizes saved');
+      onSaveSuccess?.();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save prizes');
     } finally {

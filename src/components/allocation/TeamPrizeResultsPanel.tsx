@@ -174,11 +174,18 @@ function GroupCard({ group }: { group: GroupResponse }) {
                 </Table>
               </div>
             ) : (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>No winners</AlertTitle>
-                <AlertDescription>
-                  No eligible institutions found for this prize group.
+              <Alert variant="default" className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-amber-800 dark:text-amber-200">No eligible institutions found</AlertTitle>
+                <AlertDescription className="text-amber-700 dark:text-amber-300 mt-2">
+                  <p className="mb-2">Common causes:</p>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    <li><strong>Missing "{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}" data</strong> – players may not have this field populated in the import</li>
+                    {(group.config.female_slots > 0 || group.config.male_slots > 0) && (
+                      <li><strong>Gender requirements impossible</strong> – not enough female ({group.config.female_slots}) or male ({group.config.male_slots}) players per institution</li>
+                    )}
+                    <li><strong>Team size too large</strong> – institutions need at least {group.config.team_size} players to qualify</li>
+                  </ul>
                 </AlertDescription>
               </Alert>
             )}
