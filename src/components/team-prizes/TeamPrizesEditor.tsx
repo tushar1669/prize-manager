@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Settings, Trash2, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Plus, Settings, Trash2, Users, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,10 +24,22 @@ interface Props {
   isOrganizer: boolean;
 }
 
+function formatLastSaved(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  
+  if (diffSec < 60) return 'just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return date.toLocaleDateString();
+}
+
 export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   const [rulesSheet, setRulesSheet] = useState<{ open: boolean; group: Partial<InstitutionPrizeGroup> | null }>({ open: false, group: null });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; group?: InstitutionPrizeGroup }>({ open: false });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [lastSavedByGroup, setLastSavedByGroup] = useState<Map<string, Date>>(new Map());
 
   // Fetch groups and prizes
   const { data: groups, isLoading: loadingGroups } = useInstitutionPrizeGroups(tournamentId);
@@ -91,6 +103,10 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   const handleSavePrizes = async (groupId: string, delta: any) => {
     await savePrizes.mutateAsync({ groupId, tournamentId, delta });
   };
+
+  const handlePrizeSaveSuccess = useCallback((groupId: string) => {
+    setLastSavedByGroup(prev => new Map(prev).set(groupId, new Date()));
+  }, []);
 
   const getGroupByLabel = (value: string) => {
     return GROUP_BY_OPTIONS.find(o => o.value === value)?.label || value;
@@ -240,11 +256,19 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
 
                   <CollapsibleContent>
                     <CardContent className="pt-0">
+                      {/* Last saved timestamp */}
+                      {lastSavedByGroup.has(group.id) && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+                          <Clock className="h-3 w-3" />
+                          Last saved {formatLastSaved(lastSavedByGroup.get(group.id)!)}
+                        </div>
+                      )}
                       <TeamGroupPrizesTable
                         groupId={group.id}
                         prizes={groupPrizes}
                         onSave={handleSavePrizes}
                         canEdit={isOrganizer}
+                        onSaveSuccess={() => handlePrizeSaveSuccess(group.id)}
                       />
                     </CardContent>
                   </CollapsibleContent>
