@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import type { UserConfig } from 'vitest/config';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -15,4 +16,13 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: [
+      'tests/utils/**/*.spec.ts',
+      'tests/conflict-utils.spec.ts',
+      'tests/ceremony-order.spec.ts',
+    ],
+  } satisfies UserConfig['test'],
 }));

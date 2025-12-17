@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -57,6 +57,51 @@ export interface TeamPrizeResultsResponse {
 export interface UseTeamPrizeResultsOptions {
   /** Whether to trigger the allocation call */
   enabled?: boolean;
+  /** Optional allocation version to scope caching */
+  allocationVersion?: number | string;
+}
+
+const TEAM_PRIZE_RESULT_TTL_MS = 5 * 60 * 1000; // 5 minutes per session
+
+type TeamPrizeCacheEntry = {
+  data: TeamPrizeResultsResponse;
+  expiresAt: number;
+};
+
+const teamPrizeResultCache = new Map<string, TeamPrizeCacheEntry>();
+
+function getCacheKey(tournamentId: string, allocationVersion?: number | string) {
+  const versionKey = allocationVersion ?? 'latest';
+  return `${tournamentId}:${versionKey}`;
+}
+
+export async function fetchTeamPrizeResults(
+  tournamentId: string,
+  allocationVersion?: number | string
+): Promise<TeamPrizeResultsResponse> {
+  const cacheKey = getCacheKey(tournamentId, allocationVersion);
+  const cached = teamPrizeResultCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data: result, error: invokeError } = await supabase.functions.invoke('allocateInstitutionPrizes', {
+    body: { tournament_id: tournamentId },
+    headers: { Authorization: `Bearer ${session?.access_token}` }
+  });
+
+  if (invokeError) throw invokeError;
+
+  const typedResult = result as TeamPrizeResultsResponse;
+  teamPrizeResultCache.set(cacheKey, {
+    data: typedResult,
+    expiresAt: now + TEAM_PRIZE_RESULT_TTL_MS,
+  });
+
+  return typedResult;
 }
 
 /**
@@ -71,7 +116,7 @@ export function useTeamPrizeResults(
   tournamentId: string | undefined,
   options: UseTeamPrizeResultsOptions = {}
 ) {
-  const { enabled = true } = options;
+  const { enabled = true, allocationVersion } = options;
 
   // Check if team prize groups exist for this tournament
   const { data: hasTeamPrizes, isLoading: checkingTeamPrizes } = useQuery({
@@ -89,43 +134,25 @@ export function useTeamPrizeResults(
     enabled: !!tournamentId,
   });
 
-  // Team prize allocation state
-  const [data, setData] = useState<TeamPrizeResultsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const allocationQueryEnabled = useMemo(
+    () => !!tournamentId && !!hasTeamPrizes && enabled,
+    [enabled, hasTeamPrizes, tournamentId]
+  );
 
-  // Fetch team prize allocation when enabled and team prizes exist
-  useEffect(() => {
-    if (!tournamentId || !hasTeamPrizes || !enabled) {
-      // Reset state when disabled
-      if (!enabled && data) {
-        setData(null);
-      }
-      return;
-    }
-    
-    const fetchTeamPrizes = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const { data: result, error: invokeError } = await supabase.functions.invoke('allocateInstitutionPrizes', {
-          body: { tournament_id: tournamentId },
-          headers: { Authorization: `Bearer ${session?.access_token}` }
-        });
-        if (invokeError) throw invokeError;
-        console.log('[useTeamPrizeResults] Team prize results:', result);
-        setData(result as TeamPrizeResultsResponse);
-      } catch (err: any) {
-        console.error('[useTeamPrizeResults] Team prize allocation error:', err);
-        setError(err?.message || 'Failed to allocate team prizes');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchTeamPrizes();
-  }, [tournamentId, hasTeamPrizes, enabled]);
+  const {
+    data: teamPrizeResults,
+    isFetching: teamPrizeLoading,
+    error: teamPrizeError,
+  } = useQuery({
+    queryKey: ['team-prize-results', tournamentId, allocationVersion ?? 'latest'],
+    queryFn: async () => {
+      if (!tournamentId) throw new Error('Tournament ID missing');
+      return fetchTeamPrizeResults(tournamentId, allocationVersion);
+    },
+    enabled: allocationQueryEnabled,
+    staleTime: TEAM_PRIZE_RESULT_TTL_MS,
+    gcTime: TEAM_PRIZE_RESULT_TTL_MS * 2,
+  });
 
   return {
     /** Whether active team prize groups exist for this tournament */
@@ -133,10 +160,10 @@ export function useTeamPrizeResults(
     /** Whether we're still checking if team prizes exist */
     checkingTeamPrizes,
     /** Team prize allocation results */
-    data,
+    data: allocationQueryEnabled ? (teamPrizeResults ?? null) : null,
     /** Loading state for the allocation call */
-    isLoading,
+    isLoading: allocationQueryEnabled && teamPrizeLoading,
     /** Error message if allocation failed */
-    error,
+    error: allocationQueryEnabled ? (teamPrizeError as Error | null)?.message ?? null : null,
   };
 }

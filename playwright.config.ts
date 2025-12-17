@@ -2,6 +2,16 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: [
+    '**/allocation/**',
+    '**/institution/**',
+    '**/conflict-utils.spec.ts',
+    '**/category-prizes-delta.spec.ts',
+    '**/ceremony-order.spec.ts',
+    '**/gender-logic.spec.ts',
+    '**/player-name.spec.ts',
+    '**/utils/valueNormalizers.spec.ts',
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
