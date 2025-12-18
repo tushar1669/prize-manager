@@ -18,11 +18,32 @@ function normalizeHeader(header: unknown): string {
   return String(header ?? "").trim();
 }
 
-function withHeaderPlaceholders(row: unknown[]): string[] {
+/**
+ * Make headers unique by appending (2), (3), etc. for duplicates.
+ * Empty cells get __EMPTY_COL_X placeholders.
+ */
+function withUniqueHeaders(row: unknown[]): string[] {
+  const seen = new Map<string, number>();
   return row.map((cell, idx) => {
     const normalized = normalizeHeader(cell);
-    return normalized.length > 0 ? normalized : `__EMPTY_COL_${idx}`;
+    if (normalized.length === 0) {
+      return `__EMPTY_COL_${idx}`;
+    }
+    
+    const count = seen.get(normalized) ?? 0;
+    seen.set(normalized, count + 1);
+    
+    if (count === 0) {
+      return normalized;
+    }
+    // Append (2), (3), etc. for duplicates
+    return `${normalized} (${count + 1})`;
   });
+}
+
+// Keep original for backwards compat (not used anymore, but safe)
+function withHeaderPlaceholders(row: unknown[]): string[] {
+  return withUniqueHeaders(row);
 }
 
 function normalizeForMatching(header: string): string {
