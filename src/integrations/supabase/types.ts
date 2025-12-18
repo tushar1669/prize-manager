@@ -396,11 +396,11 @@ export type Database = {
           dob_raw: string | null
           federation: string | null
           fide_id: string | null
+          full_name: string | null
           gender: string | null
           group_label: string | null
           id: string
           name: string
-          full_name: string | null
           rank: number
           rating: number | null
           sno: string | null

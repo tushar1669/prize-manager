@@ -1,5 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// Build version for deployment verification
+const BUILD_VERSION = "2025-12-18T14:00:00Z";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -280,6 +283,18 @@ Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Ping endpoint for deployment verification
+  const url = new URL(req.url);
+  if (url.searchParams.get("ping") === "1") {
+    return new Response(JSON.stringify({ 
+      function: "allocateInstitutionPrizes", 
+      buildVersion: BUILD_VERSION,
+      status: "ok" 
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   try {
