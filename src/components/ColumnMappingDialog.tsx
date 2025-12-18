@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   HEADER_ALIASES,
   selectBestRatingColumn,
   normalizeHeaderForMatching,
+  detectFullVsAbbrevName,
+  getSampleValues,
 } from "@/utils/importSchema";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import {
@@ -37,7 +39,7 @@ interface ColumnMappingDialogProps {
 
 const requiredFields = [
   { key: 'rank', label: 'Rank (required)', description: 'Final player rank/position (NOT start number)' },
-  { key: 'name', label: 'Name (required)', description: 'Player full name' }
+  { key: 'name', label: 'Name (required)', description: 'Player short/abbreviated name' }
 ];
 
 const optionalFields = [
@@ -141,19 +143,24 @@ export function ColumnMappingDialog({
       }
     });
 
-    if (!autoMapping.full_name) {
+    // Smart detection for duplicate Name columns (full vs abbreviated)
+    if (nameCandidates.length >= 2) {
+      const detection = detectFullVsAbbrevName(sampleRows, nameCandidates[0], nameCandidates[1]);
+      if (detection) {
+        console.log('[ColumnMapping] Detected full vs short name:', detection);
+        autoMapping.name = detection.shortNameColumn;
+        autoMapping.full_name = detection.fullNameColumn;
+      } else {
+        // Fallback: first Name -> name, second -> full_name
+        autoMapping.name = nameCandidates[0];
+        autoMapping.full_name = nameCandidates[1];
+      }
+    } else if (!autoMapping.full_name) {
       const explicitFullName = detectedColumns.find(col =>
         normalizedAliases.full_name?.includes(normalizeHeaderForMatching(col))
       );
       if (explicitFullName) {
         autoMapping.full_name = explicitFullName;
-      }
-    }
-
-    if (!autoMapping.full_name && nameCandidates.length > 1) {
-      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
-      if (duplicateName) {
-        autoMapping.full_name = duplicateName;
       }
     }
 

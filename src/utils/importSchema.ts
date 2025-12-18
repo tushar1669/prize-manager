@@ -369,3 +369,111 @@ export function normalizeDobForImport(input?: string | null): {
     inferred: false 
   };
 }
+
+/**
+ * Abbreviated name pattern detection
+ * Matches patterns like: "T. Prakhar", "K. Arun", "A. B. Singh"
+ * These are SHORT names (initial + surname or vice versa)
+ */
+const ABBREV_NAME_PATTERN = /^[A-Z]\.\s/i;
+
+/**
+ * Analyze name columns to determine which is FULL vs ABBREVIATED
+ * 
+ * Heuristics:
+ * 1. Abbreviated names often start with "X. " pattern (initial + dot + space)
+ * 2. Full names are typically longer (more characters, more spaces)
+ * 3. Full names don't have leading initials
+ * 
+ * @param sampleRows - Sample data rows
+ * @param col1 - First column name
+ * @param col2 - Second column name
+ * @returns { fullNameColumn, shortNameColumn } or null if can't determine
+ */
+export function detectFullVsAbbrevName(
+  sampleRows: Record<string, unknown>[],
+  col1: string,
+  col2: string
+): { fullNameColumn: string; shortNameColumn: string } | null {
+  if (sampleRows.length === 0) return null;
+  
+  // Sample up to 20 rows
+  const sampleSize = Math.min(20, sampleRows.length);
+  
+  let col1AbbrevCount = 0;
+  let col2AbbrevCount = 0;
+  let col1TotalLen = 0;
+  let col2TotalLen = 0;
+  let validSamples = 0;
+  
+  for (let i = 0; i < sampleSize; i++) {
+    const row = sampleRows[i];
+    const val1 = String(row[col1] ?? '').trim();
+    const val2 = String(row[col2] ?? '').trim();
+    
+    if (!val1 && !val2) continue;
+    validSamples++;
+    
+    // Check abbreviated pattern
+    if (ABBREV_NAME_PATTERN.test(val1)) col1AbbrevCount++;
+    if (ABBREV_NAME_PATTERN.test(val2)) col2AbbrevCount++;
+    
+    // Track lengths
+    col1TotalLen += val1.length;
+    col2TotalLen += val2.length;
+  }
+  
+  if (validSamples < 3) return null;
+  
+  const col1AbbrevRate = col1AbbrevCount / validSamples;
+  const col2AbbrevRate = col2AbbrevCount / validSamples;
+  const col1AvgLen = col1TotalLen / validSamples;
+  const col2AvgLen = col2TotalLen / validSamples;
+  
+  console.log('[detectFullVsAbbrev]', {
+    col1, col2,
+    col1AbbrevRate, col2AbbrevRate,
+    col1AvgLen, col2AvgLen,
+    validSamples
+  });
+  
+  // Significant difference in abbreviation rate (>30% difference)
+  if (Math.abs(col1AbbrevRate - col2AbbrevRate) > 0.3) {
+    if (col1AbbrevRate > col2AbbrevRate) {
+      return { fullNameColumn: col2, shortNameColumn: col1 };
+    } else {
+      return { fullNameColumn: col1, shortNameColumn: col2 };
+    }
+  }
+  
+  // Fall back to length heuristic (full names are typically longer)
+  if (Math.abs(col1AvgLen - col2AvgLen) > 3) {
+    if (col1AvgLen > col2AvgLen) {
+      return { fullNameColumn: col1, shortNameColumn: col2 };
+    } else {
+      return { fullNameColumn: col2, shortNameColumn: col1 };
+    }
+  }
+  
+  // Can't determine - return null
+  return null;
+}
+
+/**
+ * Get sample values from a column for display
+ */
+export function getSampleValues(
+  sampleRows: Record<string, unknown>[],
+  column: string,
+  count: number = 3
+): string[] {
+  const values: string[] = [];
+  for (const row of sampleRows) {
+    if (values.length >= count) break;
+    const val = String(row[column] ?? '').trim();
+    if (val && !values.includes(val)) {
+      values.push(val);
+    }
+  }
+  return values;
+}
