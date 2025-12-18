@@ -1,10 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5?target=deno";
 
+// Build version for deployment verification
+const BUILD_VERSION = "2025-12-18T14:00:00Z";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tournament-id, x-file-name, x-sha256",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Max-Age": "86400"
 };
 
@@ -646,6 +649,18 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Ping endpoint for deployment verification
+  const url = new URL(req.url);
+  if (url.searchParams.get("ping") === "1") {
+    return new Response(JSON.stringify({ 
+      function: "parseWorkbook", 
+      buildVersion: BUILD_VERSION,
+      status: "ok" 
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
