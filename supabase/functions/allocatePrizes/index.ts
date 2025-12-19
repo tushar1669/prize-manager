@@ -323,6 +323,56 @@ Deno.serve(async (req) => {
     const payload: AllocatePrizesRequest = await req.json();
     const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false, tieBreakStrategy } = payload;
 
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: tournamentAccess, error: tournamentAccessError } = await supabaseClient
+      .from('tournaments')
+      .select('id, owner_id')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (tournamentAccessError) {
+      throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
+    }
+
+    if (!tournamentAccess) {
+      return new Response(
+        JSON.stringify({ error: 'Tournament not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: isMaster, error: roleError } = await supabaseClient
+      .rpc('has_role', { _user_id: user.id, _role: 'master' });
+
+    if (roleError) {
+      throw new Error(`Failed to check user role: ${roleError.message}`);
+    }
+
+    if (tournamentAccess.owner_id !== user.id && !isMaster) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const genderDebugEnabled = tournamentId === GENDER_DEBUG_TOURNAMENT_ID;
 
     // TEMP: gender debug logging for tournament 74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15
