@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect } from "react";
+import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
 export default function MasterDashboard() {
   const navigate = useNavigate();
@@ -147,6 +148,8 @@ export default function MasterDashboard() {
             )}
           </CardContent>
         </Card>
+
+        <EdgeFunctionStatus />
       </div>
     </div>
   );
