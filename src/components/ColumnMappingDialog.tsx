@@ -76,14 +76,22 @@ export function ColumnMappingDialog({
     | null
   >(null);
 
-  const columnOptions = detectedColumns.map((col, idx) => {
-    const isPlaceholder = col.startsWith("__EMPTY_COL_");
-    return {
-      value: col,
-      label: isPlaceholder ? `Empty column ${idx + 1} (unmapped)` : col,
-      disabled: isPlaceholder
-    };
-  });
+  // Build column options with sample previews
+  const columnOptionsWithSamples = useMemo(() => {
+    return detectedColumns.map((col, idx) => {
+      const isPlaceholder = col.startsWith("__EMPTY_COL_");
+      const samples = isPlaceholder ? [] : getSampleValues(sampleRows, col, 2);
+      const samplePreview = samples.length > 0 ? samples.join(', ') : '';
+      return {
+        value: col,
+        label: isPlaceholder ? `Empty column ${idx + 1} (unmapped)` : col,
+        samplePreview: samplePreview.length > 40 ? samplePreview.slice(0, 40) + '…' : samplePreview,
+        disabled: isPlaceholder
+      };
+    });
+  }, [detectedColumns, sampleRows]);
+
+  const columnOptions = columnOptionsWithSamples;
 
   // Auto-mapping logic extracted as useCallback
   const performAutoMapping = useCallback(() => {
@@ -261,7 +269,14 @@ export function ColumnMappingDialog({
                     <SelectContent>
                       {columnOptions.map(option => (
                         <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                          {option.label}
+                          <div className="flex flex-col">
+                            <span>{option.label}</span>
+                            {option.samplePreview && (
+                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {option.samplePreview}
+                              </span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -300,7 +315,14 @@ export function ColumnMappingDialog({
                       <SelectItem value="__skip__">Skip this field</SelectItem>
                       {columnOptions.map(option => (
                         <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                          {option.label}
+                          <div className="flex flex-col">
+                            <span>{option.label}</span>
+                            {option.samplePreview && (
+                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {option.samplePreview}
+                              </span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
