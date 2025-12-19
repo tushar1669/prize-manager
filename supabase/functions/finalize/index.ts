@@ -31,18 +31,13 @@ Deno.serve(async (req) => {
     const payload: FinalizeRequest = await req.json();
     const { tournamentId, winners } = payload;
 
-    if (!winners || winners.length === 0) {
-      console.error('[finalize] error no_winners');
-      return new Response(
-        '[finalize] error no_winners',
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } }
-      );
-    }
-
     // Get authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error('Authorization required');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
@@ -50,7 +45,49 @@ Deno.serve(async (req) => {
     );
 
     if (authError || !user) {
-      throw new Error('Unauthorized');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: tournamentAccess, error: tournamentAccessError } = await supabaseClient
+      .from('tournaments')
+      .select('id, owner_id')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (tournamentAccessError) {
+      throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
+    }
+
+    if (!tournamentAccess) {
+      return new Response(
+        JSON.stringify({ error: 'Tournament not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: isMaster, error: roleError } = await supabaseClient
+      .rpc('has_role', { _user_id: user.id, _role: 'master' });
+
+    if (roleError) {
+      throw new Error(`Failed to check user role: ${roleError.message}`);
+    }
+
+    if (tournamentAccess.owner_id !== user.id && !isMaster) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!winners || winners.length === 0) {
+      console.error('[finalize] error no_winners');
+      return new Response(
+        '[finalize] error no_winners',
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } }
+      );
     }
 
     console.log(`[finalize] Finalizing tournament ${tournamentId} by user ${user.id}`);

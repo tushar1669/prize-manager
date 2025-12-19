@@ -311,10 +311,60 @@ Deno.serve(async (req: Request) => {
     const body: AllocateInstitutionPrizesRequest = await req.json();
     const { tournament_id } = body;
 
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!tournament_id) {
       return new Response(
         JSON.stringify({ error: 'tournament_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: tournamentAccess, error: tournamentAccessError } = await supabase
+      .from('tournaments')
+      .select('id, owner_id')
+      .eq('id', tournament_id)
+      .maybeSingle();
+
+    if (tournamentAccessError) {
+      throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
+    }
+
+    if (!tournamentAccess) {
+      return new Response(
+        JSON.stringify({ error: 'Tournament not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: isMaster, error: roleError } = await supabase
+      .rpc('has_role', { _user_id: user.id, _role: 'master' });
+
+    if (roleError) {
+      throw new Error(`Failed to check user role: ${roleError.message}`);
+    }
+
+    if (tournamentAccess.owner_id !== user.id && !isMaster) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

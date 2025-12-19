@@ -90,7 +90,7 @@ function getPlaceOrdinal(place: number): string {
   return `${place}th`;
 }
 
-async function loadTeamPrizes(supabaseClient: any, tournamentId: string) {
+async function loadTeamPrizes(supabaseClient: any, tournamentId: string, authHeader: string) {
   const cacheKey = `${tournamentId}:latest`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);
@@ -117,7 +117,10 @@ async function loadTeamPrizes(supabaseClient: any, tournamentId: string) {
 
       const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
         'allocateInstitutionPrizes',
-        { body: { tournament_id: tournamentId } }
+        {
+          body: { tournament_id: tournamentId },
+          headers: { Authorization: authHeader }
+        }
       );
 
       if (teamError) {
@@ -171,6 +174,56 @@ Deno.serve(async (req) => {
     const payload: GeneratePdfRequest = await req.json();
     const { tournamentId, version } = payload;
 
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: tournamentAccess, error: tournamentAccessError } = await supabaseClient
+      .from('tournaments')
+      .select('id, owner_id')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (tournamentAccessError) {
+      throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
+    }
+
+    if (!tournamentAccess) {
+      return new Response(
+        JSON.stringify({ error: 'Tournament not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: isMaster, error: roleError } = await supabaseClient
+      .rpc('has_role', { _user_id: user.id, _role: 'master' });
+
+    if (roleError) {
+      throw new Error(`Failed to check user role: ${roleError.message}`);
+    }
+
+    if (tournamentAccess.owner_id !== user.id && !isMaster) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`[generatePdf] Generating PDF for tournament ${tournamentId}, version ${version}`);
 
     // 1) Fetch tournament details
@@ -201,7 +254,8 @@ Deno.serve(async (req) => {
     // 3) Check for team prizes and fetch results
     const { data: teamPrizeResults, error: teamPrizeError } = await loadTeamPrizes(
       supabaseClient,
-      tournamentId
+      tournamentId,
+      authHeader
     );
 
     // 4) Generate HTML report
@@ -381,4 +435,3 @@ function generateHtmlReport(
 </html>
   `;
 }
-
