@@ -404,6 +404,7 @@ export default function PlayerImport() {
     message: string;
     failedCount: number;
   } | null>(null);
+  const [fullNameMissingBanner, setFullNameMissingBanner] = useState<boolean>(false);
   const [importSource, setImportSource] = useState<'swiss-manager' | 'template' | 'unknown'>('unknown');
   const [dedupeState, setDedupeState] = useState<DedupPassResult | null>(null);
   const [dedupeDecisions, setDedupeDecisions] = useState<DedupDecision[]>([]);
@@ -1573,6 +1574,7 @@ export default function PlayerImport() {
     setParseStatus('idle');
     setReplaceBanner(null);
     setImportErrorBanner(null);
+    setFullNameMissingBanner(false);
     setShowMappingDialog(false);
     setIsParsing(false);
     setLastParseMode(null);
@@ -1621,6 +1623,7 @@ export default function PlayerImport() {
     setDedupeReviewed(false);
     setReplaceBanner(null);
     setImportErrorBanner(null);
+    setFullNameMissingBanner(false);
     setDataCoverage(null);
     setFemaleCountSummary(null);
 
@@ -2107,6 +2110,16 @@ export default function PlayerImport() {
         federation: validPlayers.filter(p => p.federation).length / totalValid,
       };
       setDataCoverage(coverage);
+
+      // Check full_name coverage - show banner if mostly missing
+      const fullNameCount = validPlayers.filter(p => p.full_name).length;
+      const fullNameCoverage = fullNameCount / totalValid;
+      if (fullNameCoverage < 0.1 && totalValid >= 5) {
+        setFullNameMissingBanner(true);
+        console.log('[import.coverage] Full names mostly missing', { fullNameCount, totalValid, fullNameCoverage });
+      } else {
+        setFullNameMissingBanner(false);
+      }
 
       const femaleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'F').length;
       const maleFromGender = validPlayers.filter(p => String(p.gender ?? '').trim().toUpperCase() === 'M').length;
@@ -2940,6 +2953,23 @@ export default function PlayerImport() {
                       {replaceBanner.type === 'success' ? 'Players cleared' : 'Delete failed'}
                     </AlertTitle>
                     <AlertDescription>{replaceBanner.message}</AlertDescription>
+                  </Alert>
+                )}
+                {fullNameMissingBanner && (
+                  <Alert className="mt-4 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="text-amber-700 dark:text-amber-400">Full names not detected</AlertTitle>
+                    <AlertDescription className="text-amber-600 dark:text-amber-300">
+                      If your sheet has two "Name" columns, map the longer one to <strong>Full Name</strong>.
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto ml-1 text-amber-700 dark:text-amber-400 underline"
+                        onClick={() => setShowMappingDialog(true)}
+                      >
+                        Fix mapping
+                      </Button>
+                    </AlertDescription>
                   </Alert>
                 )}
               </CardContent>
