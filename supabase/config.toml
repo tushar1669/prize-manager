@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.pmPing]
 verify_jwt = false
+
+[functions.publicTeamPrizes]
+verify_jwt = false

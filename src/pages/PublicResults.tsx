@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { getPlayerDisplayName } from "@/utils/playerName";
+import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 
 type PublishedTournamentBasic = {
   id: string;
@@ -237,6 +238,11 @@ export default function PublicResults() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Team Prizes Section */}
+          {tournament?.id && (
+            <PublicTeamPrizesSection tournamentId={tournament.id} />
           )}
         </div>
       </div>

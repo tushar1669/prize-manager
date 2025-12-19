@@ -21,6 +21,7 @@ const FUNCTIONS_TO_CHECK = [
   'allocateInstitutionPrizes',
   'generatePdf',
   'finalize',
+  'publicTeamPrizes',
 ];
 
 async function checkFunction(name: string): Promise<FunctionStatus> {
