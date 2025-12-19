@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.generatePdf]
 verify_jwt = true
+
+[functions.pmPing]
+verify_jwt = false
