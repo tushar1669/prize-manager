@@ -39,7 +39,7 @@ interface ColumnMappingDialogProps {
 
 const requiredFields = [
   { key: 'rank', label: 'Rank (required)', description: 'Final player rank/position (NOT start number)' },
-  { key: 'name', label: 'Name (required)', description: 'Player short/abbreviated name' }
+  { key: 'name', label: 'Name (required)', description: 'Player name (prefer full name for display)' }
 ];
 
 const optionalFields = [
@@ -152,16 +152,19 @@ export function ColumnMappingDialog({
     });
 
     // Smart detection for duplicate Name columns (full vs abbreviated)
+    // PRIORITY: Map `name` to the FULL name column (not abbreviated)
     if (nameCandidates.length >= 2) {
       const detection = detectFullVsAbbrevName(sampleRows, nameCandidates[0], nameCandidates[1]);
       if (detection) {
         console.log('[ColumnMapping] Detected full vs short name:', detection);
-        autoMapping.name = detection.shortNameColumn;
+        // Map primary `name` field to the FULL name column for best display
+        autoMapping.name = detection.fullNameColumn;
+        // Also set full_name to the same column for backwards compatibility
         autoMapping.full_name = detection.fullNameColumn;
       } else {
-        // Fallback: first Name -> name, second -> full_name
+        // Fallback: first Name -> name, second -> full_name (assume first is full)
         autoMapping.name = nameCandidates[0];
-        autoMapping.full_name = nameCandidates[1];
+        autoMapping.full_name = nameCandidates[0];
       }
     } else if (!autoMapping.full_name) {
       const explicitFullName = detectedColumns.find(col =>
