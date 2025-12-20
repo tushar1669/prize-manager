@@ -259,12 +259,18 @@ export default function Finalize() {
     },
     onError: (error: any) => {
       console.error('[finalize] error', error);
+      
+      // Extract structured error from edge function response
+      const errorBody = error?.context?.body;
+      const message = errorBody?.error || error?.message || "Unknown error";
+      const hint = errorBody?.hint || "Check console logs and try again.";
+      
       showError({
         title: "Finalization failed",
-        message: error?.message || "Unknown error",
-        hint: "Check console logs and try again."
+        message: message,
+        hint: hint
       });
-      toast.error(`Finalization failed: ${error.message}`);
+      toast.error(`Finalization failed: ${message}`);
     }
   });
 
