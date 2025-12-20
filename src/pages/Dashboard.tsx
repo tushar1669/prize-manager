@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +27,28 @@ import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 export default function Dashboard() {
   const { user } = useAuth();
   const { role, loading: roleLoading, isMaster, isVerified } = useUserRole();
+  const { pendingCount } = usePendingApprovals();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
     { open: false, tournamentId: null, title: "" }
   );
+  const hasShownPendingToast = useRef(false);
+
+  // Show toast notification for masters when there are pending approvals
+  useEffect(() => {
+    if (isMaster && pendingCount > 0 && !hasShownPendingToast.current) {
+      hasShownPendingToast.current = true;
+      toast.info(
+        `${pendingCount} organizer${pendingCount > 1 ? 's' : ''} awaiting approval`,
+        { 
+          action: { label: "Review", onClick: () => navigate("/master-dashboard") },
+          duration: 6000 
+        }
+      );
+    }
+  }, [isMaster, pendingCount, navigate]);
 
   // Only show bootstrap link if no master exists AND current user is in allowlist
   const canShowBootstrap = isEmailAllowedMaster(user?.email);
@@ -229,9 +246,17 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             {isMaster && (
               <>
-                <Button variant="outline" onClick={() => navigate("/master-dashboard")} className="gap-2">
+                <Button variant="outline" onClick={() => navigate("/master-dashboard")} className="gap-2 relative">
                   <UserCheck className="h-4 w-4" />
                   Approvals
+                  {pendingCount > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 text-xs font-semibold"
+                    >
+                      {pendingCount}
+                    </Badge>
+                  )}
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/admin/tournaments")} className="gap-2">
                   <Shield className="h-4 w-4" />
