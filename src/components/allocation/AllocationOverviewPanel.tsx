@@ -15,6 +15,7 @@ interface RuleConfig {
   prefer_main_on_equal_value?: boolean;
   prefer_category_rank_on_tie?: boolean;
   allow_unrated_in_rating?: boolean;
+  main_vs_side_priority_mode?: string | null;
 }
 
 interface Player {
@@ -146,6 +147,8 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
   const rc = ruleConfig || {};
   const ageBandPolicy = rc.age_band_policy || 'non_overlapping';
   const multiPrizePolicy = rc.multi_prize_policy || 'single';
+  const mainVsSidePriorityMode = rc.main_vs_side_priority_mode
+    || (rc.prefer_main_on_equal_value ? 'main_first' : 'place_first');
   
   const prizeStackingLabel = multiPrizePolicy === 'unlimited' 
     ? 'Unlimited stacking' 
@@ -225,9 +228,9 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                 <div className="space-y-1">
                   <span className="text-muted-foreground">Tie-break Strategy</span>
                   <p className="text-xs">
-                    {rc.prefer_main_on_equal_value 
+                    {mainVsSidePriorityMode === 'main_first'
                       ? 'Prefer Main category when values are equal'
-                      : 'No main category preference on ties'
+                      : 'Prefer place before Main category when values are equal'
                     }
                   </p>
                 </div>

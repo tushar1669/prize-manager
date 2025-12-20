@@ -40,6 +40,7 @@ export const ruleConfigSchema = z.object({
   prefer_main_on_equal_value: z.boolean(),
   prefer_category_rank_on_tie: z.boolean(),
   category_priority_order: z.array(z.string()).optional(),
+  main_vs_side_priority_mode: z.enum(['main_first', 'place_first']).optional(),
   // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
   age_band_policy: z.enum(['non_overlapping', 'overlapping']).optional(),
   // NEW: Per-player prize cap - defaults to legacy single-prize behaviour

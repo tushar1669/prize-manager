@@ -238,13 +238,13 @@ describe('Prize Priority Hierarchy', () => {
   });
 
   /**
-   * NEW TEST SECTION: prefer_main_on_equal_value toggle ON
+   * NEW TEST SECTION: main_vs_side_priority_mode toggle ON
    * 
    * When the toggle is ON, Main prizes beat Side prizes at equal cash/type,
    * BEFORE place is considered. This is useful for tournaments that want
    * Main category prestige to outweigh placement in side categories.
    */
-  describe('prefer_main_on_equal_value = true (Main-first mode)', () => {
+  describe('main_vs_side_priority_mode = main_first (Main-first mode)', () => {
     const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
       cat: {
         id: cat.id ?? 'cat-1',
@@ -274,7 +274,7 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
       );
 
-      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
       const entries = [side1st, main4th];
       entries.sort(comparator);
 
@@ -293,7 +293,7 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
       );
 
-      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: false });
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entries = [main4th, side1st];
       entries.sort(comparator);
 
@@ -313,7 +313,7 @@ describe('Prize Priority Hierarchy', () => {
       );
 
       // Test with toggle ON
-      const comparatorOn = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const comparatorOn = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
       const entriesOn = [sideB2nd, sideA1st];
       entriesOn.sort(comparatorOn);
       
@@ -322,7 +322,7 @@ describe('Prize Priority Hierarchy', () => {
       expect(entriesOn[0].p.place).toBe(1);
 
       // Test with toggle OFF
-      const comparatorOff = allocator.makePrizeComparator({ prefer_main_on_equal_value: false });
+      const comparatorOff = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entriesOff = [sideB2nd, sideA1st];
       entriesOff.sort(comparatorOff);
       
@@ -340,7 +340,7 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'main-5', place: 5, cash_amount: 5000, has_trophy: true }
       );
 
-      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
       const entries = [main5th, main2nd];
       entries.sort(comparator);
 
@@ -359,7 +359,7 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'side-1', place: 1, cash_amount: 5000, has_trophy: true }
       );
 
-      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
       const entries = [side1stLowCash, main4thHighCash];
       entries.sort(comparator);
 
