@@ -386,6 +386,21 @@ export type Database = {
           },
         ]
       }
+      master_allowlist: {
+        Row: {
+          created_at: string | null
+          email: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+        }
+        Relationships: []
+      }
       players: {
         Row: {
           city: string | null
@@ -522,6 +537,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+        }
+        Relationships: []
       }
       publications: {
         Row: {
@@ -789,6 +822,7 @@ export type Database = {
           inserted_count: number
         }[]
       }
+      is_master: { Args: never; Returns: boolean }
       list_my_tournaments: {
         Args: { include_all?: boolean }
         Returns: {

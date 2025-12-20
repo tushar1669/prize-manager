@@ -31,7 +31,7 @@ import Account from "./pages/Account";
 import CategoryOrderReview from "./pages/CategoryOrderReview";
 import PublicWinnersPage from "./pages/PublicWinnersPage";
 import AdminTournaments from "./pages/AdminTournaments";
-
+import PendingApproval from "./pages/PendingApproval";
 const queryClient = new QueryClient();
 
 const App = () => {
@@ -62,6 +62,9 @@ const App = () => {
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
+              
+              {/* Pending approval route - protected but allowed for unverified */}
+              <Route path="/pending-approval" element={<ProtectedRoute><PendingApproval /></ProtectedRoute>} />
 
               {/* Protected routes */}
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
