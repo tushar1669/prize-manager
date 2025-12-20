@@ -78,6 +78,8 @@ const App = () => {
               <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
               <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/master-dashboard" element={<ProtectedRoute requireMaster><MasterDashboard /></ProtectedRoute>} />
+              {/* Legacy route - redirect to new master-dashboard for backwards compatibility */}
+              <Route path="/master/:secret" element={<Navigate to="/master-dashboard" replace />} />
               <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
               <Route path="/admin/tournaments" element={<ProtectedRoute><AdminTournaments /></ProtectedRoute>} />
 
