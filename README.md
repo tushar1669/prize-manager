@@ -34,6 +34,11 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md)
 - [State Code Auto-Extraction](./docs/import-state-extraction.md)
 
+## Security & Roles
+- [Security & Access Control](./docs/SECURITY_ACCESS_CONTROL.md) – roles, master allowlist, verification lifecycle, route guards
+- [Auth Callback Flow](./docs/AUTH_CALLBACK.md) – PKCE, hash tokens, redirect rules, resend confirmation
+- [Tournament Isolation](./docs/TOURNAMENT_ISOLATION.md) – RLS rules, the historical `list_my_tournaments` leak and fix
+
 ## Team / Institution Prizes (Phase 2)
 - **What**: A separate Phase-2 module for Best School/Academy/City/State teams. Uses dedicated `institution_prize_groups` and `institution_prizes` tables and the `allocateInstitutionPrizes` edge function (distinct from `allocatePrizes`). Players can win both individual and team prizes; multi_prize_policy is ignored for team awards.
 - **Where to configure**: Tournament Setup → Team / Institution Prizes panel. Add a group (choose grouping column, team size, gender slots, scoring mode) then add prizes per place. See [docs/team-prizes.md](./docs/team-prizes.md) for a full walkthrough.
