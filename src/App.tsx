@@ -10,6 +10,7 @@ import { NavigationGuard } from "@/components/NavigationGuard";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import Auth from "./pages/Auth";
+import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import TournamentSetup from "./pages/TournamentSetup";
 import PlayerImport from "./pages/PlayerImport";
@@ -59,6 +60,7 @@ const App = () => {
 
               {/* Auth routes */}
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
 
               {/* Protected routes */}

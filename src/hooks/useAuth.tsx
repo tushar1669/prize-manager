@@ -28,7 +28,8 @@ export function useAuth() {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    // Use /auth/callback for proper email confirmation handling
+    const redirectUrl = `${window.location.origin}/auth/callback`;
     
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -38,11 +39,12 @@ export function useAuth() {
       }
     });
     
-    // If signup successful, create user_role as organizer
+    // If signup successful, create user_role as organizer (unverified)
     if (data.user && !error) {
       await supabase.from('user_roles').insert({
         user_id: data.user.id,
-        role: 'organizer'
+        role: 'organizer',
+        is_verified: false
       });
     }
     
