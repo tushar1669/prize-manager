@@ -33,6 +33,7 @@ export default function Settings() {
       prefer_main_on_equal_value: true,
       prefer_category_rank_on_tie: false,
       category_priority_order: [],
+      main_vs_side_priority_mode: 'main_first' as const,
       age_band_policy: 'non_overlapping' as const,
       multi_prize_policy: 'single' as const
     }
@@ -63,7 +64,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, multi_prize_policy, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle() as { data: any; error: any };
       
@@ -78,14 +79,17 @@ export default function Settings() {
       }
       
       if (data) {
+        const mainVsSidePriorityMode = (data.main_vs_side_priority_mode as 'main_first' | 'place_first')
+          || (data.prefer_main_on_equal_value ? 'main_first' : 'place_first');
         form.reset({
           strict_age: data.strict_age,
           allow_unrated_in_rating: data.allow_unrated_in_rating,
           allow_missing_dob_for_age: data.allow_missing_dob_for_age,
           max_age_inclusive: data.max_age_inclusive,
-          prefer_main_on_equal_value: data.prefer_main_on_equal_value,
+          prefer_main_on_equal_value: mainVsSidePriorityMode === 'main_first',
           prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
           category_priority_order: data.category_priority_order as string[] || [],
+          main_vs_side_priority_mode: mainVsSidePriorityMode,
           age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping',
           multi_prize_policy: (data.multi_prize_policy as 'single' | 'main_plus_one_side' | 'unlimited') || 'single'
         });
@@ -99,12 +103,14 @@ export default function Settings() {
   const saveMutation = useMutation({
     mutationFn: async (values: RuleConfigForm) => {
       console.log('[settings] save rules', { id, payload: values });
+      const mainVsSidePriorityMode = values.prefer_main_on_equal_value ? 'main_first' : 'place_first';
       
       const { error } = await supabase
         .from('rule_config')
         .upsert({
           tournament_id: id,
           ...values,
+          main_vs_side_priority_mode: mainVsSidePriorityMode,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'tournament_id'

@@ -152,7 +152,7 @@ export default function ConflictReview() {
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule-config', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle();
+      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle();
       if (error) throw error;
       // Provide defaults if rule_config doesn't exist yet
       return data || {
@@ -163,6 +163,7 @@ export default function ConflictReview() {
         prefer_main_on_equal_value: true,
         prefer_category_rank_on_tie: false,
         category_priority_order: [],
+        main_vs_side_priority_mode: 'main_first',
         age_band_policy: 'non_overlapping',
         tournament_id: id,
       };

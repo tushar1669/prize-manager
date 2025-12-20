@@ -19,6 +19,7 @@ const GENDER_DEBUG_TOURNAMENT_ID = '74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15';
 type TieBreakField = 'rating' | 'name';
 type TieBreakStrategy = 'rating_then_name' | 'none' | TieBreakField[];
 export type MultiPrizePolicy = 'single' | 'main_plus_one_side' | 'unlimited';
+export type MainVsSidePriorityMode = 'main_first' | 'place_first';
 
 export function normalizeTieBreakStrategy(strategy: TieBreakStrategy | undefined): TieBreakField[] {
   if (Array.isArray(strategy)) return strategy.filter((s): s is TieBreakField => s === 'rating' || s === 'name');
@@ -78,7 +79,12 @@ function derivePrizeType(p: PrizeRow): 'cash' | 'trophy' | 'medal' | 'other' {
 }
 
 // Build priority explanation string for debug output
-function buildPriorityExplanation(cat: CategoryRow, p: PrizeRow, preferMainFirst?: boolean): string {
+function buildPriorityExplanation(
+  cat: CategoryRow,
+  p: PrizeRow,
+  mainVsSidePriorityMode: MainVsSidePriorityMode = 'place_first'
+): string {
+  const preferMainFirst = mainVsSidePriorityMode === 'main_first';
   const parts: string[] = [];
   const cash = p.cash_amount ?? 0;
   
@@ -522,6 +528,7 @@ Deno.serve(async (req) => {
       prefer_category_rank_on_tie: false,
       prefer_main_on_equal_value: true,
       category_priority_order: ['main', 'others'],
+      main_vs_side_priority_mode: 'place_first' as MainVsSidePriorityMode,
       tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
       // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
@@ -547,6 +554,10 @@ Deno.serve(async (req) => {
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
     const multiPrizePolicy: MultiPrizePolicy = (rules.multi_prize_policy ?? 'single') as MultiPrizePolicy;
     rules.multi_prize_policy = multiPrizePolicy;
+    const mainVsSidePriorityMode = (ruleConfigOverride?.main_vs_side_priority_mode ??
+      ruleConfig?.main_vs_side_priority_mode ??
+      (rules.prefer_main_on_equal_value ? 'main_first' : 'place_first')) as MainVsSidePriorityMode;
+    rules.main_vs_side_priority_mode = mainVsSidePriorityMode;
 
     // Determine age band policy
     const ageBandPolicy = (rules.age_band_policy ?? 'non_overlapping') as 'non_overlapping' | 'overlapping';
@@ -659,9 +670,9 @@ Deno.serve(async (req) => {
       cat.prizes.map(p => ({ cat, p }))
     );
 
-    // Use prefer_main_on_equal_value from rules to determine priority behavior
+    // Use main_vs_side_priority_mode from rules to determine priority behavior
     const prizeComparator = makePrizeComparator({
-      prefer_main_on_equal_value: rules.prefer_main_on_equal_value ?? false
+      main_vs_side_priority_mode: rules.main_vs_side_priority_mode ?? 'place_first'
     });
     prizeQueue.sort(prizeComparator);
 
@@ -864,7 +875,7 @@ Deno.serve(async (req) => {
           diagnosis_summary: diagnosisSummary,
           
           // Prize priority hierarchy
-          priority_explanation: buildPriorityExplanation(cat, p, rules.prefer_main_on_equal_value),
+          priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode),
           has_trophy: !!p.has_trophy,
           has_medal: !!p.has_medal
         });
@@ -995,7 +1006,7 @@ Deno.serve(async (req) => {
         diagnosis_summary: null,
         
         // Prize priority hierarchy
-        priority_explanation: buildPriorityExplanation(cat, p, rules.prefer_main_on_equal_value),
+        priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode),
         has_trophy: !!p.has_trophy,
         has_medal: !!p.has_medal
       });
@@ -1551,18 +1562,18 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
 /**
  * Factory to create a prize comparator with configurable priority rules.
  * 
- * When prefer_main_on_equal_value is TRUE and comparing Main vs Side:
+ * When main_vs_side_priority_mode = 'main_first' and comparing Main vs Side:
  *   cash → type → MAIN FIRST → place → brochure order → id
  * 
- * When prefer_main_on_equal_value is FALSE or comparing Side vs Side:
+ * When main_vs_side_priority_mode = 'place_first' or comparing Side vs Side:
  *   cash → type → place → main → brochure order → id
  * 
  * This allows tournaments to choose whether Main prizes always beat Side prizes
  * (when cash/type are equal), or whether a better place in Side beats a worse
  * place in Main.
  */
-export const makePrizeComparator = (opts: { prefer_main_on_equal_value?: boolean } = {}) => {
-  const preferMainFirst = opts.prefer_main_on_equal_value ?? false;
+export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsSidePriorityMode } = {}) => {
+  const preferMainFirst = opts.main_vs_side_priority_mode === 'main_first';
   
   return (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
     const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
@@ -1597,14 +1608,14 @@ export const makePrizeComparator = (opts: { prefer_main_on_equal_value?: boolean
 };
 
 /**
- * Default comparator for prize priority queue (prefer_main_on_equal_value = FALSE).
+ * Default comparator for prize priority queue (main_vs_side_priority_mode = 'place_first').
  * 
  * Priority: cash → trophy/medal → place → main vs sub → brochure order → prize id
  * 
  * This is the legacy behavior where place beats main (Side 1st beats Main 4th).
  * Exported for backward-compatible tests.
  */
-export const cmpPrize = makePrizeComparator({ prefer_main_on_equal_value: false });
+export const cmpPrize = makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
 
 /**
  * Deterministic comparator for eligible players (standard categories).

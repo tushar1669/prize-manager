@@ -167,11 +167,11 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     allow_missing_dob_for_age: false,
     max_age_inclusive: true,
     prefer_category_rank_on_tie: false,
-  prefer_main_on_equal_value: true,
-  category_priority_order: ['main', 'others'],
-  tie_break_strategy: 'rating_then_name' as const,
-  verbose_logs: false,
-  multi_prize_policy: 'single' as const,
+    category_priority_order: ['main', 'others'],
+    main_vs_side_priority_mode: 'place_first' as const,
+    tie_break_strategy: 'rating_then_name' as const,
+    verbose_logs: false,
+    multi_prize_policy: 'single' as const,
   };
 
   const runAllocation = (
@@ -379,7 +379,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(unfilled.length).toBe(0);
   });
 
-  it('prefers main prize when cash amounts are equal and prefer_main_on_equal_value is true', () => {
+  it('prefers main prize when cash amounts are equal and main_vs_side_priority_mode is main_first', () => {
     const players = [
       { id: 'p1', rank: 1, name: 'Alice', rating: 1500, fide_id: '1001', gender: 'F', dob: '2005-01-01', state: 'MH', unrated: false },
     ];
@@ -407,11 +407,11 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
       },
     ];
 
-    const rulesWithMainPref = { ...defaultRules, prefer_main_on_equal_value: true };
+    const rulesWithMainPref = { ...defaultRules, main_vs_side_priority_mode: 'main_first' as const };
     const { winners, unfilled } = runAllocation(categories, players, rulesWithMainPref, new Date('2024-05-01'));
 
     // Alice is eligible for both Main-1 (5000) and U1600-1 (5000)
-    // With prefer_main_on_equal_value=true, should get Main-1
+    // With main_vs_side_priority_mode=main_first, should get Main-1
     expect(winners[0]).toEqual({ prizeId: 'main-1', playerId: 'p1' });
     expect(winners.length).toBe(1);
     expect(unfilled.length).toBe(1);
