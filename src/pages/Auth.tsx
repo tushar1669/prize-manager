@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy } from "lucide-react";
+import { Trophy, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -15,6 +15,10 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Detect localhost misconfiguration warning (for production deploys)
+  const isLocalhost = typeof window !== 'undefined' && 
+    (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'));
 
   useEffect(() => {
     if (user) {
@@ -37,7 +41,12 @@ export default function Auth() {
     } else {
       const { error } = await signUp(email, password);
       if (error) {
-        toast.error(error.message);
+        // Handle common signup errors with friendly messages
+        if (error.message.includes('already registered')) {
+          toast.error("This email is already registered. Please sign in instead.");
+        } else {
+          toast.error(error.message);
+        }
       } else {
         toast.success("Account created! Please check your email to confirm.");
       }
@@ -61,6 +70,17 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Localhost warning on signup only */}
+          {!isLogin && isLocalhost && (
+            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                You're on localhost. Email confirmation links will redirect here, which may fail in production. 
+                For production, use the deployed URL.
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -82,6 +102,7 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
               />
             </div>
             {isLogin && (

@@ -3,11 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, ShieldX } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 
 export default function Bootstrap() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Check if current user's email is in master allowlist
+  const isAllowed = isEmailAllowedMaster(user?.email);
 
   const { data: masterExists, isLoading } = useQuery({
     queryKey: ['master-exists'],
@@ -42,6 +48,33 @@ export default function Bootstrap() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Block non-allowlisted users from accessing bootstrap
+  if (!isAllowed) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldX className="h-5 w-5 text-destructive" />
+              Access Denied
+            </CardTitle>
+            <CardDescription>
+              You are not authorized to access the master bootstrap page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Only designated administrators can claim the master role.
+            </p>
+            <Button onClick={() => navigate('/dashboard')} className="w-full">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

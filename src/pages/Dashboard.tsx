@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -32,7 +33,9 @@ export default function Dashboard() {
     { open: false, tournamentId: null, title: "" }
   );
 
-  // Check if master exists for bootstrap link
+  // Only show bootstrap link if no master exists AND current user is in allowlist
+  const canShowBootstrap = isEmailAllowedMaster(user?.email);
+  
   const { data: masterExists } = useQuery({
     queryKey: ['master-exists'],
     queryFn: async () => {
@@ -44,13 +47,16 @@ export default function Dashboard() {
       if (error) throw error;
       return (count ?? 0) > 0;
     },
+    enabled: canShowBootstrap, // Only check if user could possibly bootstrap
   });
 
-  // Fetch tournaments
+  // CRITICAL: Non-masters only see their own tournaments (include_all=false)
+  // Master status requires BOTH role=master AND email in allowlist (enforced in useUserRole)
   const { data: tournaments, isLoading, error } = useQuery({
-    queryKey: ['tournaments', user?.id, role],
+    queryKey: ['tournaments', user?.id, isMaster],
     queryFn: async () => {
-      const includeAll = role === 'master';
+      // Only masters (role + allowlist) can see all tournaments
+      const includeAll = isMaster;
       console.log('[dashboard] fetching via RPC include_all=', includeAll);
 
       try {
@@ -245,8 +251,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Bootstrap link if no master exists */}
-        {!masterExists && (
+        {/* Bootstrap link - only shown to allowlisted users when no master exists */}
+        {canShowBootstrap && !masterExists && (
           <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               No master organizer has been assigned yet.{' '}

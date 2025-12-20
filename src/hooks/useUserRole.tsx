@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 
 export function useUserRole() {
   const { user } = useAuth();
@@ -37,5 +38,8 @@ export function useUserRole() {
     fetchRole();
   }, [user]);
 
-  return { role, loading, isMaster: role === 'master', isVerified };
+  // CRITICAL: Master access requires BOTH role=master AND email in allowlist
+  const isMaster = role === 'master' && isEmailAllowedMaster(user?.email);
+
+  return { role, loading, isMaster, isVerified };
 }
