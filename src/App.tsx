@@ -81,7 +81,7 @@ const App = () => {
               {/* Legacy route - redirect to new master-dashboard for backwards compatibility */}
               <Route path="/master/:secret" element={<Navigate to="/master-dashboard" replace />} />
               <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
-              <Route path="/admin/tournaments" element={<ProtectedRoute><AdminTournaments /></ProtectedRoute>} />
+              <Route path="/admin/tournaments" element={<ProtectedRoute requireMaster><AdminTournaments /></ProtectedRoute>} />
 
               {/* Fallback */}
               <Route path="*" element={<NotFound />} />
