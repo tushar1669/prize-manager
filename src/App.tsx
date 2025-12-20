@@ -77,7 +77,7 @@ const App = () => {
               <Route path="/t/:id/final/:view" element={<ProtectedRoute><FinalPrizeView /></ProtectedRoute>} />
               <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
               <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/master/:secret" element={<ProtectedRoute><MasterDashboard /></ProtectedRoute>} />
+              <Route path="/master-dashboard" element={<ProtectedRoute requireMaster><MasterDashboard /></ProtectedRoute>} />
               <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
               <Route path="/admin/tournaments" element={<ProtectedRoute><AdminTournaments /></ProtectedRoute>} />
 

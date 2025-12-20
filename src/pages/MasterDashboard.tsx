@@ -1,7 +1,5 @@
-import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { AppNav } from "@/components/AppNav";
@@ -12,17 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle, UserCheck, UserX, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect } from "react";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
+// Access controlled by ProtectedRoute requireMaster prop
 export default function MasterDashboard() {
-  const navigate = useNavigate();
-  const { secret } = useParams();
-  const { user } = useAuth();
   const { isMaster, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
-
-  const correctSecret = import.meta.env.VITE_MASTER_DASHBOARD_SECRET_PATH;
 
   // Pending approvals hook
   const {
@@ -34,13 +27,6 @@ export default function MasterDashboard() {
     isApproving,
     isRejecting,
   } = usePendingApprovals();
-
-  useEffect(() => {
-    if (!roleLoading && (!isMaster || secret !== correctSecret)) {
-      toast.error("Access denied");
-      navigate('/dashboard');
-    }
-  }, [isMaster, roleLoading, secret, correctSecret, navigate]);
 
   // All users query (existing)
   const { data: users, isLoading } = useQuery({
@@ -70,7 +56,7 @@ export default function MasterDashboard() {
       const profileMap = new Map((profiles || []).map(p => [p.id, p.email]));
       return roles.map(r => ({ ...r, email: profileMap.get(r.user_id) || null }));
     },
-    enabled: !!isMaster && secret === correctSecret,
+    enabled: !!isMaster,
   });
 
   const toggleVerifiedMutation = useMutation({
@@ -104,7 +90,8 @@ export default function MasterDashboard() {
     );
   }
 
-  if (!isMaster || secret !== correctSecret) {
+  // Access is enforced by ProtectedRoute requireMaster; extra guard for safety
+  if (!isMaster) {
     return null;
   }
 
