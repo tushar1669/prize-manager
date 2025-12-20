@@ -3,10 +3,31 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle, Loader2, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AlertCircle, CheckCircle, Loader2, RefreshCw, Mail } from "lucide-react";
 import { toast } from "sonner";
 
-type CallbackStatus = 'loading' | 'success' | 'error' | 'expired';
+type CallbackStatus = 'loading' | 'success' | 'error' | 'expired' | 'missing';
+
+// Check if we're in dev/preview environment
+const isDevOrPreview = () => {
+  if (typeof window === 'undefined') return false;
+  const origin = window.location.origin;
+  return origin.includes('localhost') || 
+         origin.includes('127.0.0.1') || 
+         origin.includes('lovableproject.com') ||
+         origin.includes('preview');
+};
+
+interface DebugInfo {
+  hasCode: boolean;
+  hasAccessToken: boolean;
+  hasRefreshToken: boolean;
+  hasError: boolean;
+  errorParam: string | null;
+  origin: string;
+}
 
 /**
  * AuthCallback handles email confirmation redirects from Supabase.
@@ -14,6 +35,7 @@ type CallbackStatus = 'loading' | 'success' | 'error' | 'expired';
  * - PKCE flow: URL contains ?code=...
  * - Hash token flow: URL hash contains access_token/refresh_token
  * - Error params: URL contains ?error=...
+ * - Recovery flow: No tokens, user can resend confirmation
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -21,11 +43,16 @@ export default function AuthCallback() {
   const [status, setStatus] = useState<CallbackStatus>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [flowType, setFlowType] = useState<string>('unknown');
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  
+  // Resend confirmation state
+  const [resendEmail, setResendEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Log incoming params for debugging
+        // Parse all possible auth params
         const code = searchParams.get('code');
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -33,11 +60,19 @@ export default function AuthCallback() {
         const errorParam = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
 
-        console.log('[auth-callback] Params detected:', {
+        // Build debug info
+        const debug: DebugInfo = {
           hasCode: !!code,
           hasAccessToken: !!accessToken,
           hasRefreshToken: !!refreshToken,
           hasError: !!errorParam,
+          errorParam,
+          origin: window.location.origin
+        };
+        setDebugInfo(debug);
+
+        console.log('[auth-callback] Params detected:', {
+          ...debug,
           fullUrl: window.location.href
         });
 
@@ -46,7 +81,6 @@ export default function AuthCallback() {
           console.error('[auth-callback] URL error:', errorParam, errorDescription);
           const message = errorDescription || errorParam;
           
-          // Check for common expired/invalid link errors
           if (message.toLowerCase().includes('expired') || 
               message.toLowerCase().includes('invalid') ||
               errorParam === 'access_denied') {
@@ -74,7 +108,6 @@ export default function AuthCallback() {
           if (error) {
             console.error('[auth-callback] PKCE exchange error:', error);
             
-            // Check for expired code
             if (error.message.toLowerCase().includes('expired') ||
                 error.message.toLowerCase().includes('invalid')) {
               setStatus('expired');
@@ -92,7 +125,6 @@ export default function AuthCallback() {
           toast.success('Email verified successfully!');
           setStatus('success');
           
-          // Redirect based on user verification status
           await redirectAfterAuth();
           return;
         }
@@ -133,11 +165,11 @@ export default function AuthCallback() {
         }
 
         // Case 4: No auth parameters - check if already authenticated
-        setFlowType('existing-session');
         console.log('[auth-callback] No auth params, checking existing session');
         
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          setFlowType('existing-session');
           console.log('[auth-callback] Already authenticated:', session.user.email);
           setStatus('success');
           toast.success('Already signed in');
@@ -145,12 +177,12 @@ export default function AuthCallback() {
           return;
         }
 
-        // No tokens found and not authenticated
-        console.warn('[auth-callback] No auth tokens and no existing session');
+        // Case 5: No tokens found and not authenticated - show recovery UI
+        console.warn('[auth-callback] No auth tokens and no existing session - showing recovery');
         setFlowType('missing');
-        setStatus('expired');
-        setErrorMessage('No authentication data found. The link may have expired or already been used.');
-        toast.error('Please sign in again');
+        setStatus('missing');
+        setErrorMessage('No authentication data found. The link may be incomplete, expired, or already used.');
+        toast.info('Please sign in or resend your confirmation email');
         
       } catch (err) {
         console.error('[auth-callback] Unexpected error:', err);
@@ -165,17 +197,14 @@ export default function AuthCallback() {
      * Redirect user after successful auth based on their role/verification status
      */
     const redirectAfterAuth = async () => {
-      // Small delay to ensure session is fully set
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Check user role to determine where to redirect
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         navigate('/dashboard', { replace: true });
         return;
       }
 
-      // Check if user is verified organizer or master
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('role, is_verified')
@@ -185,11 +214,9 @@ export default function AuthCallback() {
       console.log('[auth-callback] User role data:', roleData);
 
       if (roleData?.role === 'master' || roleData?.is_verified) {
-        // Verified users go to dashboard
         console.log('[auth-callback] Redirecting verified user to dashboard');
         navigate('/dashboard', { replace: true });
       } else {
-        // Unverified organizers go to pending approval
         console.log('[auth-callback] Redirecting unverified user to pending-approval');
         navigate('/pending-approval', { replace: true });
       }
@@ -198,7 +225,135 @@ export default function AuthCallback() {
     handleCallback();
   }, [searchParams, navigate]);
 
-  // Friendly UI for expired links
+  // Handle resend confirmation email
+  const handleResendConfirmation = async () => {
+    if (!resendEmail.trim()) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: resendEmail.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (error) {
+        // Handle common errors
+        if (error.message.toLowerCase().includes('not found') || 
+            error.message.toLowerCase().includes('does not exist')) {
+          toast.error('No account found with this email. Please sign up first.');
+        } else if (error.message.toLowerCase().includes('already confirmed')) {
+          toast.success('Your email is already confirmed! You can sign in.');
+          setTimeout(() => navigate('/auth'), 1500);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success('Confirmation email sent! Check your inbox.');
+      }
+    } catch (err) {
+      toast.error('Failed to resend confirmation email');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  // Debug panel for dev/preview environments
+  const DebugPanel = () => {
+    if (!isDevOrPreview() || !debugInfo) return null;
+    
+    return (
+      <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border text-xs font-mono">
+        <div className="font-semibold mb-2 text-muted-foreground">Debug Info (dev/preview only)</div>
+        <div className="space-y-1 text-muted-foreground">
+          <div>Flow: <span className="text-foreground">{flowType}</span></div>
+          <div>code: <span className={debugInfo.hasCode ? "text-green-600" : "text-red-500"}>{debugInfo.hasCode ? '✓' : '✗'}</span></div>
+          <div>access_token: <span className={debugInfo.hasAccessToken ? "text-green-600" : "text-red-500"}>{debugInfo.hasAccessToken ? '✓' : '✗'}</span></div>
+          <div>refresh_token: <span className={debugInfo.hasRefreshToken ? "text-green-600" : "text-red-500"}>{debugInfo.hasRefreshToken ? '✓' : '✗'}</span></div>
+          <div>error: <span className={debugInfo.hasError ? "text-amber-600" : "text-muted-foreground"}>{debugInfo.errorParam || 'none'}</span></div>
+          <div>origin: <span className="text-foreground break-all">{debugInfo.origin}</span></div>
+        </div>
+      </div>
+    );
+  };
+
+  // Recovery UI for missing tokens
+  if (status === 'missing') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 rounded-full bg-amber-500/10">
+                <Mail className="h-10 w-10 text-amber-500" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">Confirmation Required</CardTitle>
+            <CardDescription className="text-base">
+              {errorMessage || 'No authentication data found in this link.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              If you haven't confirmed your email yet, enter it below to resend the confirmation link.
+            </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="resend-email">Email address</Label>
+              <Input
+                id="resend-email"
+                type="email"
+                placeholder="your@email.com"
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleResendConfirmation()}
+              />
+            </div>
+            
+            <Button 
+              onClick={handleResendConfirmation} 
+              className="w-full" 
+              disabled={resendLoading}
+            >
+              {resendLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Resend Confirmation Email
+                </>
+              )}
+            </Button>
+            
+            <div className="flex flex-col gap-2">
+              <Button variant="outline" onClick={() => navigate('/auth')} className="w-full">
+                Go to Sign In
+              </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/auth?mode=signup')} 
+                className="w-full text-muted-foreground"
+              >
+                Back to Signup
+              </Button>
+            </div>
+            
+            <DebugPanel />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Expired link UI
   if (status === 'expired') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -214,21 +369,62 @@ export default function AuthCallback() {
               {errorMessage || 'This confirmation link has expired or was already used.'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Don't worry! You can request a new confirmation email or sign in if you've already verified your account.
+              Enter your email to request a new confirmation link, or sign in if you've already verified.
             </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="expired-resend-email">Email address</Label>
+              <Input
+                id="expired-resend-email"
+                type="email"
+                placeholder="your@email.com"
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleResendConfirmation()}
+              />
+            </div>
+            
+            <Button 
+              onClick={handleResendConfirmation} 
+              className="w-full" 
+              disabled={resendLoading}
+            >
+              {resendLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Resend Confirmation Email
+                </>
+              )}
+            </Button>
+            
             <div className="flex flex-col gap-2">
-              <Button onClick={() => navigate('/auth')} className="w-full">
+              <Button variant="outline" onClick={() => navigate('/auth')} className="w-full">
                 Go to Sign In
               </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/auth?mode=signup')} 
+                className="w-full text-muted-foreground"
+              >
+                Back to Signup
+              </Button>
             </div>
+            
+            <DebugPanel />
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  // Loading/Success/Error states
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="w-full max-w-md">
@@ -269,8 +465,10 @@ export default function AuthCallback() {
             <Button onClick={() => navigate('/auth')} className="w-full">
               Go to Sign In
             </Button>
+            <DebugPanel />
           </CardContent>
         )}
+        {status === 'loading' && <CardContent><DebugPanel /></CardContent>}
       </Card>
     </div>
   );
