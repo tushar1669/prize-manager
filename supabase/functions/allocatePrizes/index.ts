@@ -78,14 +78,19 @@ function derivePrizeType(p: PrizeRow): 'cash' | 'trophy' | 'medal' | 'other' {
 }
 
 // Build priority explanation string for debug output
-function buildPriorityExplanation(cat: CategoryRow, p: PrizeRow): string {
+function buildPriorityExplanation(cat: CategoryRow, p: PrizeRow, preferMainFirst?: boolean): string {
   const parts: string[] = [];
   const cash = p.cash_amount ?? 0;
   
   parts.push(`cash=₹${cash}`);
   parts.push(`type=${p.has_trophy ? 'trophy' : p.has_medal ? 'medal' : 'none'}`);
-  parts.push(`main=${cat.is_main ? 'yes' : 'no'}`);
+  if (preferMainFirst) {
+    parts.push(`main=${cat.is_main ? 'yes' : 'no'} (priority)`);
+  }
   parts.push(`place=${p.place}`);
+  if (!preferMainFirst) {
+    parts.push(`main=${cat.is_main ? 'yes' : 'no'}`);
+  }
   parts.push(`order=${cat.order_idx ?? 0}`);
   
   return parts.join(', ');
@@ -654,7 +659,11 @@ Deno.serve(async (req) => {
       cat.prizes.map(p => ({ cat, p }))
     );
 
-    prizeQueue.sort(cmpPrize);
+    // Use prefer_main_on_equal_value from rules to determine priority behavior
+    const prizeComparator = makePrizeComparator({
+      prefer_main_on_equal_value: rules.prefer_main_on_equal_value ?? false
+    });
+    prizeQueue.sort(prizeComparator);
 
     if (prizeQueue.length > 0) {
       const first = prizeKey(prizeQueue[0].cat, prizeQueue[0].p);
@@ -855,7 +864,7 @@ Deno.serve(async (req) => {
           diagnosis_summary: diagnosisSummary,
           
           // Prize priority hierarchy
-          priority_explanation: buildPriorityExplanation(cat, p),
+          priority_explanation: buildPriorityExplanation(cat, p, rules.prefer_main_on_equal_value),
           has_trophy: !!p.has_trophy,
           has_medal: !!p.has_medal
         });
@@ -986,7 +995,7 @@ Deno.serve(async (req) => {
         diagnosis_summary: null,
         
         // Prize priority hierarchy
-        priority_explanation: buildPriorityExplanation(cat, p),
+        priority_explanation: buildPriorityExplanation(cat, p, rules.prefer_main_on_equal_value),
         has_trophy: !!p.has_trophy,
         has_medal: !!p.has_medal
       });
@@ -1540,35 +1549,62 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
 };
 
 /**
- * Comparator for prize priority queue.
- * Implements the hierarchy documented in prizeKey().
+ * Factory to create a prize comparator with configurable priority rules.
+ * 
+ * When prefer_main_on_equal_value is TRUE and comparing Main vs Side:
+ *   cash → type → MAIN FIRST → place → brochure order → id
+ * 
+ * When prefer_main_on_equal_value is FALSE or comparing Side vs Side:
+ *   cash → type → place → main → brochure order → id
+ * 
+ * This allows tournaments to choose whether Main prizes always beat Side prizes
+ * (when cash/type are equal), or whether a better place in Side beats a worse
+ * place in Main.
+ */
+export const makePrizeComparator = (opts: { prefer_main_on_equal_value?: boolean } = {}) => {
+  const preferMainFirst = opts.prefer_main_on_equal_value ?? false;
+  
+  return (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
+    const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
+
+    // 1. Cash amount: higher wins
+    if (ak.cash !== bk.cash) return bk.cash - ak.cash;
+
+    // 2. Prize type: trophy > medal > none
+    if (ak.prizeTypeScore !== bk.prizeTypeScore) return bk.prizeTypeScore - ak.prizeTypeScore;
+
+    // 3. Conditional: If preferMainFirst AND comparing Main vs Side, Main wins here
+    //    This ONLY applies when one is Main and one is Side (mixed comparison)
+    //    Side vs Side still uses place before main (step 4 below)
+    const isMainVsSide = ak.main !== bk.main;
+    if (preferMainFirst && isMainVsSide) {
+      return bk.main - ak.main; // Main wins over Side
+    }
+
+    // 4. Place number: 1st > 2nd > 3rd (lower place = higher priority)
+    if (ak.place !== bk.place) return ak.place - bk.place;
+    
+    // 5. Main category preferred (when cash, type, AND place are equal)
+    //    This is a fallback for same-place comparison (only reached if places are equal)
+    if (ak.main !== bk.main) return bk.main - ak.main;
+    
+    // 6. Category brochure order
+    if (ak.order !== bk.order) return ak.order - bk.order;
+    
+    // 7. Stable tie-breaker by prize ID
+    return String(ak.pid).localeCompare(String(bk.pid));
+  };
+};
+
+/**
+ * Default comparator for prize priority queue (prefer_main_on_equal_value = FALSE).
  * 
  * Priority: cash → trophy/medal → place → main vs sub → brochure order → prize id
  * 
- * Returns negative if 'a' should come first (higher priority),
- * positive if 'b' should come first.
+ * This is the legacy behavior where place beats main (Side 1st beats Main 4th).
+ * Exported for backward-compatible tests.
  */
-export const cmpPrize = (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
-  const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
-
-  // 1. Cash amount: higher wins
-  if (ak.cash !== bk.cash) return bk.cash - ak.cash;
-
-  // 2. Prize type: trophy > medal > none
-  if (ak.prizeTypeScore !== bk.prizeTypeScore) return bk.prizeTypeScore - ak.prizeTypeScore;
-
-  // 3. Place number: 1st > 2nd > 3rd (lower place = higher priority) - BEFORE main!
-  if (ak.place !== bk.place) return ak.place - bk.place;
-  
-  // 4. Main category preferred (when cash, type, AND place are equal)
-  if (ak.main !== bk.main) return bk.main - ak.main;
-  
-  // 5. Category brochure order
-  if (ak.order !== bk.order) return ak.order - bk.order;
-  
-  // 6. Stable tie-breaker by prize ID
-  return String(ak.pid).localeCompare(String(bk.pid));
-};
+export const cmpPrize = makePrizeComparator({ prefer_main_on_equal_value: false });
 
 /**
  * Deterministic comparator for eligible players (standard categories).
