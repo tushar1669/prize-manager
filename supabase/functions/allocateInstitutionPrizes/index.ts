@@ -1,14 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 
-// Build version for deployment verification
-const BUILD_VERSION = "2025-12-18T14:00:00Z";
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "allocateInstitutionPrizes";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Max-Age': '86400'
-};
+const corsHeaders = CORS_HEADERS;
 
 /**
  * Institution Prize Allocation - Phase 2 Module
@@ -285,16 +281,17 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Ping endpoint for deployment verification
-  const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") {
-    return new Response(JSON.stringify({ 
-      function: "allocateInstitutionPrizes", 
-      buildVersion: BUILD_VERSION,
-      status: "ok" 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+  // Health check: ?ping=1 (before reading body)
+  if (hasPingQueryParam(req)) {
+    console.log(`[${FUNCTION_NAME}] ping via query param`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
+  }
+
+  // Read body as text for safe ping detection
+  const rawBody = await req.text();
+  if (isPingBody(rawBody)) {
+    console.log(`[${FUNCTION_NAME}] ping via body`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
   }
 
   try {
@@ -307,8 +304,8 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Parse request body
-    const body: AllocateInstitutionPrizesRequest = await req.json();
+    // Parse from already-read rawBody
+    const body: AllocateInstitutionPrizesRequest = JSON.parse(rawBody);
     const { tournament_id } = body;
 
     const authHeader = req.headers.get('Authorization') ?? '';

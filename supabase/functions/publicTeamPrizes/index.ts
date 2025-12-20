@@ -1,12 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 
-const BUILD_VERSION = "2025-12-19T10:00:00Z";
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "publicTeamPrizes";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+const corsHeaders = CORS_HEADERS;
 
 /**
  * Public Team Prizes Endpoint
@@ -127,15 +125,17 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") {
-    return new Response(JSON.stringify({ 
-      function: "publicTeamPrizes", 
-      buildVersion: BUILD_VERSION,
-      status: "ok" 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+  // Health check: ?ping=1 (before reading body)
+  if (hasPingQueryParam(req)) {
+    console.log(`[${FUNCTION_NAME}] ping via query param`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
+  }
+
+  // Read body as text for safe ping detection
+  const rawBody = await req.text();
+  if (isPingBody(rawBody)) {
+    console.log(`[${FUNCTION_NAME}] ping via body`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
   }
 
   try {
@@ -148,8 +148,8 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Accept tournament_id or slug
-    const body = await req.json();
+    // Parse from already-read rawBody
+    const body = JSON.parse(rawBody);
     let tournamentId = body.tournament_id;
     const slug = body.slug;
 

@@ -1,14 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 
-// Build version for deployment verification
-const BUILD_VERSION = "2025-12-20T19:30:00Z";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Max-Age': '86400'
-};
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "finalize";
+const corsHeaders = CORS_HEADERS;
 
 interface FinalizeRequest {
   tournamentId: string;
@@ -24,30 +19,23 @@ interface FinalizeRequest {
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: CORS_HEADERS });
   }
 
   try {
-    // Check for ping query parameter first (before reading body)
-    const url = new URL(req.url);
-    if (url.searchParams.get("ping") === "1") {
-      console.log('[finalize] ping via query param');
-      return new Response(
-        JSON.stringify({ function: "finalize", status: "ok", buildVersion: BUILD_VERSION }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Health check: ?ping=1 (before reading body)
+    if (hasPingQueryParam(req)) {
+      console.log(`[${FUNCTION_NAME}] ping via query param`);
+      return pingResponse(FUNCTION_NAME, BUILD_VERSION);
     }
 
     // Read body as text for safe parsing
     const rawBody = await req.text();
     
-    // Health check: empty body or "{}" or {"ping": true}
-    if (!rawBody || rawBody.trim() === '' || rawBody.trim() === '{}') {
-      console.log('[finalize] ping via empty body');
-      return new Response(
-        JSON.stringify({ function: "finalize", status: "ok", buildVersion: BUILD_VERSION }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Health check: empty body, "{}", or {"ping": true}
+    if (isPingBody(rawBody)) {
+      console.log(`[${FUNCTION_NAME}] ping via body`);
+      return pingResponse(FUNCTION_NAME, BUILD_VERSION);
     }
 
     // Safe JSON parse
@@ -55,22 +43,13 @@ Deno.serve(async (req) => {
     try {
       payload = JSON.parse(rawBody);
     } catch (parseError) {
-      console.error('[finalize] JSON parse error:', parseError);
+      console.error(`[${FUNCTION_NAME}] JSON parse error:`, parseError);
       return new Response(
         JSON.stringify({ 
           error: "Invalid JSON payload", 
           hint: "Expected { tournamentId, winners[] }" 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check for ping in body
-    if (payload.ping === true) {
-      console.log('[finalize] ping via body.ping');
-      return new Response(
-        JSON.stringify({ function: "finalize", status: "ok", buildVersion: BUILD_VERSION }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
     }
 

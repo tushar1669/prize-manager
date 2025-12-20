@@ -1,13 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { CORS_HEADERS } from "../_shared/health.ts";
 
-// Build version for deployment verification
-const BUILD_VERSION = "2025-12-19T10:00:00Z";
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "pmPing";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
+const corsHeaders = CORS_HEADERS;
 
 // Known functions and their expected build versions
 const FUNCTIONS = [
@@ -28,8 +25,8 @@ serve(async (req) => {
 
   return new Response(
     JSON.stringify({
+      function: FUNCTION_NAME,
       status: 'ok',
-      function: 'pmPing',
       buildVersion: BUILD_VERSION,
       timestamp: new Date().toISOString(),
       functions: FUNCTIONS,
