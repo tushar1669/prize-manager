@@ -120,6 +120,43 @@ In dev/preview environments only, shows:
 
 ---
 
+## Troubleshooting
+
+### Expired Link
+
+**Symptom:** User clicks email link and sees "Link Expired" UI.
+
+**Cause:** Supabase confirmation links expire (default 24h). The callback detects `expired` or `invalid` in error params.
+
+**Fix:** User enters their email in the resend form. A new confirmation email is sent with a fresh link.
+
+---
+
+### Missing Tokens
+
+**Symptom:** User lands on `/auth/callback` with no `code`, no hash tokens, no error.
+
+**Cause:** Possibly a malformed link, browser extension stripping params, or user navigating directly.
+
+**Fix:** The callback checks for an existing session. If none, shows "Confirmation Required" UI with resend option.
+
+---
+
+### Preview vs Production Redirect URL Allowlist
+
+**Symptom:** Confirmation works on localhost but fails on preview/prod (or vice versa).
+
+**Cause:** Supabase Auth → URL Configuration must include all valid redirect URLs:
+- Production: `https://your-domain.com/auth/callback`
+- Preview: `https://your-project.lovableproject.com/auth/callback`
+- Localhost: `http://localhost:5173/auth/callback` (dev only)
+
+**Fix:** Add all required URLs to Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
+
+**Why `window.location.origin`:** The resend confirmation always uses the current origin, so the email link redirects back to wherever the user initiated the resend (preview, prod, or localhost).
+
+---
+
 ## How to Test Manually
 
 1. **Fresh signup:**

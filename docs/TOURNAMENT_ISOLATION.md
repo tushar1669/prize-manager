@@ -122,6 +122,46 @@ These tables follow the same `owner_id` isolation pattern:
 
 ---
 
+## Security Pitfalls
+
+### SECURITY DEFINER Functions Can Bypass RLS
+
+**What it means:** A `SECURITY DEFINER` function runs with the *owner's* privileges, not the caller's. This bypasses RLS policies entirely.
+
+**Why it's dangerous:** If you write a function that returns `SELECT * FROM table` without filtering, ANY authenticated user can call that RPC and see ALL rows—even if RLS would normally block them.
+
+**The `list_my_tournaments` lesson:**
+```sql
+-- DANGEROUS: Returns ALL rows to ANY caller
+CREATE FUNCTION list_my_tournaments()
+RETURNS SETOF tournaments
+LANGUAGE sql
+SECURITY DEFINER
+AS $$ SELECT * FROM tournaments; $$;
+```
+
+**Safe pattern:** Always filter by `auth.uid()` or gate on `is_master()`:
+```sql
+CREATE FUNCTION list_my_tournaments(include_all boolean DEFAULT false)
+RETURNS SETOF tournaments
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT * FROM tournaments
+  WHERE (include_all = true AND public.is_master())
+     OR owner_id = auth.uid();
+$$;
+```
+
+**Review checklist for SECURITY DEFINER:**
+1. Does it filter by `auth.uid()` or `is_master()`?
+2. Is `include_all` or similar gated by a privilege check?
+3. Is it exposed via RPC (callable from client)?
+4. Could a non-privileged user ever receive data they shouldn't?
+
+---
+
 ## How to Test Manually
 
 1. **Organizer isolation:**
