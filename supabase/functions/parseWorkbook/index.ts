@@ -1,14 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5?target=deno";
+import { CORS_HEADERS, hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
-// Build version for deployment verification
-const BUILD_VERSION = "2025-12-18T14:00:00Z";
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "parseWorkbook";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  ...CORS_HEADERS,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tournament-id, x-file-name, x-sha256",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Max-Age": "86400"
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -672,16 +671,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Ping endpoint for deployment verification
-  const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") {
-    return new Response(JSON.stringify({ 
-      function: "parseWorkbook", 
-      buildVersion: BUILD_VERSION,
-      status: "ok" 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+  // Health check: ?ping=1 (parseWorkbook uses binary body, so only query param ping)
+  if (hasPingQueryParam(req)) {
+    console.log(`[${FUNCTION_NAME}] ping via query param`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeaders);
   }
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";

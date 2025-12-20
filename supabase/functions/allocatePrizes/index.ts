@@ -1,14 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 
-// Build version for deployment verification
-const BUILD_VERSION = "2025-12-18T14:00:00Z";
+const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const FUNCTION_NAME = "allocatePrizes";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Max-Age': '86400'
-};
+const corsHeaders = CORS_HEADERS;
 
 interface AllocatePrizesRequest {
   tournamentId: string;
@@ -302,16 +298,17 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Ping endpoint for deployment verification
-  const url = new URL(req.url);
-  if (url.searchParams.get("ping") === "1") {
-    return new Response(JSON.stringify({ 
-      function: "allocatePrizes", 
-      buildVersion: BUILD_VERSION,
-      status: "ok" 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+  // Health check: ?ping=1 (before reading body)
+  if (hasPingQueryParam(req)) {
+    console.log(`[${FUNCTION_NAME}] ping via query param`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
+  }
+
+  // Read body as text for safe ping detection
+  const rawBody = await req.text();
+  if (isPingBody(rawBody)) {
+    console.log(`[${FUNCTION_NAME}] ping via body`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION);
   }
 
   try {
@@ -320,7 +317,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const payload: AllocatePrizesRequest = await req.json();
+    // Parse from already-read rawBody
+    const payload: AllocatePrizesRequest = JSON.parse(rawBody);
     const { tournamentId, overrides = [], ruleConfigOverride, dryRun = false, tieBreakStrategy } = payload;
 
     const authHeader = req.headers.get('Authorization') ?? '';
