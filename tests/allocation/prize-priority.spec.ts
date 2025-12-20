@@ -138,12 +138,12 @@ describe('Prize Priority Hierarchy', () => {
   });
 
   /**
-   * NEW TEST SECTION: "Place before Main" scenarios
+   * NEW TEST SECTION: "Place before Main" scenarios (toggle OFF - default)
    * 
-   * These test the updated priority hierarchy where place number
+   * These test the default behavior where place number
    * is compared BEFORE main vs subcategory when cash + trophy/medal are equal.
    */
-  describe('Place before Main scenarios (updated hierarchy)', () => {
+  describe('Place before Main scenarios (toggle OFF - default)', () => {
     const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
       cat: {
         id: cat.id ?? 'cat-1',
@@ -163,7 +163,7 @@ describe('Prize Priority Hierarchy', () => {
       } as Prize
     });
 
-    it('Main 8th vs Rating 1st (equal cash+trophy) → Rating 1st wins', () => {
+    it('Main 8th vs Rating 1st (equal cash+trophy) → Rating 1st wins (toggle OFF)', () => {
       // This is the "Abhinav scenario" - player should get Rating 1st, not Main 8th
       const main8th = makeEntry(
         { is_main: true, name: 'Main' },
@@ -234,6 +234,138 @@ describe('Prize Priority Hierarchy', () => {
 
       // Rating A should come first (lower order_idx = earlier in brochure)
       expect(entries[0].p.id).toBe('rating-a-1');
+    });
+  });
+
+  /**
+   * NEW TEST SECTION: prefer_main_on_equal_value toggle ON
+   * 
+   * When the toggle is ON, Main prizes beat Side prizes at equal cash/type,
+   * BEFORE place is considered. This is useful for tournaments that want
+   * Main category prestige to outweigh placement in side categories.
+   */
+  describe('prefer_main_on_equal_value = true (Main-first mode)', () => {
+    const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
+      cat: {
+        id: cat.id ?? 'cat-1',
+        name: cat.name ?? 'Test',
+        is_main: cat.is_main ?? false,
+        order_idx: cat.order_idx ?? 0,
+        criteria_json: cat.criteria_json ?? {},
+        prizes: []
+      } as Category,
+      p: {
+        id: prize.id ?? 'prize-1',
+        place: prize.place ?? 1,
+        cash_amount: prize.cash_amount ?? 0,
+        has_trophy: prize.has_trophy ?? false,
+        has_medal: prize.has_medal ?? false,
+        is_active: true
+      } as Prize
+    });
+
+    it('Main 4th beats Side 1st when toggle ON (equal cash+trophy)', () => {
+      const main4th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
+      );
+      const side1st = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const entries = [side1st, main4th];
+      entries.sort(comparator);
+
+      // Main 4th should come first when toggle is ON
+      expect(entries[0].p.id).toBe('main-4');
+      expect(entries[0].cat.is_main).toBe(true);
+    });
+
+    it('Side 1st still beats Main 4th when toggle OFF (default)', () => {
+      const main4th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
+      );
+      const side1st = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: false });
+      const entries = [main4th, side1st];
+      entries.sort(comparator);
+
+      // Side 1st should come first when toggle is OFF (place before main)
+      expect(entries[0].p.id).toBe('side-1');
+      expect(entries[0].p.place).toBe(1);
+    });
+
+    it('Side vs Side: 1st still beats 2nd regardless of toggle', () => {
+      const sideA1st = makeEntry(
+        { is_main: false, name: 'Rating A', order_idx: 1 },
+        { id: 'a-1', place: 1, cash_amount: 5000, has_trophy: true }
+      );
+      const sideB2nd = makeEntry(
+        { is_main: false, name: 'Rating B', order_idx: 0 }, // Earlier in brochure
+        { id: 'b-2', place: 2, cash_amount: 5000, has_trophy: true }
+      );
+
+      // Test with toggle ON
+      const comparatorOn = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const entriesOn = [sideB2nd, sideA1st];
+      entriesOn.sort(comparatorOn);
+      
+      // 1st place still beats 2nd place (Side vs Side, toggle doesn't apply)
+      expect(entriesOn[0].p.id).toBe('a-1');
+      expect(entriesOn[0].p.place).toBe(1);
+
+      // Test with toggle OFF
+      const comparatorOff = allocator.makePrizeComparator({ prefer_main_on_equal_value: false });
+      const entriesOff = [sideB2nd, sideA1st];
+      entriesOff.sort(comparatorOff);
+      
+      // 1st place still beats 2nd place
+      expect(entriesOff[0].p.id).toBe('a-1');
+    });
+
+    it('Main vs Main: lower place still wins regardless of toggle', () => {
+      const main2nd = makeEntry(
+        { is_main: true, name: 'Main', order_idx: 0 },
+        { id: 'main-2', place: 2, cash_amount: 5000, has_trophy: true }
+      );
+      const main5th = makeEntry(
+        { is_main: true, name: 'Main', order_idx: 0 },
+        { id: 'main-5', place: 5, cash_amount: 5000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const entries = [main5th, main2nd];
+      entries.sort(comparator);
+
+      // 2nd place beats 5th place (both Main, so place comparison still applies)
+      expect(entries[0].p.id).toBe('main-2');
+      expect(entries[0].p.place).toBe(2);
+    });
+
+    it('Cash still beats everything regardless of toggle', () => {
+      const main4thHighCash = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 10000, has_trophy: true }
+      );
+      const side1stLowCash = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 5000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ prefer_main_on_equal_value: true });
+      const entries = [side1stLowCash, main4thHighCash];
+      entries.sort(comparator);
+
+      // Higher cash wins regardless
+      expect(entries[0].p.id).toBe('main-4');
+      expect(entries[0].p.cash_amount).toBe(10000);
     });
   });
 
