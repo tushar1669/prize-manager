@@ -1,20 +1,31 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, AlertTriangle } from "lucide-react";
+import { Trophy, AlertTriangle, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, signIn, signUp } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  
+  // Check URL param for initial mode
+  const initialMode = searchParams.get('mode');
+  const [isLogin, setIsLogin] = useState(initialMode !== 'signup');
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // Resend confirmation state
+  const [showResend, setShowResend] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Detect localhost misconfiguration warning (for production deploys)
   const isLocalhost = typeof window !== 'undefined' && 
@@ -25,6 +36,13 @@ export default function Auth() {
       navigate("/dashboard");
     }
   }, [user, navigate]);
+
+  // Update mode when URL param changes
+  useEffect(() => {
+    if (initialMode === 'signup') {
+      setIsLogin(false);
+    }
+  }, [initialMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,10 +67,51 @@ export default function Auth() {
         }
       } else {
         toast.success("Account created! Please check your email to confirm.");
+        // Show resend option after successful signup
+        setResendEmail(email);
+        setShowResend(true);
       }
     }
     
     setLoading(false);
+  };
+
+  const handleResendConfirmation = async () => {
+    const emailToResend = resendEmail.trim() || email.trim();
+    if (!emailToResend) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: emailToResend,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes('not found') || 
+            error.message.toLowerCase().includes('does not exist')) {
+          toast.error('No account found with this email. Please sign up first.');
+        } else if (error.message.toLowerCase().includes('already confirmed')) {
+          toast.success('Your email is already confirmed! You can sign in now.');
+          setIsLogin(true);
+          setShowResend(false);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success('Confirmation email sent! Check your inbox.');
+      }
+    } catch (err) {
+      toast.error('Failed to resend confirmation email');
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   return (
@@ -78,6 +137,40 @@ export default function Auth() {
                 You're on localhost. Email confirmation links will redirect here, which may fail in production. 
                 For production, use the deployed URL.
               </p>
+            </div>
+          )}
+
+          {/* Resend confirmation section - shown after signup or when user requests */}
+          {showResend && !isLogin && (
+            <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Mail className="h-4 w-4" />
+                Didn't receive the email?
+              </div>
+              <div className="space-y-2">
+                <Input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={resendEmail}
+                  onChange={(e) => setResendEmail(e.target.value)}
+                />
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  className="w-full" 
+                  onClick={handleResendConfirmation}
+                  disabled={resendLoading}
+                >
+                  {resendLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Resend Confirmation Email'
+                  )}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -115,6 +208,21 @@ export default function Auth() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (isLogin ? "Signing in..." : "Creating account...") : (isLogin ? "Sign In" : "Create Account")}
             </Button>
+            
+            {/* Resend link for signup mode */}
+            {!isLogin && !showResend && (
+              <div className="text-center">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-xs text-muted-foreground p-0 h-auto"
+                  onClick={() => setShowResend(true)}
+                >
+                  Already signed up? Resend confirmation email
+                </Button>
+              </div>
+            )}
+            
             <div className="text-center text-sm">
               <span className="text-muted-foreground">
                 {isLogin ? "Don't have an account?" : "Already have an account?"}
@@ -123,7 +231,10 @@ export default function Auth() {
                 type="button"
                 variant="link"
                 className="ml-1 p-0 h-auto"
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setShowResend(false);
+                }}
               >
                 {isLogin ? "Sign up" : "Sign in"}
               </Button>
