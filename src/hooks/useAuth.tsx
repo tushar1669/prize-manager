@@ -39,14 +39,8 @@ export function useAuth() {
       }
     });
     
-    // If signup successful, create user_role as organizer (unverified)
-    if (data.user && !error) {
-      await supabase.from('user_roles').insert({
-        user_id: data.user.id,
-        role: 'organizer',
-        is_verified: false
-      });
-    }
+    // NOTE: user_roles and profiles are auto-created by the handle_new_user trigger
+    // No client-side insertion needed
     
     return { data, error };
   };

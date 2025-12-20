@@ -38,7 +38,10 @@ export function useUserRole() {
     fetchRole();
   }, [user]);
 
-  // CRITICAL: Master access requires BOTH role=master AND email in allowlist
+  // CRITICAL: Master access requires BOTH:
+  // 1. role === 'master' in DB
+  // 2. email in allowlist (client-side check, backed by server-side RLS)
+  // Server-side is_master() function provides the real protection
   const isMaster = role === 'master' && isEmailAllowedMaster(user?.email);
 
   return { role, loading, isMaster, isVerified };
