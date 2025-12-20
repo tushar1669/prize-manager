@@ -70,6 +70,8 @@ type AdminTournament = {
   time_control_base_minutes: number | null;
   time_control_increment_seconds: number | null;
   time_control_category: TimeControlCategory | null;
+  owner_id: string;
+  owner_email?: string;
 };
 
 const badgeVariants: Record<Exclude<TimeControlCategory, "UNKNOWN">, "destructive" | "default" | "secondary"> = {
@@ -107,20 +109,39 @@ export default function AdminTournaments() {
   }>({ open: false, action: null, tournament: null });
   const [hardDeleteConfirmText, setHardDeleteConfirmText] = useState("");
 
-  // Fetch all tournaments (admin view)
+  // Fetch all tournaments with owner info (admin view - master only)
   const { data: tournaments, isLoading, error } = useQuery({
     queryKey: ["admin-tournaments"],
     queryFn: async (): Promise<AdminTournament[]> => {
-      const { data, error } = await supabase
+      // Fetch tournaments
+      const { data: tournamentsData, error: tournamentsError } = await supabase
         .from("tournaments")
         .select(
-          "id, title, start_date, end_date, city, venue, status, is_published, is_archived, deleted_at, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category"
+          "id, title, start_date, end_date, city, venue, status, is_published, is_archived, deleted_at, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category, owner_id"
         )
         .order("start_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return (data as unknown as AdminTournament[]) ?? [];
+      if (tournamentsError) throw tournamentsError;
+      if (!tournamentsData || tournamentsData.length === 0) return [];
+
+      // Get unique owner IDs
+      const ownerIds = [...new Set(tournamentsData.map((t) => t.owner_id).filter(Boolean))];
+
+      // Fetch profiles for owners (master can read all profiles via RLS)
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .in("id", ownerIds);
+
+      // Create lookup map
+      const profileMap = new Map((profilesData ?? []).map((p) => [p.id, p.email]));
+
+      // Merge owner emails into tournaments
+      return tournamentsData.map((t) => ({
+        ...t,
+        owner_email: profileMap.get(t.owner_id) ?? undefined,
+      })) as AdminTournament[];
     },
     enabled: !!user && !roleLoading && isMaster,
   });
@@ -388,6 +409,7 @@ export default function AdminTournaments() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Tournament</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Dates</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Time Control</TableHead>
@@ -411,6 +433,11 @@ export default function AdminTournaments() {
                     <TableRow key={t.id} className={t.deleted_at ? "opacity-60" : ""}>
                       <TableCell>
                         <div className="font-medium text-foreground">{t.title}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground truncate max-w-[180px]" title={t.owner_email}>
+                          {t.owner_email || <span className="italic">Unknown</span>}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
