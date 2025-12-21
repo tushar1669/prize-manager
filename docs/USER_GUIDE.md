@@ -32,11 +32,16 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
 - One-prize policy: each player can receive at most one prize. The allocator assigns the highest-priority eligible prize first.
 
 ## Tournament Settings
-Tournament organizers can configure allocation rules at `/t/<id>/settings`.
 
-- **Main vs Place Priority** controls the main-vs-side tie-break when cash and prize type match.
-  - **Place before Main** (`main_vs_side_priority_mode = place_first`): better place wins even across categories.
-  - **Main before Place** (`main_vs_side_priority_mode = main_first`): main category wins before place is considered.
+Tournament organizers can configure allocation rules at `/t/<id>/settings`. For a complete reference of all settings including defaults, allocator effects, and gotchas, see the **[Tournament Settings Reference](./TOURNAMENT_SETTINGS.md)**.
+
+Key settings include:
+- **Strict Age Eligibility** — Exclude DOB-less players from age categories (default: ON)
+- **Allow Missing DOB for Age** — Treat DOB-less players as eligible with warning (default: OFF)
+- **Inclusive Maximum Age** — Include players exactly at max_age boundary (default: ON)
+- **Main vs Place Priority** — Tie-break when cash/type match: `place_first` (default) or `main_first`
+- **Age Band Policy** — `non_overlapping` (one band per child) or `overlapping` (cascading eligibility)
+- **Prize Stacking Policy** — `single` (one prize per player), `main_plus_one_side`, or `unlimited`
 
 ## Review & Allocate
 - Click **Preview Allocation** to generate a provisional allocation.

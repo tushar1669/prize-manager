@@ -612,7 +612,6 @@ export type Database = {
           category_priority_order: Json | null
           created_at: string | null
           max_age_inclusive: boolean | null
-          main_vs_side_priority_mode: string | null
           multi_prize_policy: string | null
           prefer_category_rank_on_tie: boolean | null
           prefer_main_on_equal_value: boolean | null
@@ -627,7 +626,6 @@ export type Database = {
           category_priority_order?: Json | null
           created_at?: string | null
           max_age_inclusive?: boolean | null
-          main_vs_side_priority_mode?: string | null
           multi_prize_policy?: string | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
@@ -642,7 +640,6 @@ export type Database = {
           category_priority_order?: Json | null
           created_at?: string | null
           max_age_inclusive?: boolean | null
-          main_vs_side_priority_mode?: string | null
           multi_prize_policy?: string | null
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
