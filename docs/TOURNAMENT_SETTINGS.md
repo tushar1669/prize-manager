@@ -6,12 +6,14 @@ This document provides a complete reference for all configurable settings availa
 
 | Setting | Default | Stored In | Used By Allocator | Impacts Outcome |
 |---------|---------|-----------|-------------------|-----------------|
-| Strict Age Eligibility | ON | `strict_age` | ✅ Yes | ✅ Yes |
-| Allow Missing DOB for Age | OFF | `allow_missing_dob_for_age` | ✅ Yes | ✅ Yes |
-| Inclusive Maximum Age | ON | `max_age_inclusive` | ✅ Yes | ✅ Yes |
-| Main vs Place Priority | Place First | `main_vs_side_priority_mode` | ✅ Yes | ✅ Yes |
-| Age Band Policy | Non-overlapping | `age_band_policy` | ✅ Yes | ✅ Yes |
-| Prize Stacking Policy | Single | `multi_prize_policy` | ✅ Yes | ✅ Yes |
+| Strict Age Eligibility | ON | `rule_config.strict_age` | ✅ Yes | ✅ Yes |
+| Allow Missing DOB for Age | OFF | `rule_config.allow_missing_dob_for_age` | ✅ Yes | ✅ Yes |
+| Inclusive Maximum Age | ON | `rule_config.max_age_inclusive` | ✅ Yes | ✅ Yes |
+| Allow Unrated in Rating Bands | OFF | `rule_config.allow_unrated_in_rating` | ✅ Yes | ✅ Yes |
+| Main-first vs Place-first (Main vs Side only) | Place First | `rule_config.main_vs_side_priority_mode` | ✅ Yes | ✅ Yes |
+| Age Band Policy | Non-overlapping | `rule_config.age_band_policy` | ✅ Yes | ✅ Yes |
+| Prize Stacking Policy | Single | `rule_config.multi_prize_policy` | ✅ Yes | ✅ Yes |
+| Category Priority Order | Current order | `categories.order_idx` | ✅ Yes | ✅ Yes |
 
 ---
 
@@ -55,6 +57,12 @@ When enabled, players with missing birthdates are treated as **eligible** for ag
 - **OFF (default):** Players with `dob = null` are ineligible for any category with age criteria.
 - **ON:** Players with `dob = null` can win age prizes, but receive a warning flag in the debug report.
 
+**Example:**
+- Category: "Under 14 Best"
+- Player: Rating top-ranked, DOB missing
+- **ON:** ✅ Eligible (flagged with `dob_missing_allowed`)
+- **OFF:** ❌ Ineligible (fails with `dob_missing`)
+
 **Interaction with `strict_age`:**
 
 | strict_age | allow_missing_dob_for_age | Result for DOB-less player in age category |
@@ -88,7 +96,32 @@ Determines whether players exactly AT the maximum age boundary are included in t
 
 ---
 
-### Main vs Place Priority
+### Allow Unrated in Rating Bands
+
+**Column:** `rule_config.allow_unrated_in_rating`  
+**Type:** `boolean`  
+**Default:** `false` (OFF)  
+**UI Location:** Not currently exposed in Settings UI (legacy rule_config value)
+
+**What it does:**
+
+Sets the **global fallback** for rating categories when the category does not explicitly set `include_unrated`. It controls whether unrated players may enter rating bands by default.
+
+**Allocator behavior:**
+- **OFF (default):** Unrated players are excluded from rating categories unless `include_unrated = true`, `unrated_only = true`, or the category is a max-only band (legacy behavior).
+- **ON:** Unrated players are eligible in rating categories when `include_unrated` is unset.
+
+**Example:**
+- Category: "Below 1600" with `min_rating = 1200`, `max_rating = 1600`, `include_unrated` unset
+- Player: No rating (unrated)
+- **Global OFF:** ❌ Ineligible
+- **Global ON:** ✅ Eligible (passes `rating_unrated_allowed`)
+
+**Note:** Per-category `include_unrated` and `unrated_only` always override this setting.
+
+---
+
+### Main-first vs Place-first (Main vs Side only)
 
 **Column:** `rule_config.main_vs_side_priority_mode`  
 **Type:** `'place_first' | 'main_first'`  
@@ -125,6 +158,12 @@ A Main 4th prize beats a Side 1st prize (when cash/type match).
 **Important:** This ONLY affects Main vs Side comparisons:
 - Side vs Side: Always uses place first
 - Main vs Main: Always uses place first
+
+**Example:**
+- Prize A: Main 4th, ₹5000, trophy
+- Prize B: Side 1st, ₹5000, trophy
+- **Place-first:** Side 1st wins
+- **Main-first:** Main 4th wins
 
 See [Prize Priority Hierarchy](./allocator/prize-priority-hierarchy.md) for detailed examples.
 
@@ -171,6 +210,8 @@ A 10-year-old is eligible for **U11, U14, and U17**.
 - **Non-overlapping:** One age prize per child (most tournaments)
 - **Overlapping:** Cascading eligibility for special events
 
+**Example:** A 12-year-old is eligible for U14 only in non-overlapping mode, but U14 and U17 in overlapping mode.
+
 See [Age Band Policies](./allocator/age-policies.md) for implementation details.
 
 ---
@@ -201,6 +242,8 @@ A player can win:
 No cap. If a player is best in multiple categories, they receive all those prizes.
 
 **Warning:** Non-strict modes reduce the number of distinct winners. Use only when the tournament brochure explicitly allows prize stacking.
+
+**Example:** In `main_plus_one_side`, a player can win Main 1st plus Best U14, but not a third prize.
 
 ---
 
@@ -304,6 +347,7 @@ Settings are stored in the `rule_config` table:
 CREATE TABLE rule_config (
   tournament_id UUID PRIMARY KEY REFERENCES tournaments(id),
   strict_age BOOLEAN DEFAULT true,
+  allow_unrated_in_rating BOOLEAN DEFAULT false,
   allow_missing_dob_for_age BOOLEAN DEFAULT false,
   max_age_inclusive BOOLEAN DEFAULT true,
   age_band_policy TEXT DEFAULT 'non_overlapping', -- 'non_overlapping' | 'overlapping'
