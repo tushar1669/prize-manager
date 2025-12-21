@@ -39,7 +39,8 @@ Key settings include:
 - **Strict Age Eligibility** — Exclude DOB-less players from age categories (default: ON)
 - **Allow Missing DOB for Age** — Treat DOB-less players as eligible with warning (default: OFF)
 - **Inclusive Maximum Age** — Include players exactly at max_age boundary (default: ON)
-- **Main vs Place Priority** — Tie-break when cash/type match: `place_first` (default) or `main_first`
+- **Allow Unrated in Rating Bands** — Global fallback when categories do not specify `include_unrated` (default: OFF)
+- **Main-first vs Place-first (Main vs Side only)** — Tie-break when cash/type match: `place_first` (default) or `main_first`
 - **Age Band Policy** — `non_overlapping` (one band per child) or `overlapping` (cascading eligibility)
 - **Prize Stacking Policy** — `single` (one prize per player), `main_plus_one_side`, or `unlimited`
 
