@@ -443,6 +443,46 @@ describe('Prize Priority Hierarchy', () => {
       entriesOff.sort(comparatorOff);
       expect(entriesOff[0].p.id).toBe('side-1');
     });
+
+    it('Case 4 (main vs main): 2nd vs 5th (equal cash/type) → 2nd wins regardless of mode', () => {
+      const main2nd = makeEntry(
+        { is_main: true, name: 'Main', order_idx: 0 },
+        { id: 'main-2', place: 2, cash_amount: 5000, has_trophy: true }
+      );
+      const main5th = makeEntry(
+        { is_main: true, name: 'Main', order_idx: 0 },
+        { id: 'main-5', place: 5, cash_amount: 5000, has_trophy: true }
+      );
+
+      const comparatorOn = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
+      const entriesOn = [main5th, main2nd];
+      entriesOn.sort(comparatorOn);
+      expect(entriesOn[0].p.id).toBe('main-2');
+
+      const comparatorOff = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+      const entriesOff = [main5th, main2nd];
+      entriesOff.sort(comparatorOff);
+      expect(entriesOff[0].p.id).toBe('main-2');
+    });
+
+    it('Case 5 (invalid DB value): defaults to place_first behavior', () => {
+      const main4th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
+      );
+      const side1st = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({
+        main_vs_side_priority_mode: 'unexpected' as AllocatorModule.MainVsSidePriorityMode
+      });
+      const entries = [main4th, side1st];
+      entries.sort(comparator);
+
+      expect(entries[0].p.id).toBe('side-1');
+    });
   });
 
   describe('Scenario: Equal-cash trophies in different categories', () => {
