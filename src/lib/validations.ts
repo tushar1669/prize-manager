@@ -37,8 +37,6 @@ export const ruleConfigSchema = z.object({
   allow_unrated_in_rating: z.boolean(),
   allow_missing_dob_for_age: z.boolean(),
   max_age_inclusive: z.boolean(),
-  prefer_main_on_equal_value: z.boolean(),
-  prefer_category_rank_on_tie: z.boolean(),
   category_priority_order: z.array(z.string()).optional(),
   main_vs_side_priority_mode: z.enum(['main_first', 'place_first']).optional(),
   // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
