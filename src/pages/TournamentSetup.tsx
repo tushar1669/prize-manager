@@ -74,6 +74,22 @@ export async function ensureMainCategoryExists({
 
   ensuringRef.current = true;
 
+  // DB-FIRST CHECK: Query DB directly to avoid stale in-memory state
+  const { data: existingMain } = await supabaseClient
+    .from('categories')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .eq('is_main', true)
+    .maybeSingle();
+
+  if (existingMain) {
+    // Main already exists in DB, just refetch to sync state
+    console.log('[ensureMainCategoryExists] Main category already exists in DB, syncing');
+    ensuringRef.current = false;
+    await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
+    return false;
+  }
+
   const { error } = await supabaseClient.from('categories').insert({
     tournament_id: tournamentId,
     name: MAIN_CATEGORY_NAME,
@@ -316,6 +332,20 @@ export default function TournamentSetup() {
     setHasHydratedPrizes(false);
   }, [id]);
 
+  // Force fresh fetch and reset hydration when switching TO prizes tab
+  // This handles navigation back from Import Players
+  useEffect(() => {
+    if (activeTab === 'prizes' && id) {
+      // Invalidate categories to force fresh fetch
+      queryClient.invalidateQueries({ queryKey: ['categories', id] });
+      // Reset hydration ONLY if there's no pending draft the user might want to restore
+      if (!hasPendingDraft) {
+        setHasHydratedPrizes(false);
+      }
+      dlog('[prizes tab] invalidated categories, reset hydration', { hasPendingDraft });
+    }
+  }, [activeTab, id, queryClient, hasPendingDraft]);
+
   // Autosave Main Prizes while dirty (only after hydration)
   const isMainPrizesDirty = useMemo(() => {
     if (!hasHydratedPrizes) return false;
@@ -426,7 +456,7 @@ export default function TournamentSetup() {
   const isOrganizer = 
     (user && tournament && tournament.owner_id === user.id) || !!isMaster;
 
-  // Fetch categories
+  // Fetch categories - force fresh fetch on mount to handle navigation back scenarios
   const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories', id],
     queryFn: async () => {
@@ -444,8 +474,10 @@ export default function TournamentSetup() {
       return data;
     },
     enabled: !!id && activeTab === 'prizes',
-    staleTime: 30_000,
-    refetchOnWindowFocus: false
+    staleTime: 0, // Always consider stale to ensure fresh data on navigation
+    refetchOnWindowFocus: false,
+    refetchOnMount: 'always', // Force fresh fetch when returning to this page
+    refetchOnReconnect: true
   });
 
   // Ensure Main Prize category exists for individual prize mode
@@ -1124,6 +1156,13 @@ export default function TournamentSetup() {
   };
 
   const onCategorySubmit = (values: CategoryForm) => {
+    // Guard: Prevent creating a category with reserved "Main Prize" name
+    const normalizedName = values.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normalizedName === 'main prize') {
+      toast.error('Main Prize is reserved and already exists. Add a different category name.');
+      return;
+    }
+
     // If copying from a category, optionally include criteria (controlled state)
     if (copyFromCategoryId && includeCriteriaOnCopy) {
       const source = categories?.find(c => c.id === copyFromCategoryId);
