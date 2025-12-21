@@ -13,7 +13,6 @@ interface RuleConfig {
   allow_missing_dob_for_age?: boolean;
   max_age_inclusive?: boolean;
   prefer_main_on_equal_value?: boolean;
-  prefer_category_rank_on_tie?: boolean;
   allow_unrated_in_rating?: boolean;
   main_vs_side_priority_mode?: string | null;
 }
@@ -229,8 +228,8 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                   <span className="text-muted-foreground">Tie-break Strategy</span>
                   <p className="text-xs">
                     {mainVsSidePriorityMode === 'main_first'
-                      ? 'Prefer Main category when values are equal'
-                      : 'Prefer place before Main category when values are equal'
+                      ? 'Main before Place when cash and prize type match'
+                      : 'Place before Main when cash and prize type match'
                     }
                   </p>
                 </div>

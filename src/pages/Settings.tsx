@@ -30,10 +30,8 @@ export default function Settings() {
       allow_unrated_in_rating: false,
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
-      prefer_main_on_equal_value: true,
-      prefer_category_rank_on_tie: false,
       category_priority_order: [],
-      main_vs_side_priority_mode: 'main_first' as const,
+      main_vs_side_priority_mode: 'place_first' as const,
       age_band_policy: 'non_overlapping' as const,
       multi_prize_policy: 'single' as const
     }
@@ -64,7 +62,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle() as { data: any; error: any };
       
@@ -80,14 +78,13 @@ export default function Settings() {
       
       if (data) {
         const mainVsSidePriorityMode = (data.main_vs_side_priority_mode as 'main_first' | 'place_first')
-          || (data.prefer_main_on_equal_value ? 'main_first' : 'place_first');
+          || (data.prefer_main_on_equal_value ? 'main_first' : 'place_first')
+          || 'place_first';
         form.reset({
           strict_age: data.strict_age,
           allow_unrated_in_rating: data.allow_unrated_in_rating,
           allow_missing_dob_for_age: data.allow_missing_dob_for_age,
           max_age_inclusive: data.max_age_inclusive,
-          prefer_main_on_equal_value: mainVsSidePriorityMode === 'main_first',
-          prefer_category_rank_on_tie: data.prefer_category_rank_on_tie,
           category_priority_order: data.category_priority_order as string[] || [],
           main_vs_side_priority_mode: mainVsSidePriorityMode,
           age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping',
@@ -103,14 +100,14 @@ export default function Settings() {
   const saveMutation = useMutation({
     mutationFn: async (values: RuleConfigForm) => {
       console.log('[settings] save rules', { id, payload: values });
-      const mainVsSidePriorityMode = values.prefer_main_on_equal_value ? 'main_first' : 'place_first';
       
       const { error } = await supabase
         .from('rule_config')
         .upsert({
           tournament_id: id,
           ...values,
-          main_vs_side_priority_mode: mainVsSidePriorityMode,
+          main_vs_side_priority_mode: values.main_vs_side_priority_mode,
+          prefer_main_on_equal_value: values.main_vs_side_priority_mode === 'main_first',
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'tournament_id'
@@ -240,45 +237,44 @@ export default function Settings() {
 
                 <FormField
                   control={form.control}
-                  name="prefer_main_on_equal_value"
+                  name="main_vs_side_priority_mode"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between py-2">
-                      <div>
-                        <FormLabel className="text-foreground font-medium">
-                          Prefer Main on Equal Value
-                        </FormLabel>
-                        <FormDescription className="text-sm text-muted-foreground mt-1">
-                          When prizes have equal cash value, prefer main category over others
-                        </FormDescription>
-                      </div>
+                    <FormItem>
+                      <FormLabel className="text-foreground font-medium">
+                        Main vs Place Priority
+                      </FormLabel>
+                      <FormDescription className="text-sm text-muted-foreground mt-1 mb-4">
+                        Decide which prize wins when cash and prize type match
+                      </FormDescription>
                       <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="prefer_category_rank_on_tie"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between py-2">
-                      <div>
-                        <FormLabel className="text-foreground font-medium">
-                          Prefer Category Rank on Tie
-                        </FormLabel>
-                        <FormDescription className="text-sm text-muted-foreground mt-1">
-                          When values are equal, prefer higher category priority
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
+                        <RadioGroup
+                          value={field.value || 'place_first'}
+                          onValueChange={field.onChange}
+                          className="space-y-3"
+                        >
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="place_first" id="priority-place-first" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="priority-place-first" className="font-medium cursor-pointer">
+                                Place before Main
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Keep the higher place prize when cash and prize type match.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="main_first" id="priority-main-first" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="priority-main-first" className="font-medium cursor-pointer">
+                                Main before Place
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Prefer the main category when cash and prize type match.
+                              </p>
+                            </div>
+                          </div>
+                        </RadioGroup>
                       </FormControl>
                     </FormItem>
                   )}
@@ -407,8 +403,14 @@ export default function Settings() {
                   <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
-                  <li>Prefer Main on Equal Value: <strong>{form.watch('prefer_main_on_equal_value') ? 'ON' : 'OFF'}</strong></li>
-                  <li>Prefer Category Rank on Tie: <strong>{form.watch('prefer_category_rank_on_tie') ? 'ON' : 'OFF'}</strong></li>
+                  <li>
+                    Main vs Place Priority:{' '}
+                    <strong>
+                      {form.watch('main_vs_side_priority_mode') === 'main_first'
+                        ? 'Main before Place'
+                        : 'Place before Main'}
+                    </strong>
+                  </li>
                   <li>Prize Stacking: <strong>
                     {form.watch('multi_prize_policy') === 'unlimited' ? 'Unlimited' :
                      form.watch('multi_prize_policy') === 'main_plus_one_side' ? 'Main + one extra' :
