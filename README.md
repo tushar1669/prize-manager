@@ -29,6 +29,7 @@ Prize allocation always hands out the **best overall prize first** using a globa
 
 ## Documentation
 - [User Guide](./docs/USER_GUIDE.md)
+- [Tournament Settings Reference](./docs/TOURNAMENT_SETTINGS.md) — All allocation toggles with defaults, effects, and gotchas
 - [Technical Overview](./docs/TECH_OVERVIEW.md)
 - [Prize Allocation Algorithm Specification](./docs/allocator/README.md)
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md)

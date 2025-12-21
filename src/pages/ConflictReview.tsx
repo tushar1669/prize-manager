@@ -152,7 +152,8 @@ export default function ConflictReview() {
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule-config', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle();
+      // Cast to any to handle main_vs_side_priority_mode which may not exist in all DB schemas
+      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle() as { data: any; error: any };
       if (error) throw error;
       // Provide defaults if rule_config doesn't exist yet
       return data || {
