@@ -11,6 +11,7 @@ export const defaultRules = {
   tie_break_strategy: 'rating_then_name' as const,
   verbose_logs: false,
   multi_prize_policy: 'single' as AllocatorModule.MultiPrizePolicy,
+  age_band_policy: 'non_overlapping' as const,
 };
 
 export type TestPlayer = {

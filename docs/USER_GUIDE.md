@@ -31,6 +31,13 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
 - Categories can filter by age, gender, state/city, club, rating band, Type/Group labels, and special groups (FMG, PC, etc.).
 - One-prize policy: each player can receive at most one prize. The allocator assigns the highest-priority eligible prize first.
 
+## Tournament Settings
+Tournament organizers can configure allocation rules at `/t/<id>/settings`.
+
+- **Main vs Place Priority** controls the main-vs-side tie-break when cash and prize type match.
+  - **Place before Main** (`main_vs_side_priority_mode = place_first`): better place wins even across categories.
+  - **Main before Place** (`main_vs_side_priority_mode = main_first`): main category wins before place is considered.
+
 ## Review & Allocate
 - Click **Preview Allocation** to generate a provisional allocation.
 - **Allocation Debug Report**
