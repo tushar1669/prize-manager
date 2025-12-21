@@ -611,7 +611,7 @@ export type Database = {
           allow_unrated_in_rating: boolean | null
           category_priority_order: Json | null
           created_at: string | null
-          main_vs_side_priority_mode: string | null
+          main_vs_side_priority_mode: string
           max_age_inclusive: boolean | null
           multi_prize_policy: string | null
           prefer_category_rank_on_tie: boolean | null
@@ -626,7 +626,7 @@ export type Database = {
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
-          main_vs_side_priority_mode?: string | null
+          main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
           prefer_category_rank_on_tie?: boolean | null
@@ -641,7 +641,7 @@ export type Database = {
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
           created_at?: string | null
-          main_vs_side_priority_mode?: string | null
+          main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
           prefer_category_rank_on_tie?: boolean | null
