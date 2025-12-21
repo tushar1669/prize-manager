@@ -369,6 +369,82 @@ describe('Prize Priority Hierarchy', () => {
     });
   });
 
+  describe('Acceptance cases: main vs side priority modes', () => {
+    const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
+      cat: {
+        id: cat.id ?? 'cat-1',
+        name: cat.name ?? 'Test',
+        is_main: cat.is_main ?? false,
+        order_idx: cat.order_idx ?? 0,
+        criteria_json: cat.criteria_json ?? {},
+        prizes: []
+      } as Category,
+      p: {
+        id: prize.id ?? 'prize-1',
+        place: prize.place ?? 1,
+        cash_amount: prize.cash_amount ?? 0,
+        has_trophy: prize.has_trophy ?? false,
+        has_medal: prize.has_medal ?? false,
+        is_active: true
+      } as Prize
+    });
+
+    it('Case 1 (place_first): main 4th vs side 1st (equal cash/type) → side 1st wins', () => {
+      const main4th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
+      );
+      const side1st = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+      const entries = [main4th, side1st];
+      entries.sort(comparator);
+
+      expect(entries[0].p.id).toBe('side-1');
+    });
+
+    it('Case 2 (main_first): main 4th vs side 1st (equal cash/type) → main 4th wins', () => {
+      const main4th = makeEntry(
+        { is_main: true, name: 'Main' },
+        { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
+      );
+      const side1st = makeEntry(
+        { is_main: false, name: 'Below-1800' },
+        { id: 'side-1', place: 1, cash_amount: 8000, has_trophy: true }
+      );
+
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
+      const entries = [side1st, main4th];
+      entries.sort(comparator);
+
+      expect(entries[0].p.id).toBe('main-4');
+    });
+
+    it('Case 3 (side vs side): 1st vs 2nd (equal cash/type) → 1st wins regardless of mode', () => {
+      const side1st = makeEntry(
+        { is_main: false, name: 'Rating A', order_idx: 1 },
+        { id: 'side-1', place: 1, cash_amount: 5000, has_trophy: true }
+      );
+      const side2nd = makeEntry(
+        { is_main: false, name: 'Rating B', order_idx: 0 },
+        { id: 'side-2', place: 2, cash_amount: 5000, has_trophy: true }
+      );
+
+      const comparatorOn = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
+      const entriesOn = [side2nd, side1st];
+      entriesOn.sort(comparatorOn);
+      expect(entriesOn[0].p.id).toBe('side-1');
+
+      const comparatorOff = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+      const entriesOff = [side2nd, side1st];
+      entriesOff.sort(comparatorOff);
+      expect(entriesOff[0].p.id).toBe('side-1');
+    });
+  });
+
   describe('Scenario: Equal-cash trophies in different categories', () => {
     it('player gets 1st place in sub over 2nd place in main (place now beats main)', () => {
       const mainCat: Category = {

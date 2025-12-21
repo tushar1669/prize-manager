@@ -4,11 +4,15 @@ When a player qualifies for multiple prizes, the allocation algorithm must decid
 
 ## Priority Order (Configurable)
 
-The priority hierarchy depends on the **"Prefer Main on Equal Value"** toggle in Tournament Settings.
+The priority hierarchy depends on the **Main vs Place Priority** control in Tournament Settings.
+This maps to the rule config field `main_vs_side_priority_mode` with two values:
 
-### Toggle OFF (default): Place Before Main
+- `place_first` (default)
+- `main_first`
 
-When the toggle is **OFF**, place number is compared before Main vs Subcategory:
+### Mode `place_first` (default): Place Before Main
+
+When `main_vs_side_priority_mode` is `place_first`, place number is compared before Main vs Side:
 
 | Priority | Field | Direction | Description |
 |----------|-------|-----------|-------------|
@@ -21,9 +25,9 @@ When the toggle is **OFF**, place number is compared before Main vs Subcategory:
 
 **Use case**: Player prefers the prize where their placing is better, regardless of category type. "I'd rather be 1st in something than 8th in Main."
 
-### Toggle ON: Main First
+### Mode `main_first`: Main First
 
-When the toggle is **ON**, Main beats Side immediately after cash/type (before place):
+When `main_vs_side_priority_mode` is `main_first`, Main beats Side immediately after cash/type (before place):
 
 | Priority | Field | Direction | Description |
 |----------|-------|-----------|-------------|
@@ -78,12 +82,12 @@ When both prizes are Main, place is always compared normally.
 
 The allocation debug report includes a `priority_explanation` field for each prize:
 
-**Toggle OFF**:
+**Mode `place_first`**:
 ```
 priority_explanation: "cash=₹1000, type=trophy, place=1, main=yes, order=0"
 ```
 
-**Toggle ON**:
+**Mode `main_first`**:
 ```
 priority_explanation: "cash=₹1000, type=trophy, main=yes (priority), place=1, order=0"
 ```
@@ -100,9 +104,9 @@ The hierarchy is implemented in `supabase/functions/allocatePrizes/index.ts`:
 ### Comparator Logic (simplified)
 
 ```typescript
-// Factory creates comparator based on prefer_main_on_equal_value setting
-export const makePrizeComparator = (opts: { prefer_main_on_equal_value?: boolean }) => {
-  const preferMainFirst = opts.prefer_main_on_equal_value ?? false;
+// Factory creates comparator based on main_vs_side_priority_mode
+export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsSidePriorityMode }) => {
+  const preferMainFirst = opts.main_vs_side_priority_mode === 'main_first';
   
   return (a, b) => {
     // 1. Cash amount: higher wins
