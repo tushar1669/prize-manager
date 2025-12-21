@@ -64,6 +64,50 @@ describe('TournamentSetup main category safeguards', () => {
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
+  it('does not insert while categories are still loading', async () => {
+    const supabaseClient = { from: vi.fn() } as any;
+    const invalidateQueries = vi.fn();
+    const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
+
+    const created = await ensureMainCategoryExists({
+      prizeMode: 'individual',
+      categories: [], // even empty, should wait if loading
+      categoriesLoading: true, // STILL LOADING
+      tournamentId: 't1',
+      supabaseClient,
+      queryClient: { invalidateQueries } as any,
+      ensuringRef,
+    });
+
+    expect(created).toBe(false);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+    expect(ensuringRef.current).toBe(false);
+  });
+
+  it('handles unique constraint violation by refetching instead of erroring', async () => {
+    const insert = vi.fn().mockResolvedValue({ 
+      error: { code: '23505', message: 'duplicate key value violates unique constraint' } 
+    });
+    const supabaseClient = { from: vi.fn(() => ({ insert })) } as any;
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
+
+    const created = await ensureMainCategoryExists({
+      prizeMode: 'individual',
+      categories: [], // Empty, so it tries to create
+      categoriesLoading: false,
+      tournamentId: 't1',
+      supabaseClient,
+      queryClient: { invalidateQueries } as any,
+      ensuringRef,
+    });
+
+    // Should return false (not throw) and refetch
+    expect(created).toBe(false);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['categories', 't1'] });
+    expect(ensuringRef.current).toBe(false); // Reset on unique constraint
+  });
+
   it('prevents toggling or deleting the main category in the UI', () => {
     const onToggleCategory = vi.fn();
     const onDeleteCategory = vi.fn();

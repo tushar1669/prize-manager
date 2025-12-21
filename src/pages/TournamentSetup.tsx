@@ -64,7 +64,10 @@ export async function ensureMainCategoryExists({
   ensuringRef: React.MutableRefObject<boolean>;
 }) {
   if (prizeMode !== 'individual') return false;
-  if (!tournamentId || !categories || categoriesLoading) return false;
+  // Wait for categories to finish loading before checking - prevents race condition
+  if (!tournamentId || categoriesLoading) return false;
+  // Guard: categories must be an array (even if empty) after loading completes
+  if (!Array.isArray(categories)) return false;
 
   const hasMainCategory = categories.some((c) => c.is_main);
   if (hasMainCategory || ensuringRef.current) return false;
@@ -81,6 +84,12 @@ export async function ensureMainCategoryExists({
 
   if (error) {
     ensuringRef.current = false;
+    // If unique constraint violation (main already exists), just refetch
+    if (error.code === '23505') {
+      console.warn('[ensureMainCategoryExists] Main category already exists (unique constraint), refetching');
+      await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
+      return false;
+    }
     throw error;
   }
 
@@ -458,9 +467,18 @@ export default function TournamentSetup() {
 
   // UI-only sort for Setup page: show newest categories at top for better editing UX
   // (CategoryOrderReview still uses order_idx ASC for brochure order)
+  // DETERMINISTIC: If multiple main categories exist (legacy), pick oldest by created_at
   const sortedCategories = useMemo(() => {
     if (!categories) return [];
-    const mainCategory = categories.find((c) => c.is_main);
+    const mainCategories = categories.filter((c) => c.is_main);
+    let mainCategory = mainCategories[0];
+    if (mainCategories.length > 1) {
+      // Pick oldest by created_at for consistency
+      mainCategory = mainCategories.sort((a, b) => 
+        new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+      )[0];
+      console.warn('[TournamentSetup] Multiple main categories found, using oldest:', mainCategory.id);
+    }
     const otherCategories = categories
       .filter(c => !c.is_main)
       .sort((a, b) => (b.order_idx ?? 0) - (a.order_idx ?? 0)); // DESC = newest first
@@ -479,7 +497,11 @@ export default function TournamentSetup() {
     
     if (!categories || hasHydratedPrizes || activeTab !== 'prizes' || hasPendingDraft) return;
     
-    const mainCat = categories.find(c => c.is_main);
+    // DETERMINISTIC: If multiple main categories exist (legacy), pick oldest by created_at
+    const mainCats = categories.filter(c => c.is_main);
+    const mainCat = mainCats.length > 1
+      ? mainCats.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())[0]
+      : mainCats[0];
     
     // Check if draft exists first
     const draft = getDraft<any>(mainPrizesDraftKey, 1);
@@ -651,8 +673,10 @@ export default function TournamentSetup() {
       
       console.log('[prizes] valid prizes count', { total: prizes.length, valid: validPrizes.length });
       
-      // Find or create main category
-      let mainCategoryId = categories?.find(c => c.is_main)?.id;
+      // Find main category - use oldest if multiple exist (deterministic selection)
+      let mainCategoryId = categories
+        ?.filter(c => c.is_main)
+        ?.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())[0]?.id;
       
       if (!mainCategoryId) {
         const { data, error } = await supabase
@@ -667,8 +691,24 @@ export default function TournamentSetup() {
           .select('id')
           .single();
         
-        if (error) throw error;
-        mainCategoryId = data.id;
+        if (error) {
+          // Handle unique constraint violation - main already exists, refetch
+          if (error.code === '23505') {
+            console.warn('[prizes] Main category already exists, refetching');
+            const { data: existingCat } = await supabase
+              .from('categories')
+              .select('id')
+              .eq('tournament_id', id)
+              .eq('is_main', true)
+              .single();
+            if (existingCat) mainCategoryId = existingCat.id;
+            else throw error;
+          } else {
+            throw error;
+          }
+        } else {
+          mainCategoryId = data.id;
+        }
       }
 
       console.log('[prizes] deleting then inserting', { mainCategoryId });
