@@ -5,7 +5,7 @@ import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown, ExternalLink, ArrowRight } from "lucide-react";
+import { FileDown, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +28,7 @@ import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
+import { useFinalizeData } from "@/hooks/useFinalizeData";
 
 interface Winner {
   prizeId: string;
@@ -65,14 +66,32 @@ export default function Finalize() {
     finalizeResult?: { version: number; allocationsCount: number };
   } | undefined;
   
-  // Early guard: if no winners in state, show fallback UI and don't run queries
-  const winners = (locationState?.winners || []) as Winner[];
-  if (!locationState?.winners || winners.length === 0) {
+  // Use hook that handles both location state AND DB fallback
+  const {
+    winners,
+    unfilled,
+    version: dataVersion,
+    source: dataSource,
+    isLoading: dataLoading,
+    error: dataError,
+  } = useFinalizeData(id, locationState);
+
+  // Show loading state when fetching from DB
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Show guard only when NO data exists (not in state AND not in DB)
+  if (winners.length === 0 && !dataLoading) {
     return <NoAllocationGuard />;
   }
 
   const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
-  const unfilled = (locationState?.unfilled || []) as Unfilled[];
+  // unfilled now comes from useFinalizeData hook above
   const fallbackConflicts = Array.isArray(locationState?.conflicts)
     ? locationState.conflicts.length
     : typeof locationState?.conflictsCount === 'number'
@@ -97,6 +116,16 @@ export default function Finalize() {
   const [isExportingPrint, setIsExportingPrint] = useState(false);
   const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
+
+  // Debug log: which source was used (once per mount)
+  useEffect(() => {
+    console.log('[finalize] Page loaded', {
+      source: dataSource,
+      version: dataVersion,
+      winnersCount: winners.length,
+      unfilledCount: unfilled.length,
+    });
+  }, [dataSource, dataVersion, winners.length, unfilled.length]);
 
   // Team prize results - always enabled in Finalize since allocations are finalized
   const {
