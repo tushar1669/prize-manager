@@ -72,6 +72,16 @@ All colors MUST be HSL.
 }
 
 @media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
   body {
     background: #ffffff !important;
     color: #111827 !important;
@@ -86,7 +96,7 @@ All colors MUST be HSL.
 
   /* Print container */
   .pm-print-page {
-    width: 210mm;
+    width: 100%;
     max-width: 210mm;
     margin: 0 auto;
   }
@@ -101,6 +111,10 @@ All colors MUST be HSL.
   /* Hide elements in print */
   .pm-print-hide {
     display: none !important;
+  }
+
+  .min-h-screen {
+    min-height: auto !important;
   }
 
   /* Table rows should not split */

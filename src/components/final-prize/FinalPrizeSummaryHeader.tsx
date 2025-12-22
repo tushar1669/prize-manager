@@ -33,7 +33,7 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur print:static print:border-black print:bg-white print:py-3">
+    <header className="pm-print-hide sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur print:border-black">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between print:px-4 print:py-2">
         <div className="space-y-2 print:space-y-1">
           <h1 className="text-2xl font-bold text-foreground md:text-3xl print:text-2xl print:text-black">{tournamentTitle || 'Final Prize List'}</h1>
