@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -22,6 +22,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { exportPlayersViaPrint } from "@/utils/print";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
@@ -49,6 +51,10 @@ interface Unfilled {
   prizeId: string;
   reasonCodes: string[];
 }
+
+type WinnersView = 'category' | 'amount';
+
+const CATEGORY_PAGE_SIZE = 25;
 
 export default function Finalize() {
   const { id } = useParams();
@@ -116,6 +122,8 @@ export default function Finalize() {
   const [isExportingPrint, setIsExportingPrint] = useState(false);
   const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
+  const [winnersView, setWinnersView] = useState<WinnersView>('category');
+  const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
 
   // Debug log: which source was used (once per mount)
   useEffect(() => {
@@ -157,7 +165,7 @@ export default function Finalize() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
+        .select('id, name, order_idx, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
@@ -168,7 +176,9 @@ export default function Finalize() {
           cash_amount: p.cash_amount,
           has_trophy: p.has_trophy,
           has_medal: p.has_medal,
-          category_name: cat.name
+          category_id: cat.id,
+          category_name: cat.name,
+          category_order: typeof cat.order_idx === 'number' ? cat.order_idx : 999,
         }))
       );
       return prizes;
@@ -266,6 +276,73 @@ export default function Finalize() {
     },
     enabled: !!id && winners.length > 0
   });
+
+  const prizeById = useMemo(() => {
+    return new Map(prizesList?.map(prize => [prize.id, prize]) ?? []);
+  }, [prizesList]);
+
+  const playerById = useMemo(() => {
+    return new Map(playersList?.map(player => [player.id, player]) ?? []);
+  }, [playersList]);
+
+  const winnerRows = useMemo(() => {
+    return winners.map(winner => ({
+      winner,
+      prize: prizeById.get(winner.prizeId),
+      player: playerById.get(winner.playerId),
+    }));
+  }, [prizeById, playerById, winners]);
+
+  const winnersByAmount = useMemo(() => {
+    return [...winnerRows].sort((a, b) => {
+      const amountDiff = (b.prize?.cash_amount ?? 0) - (a.prize?.cash_amount ?? 0);
+      if (amountDiff !== 0) return amountDiff;
+      const placeDiff = (a.prize?.place ?? 0) - (b.prize?.place ?? 0);
+      if (placeDiff !== 0) return placeDiff;
+      return (a.player?.name ?? '').localeCompare(a.player?.name ?? '');
+    });
+  }, [winnerRows]);
+
+  const winnersByCategory = useMemo(() => {
+    const byCategory = new Map<
+      string,
+      { id: string; name: string; order: number; winners: typeof winnerRows }
+    >();
+
+    winnerRows.forEach(row => {
+      const categoryId = row.prize?.category_id ?? 'unknown';
+      const categoryName = row.prize?.category_name ?? 'Unknown Category';
+      const categoryOrder = row.prize?.category_order ?? 999;
+      if (!byCategory.has(categoryId)) {
+        byCategory.set(categoryId, {
+          id: categoryId,
+          name: categoryName,
+          order: categoryOrder,
+          winners: [],
+        });
+      }
+      byCategory.get(categoryId)!.winners.push(row);
+    });
+
+    const groups = Array.from(byCategory.values()).sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.name.localeCompare(b.name);
+    });
+
+    groups.forEach(group => {
+      group.winners.sort((a, b) => {
+        const placeDiff = (a.prize?.place ?? 0) - (b.prize?.place ?? 0);
+        if (placeDiff !== 0) return placeDiff;
+        return (a.player?.name ?? '').localeCompare(b.player?.name ?? '');
+      });
+    });
+
+    return groups;
+  }, [winnerRows]);
+
+  const handleCategoryPageChange = (categoryId: string, page: number) => {
+    setCategoryPages(prev => ({ ...prev, [categoryId]: page }));
+  };
 
   const finalizeMutation = useMutation({
     mutationFn: async (winners: Winner[]) => {
@@ -561,40 +638,128 @@ export default function Finalize() {
                   </Badge>
                 )}
               </div>
-              <div className="rounded-md border overflow-auto max-h-96">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Prize</th>
-                      <th className="text-left p-2">Place</th>
-                      <th className="text-left p-2">Player</th>
-                      <th className="text-left p-2">Rating</th>
-                      <th className="text-left p-2">Amount</th>
-                      <th className="text-left p-2">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {winners.map((winner, idx) => {
-                      const prize = prizesList?.find(p => p.id === winner.prizeId);
-                      const player = playersList?.find(p => p.id === winner.playerId);
-                      return (
-                        <tr key={idx} className="border-b">
-                          <td className="p-2">{prize?.category_name || 'N/A'}</td>
-                          <td className="p-2">#{prize?.place || 'N/A'}</td>
-                          <td className="p-2">{player?.name || 'N/A'}</td>
-                          <td className="p-2">{player?.rating || 'N/A'}</td>
-                          <td className="p-2">₹{prize?.cash_amount || 0}</td>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  View winners
+                </p>
+                <Tabs value={winnersView} onValueChange={value => setWinnersView(value as WinnersView)}>
+                  <TabsList>
+                    <TabsTrigger value="category">Category-wise</TabsTrigger>
+                    <TabsTrigger value="amount">Sorted by Amount</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {winnersView === 'category' ? (
+                <Accordion
+                  type="multiple"
+                  defaultValue={winnersByCategory.map(group => group.id)}
+                  className="rounded-md border border-border"
+                >
+                  {winnersByCategory.map(group => {
+                    const pageIndex = categoryPages[group.id] ?? 0;
+                    const totalPages = Math.max(1, Math.ceil(group.winners.length / CATEGORY_PAGE_SIZE));
+                    const start = pageIndex * CATEGORY_PAGE_SIZE;
+                    const pageWinners = group.winners.slice(start, start + CATEGORY_PAGE_SIZE);
+                    return (
+                      <AccordionItem key={group.id} value={group.id}>
+                        <AccordionTrigger className="px-3 text-left">
+                          <div className="flex flex-1 items-center justify-between gap-2">
+                            <span className="font-medium text-foreground">{group.name}</span>
+                            <span className="text-xs text-muted-foreground">{group.winners.length} winners</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="rounded-md border border-border bg-background/50 overflow-auto max-h-80">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left p-2">Place</th>
+                                  <th className="text-left p-2">Player</th>
+                                  <th className="text-left p-2">Rating</th>
+                                  <th className="text-left p-2">Amount</th>
+                                  <th className="text-left p-2">Notes</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pageWinners.map(row => (
+                                  <tr key={row.winner.prizeId} className="border-b">
+                                    <td className="p-2">#{row.prize?.place ?? 'N/A'}</td>
+                                    <td className="p-2">{row.player?.name || 'N/A'}</td>
+                                    <td className="p-2">{row.player?.rating || 'N/A'}</td>
+                                    <td className="p-2">₹{row.prize?.cash_amount || 0}</td>
+                                    <td className="p-2 text-xs text-muted-foreground">
+                                      {row.winner.isManual ? 'Manual' : 'Auto'}
+                                      {row.prize?.has_trophy ? ' 🏆' : ''}
+                                      {row.prize?.has_medal ? ' 🥇' : ''}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {totalPages > 1 && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-2 text-xs text-muted-foreground">
+                              <span>
+                                Page {pageIndex + 1} of {totalPages}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCategoryPageChange(group.id, Math.max(0, pageIndex - 1))}
+                                  disabled={pageIndex === 0}
+                                >
+                                  Previous
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCategoryPageChange(group.id, Math.min(totalPages - 1, pageIndex + 1))}
+                                  disabled={pageIndex >= totalPages - 1}
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              ) : (
+                <div className="rounded-md border overflow-auto max-h-96">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Prize</th>
+                        <th className="text-left p-2">Place</th>
+                        <th className="text-left p-2">Player</th>
+                        <th className="text-left p-2">Rating</th>
+                        <th className="text-left p-2">Amount</th>
+                        <th className="text-left p-2">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {winnersByAmount.map(row => (
+                        <tr key={row.winner.prizeId} className="border-b">
+                          <td className="p-2">{row.prize?.category_name || 'N/A'}</td>
+                          <td className="p-2">#{row.prize?.place || 'N/A'}</td>
+                          <td className="p-2">{row.player?.name || 'N/A'}</td>
+                          <td className="p-2">{row.player?.rating || 'N/A'}</td>
+                          <td className="p-2">₹{row.prize?.cash_amount || 0}</td>
                           <td className="p-2 text-xs text-muted-foreground">
-                            {winner.isManual ? 'Manual' : 'Auto'}
-                            {prize?.has_trophy ? ' 🏆' : ''}
-                            {prize?.has_medal ? ' 🥇' : ''}
+                            {row.winner.isManual ? 'Manual' : 'Auto'}
+                            {row.prize?.has_trophy ? ' 🏆' : ''}
+                            {row.prize?.has_medal ? ' 🥇' : ''}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
 
