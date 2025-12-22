@@ -7,34 +7,12 @@ import { Loader2, Users } from 'lucide-react';
 import { useFinalPrizeData, FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { useTeamPrizeResults, GroupResponse } from '@/components/team-prizes/useTeamPrizeResults';
 import { formatCurrencyINR } from '@/utils/currency';
+import { type CeremonyItem, sortCeremonyItems } from '@/components/final-prize/ceremonyScriptUtils';
 
 const STORAGE_KEY = 'pm.ceremony.announceSmallestToBiggest';
 
 interface CeremonyScriptViewProps {
   tournamentId: string;
-}
-
-// Ceremony announcement item - unified for both individual and team prizes
-interface CeremonyItem {
-  type: 'individual' | 'team';
-  // For sorting
-  isMain: boolean;
-  categoryOrder: number;
-  place: number;
-  amount: number;
-  // Display data
-  categoryName: string;
-  playerName: string; // or institution name for teams
-  prizeId: string;
-  rank?: number | null;
-  sno?: string | null;
-  club?: string | null;
-  state?: string | null;
-  hasTrophy?: boolean;
-  hasMedal?: boolean;
-  // Team-specific
-  teamPlayers?: Array<{ name: string; rank: number }>;
-  totalPoints?: number;
 }
 
 /**
@@ -209,13 +187,7 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
     const winners = data?.winners ?? [];
     const teamGroups = teamData?.groups ?? [];
     const items = buildCeremonyScript(winners, teamGroups);
-    return [...items].sort((a, b) => {
-      const amountDiff = announceSmallestFirst ? a.amount - b.amount : b.amount - a.amount;
-      if (amountDiff !== 0) return amountDiff;
-      if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
-      if (a.place !== b.place) return a.place - b.place;
-      return 0;
-    });
+    return sortCeremonyItems(items, announceSmallestFirst);
   }, [data?.winners, teamData?.groups, announceSmallestFirst]);
 
   if (isLoading || teamLoading) {
