@@ -20,12 +20,21 @@ export interface CeremonyItem {
   totalPoints?: number;
 }
 
-export function sortCeremonyItems(items: CeremonyItem[], announceSmallestFirst: boolean): CeremonyItem[] {
+/**
+ * Sort ceremony items by category order, then by place descending within each category.
+ * This produces the correct ceremony announcement order:
+ * - Non-main categories first (by brochure order)
+ * - Team prizes
+ * - Main category last (Champion announced last)
+ * Within each category: 3rd, 2nd, 1st (lowest place announced last)
+ */
+export function sortCeremonyItems(items: CeremonyItem[]): CeremonyItem[] {
   return [...items].sort((a, b) => {
-    const amountDiff = announceSmallestFirst ? a.amount - b.amount : b.amount - a.amount;
-    if (amountDiff !== 0) return amountDiff;
+    // Main categories always come last
+    if (a.isMain !== b.isMain) return a.isMain ? 1 : -1;
+    // Then by category order (brochure order)
     if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
-    if (a.place !== b.place) return a.place - b.place;
-    return 0;
+    // Within category: highest place first (3rd, 2nd, 1st) so 1st is announced last
+    return b.place - a.place;
   });
 }
