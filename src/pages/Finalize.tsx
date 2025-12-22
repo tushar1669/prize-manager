@@ -315,7 +315,6 @@ export default function Finalize() {
           prizePlace: row.prize?.place ?? null,
           playerRank: row.player?.rank ?? null,
           playerName: row.player?.name ?? 'N/A',
-          rating: row.player?.rating ?? null,
           amount: row.prize?.cash_amount ?? null,
           trophy: row.prize?.has_trophy ?? false,
           medal: row.prize?.has_medal ?? false,

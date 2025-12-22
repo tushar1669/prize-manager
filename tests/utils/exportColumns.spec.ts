@@ -41,4 +41,29 @@ describe('filterEmptyColumns', () => {
 
     expect(filtered.map(col => col.key)).toEqual(['name', 'nickname']);
   });
+
+  it('removes empty location columns from exports', () => {
+    type LocationRow = {
+      name: string;
+      state?: string | null;
+      city?: string | null;
+      club?: string | null;
+    };
+
+    const rows: LocationRow[] = [
+      { name: 'Asha', state: '', city: ' ', club: null },
+      { name: 'Dev', state: undefined, city: '', club: '' },
+    ];
+
+    const columns: ExportColumn<LocationRow>[] = [
+      { key: 'name', label: 'Name', value: row => row.name },
+      { key: 'state', label: 'State', value: row => row.state },
+      { key: 'city', label: 'City', value: row => row.city },
+      { key: 'club', label: 'Club', value: row => row.club },
+    ];
+
+    const filtered = filterEmptyColumns(rows, columns);
+
+    expect(filtered.map(col => col.key)).toEqual(['name']);
+  });
 });
