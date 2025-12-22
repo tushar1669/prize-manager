@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
+import { Trophy, Medal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -75,16 +76,43 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
             <div className="text-3xl font-extrabold tracking-tight text-foreground print:text-lg print:text-black">
               {winner.playerName}
             </div>
-            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground print:gap-1 print:text-xs print:text-black">
-              <span className="rounded-full bg-success/10 px-3 py-1 text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">Place {winner.place}</span>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground print:gap-1 print:text-xs print:text-black">
+              <span className="font-semibold text-foreground print:text-black">Category won:</span>
+              <span>{winner.categoryName}</span>
+              {(winner.hasTrophy || winner.hasMedal) && (
+                <span className="inline-flex items-center gap-1 text-primary">
+                  {winner.hasTrophy && (
+                    <span className="inline-flex items-center gap-1">
+                      <Trophy className="h-4 w-4" aria-hidden />
+                      <span className="sr-only">Trophy</span>
+                    </span>
+                  )}
+                  {winner.hasMedal && (
+                    <span className="inline-flex items-center gap-1">
+                      <Medal className="h-4 w-4" aria-hidden />
+                      <span className="sr-only">Medal</span>
+                    </span>
+                  )}
+                </span>
+              )}
               <span className="rounded-full bg-primary/10 px-3 py-1 text-primary print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">
                 {formatCurrencyINR(winner.amount)}
               </span>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground print:gap-1 print:text-xs print:text-black">
+              <span className="rounded-full bg-success/10 px-3 py-1 text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">
+                Prize Place {winner.place}
+              </span>
+              <span className="rounded-full bg-secondary/10 px-3 py-1 text-secondary print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">
+                Rank {winner.rank ?? '—'}
+              </span>
               {winner.state && <span className="rounded-full bg-muted px-3 py-1 print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-black">{winner.state}</span>}
             </div>
-            <div className="text-base text-muted-foreground print:text-xs print:text-black/70">
-              {winner.club || 'Club TBC'} • Rank {winner.rank ?? '—'}
-            </div>
+            {winner.club && (
+              <div className="text-base text-muted-foreground print:text-xs print:text-black/70">
+                {winner.club}
+              </div>
+            )}
           </div>
         ))}
       </div>
