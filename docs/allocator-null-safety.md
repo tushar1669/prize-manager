@@ -173,7 +173,6 @@ These tests enforce the following system invariants:
 
 - [Prize Allocation Algorithm Specification](./allocator/README.md)
 - [Organizer Guide: How Prizes Are Decided](./allocator/organizer-guide.md)
-- [CSV Purge Verification](./csv-purge-verification.md)
 
 ## Maintenance Notes
 
