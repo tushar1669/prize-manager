@@ -58,7 +58,7 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
               </CardTitle>
               <div className="text-sm text-muted-foreground print:text-xs print:text-black/70">{winners.length} placements</div>
             </CardHeader>
-            <CardContent className="grid gap-4 py-5 md:grid-cols-2 xl:grid-cols-3 print:gap-2.5 print:py-2.5">
+            <CardContent className="grid gap-4 py-5 sm:grid-cols-2 lg:grid-cols-3 print:gap-2.5 print:py-2.5">
               {winners.map(winner => (
                 <div
                   key={winner.prizeId}
