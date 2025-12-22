@@ -1,7 +1,5 @@
-import { Fragment } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Trophy, Medal } from 'lucide-react';
 import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
@@ -60,35 +58,35 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
               </CardTitle>
               <div className="text-sm text-muted-foreground print:text-xs print:text-black/70">{winners.length} placements</div>
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-5 py-5 print:gap-2.5 print:py-2.5">
-              {winners.map((winner, index) => (
-                <Fragment key={winner.prizeId}>
-                  {index > 0 && <Separator className="bg-border print:bg-black/20" />}
-                  <div className="flex items-start gap-4 print:gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary print:h-7 print:w-7 print:text-sm print:text-black">
-                      {winner.place}
+            <CardContent className="grid gap-4 py-5 md:grid-cols-2 xl:grid-cols-3 print:gap-2.5 print:py-2.5">
+              {winners.map(winner => (
+                <div
+                  key={winner.prizeId}
+                  className="flex items-start gap-4 rounded-md border border-border/60 bg-background/50 p-3 print:gap-2 print:border-black/30 print:bg-white"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary print:h-7 print:w-7 print:text-sm print:text-black">
+                    {winner.place}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5 print:space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2 text-base font-bold text-foreground print:gap-1 print:text-[11px] print:text-black">
+                      {glyphByPlace(winner.place)}
+                      <span>{winner.playerName}</span>
+                      {winner.state && (
+                        <Badge variant="secondary" className="rounded-full border-success/20 bg-success/10 text-xs text-success print:border print:border-black/40 print:bg-white print:text-[10px] print:text-black">
+                          {winner.state}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex-1 space-y-1.5 print:space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-foreground print:gap-1 print:text-sm print:text-black">
-                        {glyphByPlace(winner.place)}
-                        <span>{winner.playerName}</span>
-                        {winner.state && (
-                          <Badge variant="secondary" className="rounded-full bg-success/10 text-xs text-success border-success/20 print:border print:border-black/40 print:bg-white print:text-[10px] print:text-black">
-                            {winner.state}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground print:text-[10px] print:text-black/60">
-                        {winner.club ? `${winner.club} • ` : ''}#{winner.sno ?? '—'} • Rank {winner.rank ?? '—'}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center">
-                      <span className="inline-flex items-center rounded-full border border-success/50 bg-success/10 px-4 py-1.5 text-base font-bold text-success print:border-black/50 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
-                        {formatCurrencyINR(winner.amount)}
-                      </span>
+                    <div className="text-sm text-muted-foreground print:text-[10px] print:text-black/60">
+                      {winner.club ? `${winner.club} • ` : ''}#{winner.sno ?? '—'} • Rank {winner.rank ?? '—'}
                     </div>
                   </div>
-                </Fragment>
+                  <div className="flex shrink-0 items-center">
+                    <span className="inline-flex items-center rounded-full border border-success/50 bg-success/10 px-4 py-1.5 text-base font-bold text-success print:border-black/50 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
+                      {formatCurrencyINR(winner.amount)}
+                    </span>
+                  </div>
+                </div>
               ))}
             </CardContent>
           </Card>
