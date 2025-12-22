@@ -1,5 +1,5 @@
 export interface WinnerRow {
-  winner: { prizeId: string; playerId: string };
+  winner: { prizeId: string; playerId: string; isManual?: boolean };
   prize?: {
     id: string;
     place?: number | null;
@@ -7,10 +7,15 @@ export interface WinnerRow {
     category_id?: string | null;
     category_name?: string | null;
     category_order?: number | null;
+    category_criteria?: unknown;
+    has_trophy?: boolean | null;
+    has_medal?: boolean | null;
   };
   player?: {
-    id: string;
+    id?: string | null;
     name?: string | null;
+    rating?: number | null;
+    rank?: number | null;
   };
 }
 
