@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Medal, Trophy } from 'lucide-react';
 import { FinalPrizeWinnerRow, useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -27,11 +28,10 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId }: Arb
                 <TableHead className="w-16 font-bold text-foreground print:text-black">Place</TableHead>
                 <TableHead className="font-bold text-foreground print:text-black">Category</TableHead>
                 <TableHead className="font-bold text-foreground print:text-black">Player</TableHead>
-                <TableHead className="font-bold text-foreground print:text-black">SNo</TableHead>
                 <TableHead className="font-bold text-foreground print:text-black">Rank</TableHead>
-                <TableHead className="font-bold text-foreground print:text-black">Club</TableHead>
-                <TableHead className="font-bold text-foreground print:text-black">State</TableHead>
                 <TableHead className="text-right font-bold text-foreground print:text-black">Amount</TableHead>
+                <TableHead className="w-20 text-center font-bold text-foreground print:text-black">Trophy</TableHead>
+                <TableHead className="w-20 text-center font-bold text-foreground print:text-black">Medal</TableHead>
                 <TableHead className="w-24 font-bold text-foreground print:text-black">Sign</TableHead>
               </TableRow>
             </TableHeader>
@@ -43,11 +43,14 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId }: Arb
                   <TableCell>
                     <div className="font-semibold text-foreground print:text-black">{winner.playerName}</div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground print:text-black/70">{winner.sno || '—'}</TableCell>
                   <TableCell className="text-muted-foreground print:text-black/70">{winner.rank || '—'}</TableCell>
-                  <TableCell className="text-muted-foreground print:text-black/70">{winner.club || '—'}</TableCell>
-                  <TableCell className="text-muted-foreground print:text-black/70">{winner.state || '—'}</TableCell>
                   <TableCell className="text-right font-bold text-success print:text-black">{formatCurrencyINR(winner.amount)}</TableCell>
+                  <TableCell className="text-center text-muted-foreground print:text-black/70">
+                    {winner.hasTrophy ? <Trophy className="mx-auto h-4 w-4 text-accent print:text-black" /> : '—'}
+                  </TableCell>
+                  <TableCell className="text-center text-muted-foreground print:text-black/70">
+                    {winner.hasMedal ? <Medal className="mx-auto h-4 w-4 text-success print:text-black" /> : '—'}
+                  </TableCell>
                   <TableCell className="border-l border-border print:border-black/30">
                     <div className="h-6 rounded-md border border-dashed border-border print:border-black/30"></div>
                   </TableCell>
@@ -55,7 +58,7 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId }: Arb
               ))}
               {winners.length === 0 && !isLoading && (
                 <TableRow className="border-border print:border-black">
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground print:text-black/70">
+                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground print:text-black/70">
                     No prize allocations found yet.
                   </TableCell>
                 </TableRow>
