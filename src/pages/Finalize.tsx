@@ -5,32 +5,27 @@ import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown, ExternalLink, ArrowRight, Loader2 } from "lucide-react";
+import { FileDown, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
-import {
-  ENABLE_PDF_EXPORT,
-  ENABLE_REACT_PDF,
-  PUBLIC_DOB_MASKING,
-  PUBLISH_V2_ENABLED
-} from "@/utils/featureFlags";
+import { ENABLE_PDF_EXPORT, PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { exportPlayersViaPrint } from "@/utils/print";
+import { buildWinnersPrintHtml, getWinnersExportColumns, openPrintWindow, type WinnersExportRow } from "@/utils/print";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
-import { IneligibilityTooltip } from "@/components/allocation/IneligibilityTooltip";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
+import { buildCsv, downloadCsvFile, filterEmptyColumns } from "@/utils/exportColumns";
 
 interface Winner {
   prizeId: string;
@@ -119,8 +114,9 @@ export default function Finalize() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { role } = useUserRole();
-  const [isExportingPrint, setIsExportingPrint] = useState(false);
-  const [isExportingPdfBeta, setIsExportingPdfBeta] = useState(false);
+  const [isExportingWinnersPdf, setIsExportingWinnersPdf] = useState(false);
+  const [isExportingWinnersCsv, setIsExportingWinnersCsv] = useState(false);
+  const [isExportingRankingCsv, setIsExportingRankingCsv] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
   const [winnersView, setWinnersView] = useState<WinnersView>('category');
   const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
@@ -151,7 +147,7 @@ export default function Finalize() {
       
       const { data, count, usedColumns } = await safeSelectPlayersByTournament(
         id,
-        ['id', 'name', 'rating', 'dob']
+        ['id', 'name', 'full_name', 'rating', 'rank']
       );
       
       console.log('[finalize] Loaded players', { count, usedColumns });
@@ -165,7 +161,7 @@ export default function Finalize() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, order_idx, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
+        .select('id, name, order_idx, criteria_json, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
@@ -179,6 +175,7 @@ export default function Finalize() {
           category_id: cat.id,
           category_name: cat.name,
           category_order: typeof cat.order_idx === 'number' ? cat.order_idx : 999,
+          category_criteria: cat.criteria_json,
         }))
       );
       return prizes;
@@ -340,6 +337,33 @@ export default function Finalize() {
     return groups;
   }, [winnerRows]);
 
+  const winnerExportRows = useMemo<WinnersExportRow[]>(() => {
+    return winnersByCategory.flatMap(group =>
+      group.winners.map(row => {
+        const criteria =
+          row.prize?.category_criteria &&
+          typeof row.prize.category_criteria === 'object' &&
+          !Array.isArray(row.prize.category_criteria)
+            ? (row.prize.category_criteria as Record<string, any>)
+            : {};
+        const allowedTypes = Array.isArray(criteria.allowed_types) ? criteria.allowed_types.filter(Boolean) : [];
+        const allowedGroups = Array.isArray(criteria.allowed_groups) ? criteria.allowed_groups.filter(Boolean) : [];
+        return {
+          category: row.prize?.category_name ?? 'Unknown Category',
+          prizePlace: row.prize?.place ?? null,
+          playerRank: row.player?.rank ?? null,
+          playerName: row.player?.name ?? 'N/A',
+          rating: row.player?.rating ?? null,
+          amount: row.prize?.cash_amount ?? null,
+          trophy: row.prize?.has_trophy ?? false,
+          medal: row.prize?.has_medal ?? false,
+          typeLabel: allowedTypes.length ? allowedTypes.join(', ') : null,
+          groupLabel: allowedGroups.length ? allowedGroups.join(', ') : null,
+        };
+      })
+    );
+  }, [winnersByCategory]);
+
   const handleCategoryPageChange = (categoryId: string, page: number) => {
     setCategoryPages(prev => ({ ...prev, [categoryId]: page }));
   };
@@ -475,40 +499,142 @@ export default function Finalize() {
     }
   });
 
-  const handleExportPrint = async () => {
+  const handleExportWinnersPdf = async () => {
     if (!id) {
       toast.error("Tournament ID missing");
       return;
     }
 
     try {
-      setIsExportingPrint(true);
-      await exportPlayersViaPrint({ tournamentId: id, maskDob: PUBLIC_DOB_MASKING });
-      toast.success("Opened print preview — use Save as PDF from your browser.");
+      if (!winnerExportRows.length) {
+        toast.error("No winners available to export");
+        return;
+      }
+      setIsExportingWinnersPdf(true);
+      const { data: tournament, error: tournamentError } = await supabase
+        .from("tournaments")
+        .select("title, city, start_date, end_date")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (tournamentError) {
+        throw tournamentError;
+      }
+
+      const html = buildWinnersPrintHtml(tournament ?? null, winnerExportRows);
+      const opened = openPrintWindow(html, `winners-${id}`);
+      if (!opened) {
+        throw new Error("Popup blocked. Allow popups to print or save as PDF.");
+      }
+      toast.success("Opened winners print preview — save as PDF from your browser.");
     } catch (error: any) {
       toast.error(error?.message || "Failed to open print preview");
     } finally {
-      setIsExportingPrint(false);
+      setIsExportingWinnersPdf(false);
     }
   };
 
-  const handleExportPdfBeta = async () => {
+  const handleExportWinnersCsv = async () => {
     if (!id) {
       toast.error("Tournament ID missing");
       return;
     }
 
     try {
-      setIsExportingPdfBeta(true);
-      const mod = await import(/* @vite-ignore */ "@/experimental/reactPdf");
-      await mod.downloadPlayersPdf({ tournamentId: id, maskDob: PUBLIC_DOB_MASKING });
-      toast.success("Players summary PDF exported");
+      if (!winnerExportRows.length) {
+        toast.error("No winners available to export");
+        return;
+      }
+      setIsExportingWinnersCsv(true);
+      const columns = filterEmptyColumns(winnerExportRows, getWinnersExportColumns());
+      const csv = buildCsv(winnerExportRows, columns);
+      downloadCsvFile(`winners-${id}.csv`, csv);
+      toast.success("Winners CSV exported");
     } catch (error: any) {
-      console.error(`[export.pdf] error tournament=${id} message=${error?.message ?? error}`);
-      toast.error("React-PDF not available, using print export instead");
-      await handleExportPrint();
+      toast.error(error?.message || "Failed to export winners CSV");
     } finally {
-      setIsExportingPdfBeta(false);
+      setIsExportingWinnersCsv(false);
+    }
+  };
+
+  const handleExportRankingCsv = async () => {
+    if (!id) {
+      toast.error("Tournament ID missing");
+      return;
+    }
+
+    try {
+      setIsExportingRankingCsv(true);
+      const preferredColumns = [
+        'rank',
+        'sno',
+        'name',
+        'full_name',
+        'rating',
+        'dob',
+        'dob_raw',
+        'gender',
+        'fide_id',
+        'federation',
+        'state',
+        'city',
+        'club',
+        'disability',
+        'unrated',
+        'group_label',
+        'type_label',
+        'special_notes',
+        'notes',
+      ];
+      const { data: players, usedColumns } = await safeSelectPlayersByTournament(
+        id,
+        preferredColumns,
+        { column: 'rank', ascending: true }
+      );
+
+      if (!players || players.length === 0) {
+        toast.error("No players available to export");
+        return;
+      }
+
+      const columnLabels: Record<string, string> = {
+        rank: 'Rank',
+        sno: 'SNo',
+        name: 'Name',
+        full_name: 'Full Name',
+        rating: 'Rating',
+        dob: 'DOB',
+        dob_raw: 'DOB Raw',
+        gender: 'Gender',
+        fide_id: 'FIDE ID',
+        federation: 'Federation',
+        state: 'State',
+        city: 'City',
+        club: 'Club',
+        disability: 'Disability',
+        unrated: 'Unrated',
+        group_label: 'Group',
+        type_label: 'Type',
+        special_notes: 'Special Notes',
+        notes: 'Notes',
+      };
+
+      const columns = filterEmptyColumns(
+        players,
+        usedColumns.map(column => ({
+          key: column,
+          label: columnLabels[column] ?? column.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          value: (row: any) => row[column],
+        }))
+      );
+
+      const csv = buildCsv(players, columns);
+      downloadCsvFile(`ranking-${id}.csv`, csv);
+      toast.success("Full ranking CSV exported");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to export ranking CSV");
+    } finally {
+      setIsExportingRankingCsv(false);
     }
   };
 
@@ -784,31 +910,39 @@ export default function Finalize() {
               {ENABLE_PDF_EXPORT && (
                 <div className="space-y-2">
                   <Button
-                    onClick={handleExportPrint}
+                    onClick={handleExportWinnersPdf}
                     variant="outline"
                     className="w-full justify-between"
-                    disabled={isExportingPrint || winners.length === 0}
+                    disabled={isExportingWinnersPdf || winners.length === 0}
                   >
                     <span className="flex items-center gap-2">
                       <FileDown className="h-4 w-4" />
-                      {isExportingPrint ? "Preparing Print…" : "Export PDF (Print)"}
+                      {isExportingWinnersPdf ? "Preparing Winners PDF…" : "Export Winners PDF"}
                     </span>
                     <ExternalLink className="h-4 w-4" />
                   </Button>
-                  {ENABLE_REACT_PDF && (
-                    <Button
-                      onClick={handleExportPdfBeta}
-                      variant="secondary"
-                      className="w-full justify-between"
-                      disabled={isExportingPdfBeta || winners.length === 0}
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileDown className="h-4 w-4" />
-                        {isExportingPdfBeta ? "Generating (Beta)…" : "Export PDF (React-PDF, beta)"}
-                      </span>
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button
+                    onClick={handleExportWinnersCsv}
+                    variant="secondary"
+                    className="w-full justify-between"
+                    disabled={isExportingWinnersCsv || winners.length === 0}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileDown className="h-4 w-4" />
+                      {isExportingWinnersCsv ? "Exporting Winners CSV…" : "Export Winners CSV"}
+                    </span>
+                  </Button>
+                  <Button
+                    onClick={handleExportRankingCsv}
+                    variant="outline"
+                    className="w-full justify-between"
+                    disabled={isExportingRankingCsv}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileDown className="h-4 w-4" />
+                      {isExportingRankingCsv ? "Exporting Ranking CSV…" : "Export Full Ranking CSV"}
+                    </span>
+                  </Button>
                 </div>
               )}
             </CardContent>
