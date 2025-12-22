@@ -10,7 +10,7 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
   - FIDE age is computed on the tournament start date.
 - **Manual player template XLSX**
   - Matches the in-app template (Rank, Name, Rating, DOB, gender/fs, FIDE number, state/city/club, Type/Group).
-- **CSV is NOT supported.**
+- Only Excel (.xls or .xlsx) files are supported.
 
 ## Player Import flow
 1. Upload the Swiss-Manager interim ranking Excel file.
@@ -89,4 +89,4 @@ Team prizes (Best School, Best Academy, Best City, etc.) are configured separate
 - FIDE age calculations use the tournament start date; out-of-range DOBs remain ineligible.
 - Requires a clean Swiss-Manager Excel export; corrupted spreadsheets are not auto-repaired.
 - Some categories may legitimately end with **No eligible winner** when criteria are too strict or fields are missing. This is expected and still commit-safe for non-critical prizes.
-- **CSV is NOT supported** anywhere in the flow.
+- Only Excel (.xls or .xlsx) files are supported anywhere in the flow.

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDown, ExternalLink, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
 import { ENABLE_PDF_EXPORT, PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
@@ -25,7 +26,7 @@ import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
-import { buildCsv, downloadCsvFile, filterEmptyColumns } from "@/utils/exportColumns";
+import { filterEmptyColumns, formatExportValue } from "@/utils/exportColumns";
 import { groupWinnersByCategory, sortWinnersByAmount } from "@/utils/finalizeWinners";
 
 interface Winner {
@@ -116,8 +117,8 @@ export default function Finalize() {
   const { user } = useAuth();
   const { role } = useUserRole();
   const [isExportingWinnersPdf, setIsExportingWinnersPdf] = useState(false);
-  const [isExportingWinnersCsv, setIsExportingWinnersCsv] = useState(false);
-  const [isExportingRankingCsv, setIsExportingRankingCsv] = useState(false);
+  const [isExportingWinnersXlsx, setIsExportingWinnersXlsx] = useState(false);
+  const [isExportingRankingXlsx, setIsExportingRankingXlsx] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
   const [winnersView, setWinnersView] = useState<WinnersView>('category');
   const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
@@ -495,7 +496,16 @@ export default function Finalize() {
     }
   };
 
-  const handleExportWinnersCsv = async () => {
+  const downloadXlsx = <T,>(rows: T[], columns: { label: string; value: (row: T) => unknown }[], filename: string, sheetName: string) => {
+    const headers = columns.map(column => column.label);
+    const data = rows.map(row => columns.map(column => formatExportValue(column.value(row))));
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, filename);
+  };
+
+  const handleExportWinnersXlsx = async () => {
     if (!id) {
       toast.error("Tournament ID missing");
       return;
@@ -506,26 +516,25 @@ export default function Finalize() {
         toast.error("No winners available to export");
         return;
       }
-      setIsExportingWinnersCsv(true);
+      setIsExportingWinnersXlsx(true);
       const columns = filterEmptyColumns(winnerExportRows, getWinnersExportColumns());
-      const csv = buildCsv(winnerExportRows, columns);
-      downloadCsvFile(`winners-${id}.csv`, csv);
-      toast.success("Winners CSV exported");
+      downloadXlsx(winnerExportRows, columns, `winners-${id}.xlsx`, "Winners");
+      toast.success("Winners XLSX exported");
     } catch (error: any) {
-      toast.error(error?.message || "Failed to export winners CSV");
+      toast.error(error?.message || "Failed to export winners XLSX");
     } finally {
-      setIsExportingWinnersCsv(false);
+      setIsExportingWinnersXlsx(false);
     }
   };
 
-  const handleExportRankingCsv = async () => {
+  const handleExportRankingXlsx = async () => {
     if (!id) {
       toast.error("Tournament ID missing");
       return;
     }
 
     try {
-      setIsExportingRankingCsv(true);
+      setIsExportingRankingXlsx(true);
       const preferredColumns = [
         'rank',
         'sno',
@@ -589,13 +598,12 @@ export default function Finalize() {
         }))
       );
 
-      const csv = buildCsv(players, columns);
-      downloadCsvFile(`ranking-${id}.csv`, csv);
-      toast.success("Full ranking CSV exported");
+      downloadXlsx(players, columns, `ranking-${id}.xlsx`, "Ranking");
+      toast.success("Full ranking XLSX exported");
     } catch (error: any) {
-      toast.error(error?.message || "Failed to export ranking CSV");
+      toast.error(error?.message || "Failed to export ranking XLSX");
     } finally {
-      setIsExportingRankingCsv(false);
+      setIsExportingRankingXlsx(false);
     }
   };
 
@@ -883,25 +891,25 @@ export default function Finalize() {
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                   <Button
-                    onClick={handleExportWinnersCsv}
+                    onClick={handleExportWinnersXlsx}
                     variant="secondary"
                     className="w-full justify-between"
-                    disabled={isExportingWinnersCsv || winners.length === 0}
+                    disabled={isExportingWinnersXlsx || winners.length === 0}
                   >
                     <span className="flex items-center gap-2">
                       <FileDown className="h-4 w-4" />
-                      {isExportingWinnersCsv ? "Exporting Winners CSV…" : "Export Winners CSV"}
+                      {isExportingWinnersXlsx ? "Exporting Winners XLSX…" : "Export Winners XLSX"}
                     </span>
                   </Button>
                   <Button
-                    onClick={handleExportRankingCsv}
+                    onClick={handleExportRankingXlsx}
                     variant="outline"
                     className="w-full justify-between"
-                    disabled={isExportingRankingCsv}
+                    disabled={isExportingRankingXlsx}
                   >
                     <span className="flex items-center gap-2">
                       <FileDown className="h-4 w-4" />
-                      {isExportingRankingCsv ? "Exporting Ranking CSV…" : "Export Full Ranking CSV"}
+                      {isExportingRankingXlsx ? "Exporting Ranking XLSX…" : "Export Full Ranking XLSX"}
                     </span>
                   </Button>
                 </div>

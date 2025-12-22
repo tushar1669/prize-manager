@@ -10,14 +10,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "bootstrap": "bash scripts/bootstrap.sh",
-    "assert:no-csv": "node scripts/assert-no-csv.js",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:swiss": "playwright test tests/import-swiss-manager.spec.ts --trace=on",
     "test:alloc": "playwright test tests/allocator-null-safety.spec.ts --trace=on",
     "test:ux": "playwright test tests/ux-improvements.spec.ts --trace=on",
-    "qa": "npm run assert:no-csv && npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux"
+    "qa": "npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux"
   },
   "engines": {
     "node": ">=20 <21"

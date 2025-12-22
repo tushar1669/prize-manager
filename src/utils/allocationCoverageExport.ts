@@ -4,7 +4,7 @@ import type { AllocationCoverageEntry } from '@/types/allocation';
 
 /**
  * Export allocation coverage data to XLSX file
- * Uses the same XLSX helper as player exports (NO CSV)
+ * Uses the same XLSX helper as player exports
  */
 export function exportCoverageToXlsx(
   coverage: AllocationCoverageEntry[],
