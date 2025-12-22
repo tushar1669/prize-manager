@@ -47,7 +47,6 @@ export type WinnersExportRow = {
   prizePlace: number | string | null;
   playerName: string;
   playerRank: number | string | null;
-  rating: number | string | null;
   amount: number | string | null;
   trophy: boolean | null;
   medal: boolean | null;
@@ -233,7 +232,6 @@ export function getWinnersExportColumns(): ExportColumn<WinnersExportRow>[] {
     { key: "prizePlace", label: "Prize Place", value: row => row.prizePlace },
     { key: "playerRank", label: "Rank", value: row => row.playerRank },
     { key: "playerName", label: "Player", value: row => row.playerName },
-    { key: "rating", label: "Rating", value: row => row.rating },
     { key: "amount", label: "Amount", value: row => row.amount },
     { key: "trophy", label: "Trophy", value: row => row.trophy },
     { key: "medal", label: "Medal", value: row => row.medal },
