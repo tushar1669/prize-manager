@@ -26,6 +26,7 @@ import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsP
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
 import { buildCsv, downloadCsvFile, filterEmptyColumns } from "@/utils/exportColumns";
+import { groupWinnersByCategory, sortWinnersByAmount } from "@/utils/finalizeWinners";
 
 interface Winner {
   prizeId: string;
@@ -291,50 +292,11 @@ export default function Finalize() {
   }, [prizeById, playerById, winners]);
 
   const winnersByAmount = useMemo(() => {
-    return [...winnerRows].sort((a, b) => {
-      const amountDiff = (b.prize?.cash_amount ?? 0) - (a.prize?.cash_amount ?? 0);
-      if (amountDiff !== 0) return amountDiff;
-      const placeDiff = (a.prize?.place ?? 0) - (b.prize?.place ?? 0);
-      if (placeDiff !== 0) return placeDiff;
-      return (a.player?.name ?? '').localeCompare(a.player?.name ?? '');
-    });
+    return sortWinnersByAmount(winnerRows);
   }, [winnerRows]);
 
   const winnersByCategory = useMemo(() => {
-    const byCategory = new Map<
-      string,
-      { id: string; name: string; order: number; winners: typeof winnerRows }
-    >();
-
-    winnerRows.forEach(row => {
-      const categoryId = row.prize?.category_id ?? 'unknown';
-      const categoryName = row.prize?.category_name ?? 'Unknown Category';
-      const categoryOrder = row.prize?.category_order ?? 999;
-      if (!byCategory.has(categoryId)) {
-        byCategory.set(categoryId, {
-          id: categoryId,
-          name: categoryName,
-          order: categoryOrder,
-          winners: [],
-        });
-      }
-      byCategory.get(categoryId)!.winners.push(row);
-    });
-
-    const groups = Array.from(byCategory.values()).sort((a, b) => {
-      if (a.order !== b.order) return a.order - b.order;
-      return a.name.localeCompare(b.name);
-    });
-
-    groups.forEach(group => {
-      group.winners.sort((a, b) => {
-        const placeDiff = (a.prize?.place ?? 0) - (b.prize?.place ?? 0);
-        if (placeDiff !== 0) return placeDiff;
-        return (a.player?.name ?? '').localeCompare(b.player?.name ?? '');
-      });
-    });
-
-    return groups;
+    return groupWinnersByCategory(winnerRows);
   }, [winnerRows]);
 
   const winnerExportRows = useMemo<WinnersExportRow[]>(() => {
