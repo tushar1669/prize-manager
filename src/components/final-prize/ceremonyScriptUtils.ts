@@ -21,20 +21,15 @@ export interface CeremonyItem {
 }
 
 /**
- * Sort ceremony items by category order, then by place descending within each category.
- * This produces the correct ceremony announcement order:
- * - Non-main categories first (by brochure order)
- * - Team prizes
- * - Main category last (Champion announced last)
- * Within each category: 3rd, 2nd, 1st (lowest place announced last)
+ * Sort ceremony items by category order, then by place ascending within each category.
+ * This produces a stable ceremony order that matches the category order used elsewhere.
  */
 export function sortCeremonyItems(items: CeremonyItem[]): CeremonyItem[] {
   return [...items].sort((a, b) => {
-    // Main categories always come last
-    if (a.isMain !== b.isMain) return a.isMain ? 1 : -1;
     // Then by category order (brochure order)
     if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
-    // Within category: highest place first (3rd, 2nd, 1st) so 1st is announced last
-    return b.place - a.place;
+    // Within category: lowest place first (1st, 2nd, 3rd)
+    if (a.place !== b.place) return a.place - b.place;
+    return a.prizeId.localeCompare(b.prizeId);
   });
 }

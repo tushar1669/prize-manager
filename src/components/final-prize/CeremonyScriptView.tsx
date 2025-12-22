@@ -12,13 +12,10 @@ interface CeremonyScriptViewProps {
 }
 
 /**
- * Build ceremony script items with correct announcement order:
- * 1. Non-main individual categories (lowest place first within each category)
- * 2. Team prizes (lowest place first within each group)
- * 3. Main category (lowest place first, Champion LAST)
- * 
- * Within each section, categories are ordered by brochure order (categoryOrder).
- * Within each category, prizes go from lowest place → highest (e.g., 3rd, 2nd, 1st).
+ * Build ceremony script items with category-wise announcement order.
+ *
+ * Categories follow brochure order, and prizes within each category are
+ * announced by ascending place (1st, 2nd, 3rd...).
  */
 function buildCeremonyScript(
   winners: FinalPrizeWinnerRow[],
@@ -35,7 +32,7 @@ function buildCeremonyScript(
     byCategory.get(w.categoryId)!.push(w);
   });
 
-  // Sort categories: non-main first by order, then main
+  // Sort categories by brochure order
   const categoryIds = Array.from(byCategory.keys());
   const categoryMeta = new Map<string, { isMain: boolean; order: number; name: string }>();
   winners.forEach(w => {
@@ -48,24 +45,20 @@ function buildCeremonyScript(
     }
   });
 
-  // Separate main and non-main categories
-  const nonMainCategories = categoryIds.filter(id => !categoryMeta.get(id)?.isMain);
-  const mainCategories = categoryIds.filter(id => categoryMeta.get(id)?.isMain);
+  const sortedCategories = categoryIds.sort(
+    (a, b) => (categoryMeta.get(a)?.order ?? 999) - (categoryMeta.get(b)?.order ?? 999)
+  );
 
-  // Sort each by brochure order
-  nonMainCategories.sort((a, b) => (categoryMeta.get(a)?.order ?? 999) - (categoryMeta.get(b)?.order ?? 999));
-  mainCategories.sort((a, b) => (categoryMeta.get(a)?.order ?? 999) - (categoryMeta.get(b)?.order ?? 999));
-
-  // Add non-main individual prizes (lowest place first = highest place number first)
-  nonMainCategories.forEach(catId => {
+  // Add individual prizes in brochure order, place ascending.
+  sortedCategories.forEach(catId => {
     const catWinners = byCategory.get(catId) || [];
     const meta = categoryMeta.get(catId)!;
-    // Sort by place DESC (3rd, 2nd, 1st)
-    catWinners.sort((a, b) => b.place - a.place);
+    // Sort by place ASC (1st, 2nd, 3rd)
+    catWinners.sort((a, b) => a.place - b.place);
     catWinners.forEach(w => {
       items.push({
         type: 'individual',
-        isMain: false,
+        isMain: meta.isMain,
         categoryOrder: meta.order,
         place: w.place,
         amount: w.amount,
@@ -82,18 +75,23 @@ function buildCeremonyScript(
     });
   });
 
-  // Add team prizes (lowest place first within each group)
+  const maxCategoryOrder = Math.max(
+    0,
+    ...Array.from(categoryMeta.values()).map(meta => meta.order ?? 0)
+  );
+
+  // Add team prizes after individual categories, by group order and place ascending.
   teamGroups.forEach((group, groupIndex) => {
     const filledPrizes = group.prizes
       .filter(p => p.winner_institution !== null)
-      .sort((a, b) => b.place - a.place); // 3rd, 2nd, 1st
+      .sort((a, b) => a.place - b.place); // 1st, 2nd, 3rd
     
     filledPrizes.forEach(prize => {
       const winner = prize.winner_institution!;
       items.push({
         type: 'team',
         isMain: false,
-        categoryOrder: 1000 + groupIndex, // After non-main individual
+        categoryOrder: maxCategoryOrder + 1 + groupIndex, // After individual categories
         place: prize.place,
         amount: prize.cash_amount,
         categoryName: group.name,
@@ -103,32 +101,6 @@ function buildCeremonyScript(
         hasMedal: prize.has_medal,
         teamPlayers: winner.players.map(p => ({ name: p.name, rank: p.rank })),
         totalPoints: winner.total_points,
-      });
-    });
-  });
-
-  // Add main category prizes LAST (lowest place first = 8th, 7th, ..., 2nd, 1st)
-  mainCategories.forEach(catId => {
-    const catWinners = byCategory.get(catId) || [];
-    const meta = categoryMeta.get(catId)!;
-    // Sort by place DESC (Champion = 1st is LAST)
-    catWinners.sort((a, b) => b.place - a.place);
-    catWinners.forEach(w => {
-      items.push({
-        type: 'individual',
-        isMain: true,
-        categoryOrder: meta.order,
-        place: w.place,
-        amount: w.amount,
-        categoryName: w.categoryName,
-        playerName: w.playerName,
-        prizeId: w.prizeId,
-        rank: w.rank,
-        sno: w.sno,
-        club: w.club,
-        state: w.state,
-        hasTrophy: w.hasTrophy,
-        hasMedal: w.hasMedal,
       });
     });
   });
@@ -196,7 +168,7 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
         <div>
           <h3 className="text-sm font-semibold text-foreground print:text-xs">Ceremony Order</h3>
           <p className="mt-1 text-sm text-muted-foreground print:text-xs">
-            Prizes ordered by category, with Champion announced last.
+            Prizes ordered by category, then by place within each category.
             {hasTeamPrizes && ' Team prizes are included.'}
           </p>
         </div>
