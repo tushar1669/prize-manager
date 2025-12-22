@@ -209,8 +209,13 @@ export function CeremonyScriptView({ tournamentId }: CeremonyScriptViewProps) {
     const winners = data?.winners ?? [];
     const teamGroups = teamData?.groups ?? [];
     const items = buildCeremonyScript(winners, teamGroups);
-    // If toggle OFF, reverse the entire list (Champion first)
-    return announceSmallestFirst ? items : [...items].reverse();
+    return [...items].sort((a, b) => {
+      const amountDiff = announceSmallestFirst ? a.amount - b.amount : b.amount - a.amount;
+      if (amountDiff !== 0) return amountDiff;
+      if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
+      if (a.place !== b.place) return a.place - b.place;
+      return 0;
+    });
   }, [data?.winners, teamData?.groups, announceSmallestFirst]);
 
   if (isLoading || teamLoading) {
