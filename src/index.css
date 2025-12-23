@@ -137,6 +137,18 @@ All colors MUST be HSL.
     margin-right: auto !important;
   }
 
+  .poster-grid-cards {
+    align-content: start;
+  }
+
+  .poster-grid-card {
+    min-height: 58mm;
+  }
+
+  .poster-grid[data-poster-size='a3'] .poster-grid-card {
+    min-height: 52mm;
+  }
+
   /* Remove shadows in print */
   .shadow, .shadow-lg, .shadow-sm {
     box-shadow: none !important;
