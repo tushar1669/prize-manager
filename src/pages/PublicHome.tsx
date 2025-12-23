@@ -1,13 +1,11 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Calendar, MapPin, ExternalLink, Trophy, Clock, User, Banknote } from "lucide-react";
+import { Calendar, MapPin, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { classifyTimeControl, type TimeControlCategory } from "@/utils/timeControl";
-import { BrochureLink } from "@/components/public/BrochureLink";
 
 type PublicTournament = {
   id: string;
@@ -17,17 +15,10 @@ type PublicTournament = {
   city: string | null;
   venue: string | null;
   public_slug: string;
-  brochure_url: string | null;
-  chessresults_url: string | null;
-  public_results_url: string | null;
   created_at: string | null;
   time_control_base_minutes: number | null;
   time_control_increment_seconds: number | null;
   time_control_category: TimeControlCategory | null;
-  chief_arbiter: string | null;
-  tournament_director: string | null;
-  entry_fee_amount: number | null;
-  cash_prize_total: number | null;
 };
 
 const badgeVariants: Record<Exclude<TimeControlCategory, "UNKNOWN">, BadgeProps["variant"]> = {
@@ -59,18 +50,13 @@ function formatTimeControl(base: number | null | undefined, inc: number | null |
   return `${base} + ${inc}`;
 }
 
-function formatCurrency(amount: number | null | undefined) {
-  if (amount == null) return null;
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
-}
-
 export default function PublicHome() {
   const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
     queryFn: async (): Promise<PublicTournament[]> => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, city, venue, public_slug, brochure_url, chessresults_url, public_results_url, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total')
+        .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category')
         .eq('is_published', true)
         .eq('is_archived', false)
         .is('deleted_at', null)
@@ -83,30 +69,6 @@ export default function PublicHome() {
   });
 
   const tournamentList: PublicTournament[] = tournaments ?? [];
-
-  const { data: allocationsMap } = useQuery({
-    queryKey: ['allocations-map'],
-    queryFn: async () => {
-      if (!tournamentList || tournamentList.length === 0) return {};
-
-      const tournamentIds = tournamentList.map(t => t.id);
-      const { data, error } = await supabase
-        .from('allocations')
-        .select('tournament_id, version')
-        .in('tournament_id', tournamentIds)
-        .order('version', { ascending: false });
-
-      if (error) throw error;
-
-      const map: Record<string, boolean> = {};
-      data?.forEach(a => {
-        if (map[a.tournament_id]) return;
-        map[a.tournament_id] = true;
-      });
-      return map;
-    },
-    enabled: !!tournamentList && tournamentList.length > 0,
-  });
 
   // Helper function for rendering time control - must be defined before early returns
   const renderTimeControl = (t: PublicTournament) => {
@@ -192,12 +154,9 @@ export default function PublicHome() {
               </Card>
             ) : (
               tournamentList.map((tournament) => {
-                const hasInternalResults = allocationsMap?.[tournament.id];
-                const showFinalRanks = tournament.public_results_url || hasInternalResults;
                 const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
                 const location = [tournament.city, tournament.venue].filter(Boolean).join(" • ") || null;
-                const entryFee = formatCurrency(tournament.entry_fee_amount);
-                const cashPrize = formatCurrency(tournament.cash_prize_total);
+                const timeControl = renderTimeControl(tournament);
 
                 return (
                   <Card
@@ -223,79 +182,21 @@ export default function PublicHome() {
                             )}
                           </div>
                         </div>
-                        <Badge variant="outline" className="text-[11px] uppercase tracking-wide">Published</Badge>
                       </div>
-                      {renderTimeControl(tournament)}
+                      {timeControl && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="font-medium text-foreground">Format:</span>
+                          {timeControl}
+                        </div>
+                      )}
                     </CardHeader>
 
-                    <CardContent className="p-0 pt-4 space-y-2 text-sm text-muted-foreground">
-                      {tournament.chief_arbiter && (
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          <span>
-                            <span className="font-medium text-foreground">Chief Arbiter:</span> {tournament.chief_arbiter}
-                          </span>
-                        </div>
-                      )}
-                      {tournament.tournament_director && (
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          <span>
-                            <span className="font-medium text-foreground">Tournament Director:</span> {tournament.tournament_director}
-                          </span>
-                        </div>
-                      )}
-                      {entryFee && (
-                        <div className="flex items-center gap-2">
-                          <Banknote className="h-4 w-4" />
-                          <span>
-                            <span className="font-medium text-foreground">Entry Fee:</span> {entryFee}
-                          </span>
-                        </div>
-                      )}
-                      {cashPrize && (
-                        <div className="flex items-center gap-2">
-                          <Trophy className="h-4 w-4" />
-                          <span>
-                            <span className="font-medium text-foreground">Total Cash Prize:</span> {cashPrize}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="pt-4 flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" asChild className="group-hover:border-primary/60 group-hover:text-primary">
-                          <Link to={`/p/${tournament.public_slug}`} className="gap-2">
-                            <Trophy className="h-4 w-4" />
-                            View Details
-                          </Link>
-                        </Button>
-
-                        <BrochureLink url={tournament.brochure_url} />
-
-                        {tournament.chessresults_url && (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={tournament.chessresults_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                              <ExternalLink className="h-4 w-4" />
-                              ChessResults
-                            </a>
-                          </Button>
-                        )}
-
-                        {showFinalRanks && (
-                          <Button variant="outline" size="sm" asChild>
-                            {tournament.public_results_url ? (
-                              <a href={tournament.public_results_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                                Final Ranks
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : (
-                              <Link to={`/p/${tournament.public_slug}/results`} className="gap-2">
-                                Final Ranks
-                              </Link>
-                            )}
-                          </Button>
-                        )}
-                      </div>
+                    <CardContent className="p-0 pt-4">
+                      <Button variant="outline" size="sm" asChild className="group-hover:border-primary/60 group-hover:text-primary">
+                        <Link to={`/p/${tournament.public_slug}`} className="gap-2">
+                          View Details
+                        </Link>
+                      </Button>
                     </CardContent>
                   </Card>
                 );

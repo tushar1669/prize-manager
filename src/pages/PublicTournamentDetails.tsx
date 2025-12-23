@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PublicBackButton } from "@/components/public/PublicBackButton";
 
 type TournamentDetails = {
   title: string;
@@ -66,6 +67,7 @@ export default function PublicTournamentDetails() {
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto p-6 space-y-6">
         <ErrorPanel error={error} onDismiss={clearError} />
+        <PublicBackButton />
         
         {!t ? (
           <div className="text-center py-12 opacity-60">
