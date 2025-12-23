@@ -7,6 +7,7 @@ import { Trophy, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
+import { PublicBackButton } from "@/components/public/PublicBackButton";
 
 type PublishedTournament = {
   id: string;
@@ -94,6 +95,7 @@ export default function PublicTournament() {
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
         <div className="container mx-auto px-6 py-16">
           <div className="max-w-4xl mx-auto">
+            <PublicBackButton className="mb-6" />
             <div className="flex items-start gap-4 mb-6">
               <div className="p-3 rounded-lg bg-primary/10">
                 <Trophy className="h-8 w-8 text-primary" />
