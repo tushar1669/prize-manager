@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { compareEligibleByRankRatingName } from '../supabase/functions/allocatePrizes/index';
 
 function makeCandidate(rank: number | null, rating: number | null, name: string) {
-  return { player: { rank, rating, name } } as any;
+  return { player: { rank, rating, name } } as unknown;
 }
 
 test.describe('Allocator: Deterministic Tie-Breaking', () => {

@@ -39,8 +39,9 @@ export default function Bootstrap() {
       toast.success(message);
       navigate('/dashboard');
     },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to bootstrap master');
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to bootstrap master';
+      toast.error(message);
     },
   });
 

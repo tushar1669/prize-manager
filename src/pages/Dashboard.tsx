@@ -23,6 +23,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
+import type { Database } from "@/integrations/supabase/types";
+
+type TournamentRow = Database["public"]["Tables"]["tournaments"]["Row"];
+type TournamentView = Database["public"]["Functions"]["list_my_tournaments"]["Returns"][number];
+type DashboardTournament = TournamentRow | TournamentView;
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -77,7 +82,7 @@ export default function Dashboard() {
       console.log('[dashboard] fetching via RPC include_all=', includeAll);
 
       try {
-        const { data, error } = await supabase.rpc('list_my_tournaments' as any, { include_all: includeAll });
+        const { data, error } = await supabase.rpc('list_my_tournaments', { include_all: includeAll });
 
         if (error) {
           const msg = `${error.code ?? ''} ${error.message ?? ''}`.toLowerCase();
@@ -123,7 +128,7 @@ export default function Dashboard() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const today = new Date().toISOString().split('T')[0];
-      const payload: any = {
+      const payload: Database["public"]["Tables"]["tournaments"]["Insert"] = {
         title: 'Untitled Tournament',
         start_date: today,
         end_date: today,
@@ -145,11 +150,12 @@ export default function Dashboard() {
       console.log('[dashboard] query invalidated after mutation');
       navigate(`/t/${data.id}/setup?tab=details`);
     },
-    onError: (error: any) => {
-      if (error.message?.includes('row-level security')) {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to create tournament';
+      if (message.includes('row-level security')) {
         toast.error('You do not have permission to create tournaments');
       } else {
-        toast.error('Failed to create tournament: ' + error.message);
+        toast.error('Failed to create tournament: ' + message);
       }
     }
   });
@@ -168,16 +174,17 @@ export default function Dashboard() {
       console.log('[dashboard] query invalidated after mutation');
       toast.success('Tournament deleted');
     },
-    onError: (error: any) => {
-      if (error.message?.includes('row-level security')) {
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to delete tournament';
+      if (message.includes('row-level security')) {
         toast.error('You do not have permission to delete this tournament');
       } else {
-        toast.error('Failed to delete tournament: ' + error.message);
+        toast.error('Failed to delete tournament: ' + message);
       }
     }
   });
 
-  const filteredTournaments = (tournaments || []).filter((t: any) => 
+  const filteredTournaments = (tournaments || []).filter((t: DashboardTournament) => 
     t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.city?.toLowerCase().includes(searchQuery.toLowerCase())

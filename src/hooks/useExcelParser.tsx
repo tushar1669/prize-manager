@@ -10,7 +10,7 @@ const LOCAL_PARSE_TIMEOUT_MS = 3000;
 const PROHIBITED_EXTENSION = ['.', 'c', 's', 'v'].join('');
 
 export type ParseResult = {
-  data: any[];
+  data: Record<string, unknown>[];
   headers: string[];
   sheetName?: string;
   headerRow?: number;
@@ -33,7 +33,17 @@ export type ParseFileOptions = {
   tournamentId?: string;
 };
 
-function normalizeHeaders(headers: any[]): string[] {
+type ServerParsePayload = {
+  rows?: Record<string, unknown>[];
+  headers?: string[];
+  sheetName?: string;
+  headerRow?: number;
+  fileHash?: string | null;
+  source?: "swiss-manager" | "organizer-template" | "unknown";
+  genderConfig?: ParseResult["genderConfig"];
+};
+
+function normalizeHeaders(headers: unknown[]): string[] {
   return (headers || []).map((header, idx) => {
     const trimmed = String(header ?? "").trim();
     return trimmed.length > 0 ? trimmed : `__EMPTY_COL_${idx}`;
@@ -88,13 +98,13 @@ export function useExcelParser() {
       let headers: string[];
 
       if (isFeatureEnabled("HEADER_DETECTION")) {
-        const allSheets: Record<string, any[][]> = {};
+        const allSheets: Record<string, unknown[][]> = {};
         workbook.SheetNames.forEach((name) => {
           allSheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], {
             header: 1,
             defval: "",
             raw: false
-          }) as any[][];
+          }) as unknown[][];
         });
 
         const detected = detectHeaderRow(allSheets, 25);
@@ -112,10 +122,10 @@ export function useExcelParser() {
       } else {
         sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const asRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+        const asRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
           header: 1,
           defval: ""
-        }) as any[][];
+        }) as unknown[][];
 
         if (!asRows.length || !asRows[0]) {
           throw new Error("No header row found. Please use the provided template and ensure row 1 has headers.");
@@ -157,7 +167,7 @@ export function useExcelParser() {
         headerRow: headerRowIndex + 1,
         fileHash: fileHash ?? null,
         mode: "local",
-        source: inferImportSource(headers, data as Record<string, any>[])
+        source: inferImportSource(headers, data as Record<string, unknown>[])
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -198,7 +208,7 @@ export function useExcelParser() {
       throw new Error(error.message ?? "Server parse failed");
     }
 
-    const payload = data as any;
+    const payload = data as ServerParsePayload;
     return {
       data: payload?.rows ?? [],
       headers: payload?.headers ?? [],

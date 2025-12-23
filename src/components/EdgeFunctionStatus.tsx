@@ -71,12 +71,13 @@ async function checkFunction(name: string): Promise<FunctionStatus> {
       buildVersion: data?.buildVersion || 'unknown',
       checkedAt,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return {
       name,
       status: 'error',
       buildVersion: null,
-      error: err.message || 'Unknown error',
+      error: message,
       checkedAt,
     };
   }

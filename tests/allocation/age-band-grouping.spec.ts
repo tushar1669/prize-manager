@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
-vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as any)) }), { virtual: true });
+vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as unknown)) }), { virtual: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,7 +21,7 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
   let allocator: typeof AllocatorModule;
 
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };
@@ -43,13 +43,13 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
 
   // Helper to run allocation with effective age bands
   const runAllocationWithAgeBands = (
-    categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: any; prizes: any[] }>,
-    players: Array<any>,
-    rules: any,
+    categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: unknown; prizes: unknown[] }>,
+    players: Array<unknown>,
+    rules: unknown,
     startDate: Date,
   ) => {
     const prizeQueue = categories.flatMap(cat =>
-      cat.prizes.map(p => ({ cat: { ...cat, prizes: undefined } as any, p }))
+      cat.prizes.map(p => ({ cat: { ...cat, prizes: undefined } as unknown, p }))
     );
     prizeQueue.sort(allocator.cmpPrize);
 
@@ -116,11 +116,11 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
     }> = [];
 
     for (const { cat, p } of prizeQueue) {
-      const eligible: Array<{ player: any }> = [];
+      const eligible: Array<{ player: unknown }> = [];
       const failCodes = new Set<string>();
 
       for (const player of players) {
-        const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate, effectiveAgeBands);
+        const evaluation = allocator.evaluateEligibility(player, cat as unknown, rules, startDate, effectiveAgeBands);
         eligibilityLog.push({
           playerId: player.id,
           categoryId: cat.id,
@@ -163,7 +163,7 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
       { id: 'u17-girl', name: 'Under 17 Girl', is_main: false, order_idx: 7, criteria_json: { max_age: 17, gender: 'F' }, prizes: [{ id: 'u17g-1', place: 1, cash_amount: 500, has_trophy: true, has_medal: false }] },
     ];
 
-    const players: any[] = [];
+    const players: unknown[] = [];
     const { effectiveAgeBands } = runAllocationWithAgeBands(categories, players, defaultRules, new Date('2024-05-01'));
 
     // Verify Boy and Girl pairs share identical bands

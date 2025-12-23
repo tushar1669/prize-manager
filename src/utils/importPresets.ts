@@ -8,7 +8,7 @@ import {
 import { extractStateFromIdent } from './stateExtract';
 
 export type FieldMap = Record<string, string | string[]>;
-export interface FieldNormalizer { field: string; normalize: (value: any, row?: any) => any; }
+export interface FieldNormalizer { field: string; normalize: (value: unknown, row?: Record<string, unknown>) => unknown; }
 export interface ImportPreset {
   id: string;
   name: string;

@@ -13,7 +13,7 @@ const baseConfig: GenderColumnConfig = {
 let evaluateEligibility: typeof import('../supabase/functions/allocatePrizes/index').evaluateEligibility;
 
 beforeAll(async () => {
-  (globalThis as any).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
+  (globalThis as unknown).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
   const allocator = await import('../supabase/functions/allocatePrizes/index');
   evaluateEligibility = allocator.evaluateEligibility;
 });
@@ -446,12 +446,12 @@ describe('Jaipur-style tournament simulation', () => {
 });
 
 describe('gender eligibility', () => {
-  const baseCat = { id: 'cat', name: 'Category', is_main: false, order_idx: 0 } as any;
-  const rules = { strict_age: true, allow_missing_dob_for_age: true, max_age_inclusive: true } as any;
+  const baseCat = { id: 'cat', name: 'Category', is_main: false, order_idx: 0 } as unknown;
+  const rules = { strict_age: true, allow_missing_dob_for_age: true, max_age_inclusive: true } as unknown;
   const date = new Date('2024-01-01');
 
   it('female-only categories reject null or male genders', () => {
-    const catF = { ...baseCat, criteria_json: { gender: 'F' } } as any;
+    const catF = { ...baseCat, criteria_json: { gender: 'F' } } as unknown;
     const missing = evaluateEligibility({ gender: null }, catF, rules, date);
     expect(missing.eligible).toBe(false);
     expect(missing.reasonCodes).toContain('gender_missing');
@@ -466,7 +466,7 @@ describe('gender eligibility', () => {
   });
 
   it('male categories accept null or male but reject female', () => {
-    const catM = { ...baseCat, criteria_json: { gender: 'M' } } as any;
+    const catM = { ...baseCat, criteria_json: { gender: 'M' } } as unknown;
     const unknown = evaluateEligibility({ gender: null }, catM, rules, date);
     expect(unknown.eligible).toBe(true);
     expect(unknown.passCodes).toContain('gender_ok');

@@ -13,7 +13,7 @@ export interface DetectedHeader {
  * Normalize cell content for header detection
  * Handles NBSP, whitespace, control chars, case normalization
  */
-function normalizeCell(cell: any): string {
+function normalizeCell(cell: unknown): string {
   return String(cell || '')
     .trim()
     .replace(/\u00A0/g, ' ') // NBSP → space
@@ -26,7 +26,7 @@ function normalizeCell(cell: any): string {
  * Score a row for likelihood of being a header row
  * Higher score = more likely to be header row
  */
-export function scoreHeaderRow(row: any[]): number {
+export function scoreHeaderRow(row: unknown[]): number {
   const normalized = row.map(normalizeCell);
   
   let score = 0;
@@ -80,7 +80,7 @@ export function scoreHeaderRow(row: any[]): number {
  * Scans first maxRowsToScan rows of each sheet
  */
 export function detectHeaderRow(
-  sheets: Record<string, any[][]>,
+  sheets: Record<string, unknown[][]>,
   maxRowsToScan: number = 25
 ): DetectedHeader {
   const candidates: Array<{

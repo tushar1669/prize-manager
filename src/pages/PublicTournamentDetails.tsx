@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function PublicTournamentDetails() {
   const { slug } = useParams();
   const { error, showError, clearError } = useErrorPanel();
-  const [t, setT] = useState<any>(null);
+  const [t, setT] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function PublicTournamentDetails() {
         if (error) throw error;
         console.log('[publish] tournament details loaded', data);
         setT(data);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error("[publish] details error", e);
         showError({ 
           title: "Failed to load tournament", 

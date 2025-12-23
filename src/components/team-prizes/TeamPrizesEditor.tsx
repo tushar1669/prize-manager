@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { GROUP_BY_OPTIONS, type InstitutionPrizeGroup } from './types';
+import { GROUP_BY_OPTIONS, type InstitutionPrizeDelta, type InstitutionPrizeGroup } from './types';
 import { 
   useInstitutionPrizeGroups, 
   useInstitutionPrizes, 
@@ -76,8 +76,9 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
         toast.success('Team group created');
       }
       setRulesSheet({ open: false, group: null });
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to save group');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to save group';
+      toast.error(message);
     }
   };
 
@@ -87,20 +88,22 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
       await deleteGroup.mutateAsync({ id: deleteDialog.group.id, tournamentId });
       toast.success('Team group deleted');
       setDeleteDialog({ open: false });
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to delete group');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to delete group';
+      toast.error(message);
     }
   };
 
   const handleToggleActive = async (group: InstitutionPrizeGroup) => {
     try {
       await updateGroup.mutateAsync({ id: group.id, is_active: !group.is_active });
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to toggle group');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to toggle group';
+      toast.error(message);
     }
   };
 
-  const handleSavePrizes = async (groupId: string, delta: any) => {
+  const handleSavePrizes = async (groupId: string, delta: InstitutionPrizeDelta) => {
     await savePrizes.mutateAsync({ groupId, tournamentId, delta });
   };
 

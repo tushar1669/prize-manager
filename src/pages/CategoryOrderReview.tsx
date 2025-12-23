@@ -186,10 +186,10 @@ export default function CategoryOrderReview() {
         return; 
       }
       
-      const mapped = (data || []).map((c: any) => ({
+      const mapped = (data || []).map((c: unknown) => ({
         ...c,
         is_active: c.is_active ?? true,
-        prizes: (c.prizes || []).map((p: any) => ({ ...p, is_active: p.is_active ?? true })),
+        prizes: (c.prizes || []).map((p: unknown) => ({ ...p, is_active: p.is_active ?? true })),
       }));
       console.log('[order-review] loaded', mapped.map(c => ({ id: c.id, name: c.name, order_idx: c.order_idx, is_active: c.is_active, prizes: (c.prizes||[]).length })));
       setCats(mapped);
@@ -253,7 +253,7 @@ export default function CategoryOrderReview() {
       setDeleteDialog({ open: false, category: null });
       setDeleteConfirmText('');
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       console.error('[delete-cat] err', err);
       showError({ title: 'Delete Error', message: `Failed to delete category: ${err.message || 'Unknown error'}` });
     },
@@ -400,7 +400,7 @@ export default function CategoryOrderReview() {
       clearError();
       toast.success('Order & selections saved');
       navigate(`/t/${id}/import`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[order-review] save error', err);
       setCats(lastSavedOrder); // rollback visual order
       showError({
@@ -489,8 +489,8 @@ export default function CategoryOrderReview() {
                   onClick={() => {
                     const byId = new Map(cats.map(c => [c.id, c]));
                     const restored = (orderRestore.data.ids || []).map(id => byId.get(id)).filter(Boolean);
-                    const merged = restored.map((c: any) => ({ ...c, is_active: !!orderRestore.data.active[c.id] }));
-                    setCats(merged as any);
+                    const merged = restored.map((c: unknown) => ({ ...c, is_active: !!orderRestore.data.active[c.id] }));
+                    setCats(merged as unknown);
                     setOrderRestore(null);
                   }}
                 >

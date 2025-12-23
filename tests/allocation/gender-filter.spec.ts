@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as AllocatorModule from '../../supabase/functions/allocatePrizes/index';
 
-vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as any)) }), { virtual: true });
+vi.mock('npm:@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({} as unknown)) }), { virtual: true });
 
 /**
  * Tests for unified gender filtering logic.
@@ -17,7 +17,7 @@ describe('Gender filter eligibility', () => {
   let allocator: typeof AllocatorModule;
 
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };
@@ -62,7 +62,7 @@ describe('Gender filter eligibility', () => {
     it('allows male players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('M'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -73,7 +73,7 @@ describe('Gender filter eligibility', () => {
     it('allows players with null/unknown gender', () => {
       const result = allocator.evaluateEligibility(
         makePlayer(null),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -84,7 +84,7 @@ describe('Gender filter eligibility', () => {
     it('excludes explicit female players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('F'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -99,7 +99,7 @@ describe('Gender filter eligibility', () => {
     it('allows male players (same as M_OR_UNKNOWN)', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('M'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -110,7 +110,7 @@ describe('Gender filter eligibility', () => {
     it('allows players with null/unknown gender (same as M_OR_UNKNOWN)', () => {
       const result = allocator.evaluateEligibility(
         makePlayer(null),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -121,7 +121,7 @@ describe('Gender filter eligibility', () => {
     it('excludes explicit female players (same as M_OR_UNKNOWN)', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('F'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -136,7 +136,7 @@ describe('Gender filter eligibility', () => {
     it('allows explicit female players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('F'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -147,7 +147,7 @@ describe('Gender filter eligibility', () => {
     it('excludes male players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('M'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -158,7 +158,7 @@ describe('Gender filter eligibility', () => {
     it('excludes players with null/unknown gender (gender_missing)', () => {
       const result = allocator.evaluateEligibility(
         makePlayer(null),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -173,7 +173,7 @@ describe('Gender filter eligibility', () => {
     it('allows male players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('M'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -183,7 +183,7 @@ describe('Gender filter eligibility', () => {
     it('allows female players', () => {
       const result = allocator.evaluateEligibility(
         makePlayer('F'),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );
@@ -193,7 +193,7 @@ describe('Gender filter eligibility', () => {
     it('allows players with null/unknown gender', () => {
       const result = allocator.evaluateEligibility(
         makePlayer(null),
-        category as any,
+        category as unknown,
         defaultRules,
         new Date('2024-05-01')
       );

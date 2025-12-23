@@ -157,8 +157,9 @@ export default function AdminTournaments() {
       queryClient.invalidateQueries({ queryKey: ["public-tournaments"] });
       console.log(`[admin] Updated tournament ${variables.id}`, variables.updates);
     },
-    onError: (error: any) => {
-      toast.error("Failed to update tournament: " + error.message);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Failed to update tournament";
+      toast.error("Failed to update tournament: " + message);
     },
   });
 
@@ -184,8 +185,9 @@ export default function AdminTournaments() {
       toast.success("Tournament permanently deleted");
       console.log(`[admin] Hard deleted tournament ${id}`);
     },
-    onError: (error: any) => {
-      toast.error("Failed to delete tournament: " + error.message);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Failed to delete tournament";
+      toast.error("Failed to delete tournament: " + message);
     },
   });
 

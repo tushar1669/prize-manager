@@ -401,7 +401,7 @@ export async function exportPlayersViaPrint({
 
     const duration = Math.round(performance.now() - start);
     console.log(`${LOG_PREFIX} ok tournament=${tournamentId} duration_ms=${duration}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     const duration = Math.round(performance.now() - start);
     const message = error?.message ?? String(error);
     console.error(`${LOG_PREFIX} error tournament=${tournamentId} message=${message}`);

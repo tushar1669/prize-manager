@@ -31,7 +31,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
-import CategoryPrizesEditor, { PrizeDelta, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
+import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
 import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext";
@@ -42,9 +42,16 @@ import { TeamPrizesEditor } from '@/components/team-prizes';
 
 // Flip to true only when debugging
 const DEBUG = false;
-const dlog = (...args: any[]) => { if (DEBUG) console.log(...args); };
+const dlog = (...args: unknown[]) => { if (DEBUG) console.log(...args); };
 
 const MAIN_CATEGORY_NAME = 'Main Prize';
+type CriteriaJson = Record<string, unknown>;
+type CriteriaCategory = {
+  id?: string;
+  name?: string;
+  criteria_json?: CriteriaJson;
+  category_type?: string | null;
+} & Record<string, unknown>;
 
 export async function ensureMainCategoryExists({
   prizeMode,
@@ -136,9 +143,9 @@ export default function TournamentSetup() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [criteriaSheet, setCriteriaSheet] = useState<{
     open: boolean;
-    category: any | null;
+    category: CriteriaCategory | null;
   }>({ open: false, category: null });
-  const [savedCriteria, setSavedCriteria] = useState<{ criteria: any; category_type: string } | null>(null);
+  const [savedCriteria, setSavedCriteria] = useState<{ criteria: CriteriaJson; category_type: string } | null>(null);
   const [categoryTypeSelection, setCategoryTypeSelection] = useState<string>('standard');
   // Start with empty arrays - will be populated during hydration
   const [prizes, setPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
@@ -175,22 +182,23 @@ export default function TournamentSetup() {
       toast.success('Category deleted');
       setCatDelete({ open: false });
     },
-    onError: (err: any) => {
-      console.error('[prizes] delete category error', err);
-      toast.error(err?.message || 'Failed to delete category');
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to delete category';
+      console.error('[prizes] delete category error', message);
+      toast.error(message);
     }
   });
 
   // Autosave state for Details form
   const detailsDraftKey = makeKey(`t:${id}:details`);
-  const [detailsRestore, setDetailsRestore] = useState<null | { data: any; ageMs: number }>(null);
+  const [detailsRestore, setDetailsRestore] = useState<null | { data: TournamentDetailsForm; ageMs: number }>(null);
 
   // Autosave key: compute only when a valid id exists (prevents "undefined" keys)
   const tid = useMemo(() => (id ? String(id).trim() : ''), [id]);
   const mainPrizesDraftKey = useMemo(() => (
     tid ? makeKey(`t:${tid}:main-prizes`) : ''
   ), [tid]);
-  const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: any; ageMs: number }>(null);
+  const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: PrizeRow[]; ageMs: number }>(null);
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
 
   // Helper to get/create editor refs
@@ -296,7 +304,7 @@ export default function TournamentSetup() {
   // Check for Details form draft on tab switch
   useEffect(() => {
     if (activeTab !== 'details' || detailsForm.formState.isDirty) return;
-    const draft = getDraft<any>(detailsDraftKey, 1);
+    const draft = getDraft<TournamentDetailsForm>(detailsDraftKey, 1);
     if (draft) setDetailsRestore(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, tournament?.id]);
@@ -314,7 +322,7 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (activeTab !== 'prizes' || !mainPrizesDraftKey || !id) return;
     
-    const draft = getDraft<any>(mainPrizesDraftKey, 1);
+    const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
     if (draft) {
       // Show banner for manual restore (no more silent auto-restore)
       setMainPrizesRestore(draft);
@@ -536,7 +544,7 @@ export default function TournamentSetup() {
       : mainCats[0];
     
     // Check if draft exists first
-    const draft = getDraft<any>(mainPrizesDraftKey, 1);
+    const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
     
     if (draft) {
       // Draft exists - check if it's recent (within last 5 minutes)
@@ -626,14 +634,15 @@ export default function TournamentSetup() {
       toast.success('Tournament details saved');
       navigate(`/t/${id}/setup?tab=prizes`);
     },
-    onError: (error: any) => {
-      console.error('[details] save error', error);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[details] save error', message);
       showError({
         title: "Failed to save details",
-        message: error?.message || "Unknown error",
+        message,
         hint: "Please check your connection and try again."
       });
-      toast.error(error?.message || 'Failed to save');
+      toast.error(message || 'Failed to save');
     }
   });
 
@@ -667,8 +676,9 @@ export default function TournamentSetup() {
         if (copyFromCategoryId) {
           await copyPrizesForCategory(copyFromCategoryId, createdCategory.id);
         }
-      } catch (err: any) {
-        console.warn('[copy prizes] failed', err);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('[copy prizes] failed', message);
         toast.error('Category created. Failed to copy prizes.');
       } finally {
         queryClient.invalidateQueries({ queryKey: ['categories', id] });
@@ -680,8 +690,9 @@ export default function TournamentSetup() {
         categoryForm.reset();
       }
     },
-    onError: (error: any) => {
-      toast.error('Failed to add category: ' + error.message);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to add category';
+      toast.error('Failed to add category: ' + message);
     }
   });
 
@@ -793,14 +804,15 @@ export default function TournamentSetup() {
         setTimeout(() => navigate(`/t/${id}/order-review`), 600);
       }
     },
-    onError: (error: any) => {
-      console.error('[prizes] save main prizes error', error);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[prizes] save main prizes error', message);
       showError({
         title: "Failed to save prizes",
-        message: error?.message || "Unknown error",
+        message,
         hint: "Please check your connection and try again."
       });
-      toast.error(`Failed to save prizes: ${error?.message || 'Unknown error'}`);
+      toast.error(`Failed to save prizes: ${message || 'Unknown error'}`);
     }
   });
 
@@ -882,9 +894,10 @@ export default function TournamentSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
     },
-    onError: (error: any) => {
-      console.error('[prizes-cat] error', { scope: 'category', message: error?.message });
-      toast.error(error?.message || 'Failed to save prizes');
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to save prizes';
+      console.error('[prizes-cat] error', { scope: 'category', message });
+      toast.error(message);
     }
   });
 
@@ -896,7 +909,7 @@ export default function TournamentSetup() {
       categoryType,
     }: {
       categoryId: string;
-      criteria: any;
+      criteria: CriteriaJson;
       categoryType: string;
     }) => {
       // Store category_type inside criteria_json (column doesn't exist in DB yet)
@@ -923,7 +936,10 @@ export default function TournamentSetup() {
       setSavedCriteria(null);
       setCriteriaSheet({ open: false, category: null });
     },
-    onError: (e: any) => toast.error(e.message || 'Failed to save rules'),
+    onError: (e: unknown) => {
+      const message = e instanceof Error ? e.message : 'Failed to save rules';
+      toast.error(message);
+    },
   });
 
   // Save All Categories handler
@@ -966,13 +982,14 @@ export default function TournamentSetup() {
         
         console.log('[prizes-cat] save all ok', { categoryId: cat.id });
         results.push({ ok: true, categoryId: cat.id, categoryName: cat.name });
-      } catch (err: any) {
-        console.error('[prizes-cat] save all fail', { cat: cat.name, err });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error('[prizes-cat] save all fail', { cat: cat.name, message });
         results.push({ 
           ok: false, 
           categoryId: cat.id, 
           categoryName: cat.name, 
-          error: err.message || 'Unknown error' 
+          error: message 
         });
         continue;
       }
@@ -1104,8 +1121,8 @@ export default function TournamentSetup() {
 
     // 2) Create new category with cloned criteria (excluding legacy dob_on_or_after)
     const srcCriteria = (src.criteria_json && typeof src.criteria_json === 'object' && !Array.isArray(src.criteria_json))
-      ? (src.criteria_json as Record<string, any>)
-      : {} as Record<string, any>;
+      ? (src.criteria_json as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
     const criteria = { ...srcCriteria };
     delete criteria.dob_on_or_after;
     // Preserve category_type in criteria_json
@@ -1167,7 +1184,7 @@ export default function TournamentSetup() {
     if (copyFromCategoryId && includeCriteriaOnCopy) {
       const source = categories?.find(c => c.id === copyFromCategoryId);
       if (source?.criteria_json && typeof source.criteria_json === 'object' && !Array.isArray(source.criteria_json)) {
-        values.criteria_json = { ...(source.criteria_json as Record<string, any>) };
+        values.criteria_json = { ...(source.criteria_json as Record<string, unknown>) };
       }
     }
     
@@ -1926,9 +1943,10 @@ export default function TournamentSetup() {
                   toast.success('Category duplicated');
                   setDupDialog({ open: false, sourceId: null });
                   queryClient.invalidateQueries({ queryKey: ['categories', id] });
-                } catch (e: any) {
-                  console.error('[duplicate]', e);
-                  toast.error(e?.message || 'Failed to duplicate');
+                } catch (e: unknown) {
+                  const message = e instanceof Error ? e.message : 'Failed to duplicate';
+                  console.error('[duplicate]', message);
+                  toast.error(message);
                 }
               }}
             >
@@ -2067,7 +2085,7 @@ export default function TournamentSetup() {
 
             {/* Age Range */}
             {(() => {
-              const criteria = criteriaSheet.category?.criteria_json as any;
+              const criteria = criteriaSheet.category?.criteria_json as Record<string, unknown> | undefined;
               const youngestCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male';
               return (
                 <>
@@ -2416,7 +2434,7 @@ export default function TournamentSetup() {
                 // Clear any previous errors
                 setCriteriaErrors({});
 
-                const criteria: any = {};
+                const criteria: Record<string, unknown> = {};
 
                 // Age fields (used by allocator)
                 if (!isYoungest) {

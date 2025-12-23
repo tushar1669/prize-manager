@@ -32,7 +32,7 @@ export interface CategoryRow {
   is_active: boolean;
   order_idx: number;
   category_type?: string | null;
-  criteria_json?: any;
+  criteria_json?: Record<string, unknown>;
   prizes: PrizeRow[];
 }
 
@@ -73,11 +73,11 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   
   // Autosave state
   const draftKey = makeKey(`cat:${category.id}:prizes`);
-  const [restore, setRestore] = useState<null | { data: any; ageMs: number }>(null);
+  const [restore, setRestore] = useState<null | { data: PrizeRow[]; ageMs: number }>(null);
 
   // Check for draft on mount or category change
   useEffect(() => {
-    const saved = getDraft<any>(draftKey, 1);
+    const saved = getDraft<PrizeRow[]>(draftKey, 1);
     if (saved) setRestore(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category.id]);
@@ -183,7 +183,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       next[idx] = { ...next[idx], ...patch, _status: next[idx]._status === 'new' ? 'new' : 'dirty' };
       const idOrTemp = next[idx].id || next[idx]._tempId;
       const [field] = Object.keys(patch);
-      const value = (patch as any)[field];
+      const value = (patch as Record<string, unknown>)[field];
       console.log('[prizes-cat] edit', { categoryId: category.id, item: idOrTemp, field, value });
       return next;
     });
@@ -351,18 +351,19 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       resetDirty(`cat-${category.id}`);
       clearDraft(draftKey);
       toast.success('Category prizes saved');
-    } catch (e: any) {
-      console.error('[prizes-cat] error', { scope: 'category', message: e?.message || String(e) });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('[prizes-cat] error', { scope: 'category', message });
       setDraft(lastSaved); // rollback
       
       // Check if it's a 409 or duplicate error
-      const is409 = String(e?.message || '').includes('unique') || String(e?.message || '').includes('duplicate');
+      const is409 = message.includes('unique') || message.includes('duplicate');
       showError({
         title: 'Failed to save prizes',
-        message: e?.message || 'Unknown error',
+        message,
         hint: is409 ? 'Duplicate place detected. Each place must be unique within the category.' : 'Ensure each place is unique within the category.',
       });
-      toast.error(e?.message || 'Failed to save prizes');
+      toast.error(message || 'Failed to save prizes');
     } finally {
       setSaving(false);
     }

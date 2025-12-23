@@ -1,6 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+type ErrorMeta = {
+  status?: number | string;
+  code?: number | string;
+};
+
+const getErrorMeta = (error: unknown): ErrorMeta => {
+  if (error && typeof error === 'object') {
+    const maybeError = error as { status?: number | string; code?: number | string };
+    return { status: maybeError.status, code: maybeError.code };
+  }
+  return {};
+};
 import type { InstitutionPrizeGroup, InstitutionPrize, InstitutionPrizeDelta } from './types';
 
 /**
@@ -158,8 +171,9 @@ export function useSaveInstitutionPrizes() {
 
         if (error) {
           // Include key identifiers for RCA/debugging
+          const meta = getErrorMeta(error);
           throw new Error(
-            `Insert failed (status=${(error as any).status ?? 'n/a'} code=${(error as any).code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId})`
+            `Insert failed (status=${meta.status ?? 'n/a'} code=${meta.code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId})`
           );
         }
 
@@ -185,8 +199,9 @@ export function useSaveInstitutionPrizes() {
             .eq('id', update.id);
 
           if (error) {
+            const meta = getErrorMeta(error);
             throw new Error(
-              `Update failed (status=${(error as any).status ?? 'n/a'} code=${(error as any).code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId} id=${update.id})`
+              `Update failed (status=${meta.status ?? 'n/a'} code=${meta.code ?? 'n/a'}): ${error.message} (tournamentId=${tournamentId} group_id=${groupId} id=${update.id})`
             );
           }
         }
@@ -204,8 +219,8 @@ export function useSaveInstitutionPrizes() {
       // Also invalidate groups to refresh prize counts
       queryClient.invalidateQueries({ queryKey: ['institution_prize_groups', variables.tournamentId] });
     },
-    onError: (error: any) => {
-      const message = error?.message || 'Failed to save institution prizes';
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to save institution prizes';
       toast.error(message);
     },
   });

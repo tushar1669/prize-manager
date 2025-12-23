@@ -24,10 +24,10 @@ describe('TeamGroupPrizesTable hydration gating', () => {
   } as const;
 
   it('keeps dirty draft rows when parent rerenders with equivalent initial prizes', () => {
-    const onSave = vi.fn();
+    const onSave: React.ComponentProps<typeof TeamGroupPrizesTable>['onSave'] = vi.fn(async () => undefined);
 
     const { rerender } = render(
-      <TeamGroupPrizesTable groupId="g1" prizes={[basePrize]} onSave={onSave as any} canEdit />
+      <TeamGroupPrizesTable groupId="g1" prizes={[basePrize]} onSave={onSave} canEdit />
     );
 
     fireEvent.click(screen.getByRole('button', { name: /add prize/i }));
@@ -35,7 +35,7 @@ describe('TeamGroupPrizesTable hydration gating', () => {
     expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
     expect(screen.getByText(/unsaved changes/i)).toBeTruthy();
 
-    rerender(<TeamGroupPrizesTable groupId="g1" prizes={[{ ...basePrize }]} onSave={onSave as any} canEdit />);
+    rerender(<TeamGroupPrizesTable groupId="g1" prizes={[{ ...basePrize }]} onSave={onSave} canEdit />);
 
     expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
     expect(screen.getByText(/unsaved changes/i)).toBeTruthy();

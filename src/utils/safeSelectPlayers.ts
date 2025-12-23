@@ -145,7 +145,7 @@ export async function safeSelectPlayers(
       tried,
       errorCode: error.code,
       errorMessage: error.message,
-      errorHint: (error as any)?.hint 
+      errorHint: (error as unknown)?.hint 
     });
     return { data: [] as Array<Partial<PlayerRow>>, count: 0, usedColumns: [] };
   }

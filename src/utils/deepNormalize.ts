@@ -1,18 +1,18 @@
 /**
  * Recursively sort object keys for stable comparison
  */
-export function deepSortKeys(obj: any): any {
+export function deepSortKeys(obj: unknown): unknown {
   if (obj === null || typeof obj !== 'object') return obj;
   
   if (Array.isArray(obj)) {
     return obj.map(item => deepSortKeys(item));
   }
   
-  const sorted: Record<string, any> = {};
+  const sorted: Record<string, unknown> = {};
   Object.keys(obj)
     .sort()
     .forEach(key => {
-      sorted[key] = deepSortKeys(obj[key]);
+      sorted[key] = deepSortKeys((obj as Record<string, unknown>)[key]);
     });
   
   return sorted;
@@ -21,23 +21,32 @@ export function deepSortKeys(obj: any): any {
 /**
  * Normalize criteria for comparison (sort keys + stable array order)
  */
-export function normalizeCriteria(value: any): any {
+export function normalizeCriteria(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value;
   
   if (Array.isArray(value)) {
     // If array of objects with stable keys, sort by those
-    const hasId = value.length > 0 && value[0] && typeof value[0] === 'object' && 'id' in value[0];
-    const hasName = value.length > 0 && value[0] && typeof value[0] === 'object' && 'name' in value[0];
+    const first = value[0];
+    const hasId = value.length > 0 && first && typeof first === 'object' && 'id' in first;
+    const hasName = value.length > 0 && first && typeof first === 'object' && 'name' in first;
     
     if (hasId) {
       return [...value]
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+        .sort((a, b) => {
+          const aId = typeof a === 'object' && a && 'id' in a ? (a as { id: unknown }).id : '';
+          const bId = typeof b === 'object' && b && 'id' in b ? (b as { id: unknown }).id : '';
+          return String(aId).localeCompare(String(bId));
+        })
         .map(item => normalizeCriteria(item));
     }
     
     if (hasName) {
       return [...value]
-        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+        .sort((a, b) => {
+          const aName = typeof a === 'object' && a && 'name' in a ? (a as { name: unknown }).name : '';
+          const bName = typeof b === 'object' && b && 'name' in b ? (b as { name: unknown }).name : '';
+          return String(aName).localeCompare(String(bName));
+        })
         .map(item => normalizeCriteria(item));
     }
     
@@ -53,7 +62,7 @@ export function normalizeCriteria(value: any): any {
 /**
  * Deep equality check using normalized JSON comparison
  */
-export function deepEqualNormalized(a: any, b: any): boolean {
+export function deepEqualNormalized(a: unknown, b: unknown): boolean {
   try {
     const normA = JSON.stringify(normalizeCriteria(a));
     const normB = JSON.stringify(normalizeCriteria(b));

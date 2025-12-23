@@ -134,7 +134,7 @@ export default function ConflictReview() {
       if (error) throw error;
       
       const prizes = (data || []).flatMap(cat => 
-        (cat.prizes || []).map((p: any) => ({
+        (cat.prizes || []).map((p: unknown) => ({
           id: p.id,
           place: p.place,
           cash_amount: p.cash_amount,
@@ -153,7 +153,7 @@ export default function ConflictReview() {
     queryKey: ['rule-config', id],
     queryFn: async () => {
       // Cast to any to handle main_vs_side_priority_mode which may not exist in all DB schemas
-      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle() as { data: any; error: any };
+      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, prefer_category_rank_on_tie, category_priority_order, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle() as { data: unknown; error: unknown };
       if (error) throw error;
       // Provide defaults if rule_config doesn't exist yet
       return data || {
@@ -181,7 +181,7 @@ export default function ConflictReview() {
   } = useTeamPrizeResults(id, { enabled: previewCompleted });
 
   const allocateMutation = useMutation({
-    mutationFn: async (options?: { ruleOverride?: any; overrides?: { prizeId: string; playerId: string }[]; dryRun?: boolean }) => {
+    mutationFn: async (options?: { ruleOverride?: unknown; overrides?: { prizeId: string; playerId: string }[]; dryRun?: boolean }) => {
       const { ruleOverride, overrides, dryRun = false } = options || {};
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -313,7 +313,7 @@ export default function ConflictReview() {
       console.log('[review] players:', playersList?.length || 0, 'prizes:', prizesList?.length || 0, 'winners:', winnersWithReasons.length, 'conflicts:', conflictCount, 'unfilled:', unfilledCount);
       toast.info(conflictCount === 0 && unfilledCount === 0 ? 'All clear!' : `${conflictCount} conflicts · ${unfilledCount} unfilled`);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       console.error('[allocatePrizes] error', err);
       allocTriggeredRef.current = false;
       // Check if it's a network-level failure
@@ -345,7 +345,7 @@ export default function ConflictReview() {
       toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
       navigate(`/t/${id}/finalize`, { state: { winners, previewMeta, conflicts, unfilled, finalizeResult: data } });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('[finalize] error from review', error);
       toast.error(error?.message || 'Failed to finalize allocations');
     }
@@ -553,8 +553,8 @@ export default function ConflictReview() {
           players={playersList?.map(p => ({
             id: p.id,
             dob: p.dob,
-            dob_raw: (p as any).dob_raw,
-            gender: (p as any).gender,
+            dob_raw: (p as unknown).dob_raw,
+            gender: (p as unknown).gender,
             rating: p.rating,
           }))}
           className="mb-6"
@@ -585,7 +585,7 @@ export default function ConflictReview() {
             players={playersList?.map(p => ({ 
               id: p.id, 
               name: p.name, 
-              rank: (p as any).rank ?? null, 
+              rank: (p as unknown).rank ?? null, 
               rating: p.rating 
             })) || []}
           />

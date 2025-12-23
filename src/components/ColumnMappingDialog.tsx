@@ -34,7 +34,7 @@ interface ColumnMappingDialogProps {
   onOpenChange: (open: boolean) => void;
   detectedColumns: string[];
   onConfirm: (mapping: Record<string, string>) => void;
-  sampleRows: Record<string, any>[];
+  sampleRows: Record<string, unknown>[];
 }
 
 const requiredFields = [

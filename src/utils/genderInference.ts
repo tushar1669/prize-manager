@@ -21,7 +21,7 @@ export interface GenderColumnConfig {
   preferredSource: GenderSource | null;
 }
 
-function collectHeaders(rows: Array<Record<string, any>>): string[] {
+function collectHeaders(rows: Array<Record<string, unknown>>): string[] {
   const headers: string[] = [];
   const seen = new Set<string>();
 
@@ -38,7 +38,7 @@ function collectHeaders(rows: Array<Record<string, any>>): string[] {
   return headers;
 }
 
-export function analyzeGenderColumns(rows: Array<Record<string, any>>): GenderColumnConfig {
+export function analyzeGenderColumns(rows: Array<Record<string, unknown>>): GenderColumnConfig {
   const headers = collectHeaders(rows);
   const normalized = headers.map(normalizeHeaderForMatching);
   const genderAliases = (HEADER_ALIASES.gender || []).map(normalizeHeaderForMatching);
@@ -56,7 +56,7 @@ export function analyzeGenderColumns(rows: Array<Record<string, any>>): GenderCo
     }
   });
 
-  const headerlessGenderColumn = findHeaderlessGenderColumn(headers, rows as Array<Record<string, any>>) || null;
+  const headerlessGenderColumn = findHeaderlessGenderColumn(headers, rows as Array<Record<string, unknown>>) || null;
 
   const preferredColumn = genderColumn || fsColumn || headerlessGenderColumn || null;
   let preferredSource: GenderSource | null = null;
@@ -207,7 +207,7 @@ function detectFemaleSignalFromLabel(label?: string | null): {
  * - Female signals override explicit male (with warning)
  */
 export function inferGenderForRow(
-  row: Record<string, any>,
+  row: Record<string, unknown>,
   config?: GenderColumnConfig | null,
   typeLabel?: string | null,
   groupLabel?: string | null,

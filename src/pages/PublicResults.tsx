@@ -102,7 +102,7 @@ export default function PublicResults() {
       });
 
       // Deduplicate by prize_id
-      const uniqueByPrize = (rows: any[]) => {
+      const uniqueByPrize = (rows: unknown[]) => {
         const seen = new Set<string>();
         return rows.filter(r => {
           const key = String(r.prize_id);

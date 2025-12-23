@@ -12,7 +12,14 @@ type UpdatePrizePayload = BasePrizePayload & { id: string };
 
 type UpsertRow = BasePrizePayload & { category_id: string; id?: string };
 
-const sanitizeBase = (row: any): BasePrizePayload => ({
+type PrizeLike = Partial<BasePrizePayload> & {
+  id?: string;
+  _tempId?: string;
+  _status?: string;
+  _error?: string;
+};
+
+const sanitizeBase = (row: PrizeLike): BasePrizePayload => ({
   place: Number(row.place) || 0,
   cash_amount: Number(row.cash_amount) || 0,
   has_trophy: !!row.has_trophy,
@@ -20,14 +27,14 @@ const sanitizeBase = (row: any): BasePrizePayload => ({
   is_active: row.is_active ?? true,
 });
 
-const stripId = (row: any): BasePrizePayload => {
+const stripId = (row: PrizeLike): BasePrizePayload => {
   const { _tempId, _status, _error, id: _id, ...rest } = row;
   return sanitizeBase(rest);
 };
 
-const sanitizeUpdate = (row: any): UpdatePrizePayload => ({
+const sanitizeUpdate = (row: PrizeLike): UpdatePrizePayload => ({
   ...sanitizeBase(row),
-  id: row.id,
+  id: row.id as string,
 });
 
 export const prepareCategoryPrizeUpsertRows = (

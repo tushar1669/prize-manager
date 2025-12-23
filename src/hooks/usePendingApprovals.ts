@@ -73,8 +73,9 @@ export function usePendingApprovals() {
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
       toast.success('Organizer approved');
     },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to approve');
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to approve';
+      toast.error(message);
     },
   });
 
@@ -97,8 +98,9 @@ export function usePendingApprovals() {
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
       toast.success('Organizer rejected');
     },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to reject');
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to reject';
+      toast.error(message);
     },
   });
 

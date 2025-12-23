@@ -114,7 +114,7 @@ import { analyzeGenderColumns, hasFemaleMarker, inferGenderForRow, type GenderCo
  * Only (tournament_id, sno) conflicts are treated as success.
  * Other conflicts (e.g., fide_id) trigger row-by-row fallback.
  */
-async function bulkUpsertPlayers(payload: any[]) {
+async function bulkUpsertPlayers(payload: unknown[]) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
   const session = await supabase.auth.getSession();
@@ -332,8 +332,8 @@ async function detectAppendModeConflicts(
 const conflictKeyForIndex = (pair: ConflictPair, index: number) => `${pair.keyKind}:${pair.key}:${index}`;
 
 // Helper functions for smart retry
-const pick = (obj: Record<string, any>, keys: string[]) =>
-  keys.reduce((acc, k) => { if (k in obj) acc[k] = obj[k]; return acc; }, {} as Record<string, any>);
+const pick = (obj: Record<string, unknown>, keys: string[]) =>
+  keys.reduce((acc, k) => { if (k in obj) acc[k] = obj[k]; return acc; }, {} as Record<string, unknown>);
 
 // Parses PostgREST/Postgres error messages to extract an unknown column name
 const extractUnknownColumn = (msg: string): string | null => {
@@ -358,7 +358,7 @@ const extractUnknownColumn = (msg: string): string | null => {
 };
 
 // Helper: normalize DOB to YYYY-MM-DD, handling partial dates
-const toISODate = (d: any): { dob: string | null; dob_raw: string | null; inferred: boolean; inferredReason?: string } => {
+const toISODate = (d: unknown): { dob: string | null; dob_raw: string | null; inferred: boolean; inferredReason?: string } => {
   if (!d) return { dob: null, dob_raw: null, inferred: false };
   
   // Handle Excel serial dates
@@ -381,7 +381,7 @@ export default function PlayerImport() {
   const { setDirty, resetDirty } = useDirty();
   const queryClient = useQueryClient();
 
-  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [parsedData, setParsedData] = useState<unknown[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mappedPlayers, setMappedPlayers] = useState<ParsedPlayer[]>([]);
   const [validationErrors, setValidationErrors] = useState<{ row: number; errors: string[] }[]>([]);
@@ -827,7 +827,7 @@ export default function PlayerImport() {
       setParseError(null);
       setParseStatus('idle');
     },
-    onError: (err: any) => toast.error(`Failed: ${err.message}`)
+    onError: (err: unknown) => toast.error(`Failed: ${err.message}`)
   });
 
   const importPlayersMutation = useMutation({
@@ -857,7 +857,7 @@ export default function PlayerImport() {
           ...buildSupabasePlayerPayload(player, id!),
         }));
 
-        const { data, error } = await supabase.rpc('import_replace_players' as any, {
+        const { data, error } = await supabase.rpc('import_replace_players' as unknown, {
           tournament_id: id,
           players: rpcPayload,
         });
@@ -869,10 +869,10 @@ export default function PlayerImport() {
         }
 
         const rpcResult = Array.isArray(data) ? data?.[0] : data;
-        const rpcErrors = (rpcResult as any)?.error_rows ?? [];
+        const rpcErrors = (rpcResult as unknown)?.error_rows ?? [];
         const failedIndices = new Set<number>();
 
-        rpcErrors.forEach((errRow: any) => {
+        rpcErrors.forEach((errRow: unknown) => {
           const rowIndex = Number(errRow?.row_index);
           if (Number.isFinite(rowIndex)) {
             failedIndices.add(rowIndex);
@@ -886,7 +886,7 @@ export default function PlayerImport() {
           }
         });
 
-        const insertedCount = (rpcResult as any)?.inserted_count ?? 0;
+        const insertedCount = (rpcResult as unknown)?.inserted_count ?? 0;
 
         if (failedIndices.size > 0) {
           setReplaceBanner({
@@ -964,7 +964,7 @@ export default function PlayerImport() {
 
         if (actionPayload.creates.length > 0 || actionPayload.updates.length > 0) {
           try {
-            const { data, error } = await supabase.rpc('import_apply_actions' as any, {
+            const { data, error } = await supabase.rpc('import_apply_actions' as unknown, {
               tournament_id: id,
               actions: actionPayload,
             });
@@ -983,7 +983,7 @@ export default function PlayerImport() {
               results.created.push(...createEntries.map(entry => entry.player));
               results.updated.push(...actionableUpdates.map(entry => entry.player));
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
             // Handle network/404 errors for missing RPC
             const is404 = err?.status === 404 || err?.code === 'PGRST202';
             if (is404) {
@@ -1023,10 +1023,10 @@ export default function PlayerImport() {
               console.log(`[dedup] create chunk ${i + 1}/${createChunks.length} (${chunk.length})`);
               const payload = chunk.map(entry => entry.payload);
               
-              let bulkError: any = null;
+              let bulkError: unknown = null;
               try {
                 await bulkUpsertPlayers(payload);
-              } catch (err: any) {
+              } catch (err: unknown) {
                 bulkError = err;
               }
 
@@ -1077,10 +1077,10 @@ export default function PlayerImport() {
           console.log(`[import] Chunk ${i + 1}/${chunks.length} (${chunk.length} players)`);
           const payload = buildRows(chunk);
           
-          let bulkError: any = null;
+          let bulkError: unknown = null;
           try {
             await bulkUpsertPlayers(payload);
-          } catch (err: any) {
+          } catch (err: unknown) {
             bulkError = err;
           }
 
@@ -1160,7 +1160,7 @@ export default function PlayerImport() {
             validation_skipped: skippedFromValidation,
             import_config: { ...importConfig },
             dedupe_summary: dedupeMeta,
-          } as any, // Cast complex nested JSON to avoid type mismatch
+          } as unknown, // Cast complex nested JSON to avoid type mismatch
         };
 
         void persistImportLog(payload).then((insertedId) => {
@@ -1216,7 +1216,7 @@ export default function PlayerImport() {
           original: {
             rank: f.player.rank,
             name: f.player.name,
-            full_name: (f.player as any).full_name,
+            full_name: (f.player as unknown).full_name,
             rating: f.player.rating,
             dob: f.player.dob,
             gender: f.player.gender,
@@ -1232,7 +1232,7 @@ export default function PlayerImport() {
 
         console.log('[import] error-xlsx requested', { errors: errorRows.length });
 
-        const originals = parsedData as Record<string, any>[];
+        const originals = parsedData as Record<string, unknown>[];
         const today = new Date().toISOString().slice(0, 10);
         const filename = `${tournamentSlug}_errors_${today}.xlsx`;
 
@@ -1249,7 +1249,7 @@ export default function PlayerImport() {
         }
       }
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       importStartedAtRef.current = null;
       toast.error(err?.message || 'Import failed');
       if (replaceExisting) {
@@ -1484,7 +1484,7 @@ export default function PlayerImport() {
 
     const detectedSource = inferImportSource(
       headers,
-      parsedData as Record<string, any>[]
+      parsedData as Record<string, unknown>[]
     );
     lastFileInfoRef.current = {
       ...lastFileInfoRef.current,
@@ -1673,7 +1673,7 @@ export default function PlayerImport() {
         console.log('[import.gender] Using server-provided genderConfig:', serverGenderConfig);
       } else {
         genderConfigRef.current = data?.length
-          ? analyzeGenderColumns(data as Record<string, any>[])
+          ? analyzeGenderColumns(data as Record<string, unknown>[])
           : null;
         console.log('[import.gender] Using local genderConfig analysis:', genderConfigRef.current);
       }
@@ -1807,7 +1807,7 @@ export default function PlayerImport() {
   }, [headers, parsedData]);
 
   // Helper: Consider footer rows as non-data when both rank and name are missing/empty
-  const isFooterRow = (p: any) => {
+  const isFooterRow = (p: unknown) => {
     const r = p?.rank;
     const n = (p?.name ?? '').toString().trim();
     return (r == null || r === '' || Number.isNaN(Number(r))) && n.length === 0;
@@ -1816,14 +1816,14 @@ export default function PlayerImport() {
   const handleMappingConfirm = async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
-    const preset = selectPresetBySource(importSource as any);
+    const preset = selectPresetBySource(importSource as unknown);
     
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
 
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
-      const player: Record<string, any> = { _originalIndex: idx + 1 };
+      const player: Record<string, unknown> = { _originalIndex: idx + 1 };
 
       Object.keys(mapping).forEach((fieldKey) => {
         const col = mapping[fieldKey];
@@ -1961,7 +1961,7 @@ export default function PlayerImport() {
           player.gender = serverGender as 'M' | 'F';
         }
         if (serverGenderSource) {
-          (player as any).gender_source = serverGenderSource;
+          (player as unknown).gender_source = serverGenderSource;
         }
         if (serverGenderSources?.length) {
           player._genderSources = serverGenderSources as import("@/utils/genderInference").GenderSource[];
@@ -1983,7 +1983,7 @@ export default function PlayerImport() {
         }
 
         if (genderInference.gender_source) {
-          (player as any).gender_source = genderInference.gender_source;
+          (player as unknown).gender_source = genderInference.gender_source;
         }
 
         if (genderInference.sources.length) {
@@ -2126,8 +2126,8 @@ export default function PlayerImport() {
       let hasFemaleTypeLabel = false;
       let hasFemaleGroupLabel = false;
       const femaleFromFmg = validPlayers.filter(p => {
-        const typeLabel = String((p as any).type_label ?? p.type ?? '').trim();
-        const groupLabel = String((p as any).group_label ?? p.gr ?? '').trim();
+        const typeLabel = String((p as unknown).type_label ?? p.type ?? '').trim();
+        const groupLabel = String((p as unknown).group_label ?? p.gr ?? '').trim();
         const typeFemale = hasFemaleMarker(typeLabel);
         const groupFemale = hasFemaleMarker(groupLabel);
         if (typeFemale) hasFemaleTypeLabel = true;
@@ -2897,7 +2897,7 @@ export default function PlayerImport() {
                       rowIndex: err.row,
                       reason: err.errors.join('; '),
                     }));
-                    const originals = parsedData as Record<string, any>[];
+                    const originals = parsedData as Record<string, unknown>[];
                     const today = new Date().toISOString().slice(0, 10);
                     const filename = `${tournamentSlug}_errors_${today}.xlsx`;
                     try {
@@ -3083,7 +3083,7 @@ export default function PlayerImport() {
         open={showMappingDialog}
         onOpenChange={setShowMappingDialog}
         detectedColumns={headers}
-        sampleRows={parsedData as Record<string, any>[]}
+        sampleRows={parsedData as Record<string, unknown>[]}
         onConfirm={handleMappingConfirm}
       />
       <DeduplicationWizard

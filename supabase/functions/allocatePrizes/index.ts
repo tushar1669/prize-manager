@@ -9,7 +9,7 @@ const corsHeaders = CORS_HEADERS;
 interface AllocatePrizesRequest {
   tournamentId: string;
   overrides?: Array<{ prizeId: string; playerId: string; force?: boolean }>;
-  ruleConfigOverride?: any;
+  ruleConfigOverride?: unknown;
   dryRun?: boolean;
   tieBreakStrategy?: TieBreakStrategy;
 }
@@ -266,7 +266,7 @@ type CategoryRow = {
   order_idx: number;
   is_active?: boolean;
   category_type?: string | null;
-  criteria_json?: any;
+  criteria_json?: unknown;
   prizes: PrizeRow[];
 };
 
@@ -441,13 +441,13 @@ Deno.serve(async (req) => {
     const activeCategories = (categories || [])
       .filter(c => c.is_active !== false)
       .map(c => {
-        const catType = (c as any).category_type 
+        const catType = (c as unknown).category_type 
           ?? c.criteria_json?.category_type 
           ?? 'standard';
         return {
           ...c,
           category_type: catType,
-          prizes: (c.prizes || []).filter((p: any) => p.is_active !== false)
+          prizes: (c.prizes || []).filter((p: unknown) => p.is_active !== false)
         };
       }) as CategoryRow[];
 
@@ -511,7 +511,7 @@ Deno.serve(async (req) => {
 
     const verboseLogsEnv = (Deno.env.get('ALLOC_VERBOSE_LOGS') ?? '').toLowerCase();
     const envVerbose = ['1', 'true', 'yes', 'y', 'on'].includes(verboseLogsEnv);
-    const coerceBool = (value: any, fallback: boolean) => {
+    const coerceBool = (value: unknown, fallback: boolean) => {
       if (value == null) return fallback;
       if (typeof value === 'boolean') return value;
       if (typeof value === 'string') {
@@ -646,7 +646,7 @@ Deno.serve(async (req) => {
 
     // Pre-flight field coverage check
     if (playerRows.length > 0) {
-      const sample = playerRows[0] as any;
+      const sample = playerRows[0] as unknown;
       const criticalFields = ['id', 'rank', 'dob', 'gender', 'rating'];
       const missingCritical = criticalFields.filter(f => sample[f] === undefined);
       
@@ -659,7 +659,7 @@ Deno.serve(async (req) => {
       const fieldsToCheck = ['dob', 'gender', 'rating', 'state', 'city', 'club', 'disability', 'fide_id'];
       
       for (const field of fieldsToCheck) {
-        fieldCoverage[field] = playerRows.filter((p: any) => p[field] != null && p[field] !== '').length;
+        fieldCoverage[field] = playerRows.filter((p: unknown) => p[field] != null && p[field] !== '').length;
       }
       
       console.log(`[alloc.preflight] Field coverage (non-null):`, fieldCoverage);
@@ -707,7 +707,7 @@ Deno.serve(async (req) => {
     const prizeLookup = new Map<string, { cat: CategoryRow; p: PrizeRow }>(
       prizeQueue.map(entry => [entry.p.id, entry])
     );
-    const playerLookup = new Map<string, any>(
+    const playerLookup = new Map<string, (typeof playerRows)[number]>(
       playerRows.map(p => [p.id, p])
     );
 
@@ -773,8 +773,8 @@ Deno.serve(async (req) => {
       const youngestCategory = isYoungestCategory(cat);
 
       // Track eligibility BEFORE prize-cap exclusion
-      const eligibleBeforeOnePrize: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
-      const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
+      const eligibleBeforeOnePrize: Array<{ player: unknown; passCodes: string[]; warnCodes: string[] }> = [];
+      const eligible: Array<{ player: unknown; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
       for (const player of playerRows) {
@@ -1109,7 +1109,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[allocatePrizes] fatal', e);
     return new Response(
       JSON.stringify({ error: String((e && e.message) || e) }),
@@ -1140,7 +1140,7 @@ export const yearsOn = (dobISO: string | null | undefined, onDate: Date): number
 };
 
 // Detect rating category purely by presence of rating bounds
-export const isRatingCategory = (criteria: any): boolean =>
+export const isRatingCategory = (criteria: unknown): boolean =>
   criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number');
 
 type EligibilityResult = {
@@ -1165,7 +1165,7 @@ const STATE_ALIASES: Record<string, string> = {
   KL: 'KERALA',
 };
 
-const normalizeLocation = (raw: any, type?: LocationType): string => {
+const normalizeLocation = (raw: unknown, type?: LocationType): string => {
   const str = String(raw ?? '').trim();
   if (!str) return '';
 
@@ -1207,7 +1207,7 @@ const buildAliasLookup = (aliases: AliasSpec, type?: LocationType): Map<string, 
   return lookup;
 };
 
-const normalizeAllowedList = (values: any[] | undefined, aliases: AliasSpec, type?: LocationType) => {
+const normalizeAllowedList = (values: unknown[] | undefined, aliases: AliasSpec, type?: LocationType) => {
   const aliasLookup = buildAliasLookup(aliases, type);
   const allowedSet = new Set<string>();
 
@@ -1225,7 +1225,7 @@ const normalizeAllowedList = (values: any[] | undefined, aliases: AliasSpec, typ
   return { allowedSet, aliasLookup };
 };
 
-const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?: LocationType): boolean => {
+const matchesLocation = (value: unknown, values?: unknown[], aliases?: AliasSpec, type?: LocationType): boolean => {
   if (!Array.isArray(values) || values.length === 0) return true;
 
   const { allowedSet, aliasLookup } = normalizeAllowedList(values, aliases, type);
@@ -1239,9 +1239,9 @@ const matchesLocation = (value: any, values?: any[], aliases?: AliasSpec, type?:
 type EffectiveAgeBand = { category_id: string; effective_min_age: number; effective_max_age: number };
 
 export const evaluateEligibility = (
-  player: any,
+  player: unknown,
   cat: CategoryRow,
-  rules: any,
+  rules: unknown,
   onDate: Date,
   effectiveAgeBands?: Map<string, EffectiveAgeBand>
 ): EligibilityResult => {
@@ -1431,7 +1431,7 @@ export const evaluateEligibility = (
   }
 
   // Optional filters (disability/city/state/club lists)
-  const inList = (val: any, arr?: any[]) =>
+  const inList = (val: unknown, arr?: unknown[]) =>
     !arr || arr.length === 0 || arr.map(x => String(x).toLowerCase()).includes(String(val ?? '').toLowerCase());
 
   if (Array.isArray(c.allowed_disabilities) && c.allowed_disabilities.length > 0) {
@@ -1472,7 +1472,7 @@ export const evaluateEligibility = (
   // Group filter (Gr column): case-insensitive, trimmed matching
   if (Array.isArray(c.allowed_groups) && c.allowed_groups.length > 0) {
     const playerGroup = (player.group_label ?? '').trim().toUpperCase();
-    const allowedNormalized = c.allowed_groups.map((g: any) => String(g ?? '').trim().toUpperCase());
+    const allowedNormalized = c.allowed_groups.map((g: unknown) => String(g ?? '').trim().toUpperCase());
     
     if (!playerGroup || !allowedNormalized.includes(playerGroup)) {
       failCodes.add('group_excluded');
@@ -1484,7 +1484,7 @@ export const evaluateEligibility = (
   // Type filter (Swiss-Manager Type column): case-insensitive, trimmed matching
   if (Array.isArray(c.allowed_types) && c.allowed_types.length > 0) {
     const playerType = (player.type_label ?? '').trim().toUpperCase();
-    const allowedTypes = c.allowed_types.map((t: any) => String(t ?? '').trim().toUpperCase());
+    const allowedTypes = c.allowed_types.map((t: unknown) => String(t ?? '').trim().toUpperCase());
     
     if (!playerType || !allowedTypes.includes(playerType)) {
       failCodes.add('type_excluded');

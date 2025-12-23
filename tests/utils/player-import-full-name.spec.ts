@@ -11,7 +11,7 @@ describe('buildSupabasePlayerPayload full_name handling', () => {
         tags_json: {},
         warnings_json: {},
         _originalIndex: 1,
-      } as any,
+      } as unknown,
       'tournament-id'
     );
 
@@ -27,7 +27,7 @@ describe('buildSupabasePlayerPayload full_name handling', () => {
         tags_json: {},
         warnings_json: {},
         _originalIndex: 2,
-      } as any,
+      } as unknown,
       'tournament-id'
     );
 

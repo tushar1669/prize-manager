@@ -472,7 +472,7 @@ function inferGenderForRow(
 
   // 1. Check explicit gender column
   const genderColumn = config?.genderColumn ?? (config?.preferredSource === "gender_column" ? config?.preferredColumn : null);
-  const explicitGenderValue = genderColumn ? row[genderColumn] : "gender" in row ? (row as any).gender : undefined;
+  const explicitGenderValue = genderColumn ? row[genderColumn] : "gender" in row ? (row as unknown).gender : undefined;
   const explicitGender = normalizeExplicitGender(explicitGenderValue);
 
   if (explicitGender === "F") {
@@ -772,7 +772,7 @@ Deno.serve(async (req) => {
         })();
 
         const ratingValue =
-          (typedRow.rating as unknown) ?? typedRow.rtg ?? (typedRow as any).Rtg ?? (typedRow as any).RTG;
+          (typedRow.rating as unknown) ?? typedRow.rtg ?? (typedRow as unknown).Rtg ?? (typedRow as unknown).RTG;
 
         console.log(
           `[import.gender-debug] ${JSON.stringify({
