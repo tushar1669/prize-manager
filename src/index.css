@@ -160,5 +160,12 @@ All colors MUST be HSL.
   [data-category-card] {
     page-break-inside: avoid;
     break-inside: avoid;
+    break-before: avoid-page;
+    page-break-before: avoid;
+  }
+
+  [data-category-card]:first-of-type {
+    break-before: auto;
+    page-break-before: auto;
   }
 }
