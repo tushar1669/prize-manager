@@ -31,7 +31,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
-import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
+import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle, CategoryRow } from '@/components/prizes/CategoryPrizesEditor';
 import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext.shared";
@@ -51,7 +51,15 @@ type CriteriaCategory = {
   name?: string;
   criteria_json?: CriteriaJson;
   category_type?: string | null;
-} & Record<string, unknown>;
+};
+
+// Helper to safely get criteria_json as CriteriaJson
+const asCriteriaJson = (val: unknown): CriteriaJson => {
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    return val as CriteriaJson;
+  }
+  return {};
+};
 
 
 export default function TournamentSetup() {
@@ -363,15 +371,16 @@ export default function TournamentSetup() {
   useEffect(() => {
     if (criteriaSheet.open && criteriaSheet.category) {
       // category_type is stored in criteria_json (not as a top-level column)
-      const nextType = criteriaSheet.category.criteria_json?.category_type || 'standard';
+      const catCriteria = asCriteriaJson(criteriaSheet.category.criteria_json);
+      const nextType = String(catCriteria?.category_type ?? 'standard');
       setCategoryTypeSelection(nextType);
       setSavedCriteria({
-        criteria: normalizeCriteria(criteriaSheet.category.criteria_json),
+        criteria: normalizeCriteria(catCriteria) as CriteriaJson,
         category_type: nextType,
       });
       // Initialize gender selection for reactive warning
-      const storedGender = criteriaSheet.category.criteria_json?.gender;
-      setCriteriaGenderSelection(storedGender === 'M' ? 'M_OR_UNKNOWN' : (storedGender || ''));
+      const storedGender = catCriteria?.gender;
+      setCriteriaGenderSelection(storedGender === 'M' ? 'M_OR_UNKNOWN' : String(storedGender ?? ''));
     }
   }, [criteriaSheet.open, criteriaSheet.category]);
 
@@ -387,8 +396,9 @@ export default function TournamentSetup() {
       genderEl.value = 'M_OR_UNKNOWN';
       setCriteriaGenderSelection('M_OR_UNKNOWN');
     } else if (criteriaSheet.category?.criteria_json) {
-      const storedGender = criteriaSheet.category.criteria_json.gender;
-      genderEl.value = storedGender === 'M' ? 'M_OR_UNKNOWN' : (storedGender || '');
+      const catCriteria = asCriteriaJson(criteriaSheet.category.criteria_json);
+      const storedGender = catCriteria.gender;
+      genderEl.value = storedGender === 'M' ? 'M_OR_UNKNOWN' : String(storedGender ?? '');
     } else {
       genderEl.value = '';
     }
@@ -860,7 +870,7 @@ export default function TournamentSetup() {
     onSuccess: (_data, variables) => {
       console.log('[rules] save ok', { categoryId: variables.categoryId });
       setSavedCriteria({
-        criteria: normalizeCriteria(variables.criteria),
+        criteria: normalizeCriteria(variables.criteria) as CriteriaJson,
         category_type: variables.categoryType,
       });
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
@@ -1064,13 +1074,13 @@ export default function TournamentSetup() {
 
     const { data: created, error: createError } = await supabase
       .from('categories')
-      .insert({
+      .insert([{
         tournament_id: src.tournament_id,
         name: newName,
         is_main: false,
-        criteria_json: criteria,
+        criteria_json: JSON.parse(JSON.stringify(criteria)),
         order_idx: (src.order_idx ?? 0) + 1,
-      })
+      }])
       .select('id')
       .single();
 
@@ -1745,8 +1755,8 @@ export default function TournamentSetup() {
                           <div key={cat.id} data-category-id={cat.id}>
                             <CategoryPrizesEditor
                               ref={getEditorRef(cat.id)}
-                              category={cat}
-                              onEditRules={(category) => setCriteriaSheet({ open: true, category })}
+                              category={{ ...cat, criteria_json: asCriteriaJson(cat.criteria_json) }}
+                              onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
                               onSave={(categoryId, delta) => 
                                 saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
                               }
@@ -2019,7 +2029,21 @@ export default function TournamentSetup() {
 
             {/* Age Range */}
             {(() => {
-              const criteria = criteriaSheet.category?.criteria_json as Record<string, unknown> | undefined;
+              const criteria = asCriteriaJson(criteriaSheet.category?.criteria_json) as {
+                max_age?: number | string;
+                min_age?: number | string;
+                unrated_only?: boolean;
+                min_rating?: number | string;
+                max_rating?: number | string;
+                include_unrated?: boolean;
+                gender?: string;
+                allowed_disabilities?: string[];
+                allowed_cities?: string[];
+                allowed_clubs?: string[];
+                allowed_states?: string[];
+                allowed_groups?: string[];
+                allowed_types?: string[];
+              };
               const youngestCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male';
               return (
                 <>

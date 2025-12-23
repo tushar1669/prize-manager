@@ -172,7 +172,7 @@ export function buildSupabasePlayerPayload(
     state: state ? String(state) : null,
     city: city ? String(city) : null,
     club: club ? String(club) : null,
-    disability,
+    disability: disability != null ? String(disability) : null,
     special_notes: specialNotes ? String(specialNotes) : null,
     fide_id: toNumericFideOrNull(fideId),
     unrated: normalizedUnrated,
