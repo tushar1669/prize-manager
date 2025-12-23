@@ -45,11 +45,11 @@ describe('CeremonyScriptView category-based sort', () => {
     },
   ];
 
-  it('orders by category order (non-main first), then place DESC within category', () => {
+  it('orders by category order (non-main first), then place ASC within category', () => {
     const sorted = sortCeremonyItems(baseItems);
     // Non-main categories first (by categoryOrder), then main last
-    // Within each category: highest place first (2nd, then 1st)
-    expect(sorted.map(item => item.prizeId)).toEqual(['p2', 'p1', 'p3', 'p4']);
+    // Within each category: lowest place first (1st, then 2nd)
+    expect(sorted.map(item => item.prizeId)).toEqual(['p1', 'p2', 'p3', 'p4']);
   });
 
   it('places main category last', () => {

@@ -21,11 +21,14 @@ export interface CeremonyItem {
 }
 
 /**
- * Sort ceremony items by category order, then by place ascending within each category.
- * This produces a stable ceremony order that matches the category order used elsewhere.
+ * Sort ceremony items: non-main categories first (by brochure order), main category LAST.
+ * Within each category, sort by place ascending (1st, 2nd, 3rd).
+ * This ensures main prizes are announced last during the ceremony.
  */
 export function sortCeremonyItems(items: CeremonyItem[]): CeremonyItem[] {
   return [...items].sort((a, b) => {
+    // Main categories announced LAST
+    if (a.isMain !== b.isMain) return a.isMain ? 1 : -1;
     // Then by category order (brochure order)
     if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
     // Within category: lowest place first (1st, 2nd, 3rd)
