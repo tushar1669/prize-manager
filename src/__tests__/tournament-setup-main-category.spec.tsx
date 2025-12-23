@@ -19,7 +19,7 @@ vi.mock('sonner', () => ({
 describe('TournamentSetup main category safeguards', () => {
   it('creates a main category when individual mode has none', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
-    const supabaseClient = { from: vi.fn(() => ({ insert })) } as EnsureMainCategoryArgs['supabaseClient'];
+    const supabaseClient = { from: vi.fn(() => ({ insert })) } as unknown as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -29,7 +29,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
+      queryClient: { invalidateQueries } as unknown as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -47,7 +47,7 @@ describe('TournamentSetup main category safeguards', () => {
   });
 
   it('does not insert when a main category already exists', async () => {
-    const supabaseClient = { from: vi.fn() } as EnsureMainCategoryArgs['supabaseClient'];
+    const supabaseClient = { from: vi.fn() } as unknown as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn();
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -57,7 +57,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
+      queryClient: { invalidateQueries } as unknown as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -67,7 +67,7 @@ describe('TournamentSetup main category safeguards', () => {
   });
 
   it('does not insert while categories are still loading', async () => {
-    const supabaseClient = { from: vi.fn() } as EnsureMainCategoryArgs['supabaseClient'];
+    const supabaseClient = { from: vi.fn() } as unknown as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn();
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -77,7 +77,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: true, // STILL LOADING
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
+      queryClient: { invalidateQueries } as unknown as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -90,7 +90,7 @@ describe('TournamentSetup main category safeguards', () => {
     const insert = vi.fn().mockResolvedValue({ 
       error: { code: '23505', message: 'duplicate key value violates unique constraint' } 
     });
-    const supabaseClient = { from: vi.fn(() => ({ insert })) } as EnsureMainCategoryArgs['supabaseClient'];
+    const supabaseClient = { from: vi.fn(() => ({ insert })) } as unknown as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -100,7 +100,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
+      queryClient: { invalidateQueries } as unknown as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 

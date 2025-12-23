@@ -5,10 +5,24 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+type TournamentDetails = {
+  title: string;
+  start_date: string;
+  end_date: string;
+  venue?: string | null;
+  city?: string | null;
+  event_code?: string | null;
+  notes?: string | null;
+  brochure_url?: string | null;
+  chessresults_url?: string | null;
+  public_results_url?: string | null;
+  public_slug?: string | null;
+};
+
 export default function PublicTournamentDetails() {
   const { slug } = useParams();
   const { error, showError, clearError } = useErrorPanel();
-  const [t, setT] = useState<unknown>(null);
+  const [t, setT] = useState<TournamentDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,12 +37,13 @@ export default function PublicTournamentDetails() {
         
         if (error) throw error;
         console.log('[publish] tournament details loaded', data);
-        setT(data);
+        setT(data as TournamentDetails | null);
       } catch (e: unknown) {
         console.error("[publish] details error", e);
+        const errMsg = e instanceof Error ? e.message : "Unknown error";
         showError({ 
           title: "Failed to load tournament", 
-          message: e?.message || "Unknown error",
+          message: errMsg,
           hint: "Please check your connection and try again."
         });
       } finally {

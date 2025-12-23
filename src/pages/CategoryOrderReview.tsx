@@ -186,11 +186,11 @@ export default function CategoryOrderReview() {
         return; 
       }
       
-      const mapped = (data || []).map((c: unknown) => ({
+      const mapped = (data || []).map((c) => ({
         ...c,
         is_active: c.is_active ?? true,
-        prizes: (c.prizes || []).map((p: unknown) => ({ ...p, is_active: p.is_active ?? true })),
-      }));
+        prizes: ((c as { prizes?: Prize[] }).prizes || []).map((p) => ({ ...p, is_active: p.is_active ?? true })),
+      })) as Category[];
       console.log('[order-review] loaded', mapped.map(c => ({ id: c.id, name: c.name, order_idx: c.order_idx, is_active: c.is_active, prizes: (c.prizes||[]).length })));
       setCats(mapped);
       setLastSavedOrder(mapped); // baseline for rollback on save error
@@ -255,7 +255,8 @@ export default function CategoryOrderReview() {
     },
     onError: (err: unknown) => {
       console.error('[delete-cat] err', err);
-      showError({ title: 'Delete Error', message: `Failed to delete category: ${err.message || 'Unknown error'}` });
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      showError({ title: 'Delete Error', message: `Failed to delete category: ${errMsg}` });
     },
   });
 
@@ -403,12 +404,13 @@ export default function CategoryOrderReview() {
     } catch (err: unknown) {
       console.error('[order-review] save error', err);
       setCats(lastSavedOrder); // rollback visual order
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
       showError({
         title: 'Failed to save order',
-        message: err?.message || 'Unknown error',
+        message: errMsg,
         hint: 'Your changes have been reverted. Please try again.',
       });
-      toast.error(err?.message || 'Failed to save order');
+      toast.error(errMsg);
     } finally {
       setSaving(false);
     }
@@ -488,9 +490,11 @@ export default function CategoryOrderReview() {
                   size="sm"
                   onClick={() => {
                     const byId = new Map(cats.map(c => [c.id, c]));
-                    const restored = (orderRestore.data.ids || []).map(id => byId.get(id)).filter(Boolean);
-                    const merged = restored.map((c: unknown) => ({ ...c, is_active: !!orderRestore.data.active[c.id] }));
-                    setCats(merged as unknown);
+                    const restored = (orderRestore.data.ids || [])
+                      .map(rid => byId.get(rid))
+                      .filter((c): c is Category => c !== undefined)
+                      .map(c => ({ ...c, is_active: !!orderRestore.data.active[c.id] }));
+                    setCats(restored);
                     setOrderRestore(null);
                   }}
                 >

@@ -147,7 +147,7 @@ export function useExcelParser() {
         throw new Error("Worksheet missing after detection.");
       }
 
-      const data = XLSX.utils.sheet_to_json(worksheet, {
+      const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
         header: headers,
         range: headerRowIndex + 1,
         defval: ""

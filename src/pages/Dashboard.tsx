@@ -132,9 +132,9 @@ export default function Dashboard() {
         title: 'Untitled Tournament',
         start_date: today,
         end_date: today,
-        status: 'draft'
+        status: 'draft',
+        owner_id: user!.id,
       };
-      payload.owner_id = user!.id;
 
       const { data, error } = await supabase
         .from('tournaments')
