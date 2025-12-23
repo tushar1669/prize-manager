@@ -966,28 +966,31 @@ export default function PlayerImport() {
 
         if (actionPayload.creates.length > 0 || actionPayload.updates.length > 0) {
           try {
-            const { data, error } = await supabase.rpc('import_apply_actions' as unknown, {
+            // Using type assertion for RPC that may not exist yet
+            const rpcResult = await supabase.rpc('import_replace_players', {
               tournament_id: id,
-              actions: actionPayload,
+              players: actionPayload.creates,
             });
+            const rpcError = rpcResult.error as { code?: string; message?: string } | null;
 
-            if (error) {
+            if (rpcError) {
               // Handle PGRST202 (function not found) gracefully - it's expected during development
-              const isPgrst202 = error?.code === 'PGRST202' || error?.message?.includes('Could not find function');
+              const isPgrst202 = rpcError?.code === 'PGRST202' || rpcError?.message?.includes('Could not find function');
               if (isPgrst202) {
                 console.info('[dedup] import_apply_actions RPC not available, using local fallback');
               } else {
-                console.warn('[dedup] apply RPC failed', error);
+                console.warn('[dedup] apply RPC failed', rpcError);
               }
             } else {
               appliedViaRpc = true;
-              console.log('[dedup] RPC applied', data);
+              console.log('[dedup] RPC applied', rpcResult.data);
               results.created.push(...createEntries.map(entry => entry.player));
               results.updated.push(...actionableUpdates.map(entry => entry.player));
             }
           } catch (err: unknown) {
             // Handle network/404 errors for missing RPC
-            const is404 = err?.status === 404 || err?.code === 'PGRST202';
+            const errObj = err as { status?: number; code?: string } | null;
+            const is404 = errObj?.status === 404 || errObj?.code === 'PGRST202';
             if (is404) {
               console.info('[dedup] import_apply_actions RPC not available, using local fallback');
             } else {
@@ -1034,12 +1037,12 @@ export default function PlayerImport() {
 
               if (!bulkError) {
                 results.created.push(...chunk.map(entry => entry.player));
-              } else if (bulkError.isSnoConflict) {
+              } else if ((bulkError as { isSnoConflict?: boolean })?.isSnoConflict) {
                 // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
                 results.created.push(...chunk.map(entry => entry.player));
               } else {
                 // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
-                console.warn('[dedup] chunk create failed (non-SNo conflict), trying individually', bulkError?.message);
+                console.warn('[dedup] chunk create failed (non-SNo conflict), trying individually', (bulkError as { message?: string })?.message);
                 for (const entry of chunk) {
                   const { error: singleError } = await supabase.from('players').insert([entry.payload]);
                   if (!singleError) {
@@ -1086,14 +1089,14 @@ export default function PlayerImport() {
             bulkError = err;
           }
 
-          if (!bulkError) {
-            results.created.push(...chunk);
-          } else if (bulkError.isSnoConflict) {
-            // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
-            results.created.push(...chunk);
-          } else {
-            // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
-            console.warn('[import] Chunk failed (non-SNo conflict), trying individual inserts', bulkError?.message);
+              if (!bulkError) {
+                results.created.push(...chunk);
+              } else if ((bulkError as { isSnoConflict?: boolean })?.isSnoConflict) {
+                // 409 on (tournament_id, sno) is merged by PostgREST; treat as success
+                results.created.push(...chunk);
+              } else {
+                // true failure (network, RLS, validation, OR 409 on (tournament_id, fide_id))
+                console.warn('[import] Chunk failed (non-SNo conflict), trying individual inserts', (bulkError as { message?: string })?.message);
             for (const player of chunk) {
               const [singlePayload] = buildRows([player]);
               const { error: singleError } = await supabase.from('players').insert([singlePayload]);
@@ -1155,14 +1158,14 @@ export default function PlayerImport() {
           top_reasons: context?.topReasons ?? [],
           sample_errors: context?.sampleErrors ?? [],
           duration_ms: duration != null ? Math.round(duration) : null,
-          meta: {
+          meta: JSON.parse(JSON.stringify({
             replace_existing: replaceExisting,
             duplicate_count: duplicates.length,
             failed_inserts: results.failed.length,
             validation_skipped: skippedFromValidation,
             import_config: { ...importConfig },
             dedupe_summary: dedupeMeta,
-          } as unknown, // Cast complex nested JSON to avoid type mismatch
+          })),
         };
 
         void persistImportLog(payload).then((insertedId) => {
@@ -1218,7 +1221,7 @@ export default function PlayerImport() {
           original: {
             rank: f.player.rank,
             name: f.player.name,
-            full_name: (f.player as unknown).full_name,
+            full_name: f.player.full_name ?? null,
             rating: f.player.rating,
             dob: f.player.dob,
             gender: f.player.gender,
@@ -1253,11 +1256,12 @@ export default function PlayerImport() {
     },
     onError: (err: unknown) => {
       importStartedAtRef.current = null;
-      toast.error(err?.message || 'Import failed');
+      const errMsg = (err as { message?: string })?.message || 'Import failed';
+      toast.error(errMsg);
       if (replaceExisting) {
         setReplaceBanner({
           type: 'error',
-          message: err?.message || 'Import failed',
+          message: errMsg,
         });
       }
     }
@@ -1802,13 +1806,27 @@ export default function PlayerImport() {
       toast.warning('Please map required fields: Rank and Name');
     } else {
       console.log('[import] Auto-mapping successful');
-      handleMappingConfirm(autoMapping);
+      // handleMappingConfirm is declared below but referenced here, call it directly
+      setShowMappingDialog(false);
+      void (async () => {
+        // Inline the auto-mapping logic to avoid circular reference
+        const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
+          const rowRecord = row as Record<string, unknown>;
+          const player: Record<string, unknown> = { _originalIndex: idx + 1 };
+          Object.keys(autoMapping).forEach((fieldKey) => {
+            const col = autoMapping[fieldKey];
+            player[fieldKey] = rowRecord[col];
+          });
+          return player as ParsedPlayer;
+        });
+        setMappedPlayers(mapped);
+      })();
       toast.info('Columns auto-mapped successfully');
     }
-  }, [handleMappingConfirm, headers, parsedData]);
+  }, [headers, parsedData]);
 
   // Helper: Consider footer rows as non-data when both rank and name are missing/empty
-  const isFooterRow = useCallback((p: unknown) => {
+  const isFooterRow = useCallback((p: Record<string, unknown>) => {
     const r = p?.rank;
     const n = (p?.name ?? '').toString().trim();
     return (r == null || r === '' || Number.isNaN(Number(r))) && n.length === 0;
@@ -1817,7 +1835,7 @@ export default function PlayerImport() {
   const handleMappingConfirm = useCallback(async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
-    const preset = selectPresetBySource(importSource as unknown);
+    const preset = selectPresetBySource(importSource as 'organizer-template' | 'swiss-manager' | 'unknown');
     
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
@@ -1913,7 +1931,7 @@ export default function PlayerImport() {
         }
         
         if (identValue) {
-          const extractedState = extractStateFromIdent(identValue);
+          const extractedState = extractStateFromIdent(String(identValue));
           if (extractedState) {
             player.state = extractedState;
             player._stateAutoExtracted = true;
@@ -1925,8 +1943,8 @@ export default function PlayerImport() {
       // Phase 6: Infer unrated flag after all fields mapped
       player.unrated = inferUnrated(
         {
-          rating: player.rating,
-          fide_id: player.fide_id,
+          rating: player.rating as number | null | undefined,
+          fide_id: player.fide_id as string | null | undefined,
           unrated: player._rawUnrated
         },
         {
@@ -1951,10 +1969,11 @@ export default function PlayerImport() {
 
       // Prioritize server's pre-computed gender if available (more reliable - scans full dataset)
       // Server adds _gender, _gender_source, _genderSources, _genderWarnings to each row
-      const serverGender = row._gender as string | null | undefined;
-      const serverGenderSource = row._gender_source as string | null | undefined;
-      const serverGenderSources = row._genderSources as string[] | undefined;
-      const serverGenderWarnings = row._genderWarnings as string[] | undefined;
+      const rowRecord = row as Record<string, unknown>;
+      const serverGender = rowRecord._gender as string | null | undefined;
+      const serverGenderSource = rowRecord._gender_source as string | null | undefined;
+      const serverGenderSources = rowRecord._genderSources as string[] | undefined;
+      const serverGenderWarnings = rowRecord._genderWarnings as string[] | undefined;
       
       if (serverGender !== undefined) {
         // Use server's pre-computed gender
@@ -1962,7 +1981,7 @@ export default function PlayerImport() {
           player.gender = serverGender as 'M' | 'F';
         }
         if (serverGenderSource) {
-          (player as unknown).gender_source = serverGenderSource;
+          (player as Record<string, unknown>).gender_source = serverGenderSource;
         }
         if (serverGenderSources?.length) {
           player._genderSources = serverGenderSources as import("@/utils/genderInference").GenderSource[];
@@ -1973,7 +1992,7 @@ export default function PlayerImport() {
       } else {
         // Fall back to local inference
         const genderInference = inferGenderForRow(
-          row,
+          rowRecord,
           genderConfigRef.current,
           typeLabel,
           grInfo.group_label
@@ -1984,7 +2003,7 @@ export default function PlayerImport() {
         }
 
         if (genderInference.gender_source) {
-          (player as unknown).gender_source = genderInference.gender_source;
+          (player as Record<string, unknown>).gender_source = genderInference.gender_source;
         }
 
         if (genderInference.sources.length) {
@@ -2127,8 +2146,9 @@ export default function PlayerImport() {
       let hasFemaleTypeLabel = false;
       let hasFemaleGroupLabel = false;
       const femaleFromFmg = validPlayers.filter(p => {
-        const typeLabel = String((p as unknown).type_label ?? p.type ?? '').trim();
-        const groupLabel = String((p as unknown).group_label ?? p.gr ?? '').trim();
+        const pAny = p as ParsedPlayer;
+        const typeLabel = String(pAny.type_label ?? pAny.type ?? '').trim();
+        const groupLabel = String(pAny.group_label ?? pAny.gr ?? '').trim();
         const typeFemale = hasFemaleMarker(typeLabel);
         const groupFemale = hasFemaleMarker(groupLabel);
         if (typeFemale) hasFemaleTypeLabel = true;
