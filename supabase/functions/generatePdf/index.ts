@@ -87,7 +87,8 @@ function getPlaceOrdinal(place: number): string {
   return `${place}th`;
 }
 
-async function loadTeamPrizes(supabaseClient: unknown, tournamentId: string, authHeader: string) {
+// deno-lint-ignore no-explicit-any
+async function loadTeamPrizes(supabaseClient: any, tournamentId: string, authHeader: string) {
   const cacheKey = `${tournamentId}:latest`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);
@@ -132,7 +133,7 @@ async function loadTeamPrizes(supabaseClient: unknown, tournamentId: string, aut
     }
   } catch (e: unknown) {
     console.error('[generatePdf] Exception loading team prizes:', e);
-    teamPrizeError = e?.message || 'Unknown error';
+    teamPrizeError = e instanceof Error ? e.message : 'Unknown error';
   }
 
   const cacheEntry: CachedTeamPrizes = {
@@ -278,16 +279,37 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('[generatePdf] Error:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errMsg }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
+// Tournament type for generating HTML report
+type TournamentInfo = {
+  title: string;
+  start_date: string;
+  end_date: string;
+  venue?: string | null;
+};
+
+// Allocation row type for HTML report
+type AllocationRow = {
+  players?: { rank?: number | null; name?: string | null } | null;
+  prizes?: {
+    categories?: { name?: string | null } | null;
+    place?: number | null;
+    cash_amount?: number | null;
+    has_trophy?: boolean | null;
+    has_medal?: boolean | null;
+  } | null;
+};
+
 function generateHtmlReport(
-  tournament: unknown,
-  allocations: unknown[],
+  tournament: TournamentInfo,
+  allocations: AllocationRow[],
   version: number,
   teamPrizes: TeamPrizeResults | null,
   teamPrizeError: string | null

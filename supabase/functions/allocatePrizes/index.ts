@@ -259,6 +259,24 @@ type PrizeRow = {
   is_active?: boolean;
 };
 
+// Type for criteria_json to avoid unknown type errors
+type CriteriaJson = {
+  min_rating?: number | null;
+  max_rating?: number | null;
+  unrated_only?: boolean;
+  min_age?: number | null;
+  max_age?: number | null;
+  gender?: string | null;
+  allowed_states?: string[] | null;
+  allowed_cities?: string[] | null;
+  allowed_clubs?: string[] | null;
+  allowed_types?: string[] | null;
+  allowed_groups?: string[] | null;
+  allowed_disabilities?: string[] | null;
+  category_type?: string | null;
+  [key: string]: unknown;
+};
+
 type CategoryRow = {
   id: string;
   name: string;
@@ -266,8 +284,28 @@ type CategoryRow = {
   order_idx: number;
   is_active?: boolean;
   category_type?: string | null;
-  criteria_json?: unknown;
+  criteria_json?: CriteriaJson;
   prizes: PrizeRow[];
+};
+
+// Player row type for allocation
+type PlayerRow = {
+  id: string;
+  rank?: number | null;
+  name?: string | null;
+  rating?: number | null;
+  dob?: string | null;
+  gender?: string | null;
+  state?: string | null;
+  city?: string | null;
+  club?: string | null;
+  fide_id?: string | null;
+  disability?: string | null;
+  unrated?: boolean;
+  federation?: string | null;
+  sno?: string | null;
+  group_label?: string | null;
+  type_label?: string | null;
 };
 
 type AssignedPrizeInfo = { category: CategoryRow; prize: PrizeRow };
@@ -441,13 +479,13 @@ Deno.serve(async (req) => {
     const activeCategories = (categories || [])
       .filter(c => c.is_active !== false)
       .map(c => {
-        const catType = (c as unknown).category_type 
-          ?? c.criteria_json?.category_type 
-          ?? 'standard';
+        const crit = c.criteria_json as CriteriaJson | undefined;
+        const catType = crit?.category_type ?? 'standard';
         return {
           ...c,
+          criteria_json: crit,
           category_type: catType,
-          prizes: (c.prizes || []).filter((p: unknown) => p.is_active !== false)
+          prizes: (c.prizes || []).filter((p: PrizeRow) => p.is_active !== false) as PrizeRow[]
         };
       }) as CategoryRow[];
 
@@ -472,24 +510,7 @@ Deno.serve(async (req) => {
     if (!players) throw new Error('No players data returned');
 
     // Double assertion to work around TypeScript's union type narrowing limitation
-    const playerRows = players as unknown as Array<{
-      id: string;
-      rank?: number | null;
-      name?: string | null;
-      rating?: number | null;
-      dob?: string | null;
-      gender?: string | null;
-      state?: string | null;
-      city?: string | null;
-      club?: string | null;
-      fide_id?: string | null;
-      disability?: string | null;
-      unrated?: boolean;
-      federation?: string | null;
-      sno?: string | null;
-      group_label?: string | null;
-      type_label?: string | null;
-    }>;
+    const playerRows = players as unknown as PlayerRow[];
 
     // Log actual column availability for diagnostics
     const samplePlayer = playerRows[0];
@@ -554,9 +575,10 @@ Deno.serve(async (req) => {
     rules.verbose_logs = coerceBool(rules.verbose_logs, envVerbose);
     const multiPrizePolicy: MultiPrizePolicy = (rules.multi_prize_policy ?? 'single') as MultiPrizePolicy;
     rules.multi_prize_policy = multiPrizePolicy;
-    const mainVsSidePriorityMode = (ruleConfigOverride?.main_vs_side_priority_mode ??
+    const ruleOverride = ruleConfigOverride as Record<string, unknown> | undefined;
+    const mainVsSidePriorityMode = ((ruleOverride?.main_vs_side_priority_mode ??
       ruleConfig?.main_vs_side_priority_mode ??
-      (rules.prefer_main_on_equal_value ? 'main_first' : 'place_first')) as MainVsSidePriorityMode;
+      (rules.prefer_main_on_equal_value ? 'main_first' : 'place_first')) as MainVsSidePriorityMode);
     rules.main_vs_side_priority_mode = mainVsSidePriorityMode;
 
     // Determine age band policy
@@ -577,8 +599,8 @@ Deno.serve(async (req) => {
         .map(c => ({
           id: c.id,
           name: c.name,
-          max_age: Number(c.criteria_json.max_age),
-          min_age: c.criteria_json.min_age != null ? Number(c.criteria_json.min_age) : null,
+          max_age: Number(c.criteria_json!.max_age),
+          min_age: c.criteria_json!.min_age != null ? Number(c.criteria_json!.min_age) : null,
         }));
 
       // FIX: Group categories by max_age so that Boy/Girl pairs sharing same max_age get same band
@@ -646,7 +668,7 @@ Deno.serve(async (req) => {
 
     // Pre-flight field coverage check
     if (playerRows.length > 0) {
-      const sample = playerRows[0] as unknown;
+      const sample = playerRows[0] as Record<string, unknown>;
       const criticalFields = ['id', 'rank', 'dob', 'gender', 'rating'];
       const missingCritical = criticalFields.filter(f => sample[f] === undefined);
       
@@ -659,7 +681,7 @@ Deno.serve(async (req) => {
       const fieldsToCheck = ['dob', 'gender', 'rating', 'state', 'city', 'club', 'disability', 'fide_id'];
       
       for (const field of fieldsToCheck) {
-        fieldCoverage[field] = playerRows.filter((p: unknown) => p[field] != null && p[field] !== '').length;
+        fieldCoverage[field] = playerRows.filter((p) => (p as Record<string, unknown>)[field] != null && (p as Record<string, unknown>)[field] !== '').length;
       }
       
       console.log(`[alloc.preflight] Field coverage (non-null):`, fieldCoverage);
@@ -721,7 +743,7 @@ Deno.serve(async (req) => {
         : null;
       const eligible = evaluation?.eligible === true;
 
-      if (evaluation && prizeContext?.cat) {
+      if (evaluation && prizeContext?.cat && player) {
         logGenderEligibility(prizeContext.cat, player, evaluation);
       }
 
@@ -773,8 +795,8 @@ Deno.serve(async (req) => {
       const youngestCategory = isYoungestCategory(cat);
 
       // Track eligibility BEFORE prize-cap exclusion
-      const eligibleBeforeOnePrize: Array<{ player: unknown; passCodes: string[]; warnCodes: string[] }> = [];
-      const eligible: Array<{ player: unknown; passCodes: string[]; warnCodes: string[] }> = [];
+      const eligibleBeforeOnePrize: Array<{ player: PlayerRow; passCodes: string[]; warnCodes: string[] }> = [];
+      const eligible: Array<{ player: PlayerRow; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
       for (const player of playerRows) {
@@ -1111,8 +1133,9 @@ Deno.serve(async (req) => {
 
   } catch (e: unknown) {
     console.error('[allocatePrizes] fatal', e);
+    const errMsg = e instanceof Error ? e.message : String(e);
     return new Response(
-      JSON.stringify({ error: String((e && e.message) || e) }),
+      JSON.stringify({ error: errMsg }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
@@ -1140,8 +1163,8 @@ export const yearsOn = (dobISO: string | null | undefined, onDate: Date): number
 };
 
 // Detect rating category purely by presence of rating bounds
-export const isRatingCategory = (criteria: unknown): boolean =>
-  criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number');
+export const isRatingCategory = (criteria: CriteriaJson | undefined): boolean =>
+  !!(criteria && (typeof criteria.min_rating === 'number' || typeof criteria.max_rating === 'number'));
 
 type EligibilityResult = {
   eligible: boolean;
@@ -1238,14 +1261,39 @@ const matchesLocation = (value: unknown, values?: unknown[], aliases?: AliasSpec
 // Effective age band type for non-overlapping mode
 type EffectiveAgeBand = { category_id: string; effective_min_age: number; effective_max_age: number };
 
+// Rules type for allocation config
+type AllocationRules = {
+  strict_age?: boolean;
+  allow_missing_dob_for_age?: boolean;
+  max_age_inclusive?: boolean;
+  allow_unrated_in_rating?: boolean;
+  verbose_logs?: boolean;
+  multi_prize_policy?: MultiPrizePolicy;
+  main_vs_side_priority_mode?: MainVsSidePriorityMode;
+  tie_break_strategy?: TieBreakStrategy;
+  tieBreakStrategy?: TieBreakStrategy;
+  prefer_main_on_equal_value?: boolean;
+  age_band_policy?: 'non_overlapping' | 'overlapping';
+  prefer_category_rank_on_tie?: boolean;
+  [key: string]: unknown;
+};
+
 export const evaluateEligibility = (
-  player: unknown,
+  player: PlayerRow,
   cat: CategoryRow,
-  rules: unknown,
+  rules: AllocationRules,
   onDate: Date,
   effectiveAgeBands?: Map<string, EffectiveAgeBand>
 ): EligibilityResult => {
-  const c = cat.criteria_json || {};
+  const c = (cat.criteria_json || {}) as CriteriaJson & { 
+    allow_missing_dob_for_age?: boolean;
+    max_age_inclusive?: boolean;
+    include_unrated?: boolean;
+    unrated_only?: boolean;
+    city_aliases?: AliasSpec;
+    state_aliases?: AliasSpec;
+    club_aliases?: AliasSpec;
+  };
   const categoryType = (cat.category_type as string) || 'standard';
   const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
   const failCodes = new Set<string>();

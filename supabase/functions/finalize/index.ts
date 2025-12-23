@@ -230,13 +230,15 @@ Deno.serve(async (req) => {
     );
 
   } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
     console.error('[finalize] Error:', {
-      message: error.message,
-      stack: error.stack
+      message: errMsg,
+      stack: errStack
     });
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Internal server error',
+        error: errMsg || 'Internal server error',
         hint: 'Check edge function logs for details'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
