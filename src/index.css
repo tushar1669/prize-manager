@@ -137,20 +137,6 @@ All colors MUST be HSL.
     margin-right: auto !important;
   }
 
-  /* Ceremony script page breaks */
-  .ceremony-script .ceremony-line:nth-child(25n) {
-    break-after: page;
-    page-break-after: always;
-    -webkit-column-break-after: always;
-  }
-
-  .ceremony-script .ceremony-line {
-    break-inside: avoid;
-    page-break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    -webkit-region-break-inside: avoid;
-  }
-
   /* Remove shadows in print */
   .shadow, .shadow-lg, .shadow-sm {
     box-shadow: none !important;

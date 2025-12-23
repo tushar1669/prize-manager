@@ -10,14 +10,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { FinalPrizeSummaryHeader } from '@/components/final-prize/FinalPrizeSummaryHeader';
 import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
-import { CeremonyScriptView } from '@/components/final-prize/CeremonyScriptView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import { ArbiterSheetView } from '@/components/final-prize/ArbiterSheetView';
 import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
 
 const VIEW_TABS = [
   { id: 'v1', label: 'Category Cards' },
-  { id: 'v2', label: 'Ceremony Script' },
   { id: 'v3', label: 'Poster Grid' },
   { id: 'v4', label: 'Arbiter Sheet' },
   { id: 'v5', label: 'Team Prizes' },
@@ -113,9 +111,6 @@ export default function FinalPrizeView() {
               <>
                 <TabsContent value="v1" className={`m-0 ${normalized !== 'v1' ? 'print:hidden' : ''}`}>
                   <CategoryCardsView groups={grouped.groups} />
-                </TabsContent>
-                <TabsContent value="v2" className={`m-0 ${normalized !== 'v2' ? 'print:hidden' : ''}`}>
-                  <CeremonyScriptView tournamentId={id as string} />
                 </TabsContent>
                 <TabsContent value="v3" className={`m-0 ${normalized !== 'v3' ? 'print:hidden' : ''}`}>
                   <PosterGridView winners={data.winners} tournamentId={id as string} />
