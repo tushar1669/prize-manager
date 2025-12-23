@@ -1307,7 +1307,6 @@ export default function PlayerImport() {
     dedupeState,
     id,
     importPlayersMutation,
-    importPlayersMutation.isPending,
     isRunningDedup,
     mappedPlayers,
     navigate,
@@ -1804,16 +1803,16 @@ export default function PlayerImport() {
       handleMappingConfirm(autoMapping);
       toast.info('Columns auto-mapped successfully');
     }
-  }, [headers, parsedData]);
+  }, [handleMappingConfirm, headers, parsedData]);
 
   // Helper: Consider footer rows as non-data when both rank and name are missing/empty
-  const isFooterRow = (p: unknown) => {
+  const isFooterRow = useCallback((p: unknown) => {
     const r = p?.rank;
     const n = (p?.name ?? '').toString().trim();
     return (r == null || r === '' || Number.isNaN(Number(r))) && n.length === 0;
-  };
+  }, []);
 
-  const handleMappingConfirm = async (mapping: Record<string, string>) => {
+  const handleMappingConfirm = useCallback(async (mapping: Record<string, string>) => {
     setShowMappingDialog(false);
 
     const preset = selectPresetBySource(importSource as unknown);
@@ -2305,7 +2304,18 @@ export default function PlayerImport() {
     } else {
       setParseStatus('error');
     }
-  };
+  }, [
+    existingPlayers,
+    genderConfigRef,
+    id,
+    importConfig,
+    importSource,
+    isFooterRow,
+    parsedData,
+    replaceExisting,
+    runDedupe,
+    showError,
+  ]);
 
   // Register Cmd/Ctrl+S
   const { registerOnSave } = useDirty();
@@ -3109,4 +3119,3 @@ export default function PlayerImport() {
     </div>
   );
 }
-

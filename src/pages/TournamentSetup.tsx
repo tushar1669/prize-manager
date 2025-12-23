@@ -202,12 +202,12 @@ export default function TournamentSetup() {
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
 
   // Helper to get/create editor refs
-  const getEditorRef = (catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
+  const getEditorRef = useCallback((catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
     if (!editorRefs.current.has(catId)) {
       editorRefs.current.set(catId, React.createRef());
     }
     return editorRefs.current.get(catId)!;
-  };
+  }, []);
 
   // Details form
   const detailsForm = useForm<TournamentDetailsForm>({
@@ -1037,7 +1037,7 @@ export default function TournamentSetup() {
     } catch (err) {
       console.error('[prizes-cat] save all err', err);
     }
-  }, [categories, editorRefs, showError, clearError, toast, queryClient, id, saveCategoryPrizesMutation, setDirty, getEditorRef]);
+  }, [categories, showError, clearError, queryClient, id, saveCategoryPrizesMutation, getEditorRef]);
 
   // Keep latest values in refs so handler stays stable
   const prizesRef = useRef(prizes);
