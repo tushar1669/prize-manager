@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -87,8 +87,11 @@ function getPlaceOrdinal(place: number): string {
   return `${place}th`;
 }
 
-// deno-lint-ignore no-explicit-any
-async function loadTeamPrizes(supabaseClient: any, tournamentId: string, authHeader: string) {
+async function loadTeamPrizes(
+  supabaseClient: SupabaseClient,
+  tournamentId: string,
+  authHeader: string
+) {
   const cacheKey = `${tournamentId}:latest`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);

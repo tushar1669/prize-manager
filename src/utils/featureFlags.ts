@@ -7,7 +7,8 @@ export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : false;
 const reactPdfFlag = import.meta.env?.VITE_ENABLE_REACT_PDF;
 export const ENABLE_REACT_PDF = reactPdfFlag ? reactPdfFlag === 'true' : false;
 
-export const ALLOC_VERBOSE_LOGS = (import.meta.env.VITE_ALLOC_VERBOSE_LOGS === 'true') || false;
+const allocVerboseFlag = import.meta.env?.VITE_ALLOC_VERBOSE_LOGS;
+export const ALLOC_VERBOSE_LOGS = allocVerboseFlag === 'true';
 
 const dedupFlag = import.meta.env?.VITE_IMPORT_DEDUP_ENABLED;
 export const IMPORT_DEDUP_ENABLED = dedupFlag ? dedupFlag === "true" : true;
