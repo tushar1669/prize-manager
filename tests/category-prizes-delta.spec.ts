@@ -10,7 +10,7 @@ describe('prepareCategoryPrizeUpsertRows', () => {
       ],
       updates: [
         { id: 'existing-1', place: 2, cash_amount: 50, has_trophy: true, has_medal: false, is_active: true },
-        { id: undefined as any, place: 3, cash_amount: 25, has_trophy: false, has_medal: false, is_active: true },
+        { id: undefined as unknown, place: 3, cash_amount: 25, has_trophy: false, has_medal: false, is_active: true },
       ],
       deletes: [],
     };
@@ -21,10 +21,10 @@ describe('prepareCategoryPrizeUpsertRows', () => {
     expect(validUpdates[0].id).toBe('existing-1');
 
     expect(validInserts).toHaveLength(2);
-    expect(validInserts.every(row => !(row as any).id)).toBe(true);
+    expect(validInserts.every(row => !(row as unknown).id)).toBe(true);
 
     const place3Row = upsertRows.find(r => r.place === 3);
     expect(place3Row).toBeDefined();
-    expect((place3Row as any).id).toBeUndefined();
+    expect((place3Row as unknown).id).toBeUndefined();
   });
 });

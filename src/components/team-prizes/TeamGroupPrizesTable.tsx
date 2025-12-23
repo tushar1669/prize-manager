@@ -212,8 +212,9 @@ export default function TeamGroupPrizesTable({
 
       toast.success('Prizes saved');
       onSaveSuccess?.();
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to save prizes');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to save prizes';
+      toast.error(message);
     } finally {
       setSaving(false);
     }

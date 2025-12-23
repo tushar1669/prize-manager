@@ -44,15 +44,16 @@ function buildDateRange(start?: string | null, end?: string | null) {
 
 export default function FinalPrizeView() {
   const { id, view } = useParams();
+  const { data, isLoading, error, grouped } = useFinalPrizeData(id);
   const normalized = normalizeView(view);
+  const dateRange = useMemo(
+    () => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date),
+    [data?.tournament]
+  );
 
   if (!normalized) {
     return <Navigate to={`/t/${id}/final/v1`} replace />;
   }
-
-  const { data, isLoading, error, grouped } = useFinalPrizeData(id);
-
-  const dateRange = useMemo(() => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date), [data?.tournament]);
 
   // Team Prizes tab can show even without individual winners
   const showContent = data && (data.winners.length > 0 || normalized === 'v5');

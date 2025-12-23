@@ -64,7 +64,7 @@ export default function Settings() {
         .from('rule_config')
         .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
-        .maybeSingle() as { data: any; error: any };
+        .maybeSingle() as { data: unknown; error: unknown };
       
       console.log('[settings] load rules', { id, found: !!data });
       
@@ -119,7 +119,7 @@ export default function Settings() {
       toast.success('Settings saved successfully');
       navigate(`/t/${id}/setup?tab=prizes`);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       if (error.message?.includes('row-level security')) {
         toast.error("You don't have permission to update settings");
       } else {

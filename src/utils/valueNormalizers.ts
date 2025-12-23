@@ -4,7 +4,7 @@
 /**
  * Normalize gender values to M/F only; return null for anything else
  */
-export function normalizeGender(raw: any): 'M' | 'F' | null {
+export function normalizeGender(raw: unknown): 'M' | 'F' | null {
   if (raw == null) return null;
   const s = String(raw).trim();
   if (!s) return null;
@@ -21,7 +21,7 @@ export function normalizeGender(raw: any): 'M' | 'F' | null {
  * Returns null for invalid values
  * Coerces 0/"0" to null (treating as unrated)
  */
-export function normalizeRating(raw: any, stripCommas: boolean = true): number | null {
+export function normalizeRating(raw: unknown, stripCommas: boolean = true): number | null {
   if (raw == null) return null;
 
   let str = String(raw).trim();
@@ -58,7 +58,7 @@ export function inferUnrated(
   player: { 
     rating?: number | null; 
     fide_id?: string | null; 
-    unrated?: any;
+    unrated?: unknown;
   },
   config: UnratedInferenceConfig
 ): boolean {
@@ -106,7 +106,7 @@ export function inferUnrated(
 }
 
 /** Swiss-Manager: 'F' marks Female; blank/other stays unknown */
-export function genderBlankToMF(raw: any): 'M' | 'F' | null {
+export function genderBlankToMF(raw: unknown): 'M' | 'F' | null {
   if (raw == null || String(raw).trim() === '') return null;
   const s = String(raw).trim().toUpperCase();
   if (s === 'F') return 'F';
@@ -114,7 +114,7 @@ export function genderBlankToMF(raw: any): 'M' | 'F' | null {
 }
 
 /** Swiss-Manager: rating 0 means 'unrated' → store as null */
-export function ratingZeroToNull(raw: any): number | null {
+export function ratingZeroToNull(raw: unknown): number | null {
   if (raw == null || raw === '') return null;
   const n = Number(String(raw).replace(/[,\s]/g, ''));
   if (!isFinite(n) || n <= 0) return null;
@@ -122,7 +122,7 @@ export function ratingZeroToNull(raw: any): number | null {
 }
 
 /** Merge optional title prefix with name (e.g., 'IM' + 'A. Player' → 'IM A. Player') */
-export function mergeTitleAndName(title: any, name: any): string {
+export function mergeTitleAndName(title: unknown, name: unknown): string {
   const t = String(title ?? '').trim();
   const n = String(name ?? '').trim();
   if (t && n) return `${t} ${n}`.trim();
@@ -130,7 +130,7 @@ export function mergeTitleAndName(title: any, name: any): string {
 }
 
 /** Keep only digits from FIDE-No. cells (e.g., '12345678.' → '12345678') */
-export function digitsOnly(raw: any): string | null {
+export function digitsOnly(raw: unknown): string | null {
   if (raw == null) return null;
   const s = String(raw).replace(/\D+/g, '');
   return s || null;
@@ -142,7 +142,7 @@ export function digitsOnly(raw: any): string | null {
  * - "PC" indicates Physically Challenged (backward compatibility)
  * Returns { disability, tags, group_label } tuple for merging into player record
  */
-export function normalizeGrColumn(raw: any): { 
+export function normalizeGrColumn(raw: unknown): { 
   disability: string | null; 
   tags: string[]; 
   group_label: string | null;
@@ -169,7 +169,7 @@ export function normalizeGrColumn(raw: any): {
  * - Does NOT interpret semantics (PC, S60, F14, etc. are just strings)
  * - Case is preserved for display, matching is case-insensitive in allocator
  */
-export function normalizeTypeColumn(raw: any): string | null {
+export function normalizeTypeColumn(raw: unknown): string | null {
   if (raw == null) return null;
   const s = String(raw).trim();
   if (!s) return null;

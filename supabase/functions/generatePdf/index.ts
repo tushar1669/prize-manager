@@ -87,7 +87,7 @@ function getPlaceOrdinal(place: number): string {
   return `${place}th`;
 }
 
-async function loadTeamPrizes(supabaseClient: any, tournamentId: string, authHeader: string) {
+async function loadTeamPrizes(supabaseClient: unknown, tournamentId: string, authHeader: string) {
   const cacheKey = `${tournamentId}:latest`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);
@@ -130,7 +130,7 @@ async function loadTeamPrizes(supabaseClient: any, tournamentId: string, authHea
     } else {
       console.log('[generatePdf] No active team prize groups');
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[generatePdf] Exception loading team prizes:', e);
     teamPrizeError = e?.message || 'Unknown error';
   }
@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[generatePdf] Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
@@ -286,8 +286,8 @@ Deno.serve(async (req) => {
 });
 
 function generateHtmlReport(
-  tournament: any,
-  allocations: any[],
+  tournament: unknown,
+  allocations: unknown[],
   version: number,
   teamPrizes: TeamPrizeResults | null,
   teamPrizeError: string | null

@@ -16,7 +16,7 @@ export function useAutosaveEffect<T>(opts: {
     if (!enabled) return;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      setDraft(key, data as any, version);
+      setDraft(key, data, version);
     }, debounceMs);
     return () => {
       if (timer.current) window.clearTimeout(timer.current);

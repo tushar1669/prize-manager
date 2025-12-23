@@ -252,7 +252,7 @@ export async function fetchDedupCandidates(
 
     const grouped = new Map<number, DedupExistingPlayer[]>();
 
-    data.forEach((entry: any) => {
+    data.forEach((entry: unknown) => {
       const candidateRow = Number(entry?.cand_idx ?? entry?.row);
       const playerId = entry?.player_id;
 

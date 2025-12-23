@@ -117,12 +117,12 @@ test.describe('Allocation review flow', () => {
     });
 
     await page.addInitScript(() => {
-      const win = window as typeof window & { __ALLOC_STATE__?: { meta: any; unfilled: any } };
+      const win = window as typeof window & { __ALLOC_STATE__?: { meta: unknown; unfilled: unknown } };
       win.__ALLOC_STATE__ = { meta: null, unfilled: null };
 
       const originalPushState = history.pushState;
       history.pushState = function pushStateWithAlloc(state: unknown, title: string, url?: string | URL | null) {
-        const allocState = (window as typeof window & { __ALLOC_STATE__?: { meta: any; unfilled: any } }).__ALLOC_STATE__;
+        const allocState = (window as typeof window & { __ALLOC_STATE__?: { meta: unknown; unfilled: unknown } }).__ALLOC_STATE__;
         if (state && typeof state === 'object' && allocState) {
           const typedState = state as Record<string, unknown>;
           if (allocState.meta && typeof typedState.previewMeta === 'undefined') {
@@ -141,7 +141,7 @@ test.describe('Allocation review flow', () => {
             typedState.conflictsCount = allocState.meta.conflictCount;
           }
         }
-        return originalPushState.call(this, state, title, url as any);
+        return originalPushState.call(this, state, title, url as unknown);
       };
     });
 
@@ -224,7 +224,7 @@ test.describe('Allocation review flow', () => {
         });
 
         await page.evaluate((payload) => {
-          const win = window as typeof window & { __ALLOC_STATE__?: { meta: any; unfilled: any } };
+          const win = window as typeof window & { __ALLOC_STATE__?: { meta: unknown; unfilled: unknown } };
           win.__ALLOC_STATE__ = { meta: payload.meta, unfilled: payload.unfilled };
           if (Array.isArray(payload.logs)) {
             payload.logs.forEach((line) => console.log(line));

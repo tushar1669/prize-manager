@@ -6,6 +6,8 @@ import { ensureMainCategoryExists } from '@/pages/TournamentSetup';
 import CategoryPrizesEditor from '@/components/prizes/CategoryPrizesEditor';
 import { DirtyProvider } from '@/contexts/DirtyContext';
 
+type EnsureMainCategoryArgs = Parameters<typeof ensureMainCategoryExists>[0];
+
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -17,7 +19,7 @@ vi.mock('sonner', () => ({
 describe('TournamentSetup main category safeguards', () => {
   it('creates a main category when individual mode has none', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
-    const supabaseClient = { from: vi.fn(() => ({ insert })) } as any;
+    const supabaseClient = { from: vi.fn(() => ({ insert })) } as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -27,7 +29,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as any,
+      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -45,7 +47,7 @@ describe('TournamentSetup main category safeguards', () => {
   });
 
   it('does not insert when a main category already exists', async () => {
-    const supabaseClient = { from: vi.fn() } as any;
+    const supabaseClient = { from: vi.fn() } as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn();
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -55,7 +57,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as any,
+      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -65,7 +67,7 @@ describe('TournamentSetup main category safeguards', () => {
   });
 
   it('does not insert while categories are still loading', async () => {
-    const supabaseClient = { from: vi.fn() } as any;
+    const supabaseClient = { from: vi.fn() } as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn();
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -75,7 +77,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: true, // STILL LOADING
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as any,
+      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -88,7 +90,7 @@ describe('TournamentSetup main category safeguards', () => {
     const insert = vi.fn().mockResolvedValue({ 
       error: { code: '23505', message: 'duplicate key value violates unique constraint' } 
     });
-    const supabaseClient = { from: vi.fn(() => ({ insert })) } as any;
+    const supabaseClient = { from: vi.fn(() => ({ insert })) } as EnsureMainCategoryArgs['supabaseClient'];
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const ensuringRef = { current: false } as React.MutableRefObject<boolean>;
 
@@ -98,7 +100,7 @@ describe('TournamentSetup main category safeguards', () => {
       categoriesLoading: false,
       tournamentId: 't1',
       supabaseClient,
-      queryClient: { invalidateQueries } as any,
+      queryClient: { invalidateQueries } as EnsureMainCategoryArgs['queryClient'],
       ensuringRef,
     });
 
@@ -111,6 +113,7 @@ describe('TournamentSetup main category safeguards', () => {
   it('prevents toggling or deleting the main category in the UI', () => {
     const onToggleCategory = vi.fn();
     const onDeleteCategory = vi.fn();
+    const onSave: React.ComponentProps<typeof CategoryPrizesEditor>['onSave'] = vi.fn(async () => undefined);
 
     render(
       <DirtyProvider>
@@ -121,8 +124,8 @@ describe('TournamentSetup main category safeguards', () => {
             is_main: true,
             is_active: true,
             order_idx: 0,
-            criteria_json: {},
-            prizes: [
+          criteria_json: {},
+          prizes: [
               {
                 id: 'p1',
                 place: 1,
@@ -133,7 +136,7 @@ describe('TournamentSetup main category safeguards', () => {
               },
             ],
           }}
-          onSave={vi.fn() as any}
+          onSave={onSave}
           onToggleCategory={onToggleCategory}
           onDeleteCategory={onDeleteCategory}
           onDuplicateCategory={vi.fn()}

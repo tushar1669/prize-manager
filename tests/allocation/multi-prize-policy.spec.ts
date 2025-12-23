@@ -7,7 +7,7 @@ let allocator: typeof AllocatorModule;
 
 describe('multi_prize_policy', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
+    (globalThis as unknown).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
     allocator = await import('../../supabase/functions/allocatePrizes/index');
   });
 
@@ -24,7 +24,7 @@ describe('multi_prize_policy', () => {
       { id: 'p3', name: 'Third Seed', rank: 3, rating: 1800, state: 'MH' },
     ];
 
-    const { winners } = runAllocation(allocator, categories as any, players, {
+    const { winners } = runAllocation(allocator, categories as unknown, players, {
       ...defaultRules,
       multi_prize_policy: 'single',
     });
@@ -54,7 +54,7 @@ describe('multi_prize_policy', () => {
       { id: 'p2', name: 'Second Seed', rank: 2, rating: 1900, gender: 'F' },
     ];
 
-    const { winners } = runAllocation(allocator, categories as any, players, {
+    const { winners } = runAllocation(allocator, categories as unknown, players, {
       ...defaultRules,
       multi_prize_policy: 'unlimited',
     });
@@ -85,7 +85,7 @@ describe('multi_prize_policy', () => {
       { id: 'p3', name: 'Third Seed', rank: 3, rating: 1600, state: 'MH' },
     ];
 
-    const { winners } = runAllocation(allocator, categories as any, players, {
+    const { winners } = runAllocation(allocator, categories as unknown, players, {
       ...defaultRules,
       multi_prize_policy: 'main_plus_one_side',
     });

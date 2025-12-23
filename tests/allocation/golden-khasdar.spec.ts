@@ -21,7 +21,7 @@ for (const cat of categories) {
 
 describe('Golden fixture: Khasdar Chashak 2025', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
+    (globalThis as unknown).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
     allocator = await import('../../supabase/functions/allocatePrizes/index');
   });
 

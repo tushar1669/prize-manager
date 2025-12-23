@@ -18,7 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const loadFixture = (fixtureName: string) => {
   const filePath = path.resolve(__dirname, `../fixtures/${fixtureName}.json`);
-  return JSON.parse(readFileSync(filePath, 'utf8')) as any[];
+  return JSON.parse(readFileSync(filePath, 'utf8')) as unknown[];
 };
 
 const basePlayers = loadFixture('base_players');
@@ -112,12 +112,12 @@ describe('playerImportPayload', () => {
       rating: normalizeRating(basePlayers[0].rating),
     };
 
-    const payload = buildSupabasePlayerPayload(player as any, 'tour-123');
+    const payload = buildSupabasePlayerPayload(player as unknown, 'tour-123');
 
     expect(payload.state).toBe('TN');
     expect(payload.fide_id).toBe('1234567');
     expect(payload.disability).toBe('PC');
-    expect((payload.tags_json as any).special_group).toContain('PC');
+    expect((payload.tags_json as unknown).special_group).toContain('PC');
     expect(payload.unrated).toBe(false);
     expect(payload.group_label).toBe('PC'); // PC is preserved as group_label too
   });
@@ -130,7 +130,7 @@ describe('playerImportPayload', () => {
       rating: normalizeRating(1500),
     };
 
-    const payload = buildSupabasePlayerPayload(player as any, 'tour-456');
+    const payload = buildSupabasePlayerPayload(player as unknown, 'tour-456');
 
     expect(payload.group_label).toBe('Raipur');
     expect(payload.disability).toBeNull(); // Non-PC value shouldn't set disability
@@ -144,7 +144,7 @@ describe('playerImportPayload', () => {
       rating: normalizeRating(1400),
     };
 
-    const payload = buildSupabasePlayerPayload(player as any, 'tour-789');
+    const payload = buildSupabasePlayerPayload(player as unknown, 'tour-789');
 
     expect(payload.group_label).toBe('SECTION A'); // Trimmed but case preserved
   });
@@ -154,7 +154,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
   let allocator: typeof AllocatorModule;
 
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };
@@ -175,13 +175,13 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
   };
 
   const runAllocation = (
-    categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: any; prizes: any[] }>,
-    players: Array<any>,
-    rules: any,
+    categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: unknown; prizes: unknown[] }>,
+    players: Array<unknown>,
+    rules: unknown,
     startDate: Date,
   ) => {
     const prizeQueue = categories.flatMap(cat =>
-      cat.prizes.map(p => ({ cat: { ...cat, prizes: undefined } as any, p }))
+      cat.prizes.map(p => ({ cat: { ...cat, prizes: undefined } as unknown, p }))
     );
     prizeQueue.sort(allocator.cmpPrize);
 
@@ -198,12 +198,12 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     }> = [];
 
     for (const { cat, p } of prizeQueue) {
-      const eligible: Array<{ player: any; passCodes: string[]; warnCodes: string[] }> = [];
+      const eligible: Array<{ player: unknown; passCodes: string[]; warnCodes: string[] }> = [];
       const failCodes = new Set<string>();
 
       for (const player of players) {
         if (assigned.has(player.id)) continue;
-        const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate);
+        const evaluation = allocator.evaluateEligibility(player, cat as unknown, rules, startDate);
         eligibilityLog.push({
           playerId: player.id,
           categoryId: cat.id,
@@ -555,10 +555,10 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(winners[0]).toEqual({ prizeId: 'unrated-1', playerId: 'p2' });
 
     // p1 should be rejected with rated_player_excluded_unrated_only
-    const p1Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p1' && e.categoryId === 'unrated');
+    const p1Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p1' && e.categoryId === 'unrated');
     expect(p1Eligibility?.reasonCodes).toContain('rated_player_excluded_unrated_only');
     // p2 should explicitly pass via unrated_only_ok
-    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'unrated');
+    const p2Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'unrated');
     expect(p2Eligibility?.passCodes).toContain('unrated_only_ok');
 
     expect(unfilled.length).toBe(0);
@@ -594,15 +594,15 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(winners[0]).toEqual({ prizeId: 'vet-unrated-1', playerId: 'p2' });
 
     // p1 should be excluded because rated (even though age passes)
-    const p1Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p1' && e.categoryId === 'veteran-unrated');
+    const p1Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p1' && e.categoryId === 'veteran-unrated');
     expect(p1Eligibility?.reasonCodes).toContain('rated_player_excluded_unrated_only');
 
     // p3 should be excluded by age (too young)
-    const p3Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p3' && e.categoryId === 'veteran-unrated');
+    const p3Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p3' && e.categoryId === 'veteran-unrated');
     expect(p3Eligibility?.reasonCodes).toContain('age_below_min');
 
     // p2 should explicitly show unrated_only_ok pass code
-    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'veteran-unrated');
+    const p2Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'veteran-unrated');
     expect(p2Eligibility?.passCodes).toContain('unrated_only_ok');
 
     expect(unfilled.length).toBe(0);
@@ -639,7 +639,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
 
     // p2 should be excluded because unrated and include_unrated=false
-    const p2Eligibility = eligibilityLog?.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated');
+    const p2Eligibility = eligibilityLog?.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated');
     expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
 
     expect(unfilled.length).toBe(0);
@@ -673,7 +673,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const { winners, eligibilityLog } = runAllocation(categories, players, rulesAllowUnrated, new Date('2024-05-01'));
 
     expect(winners).toEqual([{ prizeId: 'u1600-1', playerId: 'p1' }]);
-    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated-override');
+    const p2Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'u1600-no-unrated-override');
     expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
   });
 
@@ -705,7 +705,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const { winners, eligibilityLog } = runAllocation(categories, players, rulesBlockUnrated, new Date('2024-05-01'));
 
     expect(winners).toEqual([{ prizeId: 'u1600-1', playerId: 'p1' }]);
-    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-allow-unrated');
+    const p2Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'u1600-allow-unrated');
     expect(p2Eligibility?.eligible).toBe(true);
     expect(p2Eligibility?.passCodes).toContain('rating_unrated_allowed');
     expect(p2Eligibility?.reasonCodes).not.toContain('unrated_excluded');
@@ -742,7 +742,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     // p2 should be blocked by legacy logic (min+max band, no global allow)
     expect(winners.length).toBe(1);
     expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
-    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-legacy');
+    const p2Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'u1600-legacy');
     expect(p2Eligibility?.reasonCodes).toContain('unrated_excluded');
     expect(unfilled.length).toBe(0);
   });
@@ -778,7 +778,7 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     // p2 (unrated) should be ALLOWED by legacy max-only band logic, but prize is taken
     expect(winners.length).toBe(1);
     expect(winners[0]).toEqual({ prizeId: 'u1600-1', playerId: 'p1' });
-    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'u1600-maxonly');
+    const p2Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'u1600-maxonly');
     expect(p2Eligibility?.eligible).toBe(true);
     expect(p2Eligibility?.passCodes).toContain('rating_unrated_allowed');
     expect(unfilled.length).toBe(0);
@@ -811,9 +811,9 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     expect(winners).toEqual([{ prizeId: 'vet-1', playerId: 'p1' }]);
 
-    const p1Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p1' && e.categoryId === 'veteran');
-    const p2Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p2' && e.categoryId === 'veteran');
-    const p3Eligibility = eligibilityLog.find((e: any) => e.playerId === 'p3' && e.categoryId === 'veteran');
+    const p1Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p1' && e.categoryId === 'veteran');
+    const p2Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p2' && e.categoryId === 'veteran');
+    const p3Eligibility = eligibilityLog.find((e: unknown) => e.playerId === 'p3' && e.categoryId === 'veteran');
 
     expect(p1Eligibility?.eligible).toBe(true);
     expect(p2Eligibility?.eligible).toBe(true);

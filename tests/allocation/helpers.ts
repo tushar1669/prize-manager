@@ -39,7 +39,7 @@ export type TestCategory = {
   is_main: boolean;
   order_idx: number;
   category_type?: string;
-  criteria_json?: any;
+  criteria_json?: unknown;
   prizes: TestPrize[];
 };
 
@@ -69,14 +69,14 @@ export function runAllocation(
     const eligible: Array<{ player: TestPlayer; passCodes: string[]; warnCodes: string[] }> = [];
 
     for (const player of players) {
-      const evaluation = allocator.evaluateEligibility(player, cat as any, rules, startDate);
+      const evaluation = allocator.evaluateEligibility(player, cat as unknown, rules, startDate);
       if (!evaluation.eligible) continue;
 
       const canTake = allocator.canPlayerTakePrize({
         policy: rules.multi_prize_policy ?? 'single',
-        category: cat as any,
+        category: cat as unknown,
         playerId: player.id,
-        assignments: assignments as any,
+        assignments: assignments as unknown,
       });
 
       if (canTake) {

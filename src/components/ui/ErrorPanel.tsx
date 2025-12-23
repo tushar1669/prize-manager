@@ -4,7 +4,7 @@ export type ErrorInfo = {
   title: string;
   message: string;
   hint?: string;
-  context?: any;
+  context?: unknown;
 };
 
 export default function ErrorPanel({ error, onDismiss }: { error: ErrorInfo | null; onDismiss?: () => void }) {

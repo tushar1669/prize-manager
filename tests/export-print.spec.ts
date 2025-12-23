@@ -118,25 +118,25 @@ test.describe('Print export', () => {
 
       history.replaceState({ winners }, '', location.href);
 
-      (window as any).__PRINT_HTML__ = '';
-      (window as any).__PRINT_TRIGGERED__ = false;
+      (window as unknown).__PRINT_HTML__ = '';
+      (window as unknown).__PRINT_TRIGGERED__ = false;
 
       const stubWindow = {
         document: {
           open() {},
           write(html: string) {
-            (window as any).__PRINT_HTML__ = html;
+            (window as unknown).__PRINT_HTML__ = html;
           },
           close() {},
           title: ''
         },
         focus() {},
         print() {
-          (window as any).__PRINT_TRIGGERED__ = true;
+          (window as unknown).__PRINT_TRIGGERED__ = true;
         }
       } as Window;
 
-      window.open = () => stubWindow as any;
+      window.open = () => stubWindow as unknown;
     }, { tournamentId: TOURNAMENT_ID });
 
     await page.goto(`/t/${TOURNAMENT_ID}/finalize`);
@@ -145,13 +145,13 @@ test.describe('Print export', () => {
 
     await page.waitForTimeout(300);
 
-    const html = await page.evaluate(() => (window as any).__PRINT_HTML__ as string);
+    const html = await page.evaluate(() => (window as unknown).__PRINT_HTML__ as string);
     expect(html).toContain('Mock Championship');
     expect(html).toContain('<thead>');
     expect(html).toContain('1990-05');
     expect(html).toMatch(/DOB masked to yyyy-mm/i);
 
-    const triggered = await page.evaluate(() => (window as any).__PRINT_TRIGGERED__);
+    const triggered = await page.evaluate(() => (window as unknown).__PRINT_TRIGGERED__);
     expect(triggered).toBeTruthy();
 
     expect(consoleMessages.some((msg) => msg.includes('[export.print] start'))).toBeTruthy();

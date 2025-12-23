@@ -55,12 +55,12 @@ vi.mock('npm:@supabase/supabase-js@2', () => ({
 }));
 
 // Mock data
-let mockGroups: any[] = [];
-let mockPrizes: any[] = [];
-let mockPlayers: any[] = [];
+let mockGroups: unknown[] = [];
+let mockPrizes: unknown[] = [];
+let mockPlayers: unknown[] = [];
 
 // Set Deno environment for tests
-(globalThis as any).Deno = {
+(globalThis as unknown).Deno = {
   env: {
     get: (key: string) => {
       if (key === 'SUPABASE_URL') return 'https://test.supabase.co';
@@ -220,7 +220,7 @@ describe('Institution Prize Schema Tests', () => {
       // female_slots + male_slots <= team_size
 
       const validConfigs = [
-        { team_size: 5, female_slots: 2, male_slots: 0 }, // 2 girls required, rest can be any
+        { team_size: 5, female_slots: 2, male_slots: 0 }, // 2 girls required, rest can be unknown
         { team_size: 4, female_slots: 1, male_slots: 1 }, // 1 girl, 1 boy required
         { team_size: 3, female_slots: 0, male_slots: 0 }, // No gender requirements
         { team_size: 6, female_slots: 3, male_slots: 3 }, // Equal split

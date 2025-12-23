@@ -6,10 +6,32 @@ import { getPlayerDisplayName } from './playerName';
 
 type ImportSource = 'swiss-manager' | 'template' | 'unknown';
 
+type PlayerRow = {
+  rank?: number | string | null;
+  sno?: number | string | null;
+  full_name?: string | null;
+  name?: string | null;
+  rating?: number | string | null;
+  unrated?: boolean | string | number | null;
+  dob?: string | null;
+  dob_raw?: string | null;
+  _dobInferred?: boolean | null;
+  dob_inferred?: boolean | null;
+  gender?: string | null;
+  fide_id?: string | null;
+  federation?: string | null;
+  state?: string | null;
+  city?: string | null;
+  club?: string | null;
+  special_notes?: string | null;
+  notes?: string | null;
+  [key: string]: unknown;
+};
+
 export type ErrorRow = {
   rowIndex: number;
   reason: string;
-  original?: Record<string, any>;
+  original?: Record<string, unknown>;
 };
 
 const IST_TIME_ZONE = 'Asia/Kolkata';
@@ -20,8 +42,9 @@ function sanitizeFilename(name: string) {
 
 function sanitizeSheetName(name: string): string {
   // Excel sheet names: max 31 chars, no []:*?/\
+  const invalidSheetChars = new RegExp('[\\[\\]:*?/\\\\]', 'g');
   return name
-    .replace(/[\[\]:*?/\\]/g, '')
+    .replace(invalidSheetChars, '')
     .slice(0, 31);
 }
 
@@ -81,7 +104,7 @@ function toExcelDate(dob?: string | null): Date | null {
 }
 
 export function downloadPlayersXlsx(
-  players: Array<Record<string, any>>,
+  players: PlayerRow[],
   options: { tournamentSlug?: string | null; importSource?: ImportSource } = {}
 ) {
   if (!players || players.length === 0) {
@@ -153,7 +176,8 @@ export function downloadPlayersXlsx(
     }
   }
 
-  (ws as any)['!cols'] = [
+  const worksheetWithCols = ws as XLSX.WorkSheet & { '!cols'?: XLSX.ColInfo[] };
+  worksheetWithCols['!cols'] = [
     { wch: 6 }, // Rank
     { wch: 6 }, // SNo
     { wch: 28 }, // Name
@@ -200,7 +224,12 @@ export function downloadPlayersTemplateXlsx() {
   const wsPlayers = XLSX.utils.aoa_to_sheet([headers, ...sample]);
   
   // Column widths
-  (wsPlayers as any)['!cols'] = [
+  const playersWorksheet = wsPlayers as XLSX.WorkSheet & {
+    '!cols'?: XLSX.ColInfo[];
+    '!freeze'?: { xSplit: number; ySplit: number };
+    '!autofilter'?: { ref: string };
+  };
+  playersWorksheet['!cols'] = [
     { wch: 6 },  // Rank
     { wch: 7 },  // SNo.
     { wch: 28 }, // Name
@@ -216,8 +245,8 @@ export function downloadPlayersTemplateXlsx() {
   ];
 
   // Freeze top row and enable filter
-  (wsPlayers as any)['!freeze'] = { xSplit: 0, ySplit: 1 };
-  (wsPlayers as any)['!autofilter'] = { ref: 'A1:L1' };
+  playersWorksheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+  playersWorksheet['!autofilter'] = { ref: 'A1:L1' };
 
   // === SHEET 2: README ===
   const readmeContent = [
@@ -276,7 +305,7 @@ export function downloadPlayersTemplateXlsx() {
   const wsReadme = XLSX.utils.aoa_to_sheet(readmeContent);
   
   // Column widths for ReadMe
-  (wsReadme as any)['!cols'] = [
+  (wsReadme as unknown)['!cols'] = [
     { wch: 20 },  // Column 1
     { wch: 12 },  // Column 2
     { wch: 80 }   // Column 3 (wide for descriptions)
@@ -312,7 +341,7 @@ export function downloadSwissManagerReferenceXlsx() {
   const wsRef = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
   
   // Column widths
-  (wsRef as any)['!cols'] = [
+  (wsRef as unknown)['!cols'] = [
     { wch: 6 },  // Rank
     { wch: 7 },  // SNo.
     { wch: 28 }, // Name
@@ -328,8 +357,8 @@ export function downloadSwissManagerReferenceXlsx() {
   ];
 
   // Freeze top row and enable filter
-  (wsRef as any)['!freeze'] = { xSplit: 0, ySplit: 1 };
-  (wsRef as any)['!autofilter'] = { ref: 'A1:L1' };
+  (wsRef as unknown)['!freeze'] = { xSplit: 0, ySplit: 1 };
+  (wsRef as unknown)['!autofilter'] = { ref: 'A1:L1' };
 
   // === SHEET 2: README ===
   const readmeContent = [
@@ -381,7 +410,7 @@ export function downloadSwissManagerReferenceXlsx() {
   const wsReadme = XLSX.utils.aoa_to_sheet(readmeContent);
   
   // Column widths for ReadMe
-  (wsReadme as any)['!cols'] = [
+  (wsReadme as unknown)['!cols'] = [
     { wch: 100 }  // Single wide column for instructions
   ];
 
@@ -400,7 +429,7 @@ export function downloadSwissManagerReferenceXlsx() {
  */
 export function downloadWorkbookXlsx(
   filename: string,
-  sheets: Record<string, any[]>
+  sheets: Record<string, unknown[]>
 ): boolean {
   try {
     const wb = XLSX.utils.book_new();
@@ -428,7 +457,7 @@ export function downloadWorkbookXlsx(
  */
 export async function downloadErrorXlsx(
   errors: ErrorRow[],
-  originalRows: Record<string, any>[],
+  originalRows: Record<string, unknown>[],
   filename?: string
 ): Promise<boolean> {
   try {
@@ -472,8 +501,8 @@ export function downloadConflictsXlsx(
     keyKind: string;
     key: string;
     reason: string;
-    a?: any;
-    b?: any;
+    a?: unknown;
+    b?: unknown;
   }>,
   filename?: string
 ): boolean {
@@ -509,7 +538,7 @@ export function downloadConflictsXlsx(
  * Exports post-mapping, normalized rows (state extracted, DOB normalized, rank gaps filled)
  */
 export function downloadCleanedPlayersXlsx(
-  players: Array<Record<string, any>>,
+  players: Array<Record<string, unknown>>,
   tournamentSlug?: string | null
 ): boolean {
   if (!players || players.length === 0) {
@@ -575,7 +604,7 @@ export function downloadCleanedPlayersXlsx(
   }
 
   // Set column widths
-  (ws as any)['!cols'] = [
+  (ws as unknown)['!cols'] = [
     { wch: 6 },  // rank
     { wch: 6 },  // sno
     { wch: 28 }, // name
@@ -603,4 +632,3 @@ export function downloadCleanedPlayersXlsx(
   console.log('[excel] Cleaned players workbook downloaded:', filename);
   return true;
 }
-

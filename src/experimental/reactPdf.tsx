@@ -7,6 +7,7 @@ import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { getPlayerDisplayName } from "@/utils/playerName";
 
 const LOG_PREFIX = "[export.pdf]";
+type ReactPdfRenderer = typeof import('@react-pdf/renderer');
 
 type PlayersRow = Pick<
   Database["public"]["Tables"]["players"]["Row"],
@@ -33,7 +34,7 @@ export async function downloadPlayersPdf({
 }) {
   console.log(`${LOG_PREFIX} start tournament=${tournamentId} version=players-summary`);
 
-  let renderer: any;
+  let renderer: ReactPdfRenderer;
   try {
     const moduleId = '@react-pdf/renderer';
     renderer = await import(/* @vite-ignore */ moduleId);

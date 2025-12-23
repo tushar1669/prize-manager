@@ -42,7 +42,7 @@ type Category = {
   is_main: boolean;
   order_idx: number;
   category_type?: string;
-  criteria_json?: any;
+  criteria_json?: unknown;
   prizes: Prize[];
 };
 
@@ -54,7 +54,7 @@ type Winner = {
 };
 
 /**
- * INVARIANT: For any category (except youngest), the winner of each prize must be
+ * INVARIANT: For unknown category (except youngest), the winner of each prize must be
  * the best-ranked (lowest rank number) eligible player who hasn't already won a prize.
  * 
  * This helper verifies that no unassigned player with a better rank was skipped.
@@ -63,7 +63,7 @@ function verifyRankInvariant(
   categories: Category[],
   players: Player[],
   winners: Winner[],
-  rules: any,
+  rules: unknown,
   referenceDate: Date
 ): { valid: boolean; violations: string[] } {
   const violations: string[] = [];
@@ -186,7 +186,7 @@ function runAllocationAndVerify(
     for (const player of players) {
       if (assignedPlayers.has(player.id)) continue;
       
-      const evaluation = allocator.evaluateEligibility(player, cat as any, rules, referenceDate);
+      const evaluation = allocator.evaluateEligibility(player, cat as unknown, rules, referenceDate);
       if (evaluation.eligible) {
         eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
       }
@@ -219,7 +219,7 @@ function runAllocationAndVerify(
 
 describe('Rank Invariant Tests', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };

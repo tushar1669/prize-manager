@@ -72,8 +72,9 @@ export default function MasterDashboard() {
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       toast.success('Verification status updated');
     },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to update');
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Failed to update';
+      toast.error(message);
     },
   });
 

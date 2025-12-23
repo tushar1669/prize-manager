@@ -246,7 +246,7 @@ Deno.serve(async (req: Request) => {
     const maxRank = typedPlayers.reduce((max, p) => Math.max(max, p.rank), 0);
 
     // Process each group
-    const groupResponses: any[] = [];
+    const groupResponses: unknown[] = [];
 
     for (const group of typedGroups) {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
@@ -302,7 +302,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Score institutions
-      const scoredInstitutions: any[] = [];
+      const scoredInstitutions: unknown[] = [];
       let ineligibleCount = 0;
       const ineligibleReasons: string[] = [];
 

@@ -36,7 +36,7 @@ const runYoungestAllocation = (categoryType: YoungestType, players: Player[]) =>
     category_type: categoryType,
     criteria_json: {},
     prizes: [{ id: 'p1', place: 1, cash_amount: 0, has_trophy: false, has_medal: false, is_active: true }],
-  } as any;
+  } as unknown;
 
   const eligible: Array<{ player: Player; passCodes: string[]; warnCodes: string[] }> = [];
   const failCodes = new Set<string>();
@@ -60,7 +60,7 @@ const runYoungestAllocation = (categoryType: YoungestType, players: Player[]) =>
 
 describe('youngest category allocation', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };

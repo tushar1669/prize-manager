@@ -90,7 +90,7 @@ const NORMALIZED_NAME_HEADERS = new Set(
  */
 export function findHeaderlessGenderColumn(
   headers: string[],
-  sampleRows: Array<Record<string, any>> = []
+  sampleRows: Array<Record<string, unknown>> = []
 ): string | null {
   if (!Array.isArray(headers) || headers.length === 0) {
     return null;
@@ -191,7 +191,7 @@ export function findHeaderlessGenderColumn(
     if (!row || typeof row !== 'object') continue;
 
     for (const [key, stats] of candidateStats.entries()) {
-      const value = (row as Record<string, any>)[key];
+      const value = (row as Record<string, unknown>)[key];
       if (value === undefined || value === null) continue;
       const str = String(value).trim();
       if (!str) continue;
@@ -222,7 +222,7 @@ export function findHeaderlessGenderColumn(
 
 export function inferImportSource(
   headers: string[],
-  sampleRows: Array<Record<string, any>> = []
+  sampleRows: Array<Record<string, unknown>> = []
 ): 'swiss-manager' | 'organizer-template' | 'unknown' {
   const normalized = headers.map((header) => normalizeHeaderForMatching(header));
 
@@ -324,7 +324,7 @@ export function normalizeDobForImport(input?: string | null): {
   }
   
   // Pattern 2: YYYY/00/00 or YYYY-00-00 or YYYY\00\00
-  const yZeroMatch = /^(\d{4})[\\/\-]00[\\/\-]00$/.exec(raw);
+  const yZeroMatch = /^(\d{4})[\\/-]00[\\/-]00$/.exec(raw);
   if (yZeroMatch) {
     const year = yZeroMatch[1];
     return {
@@ -336,7 +336,7 @@ export function normalizeDobForImport(input?: string | null): {
   }
 
   // Pattern 3: YYYY/MM/00 where month present but day missing
-  const yearMonthOnlyMatch = /^(\d{4})[\\/\-](\d{2})[\\/\-]00$/.exec(raw);
+  const yearMonthOnlyMatch = /^(\d{4})[\\/-](\d{2})[\\/-]00$/.exec(raw);
   if (yearMonthOnlyMatch) {
     const year = yearMonthOnlyMatch[1];
     const month = yearMonthOnlyMatch[2];

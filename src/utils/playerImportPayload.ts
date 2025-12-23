@@ -38,6 +38,11 @@ export interface ParsedPlayer extends PlayerImportRow {
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
   _rank_autofilled?: boolean;
+  group_label?: string | null;
+  type_label?: string | null;
+  tags_json?: Json;
+  warnings_json?: Json;
+  _genderWarnings?: string[];
   [key: string]: unknown;
 }
 
@@ -60,7 +65,7 @@ export function buildSupabasePlayerPayload(
     for (const alias of aliases) {
       const actualKey = lowerKeyMap.get(alias.toLowerCase());
       if (actualKey && actualKey in player) {
-        const value = (player as Record<string, any>)[actualKey];
+        const value = (player as Record<string, unknown>)[actualKey];
         if (value !== undefined) return value;
       }
     }
@@ -86,8 +91,8 @@ export function buildSupabasePlayerPayload(
   const ident = getAliasedValue('ident');
   // PREFER already-computed group_label/type_label from PlayerImport.tsx
   // Only recalculate from raw 'gr'/'type' aliases if player fields are missing
-  const existingGroupLabel = (player as any).group_label;
-  const existingTypeLabel = (player as any).type_label;
+  const existingGroupLabel = player.group_label;
+  const existingTypeLabel = player.type_label;
   
   const grInfo = existingGroupLabel !== undefined 
     ? { disability: existingGroupLabel?.toUpperCase?.() === 'PC' ? 'PC' : null, tags: existingGroupLabel?.toUpperCase?.() === 'PC' ? ['PC'] : [], group_label: existingGroupLabel }
@@ -128,11 +133,13 @@ export function buildSupabasePlayerPayload(
           : Boolean(unrated));
 
   // Merge tags_json.special_group when disability=PC detected from Gr column
-  const tags = { ...(player.tags_json as object || {}) };
-  const existingGroups = Array.isArray((tags as any).special_group)
-    ? (tags as any).special_group
-    : [];
-  const mergedGroups = new Set<string>(existingGroups);
+  const baseTags = typeof player.tags_json === 'object' && player.tags_json !== null ? player.tags_json : {};
+  const tags = { ...(baseTags as Record<string, unknown>) };
+  const specialGroup = tags.special_group;
+  const existingGroups = Array.isArray(specialGroup) ? specialGroup : [];
+  const mergedGroups = new Set<string>(
+    existingGroups.filter((group): group is string => typeof group === 'string')
+  );
 
   const disability = grInfo.disability ?? disabilityFromField ?? null;
   grInfo.tags.forEach(tag => mergedGroups.add(tag));
@@ -140,13 +147,17 @@ export function buildSupabasePlayerPayload(
     mergedGroups.add('PC');
   }
   if (mergedGroups.size > 0) {
-    (tags as any).special_group = Array.from(mergedGroups);
+    tags.special_group = Array.from(mergedGroups);
   }
 
-  const warnings: Json = ((player as any).warnings_json as Json) ?? {};
-  const genderWarnings = (player as any)._genderWarnings as string[] | undefined;
+  const warningsSource = player.warnings_json ?? {};
+  const warningsObject =
+    typeof warningsSource === 'object' && warningsSource !== null
+      ? (warningsSource as Record<string, unknown>)
+      : {};
+  const genderWarnings = player._genderWarnings;
   if (genderWarnings?.length) {
-    (warnings as any).gender = genderWarnings;
+    warningsObject.gender = genderWarnings;
   }
 
   return {
@@ -168,7 +179,7 @@ export function buildSupabasePlayerPayload(
     federation: federation || null,
     tournament_id: tournamentId,
     tags_json: tags,
-    warnings_json: warnings,
+    warnings_json: warningsObject as Json,
     group_label: grInfo.group_label,
     type_label: typeLabel,
   };

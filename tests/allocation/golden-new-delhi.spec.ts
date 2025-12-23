@@ -16,7 +16,7 @@ for (const cat of categories) {
 
 describe('Golden fixture: New Delhi Below-1800', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
+    (globalThis as unknown).Deno = { serve: vi.fn(), env: { get: vi.fn() } };
     allocator = await import('../../supabase/functions/allocatePrizes/index');
   });
 

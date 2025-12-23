@@ -19,13 +19,13 @@ type Category = {
   is_main: boolean;
   order_idx: number;
   category_type?: string;
-  criteria_json?: any;
+  criteria_json?: unknown;
   prizes: Prize[];
 };
 
 describe('Prize Priority Hierarchy', () => {
   beforeAll(async () => {
-    (globalThis as any).Deno = {
+    (globalThis as unknown).Deno = {
       serve: vi.fn(),
       env: { get: vi.fn() },
     };
@@ -658,7 +658,7 @@ describe('Prize Priority Hierarchy', () => {
           p: { id: 'p4', place: 2, cash_amount: 800, has_trophy: true, has_medal: false } },
       ];
       
-      prizes.sort((a, b) => allocator.cmpPrize(a as any, b as any));
+      prizes.sort((a, b) => allocator.cmpPrize(a as unknown, b as unknown));
       
       // Expected order by cash: p2 (1000) > p4 (800) > p3 (500) > p1 (100)
       expect(prizes.map(p => p.p.id)).toEqual(['p2', 'p4', 'p3', 'p1']);
