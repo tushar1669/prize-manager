@@ -71,6 +71,21 @@ All colors MUST be HSL.
   }
 }
 
+/* Hide Lovable badge overlays in production/public pages */
+[data-lovable-badge],
+[data-lovable="badge"],
+#lovable-badge,
+[id*="lovable-badge"],
+.lovable-badge,
+[class*="lovable-badge"],
+[class*="lovable-brand"],
+a[href*="lovable.dev"][aria-label*="Lovable"],
+a[href*="lovable.app"][aria-label*="Lovable"],
+a[href*="lovableproject.com"][aria-label*="Lovable"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
 @media print {
   @page {
     margin: 12mm;
@@ -111,6 +126,21 @@ All colors MUST be HSL.
   /* Hide elements in print */
   .pm-print-hide {
     display: none !important;
+  }
+
+  /* Hide Lovable badge overlays in print/PDF output */
+  [data-lovable-badge],
+  [data-lovable="badge"],
+  #lovable-badge,
+  [id*="lovable-badge"],
+  .lovable-badge,
+  [class*="lovable-badge"],
+  [class*="lovable-brand"],
+  a[href*="lovable.dev"][aria-label*="Lovable"],
+  a[href*="lovable.app"][aria-label*="Lovable"],
+  a[href*="lovableproject.com"][aria-label*="Lovable"] {
+    display: none !important;
+    visibility: hidden !important;
   }
 
   .min-h-screen {
