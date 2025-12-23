@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { Trash2, Plus, Save, Trophy, Medal, Check, X, Copy, CopyPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -126,6 +126,105 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     version: 1,
   });
 
+  const validationError = useCallback((): string | null => {
+    // Clear all errors first
+    setDraft(prev => prev.map(p => ({ ...p, _error: undefined })));
+
+    const activeRows = draft.filter(p => p._status !== 'deleted');
+    const placeMap = new Map<number, PrizeRow[]>();
+    
+    // Build map of place -> rows with that place
+    for (const row of activeRows) {
+      const n = Number(row.place);
+      if (!Number.isInteger(n) || n < 1) {
+        // Mark invalid place
+        setDraft(prev => prev.map(p => 
+          (p.id === row.id || p._tempId === row._tempId) 
+            ? { ...p, _error: 'Invalid place' }
+            : p
+        ));
+        return `Invalid place: ${n}. Place must be a positive integer.`;
+      }
+      if (!placeMap.has(n)) placeMap.set(n, []);
+      placeMap.get(n)!.push(row);
+    }
+
+    // Find duplicates and mark them
+    const duplicates: number[] = [];
+    for (const [place, rows] of placeMap.entries()) {
+      if (rows.length > 1) {
+        duplicates.push(place);
+        // Mark all duplicate rows with error
+        setDraft(prev => prev.map(p => {
+          const isDup = rows.some(r => r.id === p.id || r._tempId === p._tempId);
+          return isDup ? { ...p, _error: 'Duplicate place' } : p;
+        }));
+      }
+    }
+
+    if (duplicates.length > 0) {
+      return `Duplicate places: ${duplicates.sort((a, b) => a - b).join(', ')}. Each place must be unique within the category.`;
+    }
+
+    // Check for empty prize rows (no cash, no trophy, no medal)
+    const emptyRows: number[] = [];
+    for (const row of activeRows) {
+      const cashAmount = Number(row.cash_amount) || 0;
+      const hasTrophy = !!row.has_trophy;
+      const hasMedal = !!row.has_medal;
+      
+      if (cashAmount === 0 && !hasTrophy && !hasMedal) {
+        emptyRows.push(row.place);
+        // Mark empty rows with error
+        setDraft(prev => prev.map(p => 
+          (p.id === row.id || p._tempId === row._tempId) 
+            ? { ...p, _error: 'Empty prize' }
+            : p
+        ));
+      }
+    }
+
+    if (emptyRows.length > 0) {
+      return `Empty prize(s) at place ${emptyRows.join(', ')}: Add cash, trophy, or medal – or delete the row.`;
+    }
+
+    return null;
+  }, [draft]);
+
+  const computeDelta = useCallback((): PrizeDelta => {
+    const inserts: PrizeDelta['inserts'] = [];
+    const updates: PrizeDelta['updates'] = [];
+
+    draft.forEach(p => {
+      const base = {
+        place: Number(p.place) || 0,
+        cash_amount: Number(p.cash_amount) || 0,
+        has_trophy: !!p.has_trophy,
+        has_medal: !!p.has_medal,
+        is_active: !!p.is_active,
+      };
+
+      if (p._status === 'new') {
+        // New rows should never carry an id so DB defaults can populate it
+        inserts.push(base);
+        return;
+      }
+
+      if (p._status === 'dirty') {
+        if (p.id) {
+          updates.push({ ...base, id: p.id });
+          return;
+        }
+        // If a row was marked dirty but lost its id (e.g., stale draft), treat it as an insert
+        inserts.push(base);
+      }
+    });
+
+    const deletes = draft.filter(p => p._status === 'deleted' && !!p.id).map(p => p.id!) || [];
+
+    return { inserts, updates, deletes };
+  }, [draft]);
+
   // Expose imperative API via ref
   useImperativeHandle(ref, () => ({
     categoryId: category.id,
@@ -140,7 +239,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       setLastSaved(cleaned);
       resetDirty(`cat-${category.id}`);
     },
-  }), [category.id, draft, resetDirty]);
+  }), [category.id, computeDelta, draft, resetDirty, validationError]);
 
   const nextPlace = useMemo(() => {
     const places = draft.filter(p => p._status !== 'deleted').map(p => Number(p.place) || 0);
@@ -212,105 +311,6 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       next[idx] = { ...row, is_active: newVal, _status: row._status === 'new' ? 'new' : 'dirty' };
       return next;
     });
-  };
-
-  const validationError = (): string | null => {
-    // Clear all errors first
-    setDraft(prev => prev.map(p => ({ ...p, _error: undefined })));
-
-    const activeRows = draft.filter(p => p._status !== 'deleted');
-    const placeMap = new Map<number, PrizeRow[]>();
-    
-    // Build map of place -> rows with that place
-    for (const row of activeRows) {
-      const n = Number(row.place);
-      if (!Number.isInteger(n) || n < 1) {
-        // Mark invalid place
-        setDraft(prev => prev.map(p => 
-          (p.id === row.id || p._tempId === row._tempId) 
-            ? { ...p, _error: 'Invalid place' }
-            : p
-        ));
-        return `Invalid place: ${n}. Place must be a positive integer.`;
-      }
-      if (!placeMap.has(n)) placeMap.set(n, []);
-      placeMap.get(n)!.push(row);
-    }
-
-    // Find duplicates and mark them
-    const duplicates: number[] = [];
-    for (const [place, rows] of placeMap.entries()) {
-      if (rows.length > 1) {
-        duplicates.push(place);
-        // Mark all duplicate rows with error
-        setDraft(prev => prev.map(p => {
-          const isDup = rows.some(r => r.id === p.id || r._tempId === p._tempId);
-          return isDup ? { ...p, _error: 'Duplicate place' } : p;
-        }));
-      }
-    }
-
-    if (duplicates.length > 0) {
-      return `Duplicate places: ${duplicates.sort((a, b) => a - b).join(', ')}. Each place must be unique within the category.`;
-    }
-
-    // Check for empty prize rows (no cash, no trophy, no medal)
-    const emptyRows: number[] = [];
-    for (const row of activeRows) {
-      const cashAmount = Number(row.cash_amount) || 0;
-      const hasTrophy = !!row.has_trophy;
-      const hasMedal = !!row.has_medal;
-      
-      if (cashAmount === 0 && !hasTrophy && !hasMedal) {
-        emptyRows.push(row.place);
-        // Mark empty rows with error
-        setDraft(prev => prev.map(p => 
-          (p.id === row.id || p._tempId === row._tempId) 
-            ? { ...p, _error: 'Empty prize' }
-            : p
-        ));
-      }
-    }
-
-    if (emptyRows.length > 0) {
-      return `Empty prize(s) at place ${emptyRows.join(', ')}: Add cash, trophy, or medal – or delete the row.`;
-    }
-
-    return null;
-  };
-
-  const computeDelta = (): PrizeDelta => {
-    const inserts: PrizeDelta['inserts'] = [];
-    const updates: PrizeDelta['updates'] = [];
-
-    draft.forEach(p => {
-      const base = {
-        place: Number(p.place) || 0,
-        cash_amount: Number(p.cash_amount) || 0,
-        has_trophy: !!p.has_trophy,
-        has_medal: !!p.has_medal,
-        is_active: !!p.is_active,
-      };
-
-      if (p._status === 'new') {
-        // New rows should never carry an id so DB defaults can populate it
-        inserts.push(base);
-        return;
-      }
-
-      if (p._status === 'dirty') {
-        if (p.id) {
-          updates.push({ ...base, id: p.id });
-          return;
-        }
-        // If a row was marked dirty but lost its id (e.g., stale draft), treat it as an insert
-        inserts.push(base);
-      }
-    });
-
-    const deletes = draft.filter(p => p._status === 'deleted' && !!p.id).map(p => p.id!) || [];
-
-    return { inserts, updates, deletes };
   };
 
   const handleSave = async () => {
