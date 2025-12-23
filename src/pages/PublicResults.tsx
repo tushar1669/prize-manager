@@ -101,8 +101,22 @@ export default function PublicResults() {
         };
       });
 
+      type ResultRow = {
+        prize_id: string;
+        playerName: string;
+        rank: number;
+        rating?: number | null;
+        state?: string | null;
+        categoryName: string;
+        isMain: boolean;
+        place: number;
+        cashAmount: number;
+        hasTrophy: boolean;
+        hasMedal: boolean;
+      };
+
       // Deduplicate by prize_id
-      const uniqueByPrize = (rows: unknown[]) => {
+      const uniqueByPrize = (rows: ResultRow[]) => {
         const seen = new Set<string>();
         return rows.filter(r => {
           const key = String(r.prize_id);

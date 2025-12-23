@@ -133,8 +133,9 @@ export default function ConflictReview() {
         .eq('tournament_id', id);
       if (error) throw error;
       
+      type PrizeRow = { id: string; place: number; cash_amount: number | null; has_trophy: boolean; has_medal: boolean; is_active?: boolean };
       const prizes = (data || []).flatMap(cat => 
-        (cat.prizes || []).map((p: unknown) => ({
+        ((cat.prizes || []) as PrizeRow[]).map((p) => ({
           id: p.id,
           place: p.place,
           cash_amount: p.cash_amount,
@@ -316,11 +317,12 @@ export default function ConflictReview() {
     onError: (err: unknown) => {
       console.error('[allocatePrizes] error', err);
       allocTriggeredRef.current = false;
+      const errObj = err as { message?: string; context?: { error?: { message?: string } } };
       // Check if it's a network-level failure
-      if (err?.message?.includes('net::ERR_FAILED') || err?.message?.includes('Failed to fetch')) {
+      if (errObj?.message?.includes('net::ERR_FAILED') || errObj?.message?.includes('Failed to fetch')) {
         toast.error('Allocation failed: Network error. Check your connection or try again.');
       } else {
-        const msg = err?.context?.error?.message || err?.message || 'Unknown error';
+        const msg = errObj?.context?.error?.message || errObj?.message || 'Unknown error';
         toast.error(`Allocation failed: ${msg}`);
       }
     }
@@ -347,7 +349,8 @@ export default function ConflictReview() {
     },
     onError: (error: unknown) => {
       console.error('[finalize] error from review', error);
-      toast.error(error?.message || 'Failed to finalize allocations');
+      const errMsg = error instanceof Error ? error.message : 'Failed to finalize allocations';
+      toast.error(errMsg);
     }
   });
 
@@ -553,8 +556,8 @@ export default function ConflictReview() {
           players={playersList?.map(p => ({
             id: p.id,
             dob: p.dob,
-            dob_raw: (p as unknown).dob_raw,
-            gender: (p as unknown).gender,
+            dob_raw: (p as { dob_raw?: string }).dob_raw,
+            gender: (p as { gender?: string }).gender,
             rating: p.rating,
           }))}
           className="mb-6"
@@ -585,7 +588,7 @@ export default function ConflictReview() {
             players={playersList?.map(p => ({ 
               id: p.id, 
               name: p.name, 
-              rank: (p as unknown).rank ?? null, 
+              rank: (p as { rank?: number | null }).rank ?? null, 
               rating: p.rating 
             })) || []}
           />

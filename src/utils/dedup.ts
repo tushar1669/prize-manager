@@ -252,9 +252,10 @@ export async function fetchDedupCandidates(
 
     const grouped = new Map<number, DedupExistingPlayer[]>();
 
-    data.forEach((entry: unknown) => {
+    data.forEach((rawEntry: unknown) => {
+      const entry = rawEntry as Record<string, unknown>;
       const candidateRow = Number(entry?.cand_idx ?? entry?.row);
-      const playerId = entry?.player_id;
+      const playerId = entry?.player_id as string | undefined;
 
       if (!Number.isFinite(candidateRow) || !playerId) {
         return;
@@ -264,17 +265,17 @@ export async function fetchDedupCandidates(
 
       matches.push({
         id: playerId,
-        name: entry?.name ?? "",
-        dob: entry?.dob ?? null,
-        rating: entry?.rating ?? null,
-        fide_id: entry?.fide_id ?? null,
-        city: entry?.city ?? null,
-        state: entry?.state ?? null,
-        club: entry?.club ?? null,
-        gender: entry?.gender ?? null,
-        disability: entry?.disability ?? null,
-        special_notes: entry?.special_notes ?? null,
-        federation: entry?.federation ?? null,
+        name: (entry?.name ?? "") as string,
+        dob: (entry?.dob ?? null) as string | null,
+        rating: (entry?.rating ?? null) as number | null,
+        fide_id: (entry?.fide_id ?? null) as string | null,
+        city: (entry?.city ?? null) as string | null,
+        state: (entry?.state ?? null) as string | null,
+        club: (entry?.club ?? null) as string | null,
+        gender: (entry?.gender ?? null) as string | null,
+        disability: (entry?.disability ?? null) as string | null,
+        special_notes: (entry?.special_notes ?? null) as string | null,
+        federation: (entry?.federation ?? null) as string | null,
       });
 
       grouped.set(candidateRow, matches);

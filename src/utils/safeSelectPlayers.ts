@@ -140,12 +140,13 @@ export async function safeSelectPlayers(
     }
 
     // Unknown error - give up
+    const err = error as { code?: string; message?: string; hint?: string };
     console.error('[import] ❌ players safe-select failed (unknown error)', { 
       attempts: attempt + 1,
       tried,
-      errorCode: error.code,
-      errorMessage: error.message,
-      errorHint: (error as unknown)?.hint 
+      errorCode: err.code,
+      errorMessage: err.message,
+      errorHint: err.hint 
     });
     return { data: [] as Array<Partial<PlayerRow>>, count: 0, usedColumns: [] };
   }

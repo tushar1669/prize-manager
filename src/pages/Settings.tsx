@@ -56,6 +56,19 @@ export default function Settings() {
     enabled: !!id
   });
 
+  type RuleConfigData = {
+    strict_age?: boolean;
+    allow_unrated_in_rating?: boolean;
+    allow_missing_dob_for_age?: boolean;
+    max_age_inclusive?: boolean;
+    prefer_main_on_equal_value?: boolean;
+    category_priority_order?: string[];
+    main_vs_side_priority_mode?: 'main_first' | 'place_first';
+    age_band_policy?: 'non_overlapping' | 'overlapping';
+    multi_prize_policy?: 'single' | 'main_plus_one_side' | 'unlimited';
+    tournament_id?: string;
+  };
+
   // Fetch rule_config
   const { isLoading } = useQuery({
     queryKey: ['rule_config', id],
@@ -64,31 +77,33 @@ export default function Settings() {
         .from('rule_config')
         .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
-        .maybeSingle() as { data: unknown; error: unknown };
+        .maybeSingle();
       
       console.log('[settings] load rules', { id, found: !!data });
       
-      if (error && error.code !== 'PGRST116') {
-        if (error.message?.includes('row-level security')) {
+      const err = error as { code?: string; message?: string } | null;
+      if (err && err.code !== 'PGRST116') {
+        if (err.message?.includes('row-level security')) {
           toast.error("You don't have access to this tournament");
           navigate('/dashboard');
         }
         throw error;
       }
       
-      if (data) {
-        const mainVsSidePriorityMode = (data.main_vs_side_priority_mode as 'main_first' | 'place_first')
-          || (data.prefer_main_on_equal_value ? 'main_first' : 'place_first')
+      const ruleData = data as RuleConfigData | null;
+      if (ruleData) {
+        const mainVsSidePriorityMode = ruleData.main_vs_side_priority_mode
+          || (ruleData.prefer_main_on_equal_value ? 'main_first' : 'place_first')
           || 'place_first';
         form.reset({
-          strict_age: data.strict_age,
-          allow_unrated_in_rating: data.allow_unrated_in_rating,
-          allow_missing_dob_for_age: data.allow_missing_dob_for_age,
-          max_age_inclusive: data.max_age_inclusive,
-          category_priority_order: data.category_priority_order as string[] || [],
+          strict_age: ruleData.strict_age,
+          allow_unrated_in_rating: ruleData.allow_unrated_in_rating,
+          allow_missing_dob_for_age: ruleData.allow_missing_dob_for_age,
+          max_age_inclusive: ruleData.max_age_inclusive,
+          category_priority_order: ruleData.category_priority_order || [],
           main_vs_side_priority_mode: mainVsSidePriorityMode,
-          age_band_policy: (data.age_band_policy as 'non_overlapping' | 'overlapping') || 'non_overlapping',
-          multi_prize_policy: (data.multi_prize_policy as 'single' | 'main_plus_one_side' | 'unlimited') || 'single'
+          age_band_policy: ruleData.age_band_policy || 'non_overlapping',
+          multi_prize_policy: ruleData.multi_prize_policy || 'single'
         });
       }
       return data;
@@ -120,10 +135,11 @@ export default function Settings() {
       navigate(`/t/${id}/setup?tab=prizes`);
     },
     onError: (error: unknown) => {
-      if (error.message?.includes('row-level security')) {
+      const err = error as { message?: string };
+      if (err.message?.includes('row-level security')) {
         toast.error("You don't have permission to update settings");
       } else {
-        toast.error('Failed to save settings: ' + error.message);
+        toast.error('Failed to save settings: ' + (err.message || 'Unknown error'));
       }
     }
   });

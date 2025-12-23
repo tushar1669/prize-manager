@@ -508,22 +508,23 @@ export function downloadConflictsXlsx(
 ): boolean {
   if (!conflicts?.length) return false;
   
+  type ConflictRow = { name?: string; dob?: string; fide_id?: string; sno?: string; rank?: number; rating?: number };
   const rows = conflicts.map(c => ({
     KeyKind: c.keyKind,
     Key: c.key,
     Reason: c.reason,
-    NameA: c.a?.name ?? '',
-    DobA: c.a?.dob ?? '',
-    FideA: c.a?.fide_id ?? '',
-    SNoA: c.a?.sno ?? '',
-    RankA: c.a?.rank ?? '',
-    RatingA: c.a?.rating ?? '',
-    NameB: c.b?.name ?? '',
-    DobB: c.b?.dob ?? '',
-    FideB: c.b?.fide_id ?? '',
-    SNoB: c.b?.sno ?? '',
-    RankB: c.b?.rank ?? '',
-    RatingB: c.b?.rating ?? '',
+    NameA: (c.a as ConflictRow)?.name ?? '',
+    DobA: (c.a as ConflictRow)?.dob ?? '',
+    FideA: (c.a as ConflictRow)?.fide_id ?? '',
+    SNoA: (c.a as ConflictRow)?.sno ?? '',
+    RankA: (c.a as ConflictRow)?.rank ?? '',
+    RatingA: (c.a as ConflictRow)?.rating ?? '',
+    NameB: (c.b as ConflictRow)?.name ?? '',
+    DobB: (c.b as ConflictRow)?.dob ?? '',
+    FideB: (c.b as ConflictRow)?.fide_id ?? '',
+    SNoB: (c.b as ConflictRow)?.sno ?? '',
+    RankB: (c.b as ConflictRow)?.rank ?? '',
+    RatingB: (c.b as ConflictRow)?.rating ?? '',
   }));
 
   const today = new Date().toISOString().slice(0, 10);
@@ -570,7 +571,7 @@ export function downloadCleanedPlayersXlsx(
   ];
 
   const rows = players.map(player => {
-    const dobDate = toExcelDate(player.dob);
+    const dobDate = toExcelDate(player.dob as string | undefined);
     
     return [
       player.rank != null ? Number(player.rank) : null,

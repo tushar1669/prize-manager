@@ -828,7 +828,7 @@ export default function PlayerImport() {
       setParseError(null);
       setParseStatus('idle');
     },
-    onError: (err: unknown) => toast.error(`Failed: ${err.message}`)
+    onError: (err: unknown) => toast.error(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
   });
 
   const importPlayersMutation = useMutation({
@@ -858,7 +858,8 @@ export default function PlayerImport() {
           ...buildSupabasePlayerPayload(player, id!),
         }));
 
-        const { data, error } = await supabase.rpc('import_replace_players' as unknown, {
+        type RpcResultRow = { error_rows?: Array<{ row_index?: number; rank?: number; reason?: string }>; inserted_count?: number };
+        const { data, error } = await supabase.rpc('import_replace_players', {
           tournament_id: id,
           players: rpcPayload,
         });
@@ -869,11 +870,11 @@ export default function PlayerImport() {
           throw new Error(message);
         }
 
-        const rpcResult = Array.isArray(data) ? data?.[0] : data;
-        const rpcErrors = (rpcResult as unknown)?.error_rows ?? [];
+        const rpcResult = (Array.isArray(data) ? data?.[0] : data) as RpcResultRow | null;
+        const rpcErrors = rpcResult?.error_rows ?? [];
         const failedIndices = new Set<number>();
 
-        rpcErrors.forEach((errRow: unknown) => {
+        rpcErrors.forEach((errRow) => {
           const rowIndex = Number(errRow?.row_index);
           if (Number.isFinite(rowIndex)) {
             failedIndices.add(rowIndex);
@@ -887,7 +888,7 @@ export default function PlayerImport() {
           }
         });
 
-        const insertedCount = (rpcResult as unknown)?.inserted_count ?? 0;
+        const insertedCount = rpcResult?.inserted_count ?? 0;
 
         if (failedIndices.size > 0) {
           setReplaceBanner({
