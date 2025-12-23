@@ -26,6 +26,23 @@ export interface WinnerCategoryGroup {
   winners: WinnerRow[];
 }
 
+export const sortWinnersByAmount = (rows: WinnerRow[]): WinnerRow[] => {
+  return [...rows].sort((a, b) => {
+    const amountA = a.prize?.cash_amount ?? 0;
+    const amountB = b.prize?.cash_amount ?? 0;
+    if (amountA !== amountB) return amountB - amountA;
+
+    const orderA = a.prize?.category_order ?? 999;
+    const orderB = b.prize?.category_order ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+
+    const placeDiff = (a.prize?.place ?? 0) - (b.prize?.place ?? 0);
+    if (placeDiff !== 0) return placeDiff;
+
+    return (a.player?.name ?? '').localeCompare(b.player?.name ?? '');
+  });
+};
+
 export const groupWinnersByCategory = (rows: WinnerRow[]): WinnerCategoryGroup[] => {
   const byCategory = new Map<string, WinnerCategoryGroup>();
 

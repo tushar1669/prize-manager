@@ -48,6 +48,26 @@ interface Unfilled {
   reasonCodes: string[];
 }
 
+interface PrizeRecord {
+  id: string;
+  place: number | null;
+  cash_amount: number | null;
+  has_trophy: boolean | null;
+  has_medal: boolean | null;
+  is_active: boolean | null;
+}
+
+interface CategoryRecord {
+  id: string;
+  name: string;
+  order_idx: number | null;
+  criteria_json: unknown;
+  prizes?: PrizeRecord[] | null;
+  is_main?: boolean | null;
+}
+
+type PlayerExportRow = Record<string, unknown>;
+
 const CATEGORY_PAGE_SIZE = 25;
 
 export default function Finalize() {
@@ -75,20 +95,6 @@ export default function Finalize() {
     isLoading: dataLoading,
     error: dataError,
   } = useFinalizeData(id, locationState);
-
-  // Show loading state when fetching from DB
-  if (dataLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  // Show guard only when NO data exists (not in state AND not in DB)
-  if (winners.length === 0 && !dataLoading) {
-    return <NoAllocationGuard />;
-  }
 
   const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
   // unfilled now comes from useFinalizeData hook above
@@ -163,8 +169,8 @@ export default function Finalize() {
         .eq('tournament_id', id);
       if (error) throw error;
       
-      const prizes = (data || []).flatMap(cat => 
-        (cat.prizes || []).map((p: any) => ({
+      const prizes = (data as CategoryRecord[] || []).flatMap(cat =>
+        (cat.prizes || []).map(p => ({
           id: p.id,
           place: p.place,
           cash_amount: p.cash_amount,
@@ -299,7 +305,7 @@ export default function Finalize() {
           row.prize?.category_criteria &&
           typeof row.prize.category_criteria === 'object' &&
           !Array.isArray(row.prize.category_criteria)
-            ? (row.prize.category_criteria as Record<string, any>)
+            ? (row.prize.category_criteria as Record<string, unknown>)
             : {};
         const allowedTypes = Array.isArray(criteria.allowed_types) ? criteria.allowed_types.filter(Boolean) : [];
         const allowedGroups = Array.isArray(criteria.allowed_groups) ? criteria.allowed_groups.filter(Boolean) : [];
@@ -341,12 +347,18 @@ export default function Finalize() {
       setFinalizeResult(data);
       toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('[finalize] error', error);
       
       // Extract structured error from edge function response
-      const errorBody = error?.context?.body;
-      const message = errorBody?.error || error?.message || "Unknown error";
+      const errorContext =
+        typeof error === 'object' && error !== null && 'context' in error
+          ? (error as { context?: { body?: { error?: string; hint?: string } } }).context
+          : undefined;
+      const errorBody = errorContext?.body;
+      const message =
+        errorBody?.error ||
+        (error instanceof Error ? error.message : "Unknown error");
       const hint = errorBody?.hint || "Check console logs and try again.";
       
       showError({
@@ -371,7 +383,7 @@ export default function Finalize() {
       console.log(`[publish] request id=${requestId} tournament=${id}`);
 
       if (PUBLISH_V2_ENABLED) {
-        const { data, error } = await supabase.rpc('publish_tournament' as any, {
+        const { data, error } = await supabase.rpc('publish_tournament', {
           tournament_id: id,
           requested_slug: null
         });
@@ -448,8 +460,9 @@ export default function Finalize() {
       console.log('[dashboard] query invalidated after mutation');
       navigate(`/t/${id}/publish`, { state: { slug } });
     },
-    onError: (error: any) => {
-      toast.error(`Publish failed: ${error.message}`);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Publish failed';
+      toast.error(`Publish failed: ${message}`);
     }
   });
 
@@ -481,8 +494,9 @@ export default function Finalize() {
         throw new Error("Popup blocked. Allow popups to print or save as PDF.");
       }
       toast.success("Opened winners print preview — save as PDF from your browser.");
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to open print preview");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to open print preview";
+      toast.error(message);
     } finally {
       setIsExportingWinnersPdf(false);
     }
@@ -512,8 +526,9 @@ export default function Finalize() {
       const columns = filterEmptyColumns(winnerExportRows, getWinnersExportColumns());
       downloadXlsx(winnerExportRows, columns, `winners-${id}.xlsx`, "Winners");
       toast.success("Winners XLSX exported");
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to export winners XLSX");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to export winners XLSX";
+      toast.error(message);
     } finally {
       setIsExportingWinnersXlsx(false);
     }
@@ -582,18 +597,19 @@ export default function Finalize() {
       };
 
       const columns = filterEmptyColumns(
-        players,
+        players as PlayerExportRow[],
         usedColumns.map(column => ({
           key: column,
           label: columnLabels[column] ?? column.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          value: (row: any) => row[column],
+          value: (row: PlayerExportRow) => row[column],
         }))
       );
 
       downloadXlsx(players, columns, `ranking-${id}.xlsx`, "Ranking");
       toast.success("Full ranking XLSX exported");
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to export ranking XLSX");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to export ranking XLSX";
+      toast.error(message);
     } finally {
       setIsExportingRankingXlsx(false);
     }
@@ -623,6 +639,20 @@ export default function Finalize() {
 
     void proceed();
   };
+
+  // Show loading state when fetching from DB
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Show guard only when NO data exists (not in state AND not in DB)
+  if (winners.length === 0 && !dataLoading) {
+    return <NoAllocationGuard />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
