@@ -1,43 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Medal } from 'lucide-react';
+import { Medal, Trophy } from 'lucide-react';
 import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
+import { getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 
 interface CategoryCardsViewProps {
   groups: FinalPrizeCategoryGroup[];
 }
-
-const glyphByPlace = (place: number) => {
-  if (place === 1) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-accent">
-        <Trophy className="h-5 w-5" aria-hidden />
-        <span className="hidden text-xs font-semibold uppercase tracking-wide text-accent print:inline">Trophy</span>
-        <span className="sr-only">Trophy</span>
-      </span>
-    );
-  }
-  if (place === 2) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-success">
-        <Medal className="h-5 w-5" aria-hidden />
-        <span className="hidden text-xs font-semibold uppercase tracking-wide text-success print:inline">Medal</span>
-        <span className="sr-only">Medal</span>
-      </span>
-    );
-  }
-  if (place === 3) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-secondary">
-        <Medal className="h-5 w-5" aria-hidden />
-        <span className="hidden text-xs font-semibold uppercase tracking-wide text-secondary print:inline">Medal</span>
-        <span className="sr-only">Medal</span>
-      </span>
-    );
-  }
-  return null;
-};
 
 export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
   return (
@@ -84,13 +54,33 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60 print:divide-black/20">
-                    {winners.map(winner => (
-                      <tr key={winner.prizeId} className="align-top">
+                    {winners.map(winner => {
+                      const awardFlags = getAwardFlagsForPrizeRow(winner);
+
+                      return (
+                        <tr key={winner.prizeId} className="align-top">
                         <td className="py-2 pr-3 font-semibold text-foreground print:text-black">{winner.place}</td>
                         <td className="py-2 pr-3">
                           <div className="space-y-0.5">
                             <div className="flex flex-wrap items-center gap-2 font-semibold text-foreground print:gap-1 print:text-black">
-                              {glyphByPlace(winner.place)}
+                              {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
+                                <span className="inline-flex items-center gap-1.5 text-accent">
+                                  {awardFlags.hasTrophy && (
+                                    <span className="inline-flex items-center gap-1.5 text-accent">
+                                      <Trophy className="h-5 w-5" aria-hidden />
+                                      <span className="hidden text-xs font-semibold uppercase tracking-wide text-accent print:inline">Trophy</span>
+                                      <span className="sr-only">Trophy</span>
+                                    </span>
+                                  )}
+                                  {awardFlags.hasMedal && (
+                                    <span className="inline-flex items-center gap-1.5 text-success">
+                                      <Medal className="h-5 w-5" aria-hidden />
+                                      <span className="hidden text-xs font-semibold uppercase tracking-wide text-success print:inline">Medal</span>
+                                      <span className="sr-only">Medal</span>
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                               <span>{winner.playerName}</span>
                               {winner.state && (
                                 <Badge variant="secondary" className="rounded-full border-success/20 bg-success/10 text-xs text-success print:border print:border-black/40 print:bg-white print:text-[9px] print:text-black">
@@ -99,14 +89,14 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                               )}
                             </div>
                             <div className="text-xs text-muted-foreground print:text-[9px] print:text-black/60">
-                              {winner.club ? `${winner.club} • ` : ''}#{winner.sno ?? '—'}
+                              {winner.club ?? '—'}
                             </div>
                           </div>
                         </td>
                         <td className="py-2 pr-3 text-muted-foreground print:text-black">{winner.rank ?? '—'}</td>
                         <td className="py-2 pr-3 font-semibold text-success print:text-black">{formatCurrencyINR(winner.amount)}</td>
                         <td className="py-2 pr-3 text-center">
-                          {winner.place === 1 ? (
+                          {awardFlags.hasTrophy ? (
                             <span className="inline-flex items-center justify-center text-accent">
                               <Trophy className="h-4 w-4 print:hidden" aria-hidden />
                               <span className="hidden text-[9px] font-semibold uppercase tracking-wide text-accent print:inline">Trophy</span>
@@ -117,7 +107,7 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                           )}
                         </td>
                         <td className="py-2 text-center">
-                          {winner.place === 2 || winner.place === 3 ? (
+                          {awardFlags.hasMedal ? (
                             <span className="inline-flex items-center justify-center text-secondary">
                               <Medal className="h-4 w-4 print:hidden" aria-hidden />
                               <span className="hidden text-[9px] font-semibold uppercase tracking-wide text-secondary print:inline">Medal</span>
@@ -127,8 +117,9 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                             <span className="text-xs text-muted-foreground print:text-black/40">—</span>
                           )}
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -5,6 +5,7 @@ import { formatCurrencyINR } from '@/utils/currency';
 import { Trophy, Medal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
@@ -68,6 +69,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
         {winners.map(winner => {
           const club = winner.club?.trim();
           const showClub = club && club.toLowerCase() !== 'club tbc';
+          const awardFlags = getAwardFlagsForPrizeRow(winner);
 
           return (
             <div
@@ -83,15 +85,15 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground print:gap-1 print:text-xs print:text-black">
                 <span className="font-semibold text-foreground print:text-black">Category won:</span>
                 <span>{winner.categoryName}</span>
-                {(winner.hasTrophy || winner.hasMedal) && (
+                {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
                   <span className="inline-flex items-center gap-1 text-primary">
-                    {winner.hasTrophy && (
+                    {awardFlags.hasTrophy && (
                       <span className="inline-flex items-center gap-1">
                         <Trophy className="h-4 w-4" aria-hidden />
                         <span className="sr-only">Trophy</span>
                       </span>
                     )}
-                    {winner.hasMedal && (
+                    {awardFlags.hasMedal && (
                       <span className="inline-flex items-center gap-1">
                         <Medal className="h-4 w-4" aria-hidden />
                         <span className="sr-only">Medal</span>
