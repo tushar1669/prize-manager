@@ -302,7 +302,16 @@ Deno.serve(async (req: Request) => {
       }
 
       // Score institutions
-      const scoredInstitutions: unknown[] = [];
+      type ScoredInstitution = {
+        key: string;
+        label: string;
+        total_points: number;
+        rank_sum: number;
+        best_individual_rank: number;
+        players: { player_id: string; name: string; rank: number; points: number; gender: string | null }[];
+      };
+      
+      const scoredInstitutions: ScoredInstitution[] = [];
       let ineligibleCount = 0;
       const ineligibleReasons: string[] = [];
 
