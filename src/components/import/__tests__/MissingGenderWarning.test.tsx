@@ -1,6 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MissingGenderWarning, checkHasFemaleCategories } from "../MissingGenderWarning";
+import { MissingGenderWarning } from "../MissingGenderWarning";
+import { checkHasFemaleCategories } from "../MissingGenderWarning.helpers";
 
 describe("MissingGenderWarning", () => {
   it("renders nothing when femaleCount > 0", () => {

@@ -35,7 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useDirty } from "@/contexts/DirtyContext";
+import { useDirty } from "@/contexts/DirtyContext.shared";
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import {
@@ -105,7 +105,8 @@ import { ImportSummaryBar } from "@/components/import/ImportSummaryBar";
 import { DataCoverageBar } from "@/components/import/DataCoverageBar";
 import { PlayerRowBadges } from "@/components/import/PlayerRowBadges";
 import { GenderSummaryChip } from "@/components/import/GenderSummaryChip";
-import { MissingGenderWarning, checkHasFemaleCategories } from "@/components/import/MissingGenderWarning";
+import { MissingGenderWarning } from "@/components/import/MissingGenderWarning";
+import { checkHasFemaleCategories } from "@/components/import/MissingGenderWarning.helpers";
 import { analyzeGenderColumns, hasFemaleMarker, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
 
 /**

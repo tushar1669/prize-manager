@@ -1,17 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
-
-export type DirtyKey = string;
-
-export interface DirtyContextValue {
-  isDirty: boolean;
-  sources: Record<DirtyKey, boolean>;
-  setDirty: (key: DirtyKey, value: boolean) => void;
-  resetDirty: (key?: DirtyKey) => void;
-  onSave: (() => Promise<void>) | null;
-  registerOnSave: (fn: (() => Promise<void>) | null) => void;
-}
-
-const DirtyContext = createContext<DirtyContextValue | undefined>(undefined);
+import React, { useState, useCallback, useMemo, ReactNode } from 'react';
+import { DirtyContext, type DirtyKey, type DirtyContextValue } from '@/contexts/DirtyContext.shared';
 
 export function DirtyProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<Record<DirtyKey, boolean>>({});
@@ -53,10 +41,4 @@ export function DirtyProvider({ children }: { children: ReactNode }) {
       {children}
     </DirtyContext.Provider>
   );
-}
-
-export function useDirty(): DirtyContextValue {
-  const ctx = useContext(DirtyContext);
-  if (!ctx) throw new Error('useDirty must be used within DirtyProvider');
-  return ctx;
 }

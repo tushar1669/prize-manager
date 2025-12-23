@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useDirty } from '@/contexts/DirtyContext';
+import { useDirty } from '@/contexts/DirtyContext.shared';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 
 export function NavigationGuard() {

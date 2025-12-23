@@ -34,17 +34,17 @@ import { useErrorPanel } from "@/hooks/useErrorPanel";
 import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle } from '@/components/prizes/CategoryPrizesEditor';
 import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
-import { useDirty } from "@/contexts/DirtyContext";
+import { useDirty } from "@/contexts/DirtyContext.shared";
 import { makeKey, getDraft, setDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 import { TeamPrizesEditor } from '@/components/team-prizes';
+import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
 
 // Flip to true only when debugging
 const DEBUG = false;
 const dlog = (...args: unknown[]) => { if (DEBUG) console.log(...args); };
 
-const MAIN_CATEGORY_NAME = 'Main Prize';
 type CriteriaJson = Record<string, unknown>;
 type CriteriaCategory = {
   id?: string;
@@ -53,72 +53,6 @@ type CriteriaCategory = {
   category_type?: string | null;
 } & Record<string, unknown>;
 
-export async function ensureMainCategoryExists({
-  prizeMode,
-  categories,
-  categoriesLoading,
-  tournamentId,
-  supabaseClient,
-  queryClient,
-  ensuringRef,
-}: {
-  prizeMode: 'individual' | 'team';
-  categories: Array<{ is_main?: boolean; [key: string]: unknown }> | null | undefined;
-  categoriesLoading: boolean;
-  tournamentId?: string;
-  supabaseClient: typeof supabase;
-  queryClient: ReturnType<typeof useQueryClient>;
-  ensuringRef: React.MutableRefObject<boolean>;
-}) {
-  if (prizeMode !== 'individual') return false;
-  // Wait for categories to finish loading before checking - prevents race condition
-  if (!tournamentId || categoriesLoading) return false;
-  // Guard: categories must be an array (even if empty) after loading completes
-  if (!Array.isArray(categories)) return false;
-
-  const hasMainCategory = categories.some((c) => c.is_main);
-  if (hasMainCategory || ensuringRef.current) return false;
-
-  ensuringRef.current = true;
-
-  // DB-FIRST CHECK: Query DB directly to avoid stale in-memory state
-  const { data: existingMain } = await supabaseClient
-    .from('categories')
-    .select('id')
-    .eq('tournament_id', tournamentId)
-    .eq('is_main', true)
-    .maybeSingle();
-
-  if (existingMain) {
-    // Main already exists in DB, just refetch to sync state
-    console.log('[ensureMainCategoryExists] Main category already exists in DB, syncing');
-    ensuringRef.current = false;
-    await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
-    return false;
-  }
-
-  const { error } = await supabaseClient.from('categories').insert({
-    tournament_id: tournamentId,
-    name: MAIN_CATEGORY_NAME,
-    is_main: true,
-    criteria_json: {},
-    order_idx: 0,
-  });
-
-  if (error) {
-    ensuringRef.current = false;
-    // If unique constraint violation (main already exists), just refetch
-    if (error.code === '23505') {
-      console.warn('[ensureMainCategoryExists] Main category already exists (unique constraint), refetching');
-      await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
-      return false;
-    }
-    throw error;
-  }
-
-  await queryClient.invalidateQueries({ queryKey: ['categories', tournamentId] });
-  return true;
-}
 
 export default function TournamentSetup() {
   const { id } = useParams();

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useDirty } from '@/contexts/DirtyContext';
+import { useDirty } from '@/contexts/DirtyContext.shared';
 
 export function GlobalShortcuts() {
   const { onSave } = useDirty();

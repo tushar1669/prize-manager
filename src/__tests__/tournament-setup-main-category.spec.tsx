@@ -2,7 +2,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ensureMainCategoryExists } from '@/pages/TournamentSetup';
+import { ensureMainCategoryExists } from '@/pages/TournamentSetup.helpers';
 import CategoryPrizesEditor from '@/components/prizes/CategoryPrizesEditor';
 import { DirtyProvider } from '@/contexts/DirtyContext';
 

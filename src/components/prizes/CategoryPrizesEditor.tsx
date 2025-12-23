@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import ErrorPanel from '@/components/ui/ErrorPanel';
 import { useErrorPanel } from '@/hooks/useErrorPanel';
 import { toast } from 'sonner';
-import { useDirty } from '@/contexts/DirtyContext';
+import { useDirty } from '@/contexts/DirtyContext.shared';
 import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { CategoryCriteriaChips } from './CategoryCriteriaChips';
