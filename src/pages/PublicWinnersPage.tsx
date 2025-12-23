@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
-import { CeremonyScriptView } from "@/components/final-prize/CeremonyScriptView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { formatCurrencyINR } from "@/utils/currency";
@@ -125,10 +124,9 @@ export default function PublicWinnersPage() {
                 </div>
               ) : (
                 <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
-                  <TabsList className="grid w-full grid-cols-5 mb-6 print:hidden">
+                  <TabsList className="grid w-full grid-cols-4 mb-6 print:hidden">
                     <TabsTrigger value="v1">Category Cards</TabsTrigger>
                     <TabsTrigger value="table">Table View</TabsTrigger>
-                    <TabsTrigger value="ceremony">Ceremony Script</TabsTrigger>
                     <TabsTrigger value="poster">Poster Grid</TabsTrigger>
                     <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>
                   </TabsList>
@@ -176,10 +174,6 @@ export default function PublicWinnersPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  </TabsContent>
-
-                  <TabsContent value="ceremony" className={activeView !== 'ceremony' ? 'print:hidden' : ''}>
-                    {tournament?.id && <CeremonyScriptView tournamentId={tournament.id} />}
                   </TabsContent>
 
                   <TabsContent value="poster" className={activeView !== 'poster' ? 'print:hidden' : ''}>
