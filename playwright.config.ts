@@ -5,6 +5,10 @@ export default defineConfig({
   testIgnore: [
     '**/allocation/**',
     '**/institution/**',
+    '**/utils/**',
+    '**/allocator-tie-break.spec.ts',
+    '**/ceremony-toggle.spec.ts',
+    '**/import-name-column-priority.spec.ts',
     '**/conflict-utils.spec.ts',
     '**/category-prizes-delta.spec.ts',
     '**/ceremony-order.spec.ts',
