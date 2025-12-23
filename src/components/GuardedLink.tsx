@@ -1,5 +1,5 @@
 import { Link, LinkProps, useNavigate } from 'react-router-dom';
-import { useDirty } from '@/contexts/DirtyContext';
+import { useDirty } from '@/contexts/DirtyContext.shared';
 import { MouseEvent, useState } from 'react';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 

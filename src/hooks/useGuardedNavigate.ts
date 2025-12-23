@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useCallback, useState } from 'react';
-import { useDirty } from '@/contexts/DirtyContext';
+import { useDirty } from '@/contexts/DirtyContext.shared';
 
 export function useGuardedNavigate() {
   const navigate = useNavigate();
