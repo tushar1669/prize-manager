@@ -193,7 +193,7 @@ export default function PublicHome() {
 
                     <CardContent className="p-0 pt-4">
                       <Button variant="outline" size="sm" asChild className="group-hover:border-primary/60 group-hover:text-primary">
-                        <Link to={`/p/${tournament.public_slug}`} className="gap-2">
+                        <Link to={`/p/${tournament.public_slug}/details`} className="gap-2">
                           View Details
                         </Link>
                       </Button>
