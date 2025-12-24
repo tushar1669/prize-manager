@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Trophy, Medal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 
 interface PosterGridViewProps {
@@ -14,7 +13,6 @@ interface PosterGridViewProps {
 
 export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
   const publicUrl = `/t/${tournamentId}/public`;
-  const [posterSize, setPosterSize] = useState<'a4' | 'a3'>('a4');
   const shareLink = useMemo(() => {
     if (typeof window !== 'undefined' && window.location.origin) {
       return `${window.location.origin}${publicUrl}`;
@@ -22,14 +20,11 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
     return publicUrl;
   }, [publicUrl]);
 
-  const gridLayout = posterSize === 'a3'
-    ? 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3'
-    : 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2';
+  const gridLayout = 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2';
 
   return (
     <div
       className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4"
-      data-poster-size={posterSize}
     >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 print:mb-3 print:hidden">
         <div className="space-y-1">
@@ -41,28 +36,6 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           <Badge variant="outline" className="rounded-full border-success text-success">
             Scan to view live updates
           </Badge>
-          <div className="flex rounded-full border border-border bg-card p-1 shadow-sm">
-            <Button
-              type="button"
-              size="sm"
-              variant={posterSize === 'a4' ? 'default' : 'ghost'}
-              aria-pressed={posterSize === 'a4'}
-              className={`rounded-full ${posterSize === 'a4' ? 'bg-primary text-primary-foreground hover:bg-primary-hover' : ''}`}
-              onClick={() => setPosterSize('a4')}
-            >
-              A4
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={posterSize === 'a3' ? 'default' : 'ghost'}
-              aria-pressed={posterSize === 'a3'}
-              className={`rounded-full ${posterSize === 'a3' ? 'bg-primary text-primary-foreground hover:bg-primary-hover' : ''}`}
-              onClick={() => setPosterSize('a3')}
-            >
-              A3
-            </Button>
-          </div>
         </div>
       </div>
       <div className={`poster-grid-cards grid gap-4 ${gridLayout} print:gap-3`}>
