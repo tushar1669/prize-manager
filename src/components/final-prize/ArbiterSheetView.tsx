@@ -1,21 +1,90 @@
-import { useMemo } from 'react';
-import { Medal, Trophy } from 'lucide-react';
+import { useMemo, useCallback } from 'react';
+import { Medal, Trophy, Printer, Download } from 'lucide-react';
 import { FinalPrizeWinnerRow, useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { downloadWorkbookXlsx } from '@/utils/excel';
+import { toast } from 'sonner';
 
 interface ArbiterSheetViewProps {
   winners?: FinalPrizeWinnerRow[];
   tournamentId?: string;
 }
 
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
 export function ArbiterSheetView({ winners: providedWinners, tournamentId }: ArbiterSheetViewProps) {
   const queryTournamentId = providedWinners?.length ? undefined : tournamentId;
   const { data, isLoading } = useFinalPrizeData(queryTournamentId);
   const winners = useMemo(() => providedWinners ?? data?.winners ?? [], [providedWinners, data?.winners]);
+  const tournamentTitle = data?.tournament?.title ?? 'Tournament';
+
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
+  const handleExportXlsx = useCallback(() => {
+    if (winners.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    // Build rows for Excel export
+    const rows = winners.map((winner, index) => ({
+      'Category Order': winner.categoryOrder ?? index + 1,
+      'Category Name': winner.categoryName ?? '',
+      'Place': winner.place,
+      'Player Name': winner.playerName ?? '',
+      'Rank': winner.rank ?? '',
+      'Amount': winner.amount ?? 0,
+      'Trophy': winner.hasTrophy ? 'Yes' : 'No',
+      'Medal': winner.hasMedal ? 'Yes' : 'No',
+      'Signature': '', // Blank column for signature
+    }));
+
+    const today = new Date().toISOString().slice(0, 10);
+    const safeSlug = sanitizeFilename(tournamentTitle);
+    const filename = `${safeSlug}_final_v4_${today}.xlsx`;
+
+    const success = downloadWorkbookXlsx(filename, { 'Arbiter Sheet': rows });
+    if (success) {
+      toast.success(`Exported ${rows.length} rows to ${filename}`);
+    } else {
+      toast.error('Export failed');
+    }
+  }, [winners, tournamentTitle]);
 
   return (
     <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:w-full print:max-w-none print:px-0 print:pb-4">
+      {/* Toolbar - hidden in print */}
+      <div className="mb-4 flex items-center justify-end gap-2 pm-print-hide">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportXlsx}
+          disabled={winners.length === 0}
+          className="rounded-full"
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Export XLSX
+        </Button>
+        <Button
+          size="sm"
+          onClick={handlePrint}
+          className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+        >
+          <Printer className="mr-2 h-4 w-4" />
+          Print
+        </Button>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm print:overflow-visible print:rounded-none print:border-black print:bg-white print:shadow-none">
         {isLoading && winners.length === 0 ? (
           <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">

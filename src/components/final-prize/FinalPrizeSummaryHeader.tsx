@@ -33,38 +33,59 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
   }, []);
 
   return (
-    <header className="pm-print-hide sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur print:border-black">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between print:px-4 print:py-2">
-        <div className="space-y-2 print:space-y-1">
-          <h1 className="text-2xl font-bold text-foreground md:text-3xl print:text-2xl print:text-black">{tournamentTitle || 'Final Prize List'}</h1>
-          <div className="flex flex-wrap gap-2 text-sm text-muted-foreground print:gap-1.5 print:text-xs print:text-black">
-            {city && <span>{city}</span>}
-            {dateRange && <span>• {dateRange}</span>}
-            <Badge className="rounded-full bg-primary text-primary-foreground shadow-sm print:border print:border-black print:bg-white print:text-black print:shadow-none">
-              {formatNumberIN(totals.totalPrizes)} Prizes
-            </Badge>
-            <Badge variant="outline" className="rounded-full border-success/50 text-success print:border-black print:text-black">
-              {formatCurrencyINR(totals.totalCash)} Total Cash
-            </Badge>
-            <Badge variant="secondary" className="rounded-full print:border print:border-black print:bg-white print:text-black">
-              {formatNumberIN(totals.categoryCount)} Categories
-            </Badge>
+    <>
+      {/* Toolbar header - hidden in print */}
+      <header className="pm-print-hide sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-foreground md:text-3xl">{tournamentTitle || 'Final Prize List'}</h1>
+            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+              {city && <span>{city}</span>}
+              {dateRange && <span>• {dateRange}</span>}
+              <Badge className="rounded-full bg-primary text-primary-foreground shadow-sm">
+                {formatNumberIN(totals.totalPrizes)} Prizes
+              </Badge>
+              <Badge variant="outline" className="rounded-full border-success/50 text-success">
+                {formatCurrencyINR(totals.totalCash)} Total Cash
+              </Badge>
+              <Badge variant="secondary" className="rounded-full">
+                {formatNumberIN(totals.categoryCount)} Categories
+              </Badge>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              className="rounded-full border-primary text-primary hover:bg-primary/10"
+            >
+              <Share2 className="mr-2 h-4 w-4" /> Copy link
+            </Button>
+            <Button size="sm" onClick={handlePrint} className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover">
+              <Printer className="mr-2 h-4 w-4" /> Print
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2 print:hidden">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLink}
-            className="rounded-full border-primary text-primary hover:bg-primary/10"
-          >
-            <Share2 className="mr-2 h-4 w-4" /> Copy link
-          </Button>
-          <Button size="sm" onClick={handlePrint} className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover">
-            <Printer className="mr-2 h-4 w-4" /> Print
-          </Button>
+      </header>
+
+      {/* Printable header - visible ONLY in print */}
+      <header className="pm-print-header hidden print:block print:mb-4 print:border-b print:border-black/20 print:pb-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-black">{tournamentTitle || 'Final Prize List'}</h1>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-sm text-black/80">
+            {city && <span>{city}</span>}
+            {dateRange && <span>• {dateRange}</span>}
+            <span>• {formatNumberIN(totals.totalPrizes)} Prizes</span>
+            <span>• {formatCurrencyINR(totals.totalCash)} Total Cash</span>
+            <span>• {formatNumberIN(totals.categoryCount)} Categories</span>
+          </div>
         </div>
-      </div>
-    </header>
+        {/* Print settings note */}
+        <p className="pm-print-settings-note hidden mt-2 text-center text-xs text-black/50 print:block">
+          For best results, enable "Background graphics" in your print settings.
+        </p>
+      </header>
+    </>
   );
 }

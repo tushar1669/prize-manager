@@ -89,17 +89,24 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
 @media print {
   @page {
     margin: 12mm;
+    size: A4;
+  }
+
+  /* Preserve colors in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
   html,
   body {
     margin: 0;
     padding: 0;
+    min-height: auto !important;
   }
 
   body {
-    background: #ffffff !important;
-    color: #111827 !important;
     font-size: 11pt;
     line-height: 1.4;
   }
@@ -114,6 +121,7 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
     width: 100%;
     max-width: 210mm;
     margin: 0 auto;
+    padding-top: 0 !important;
   }
 
   /* Avoid page breaks inside elements */
@@ -123,9 +131,14 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
     -webkit-column-break-inside: avoid;
   }
 
-  /* Hide elements in print */
+  /* Hide elements in print (toolbars, buttons, etc.) */
   .pm-print-hide {
     display: none !important;
+  }
+
+  /* Printable header visible in print */
+  .pm-print-header {
+    display: block !important;
   }
 
   /* Hide Lovable badge overlays in print/PDF output */
@@ -187,21 +200,33 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
     min-height: 52mm;
   }
 
-  /* Remove shadows in print */
+  /* Remove shadows in print for cleaner look */
   .shadow, .shadow-lg, .shadow-sm {
     box-shadow: none !important;
   }
 
-  /* Category cards should not split */
+  /* Category cards print rules */
   [data-category-card] {
     page-break-inside: avoid;
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
+    margin-bottom: 8mm;
   }
 
-  /* Force page break before category cards except the first one */
-  [data-category-card]:not(:first-of-type) {
-    break-before: page;
-    page-break-before: always;
+  /* NO break before first card (avoids blank first page) */
+  [data-category-card]:first-of-type {
+    break-before: auto !important;
+    page-break-before: auto !important;
+  }
+
+  /* Page break AFTER each card except the last one */
+  [data-category-card]:not(:last-of-type) {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* Print settings note - only visible in print */
+  .pm-print-settings-note {
+    display: block !important;
   }
 }

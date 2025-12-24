@@ -11,7 +11,7 @@ interface CategoryCardsViewProps {
 
 export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
   return (
-    <div className="mx-auto mt-8 flex w-full max-w-6xl flex-col gap-6 px-6 pb-12 print:mt-0 print:gap-4 print:px-0 print:pb-4">
+    <div className="mx-auto mt-8 flex w-full max-w-6xl flex-col gap-6 px-6 pb-12 print:mt-0 print:gap-0 print:px-0 print:pb-0">
       {groups.map(({ category, winners }) => {
         if (winners.length === 0) return null;
 
