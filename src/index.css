@@ -197,13 +197,11 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
     page-break-inside: avoid;
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
-    break-before: auto;
-    page-break-before: auto;
   }
 
-  [data-category-card] + [data-category-card] {
+  /* Force page break before category cards except the first one */
+  [data-category-card]:not(:first-of-type) {
     break-before: page;
     page-break-before: always;
-    -webkit-column-break-before: always;
   }
 }

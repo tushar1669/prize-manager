@@ -2,8 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, MapPin, Timer } from "lucide-react";
 import { Link } from "react-router-dom";
+import { classifyTimeControl } from "@/utils/timeControl";
+
 type PublicTournament = {
   id: string;
   title: string;
@@ -13,6 +16,8 @@ type PublicTournament = {
   venue: string | null;
   public_slug: string;
   created_at: string | null;
+  time_control_base_minutes: number | null;
+  time_control_increment_seconds: number | null;
 };
 
 function formatDate(dateString: string | null) {
@@ -37,7 +42,7 @@ export default function PublicHome() {
     queryFn: async (): Promise<PublicTournament[]> => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, city, venue, public_slug, created_at')
+        .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds')
         .eq('is_published', true)
         .eq('is_archived', false)
         .is('deleted_at', null)
@@ -113,7 +118,11 @@ export default function PublicHome() {
               tournamentList.map((tournament) => {
                 const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
                 const location = [tournament.city, tournament.venue].filter(Boolean).join(" • ") || null;
-
+                const timeFormat = classifyTimeControl(
+                  tournament.time_control_base_minutes,
+                  tournament.time_control_increment_seconds
+                );
+                const showFormat = timeFormat && timeFormat !== "UNKNOWN";
                 return (
                   <Card
                     key={tournament.id}
@@ -132,6 +141,14 @@ export default function PublicHome() {
                           <div className="flex items-center gap-1">
                             <MapPin className="h-4 w-4" />
                             <span>{location}</span>
+                          </div>
+                        )}
+                        {showFormat && (
+                          <div className="flex items-center gap-1">
+                            <Timer className="h-4 w-4" />
+                            <Badge variant="secondary" className="text-xs">
+                              {timeFormat}
+                            </Badge>
                           </div>
                         )}
                       </div>
