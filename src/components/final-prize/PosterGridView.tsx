@@ -20,11 +20,11 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
     return publicUrl;
   }, [publicUrl]);
 
-  const gridLayout = 'sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2';
+  const gridLayout = 'sm:grid-cols-2 lg:grid-cols-3';
 
   return (
     <div
-      className="poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4"
+      className="poster-grid pm-poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4"
     >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 print:mb-3 print:hidden">
         <div className="space-y-1">
@@ -60,7 +60,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               </div>
 
               {/* Row 2: Player Name (large, prominent) */}
-              <div className="py-2 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:py-1 print:text-xl print:text-black">
+              <div className="poster-grid-name py-2 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:py-1 print:text-xl print:text-black">
                 {winner.playerName}
               </div>
 
