@@ -97,11 +97,6 @@ export default function FinalPrizeView() {
                   <AlertDescription>Unable to load final prize data. Please try again in a moment.</AlertDescription>
                 </Alert>
               )}
-              {typeof data?.version === 'number' && (
-                <Alert className="mx-auto mt-3 max-w-3xl">
-                  <AlertDescription>Showing allocations version v{data.version}</AlertDescription>
-                </Alert>
-              )}
               {!isLoading && !error && data && data.winners.length === 0 && normalized !== 'v5' && (
                 <Alert className="mx-auto max-w-3xl">
                   <AlertDescription>No winners have been allocated yet.</AlertDescription>
