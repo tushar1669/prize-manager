@@ -1,4 +1,5 @@
 import type { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
+import { stripAwardMarkers } from '@/utils/prizeAwards';
 
 export type FinalPrizeExportRow = {
   'Category Order': number;
@@ -18,7 +19,7 @@ export function buildFinalPrizeExportRows(winners: FinalPrizeWinnerRow[]): Final
     'Category Order': winner.categoryOrder ?? index + 1,
     'Category Name': winner.categoryName ?? '',
     Place: winner.place,
-    'Player Name': winner.playerName ?? '',
+    'Player Name': stripAwardMarkers(winner.playerName ?? ''),
     Rank: winner.rank ?? '',
     Amount: winner.amount ?? 0,
     Trophy: winner.hasTrophy ? 'Yes' : 'No',

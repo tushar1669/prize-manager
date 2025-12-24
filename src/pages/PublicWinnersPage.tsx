@@ -40,7 +40,7 @@ export default function PublicWinnersPage() {
     enabled: !!id,
   });
 
-  const { data: prizeData, isLoading: prizeLoading, grouped, version } = useFinalPrizeData(tournament?.id);
+  const { data: prizeData, isLoading: prizeLoading, grouped } = useFinalPrizeData(tournament?.id);
 
   const isLoading = tournamentLoading || prizeLoading;
 
@@ -107,9 +107,6 @@ export default function PublicWinnersPage() {
           <CardHeader className="print:pb-2">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-2xl font-bold text-foreground print:text-lg print:text-black">Winners</CardTitle>
-              {typeof version === 'number' && (
-                <Badge variant="outline" className="text-xs border-border print:border-black print:text-black">Allocations v{version}</Badge>
-              )}
             </div>
           </CardHeader>
           <CardContent className="print:px-2">

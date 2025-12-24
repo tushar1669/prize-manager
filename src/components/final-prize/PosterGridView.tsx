@@ -47,10 +47,9 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
           return (
             <div
               key={winner.prizeId}
-              className="poster-grid-card pm-print-avoid-break flex flex-col gap-4 rounded-xl border border-border bg-card p-6 shadow-lg print:gap-2 print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
+              className="poster-grid-card pm-print-avoid-break flex flex-col rounded-xl border border-border bg-card p-6 shadow-lg print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
             >
-              {/* Row 1: Category (left) + Place (right) */}
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4 print:border-black/30 print:pb-2">
                 <Badge className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
                   {winner.categoryName}
                 </Badge>
@@ -59,13 +58,11 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
                 </span>
               </div>
 
-              {/* Row 2: Player Name (large, prominent) */}
-              <div className="poster-grid-name py-2 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:py-1 print:text-xl print:text-black">
+              <div className="poster-grid-name border-b border-border/60 py-4 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:border-black/30 print:py-2 print:text-xl print:text-black">
                 {winner.playerName}
               </div>
 
-              {/* Row 3: Amount + Trophy/Medal */}
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 pt-4 print:pt-2">
                 <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
                   {formatCurrencyINR(winner.amount)}
                 </span>

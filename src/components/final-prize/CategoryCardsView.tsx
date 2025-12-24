@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Medal, Trophy } from 'lucide-react';
 import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
-import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
+import { getAwardDisplayClasses, getAwardFlagsForPrizeRow, stripAwardMarkers } from '@/utils/prizeAwards';
 
 interface CategoryCardsViewProps {
   groups: FinalPrizeCategoryGroup[];
@@ -60,13 +60,15 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                       const trophyDisplay = getAwardDisplayClasses('trophy');
                       const medalDisplay = getAwardDisplayClasses('medal');
 
+                      const playerName = stripAwardMarkers(winner.playerName);
+
                       return (
                         <tr key={winner.prizeId} className="align-top">
                         <td className="py-2 pr-3 font-semibold text-foreground print:text-black">{winner.place}</td>
                         <td className="py-2 pr-3">
                           <div className="space-y-0.5">
                             <div className="font-semibold text-foreground print:text-black">
-                              {winner.playerName}
+                              {playerName}
                             </div>
                             {(() => {
                               const metaParts = [winner.club, winner.state]
@@ -96,9 +98,7 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                               </span>
                               <span className="sr-only">{trophyDisplay.label}</span>
                             </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground print:text-black/40">—</span>
-                          )}
+                          ) : null}
                         </td>
                         <td className="py-2 text-center">
                           {awardFlags.hasMedal ? (
@@ -109,9 +109,7 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                               </span>
                               <span className="sr-only">{medalDisplay.label}</span>
                             </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground print:text-black/40">—</span>
-                          )}
+                          ) : null}
                         </td>
                         </tr>
                       );

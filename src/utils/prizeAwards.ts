@@ -10,6 +10,8 @@ export interface PrizeAwardInput {
 
 export type PrizeAwardKind = 'trophy' | 'medal';
 
+const AWARD_MARKERS = /(\s*(?:🏆|🥇|🥈|🥉|🏅|TROPHY|MEDAL)\s*)+/gi;
+
 export function getAwardFlagsForPrizeRow(prize: PrizeAwardInput): PrizeAwardFlags {
   return {
     hasTrophy: Boolean(prize.hasTrophy),
@@ -25,4 +27,8 @@ export function getAwardDisplayClasses(kind: PrizeAwardKind) {
     labelClass: baseClass,
     label: kind === 'trophy' ? 'Trophy' : 'Medal',
   };
+}
+
+export function stripAwardMarkers(value: string): string {
+  return value.replace(AWARD_MARKERS, ' ').replace(/\s{2,}/g, ' ').trim();
 }
