@@ -68,7 +68,7 @@ export default function PublicTournamentDetails() {
     enabled: !!slug,
   });
 
-  const { grouped, isLoading: resultsLoading, version } = useFinalPrizeData(t?.id);
+  const { grouped, isLoading: resultsLoading } = useFinalPrizeData(t?.id);
 
   const formatDate = (value: string | null | undefined) => {
     if (!value) return null;
@@ -307,11 +307,6 @@ export default function PublicTournamentDetails() {
               <CardHeader className="border-b border-border print:border-black/30">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <CardTitle className="text-2xl font-bold print:text-black">Final Ranks</CardTitle>
-                  {typeof version === "number" && (
-                    <Badge variant="outline" className="text-xs print:border-black/40 print:text-black">
-                      Allocations v{version}
-                    </Badge>
-                  )}
                 </div>
               </CardHeader>
               <CardContent className="pt-6">

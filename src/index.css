@@ -168,9 +168,12 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
 
   /* Poster grid sizing */
   .pm-poster-grid {
-    width: 210mm !important;
+    width: 100% !important;
+    max-width: 186mm !important;
     margin-left: auto !important;
     margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -178,14 +181,14 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
   .pm-poster-grid .poster-grid-cards {
     align-content: start;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 8px !important;
+    gap: 10px !important;
   }
 
   .pm-poster-grid .poster-grid-card {
-    min-height: 52mm;
+    min-height: 50mm;
     padding: 10px !important;
     gap: 8px !important;
-    border: 1px solid #1f2937 !important;
+    border: 1px solid #111827 !important;
     background: #ffffff !important;
     break-inside: avoid;
     page-break-inside: avoid;

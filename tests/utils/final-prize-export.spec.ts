@@ -16,7 +16,7 @@ describe('buildFinalPrizeExportRows', () => {
         hasTrophy: true,
         hasMedal: false,
         playerId: 'player-1',
-        playerName: 'Aditi Sharma',
+        playerName: 'Aditi Sharma 🏆 TROPHY',
         rank: 12,
         club: 'Queen Club',
         state: 'TN',

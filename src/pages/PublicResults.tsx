@@ -6,7 +6,6 @@ import { safeSelectPlayersByIds } from "@/utils/safeSelectPlayers";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trophy, Medal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { getPlayerDisplayName } from "@/utils/playerName";
@@ -189,9 +188,6 @@ export default function PublicResults() {
               <div>
                 <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
                 <p className="text-lg text-muted-foreground">Final Results</p>
-                {typeof results?.version === 'number' && (
-                  <Badge variant="outline" className="mt-2 text-xs">Allocations v{results.version}</Badge>
-                )}
               </div>
               <div className="flex items-center gap-2">
                 <BrochureLink url={tournament.brochure_url} />
