@@ -205,24 +205,24 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
     box-shadow: none !important;
   }
 
-  /* Category cards print rules */
+  /* Category cards print rules - robust index-based selectors */
   [data-category-card] {
     page-break-inside: avoid;
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
-    margin-bottom: 8mm;
+    margin-bottom: 4mm;
   }
 
-  /* NO break before first card (avoids blank first page) */
-  [data-category-card]:first-of-type {
+  /* Page break BEFORE each card EXCEPT the first (index 0) */
+  [data-category-card][data-print-index]:not([data-print-index="0"]) {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* Ensure first card has NO page break before it */
+  [data-category-card][data-print-index="0"] {
     break-before: auto !important;
     page-break-before: auto !important;
-  }
-
-  /* Page break AFTER each card except the last one */
-  [data-category-card]:not(:last-of-type) {
-    break-after: page;
-    page-break-after: always;
   }
 
   /* Print settings note - only visible in print */

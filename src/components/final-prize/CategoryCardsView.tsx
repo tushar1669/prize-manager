@@ -10,17 +10,18 @@ interface CategoryCardsViewProps {
 }
 
 export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
+  // Filter out empty groups first to get stable print indices
+  const nonEmptyGroups = groups.filter(g => g.winners.length > 0);
+
   return (
     <div className="mx-auto mt-8 flex w-full max-w-6xl flex-col gap-6 px-6 pb-12 print:mt-0 print:gap-0 print:px-0 print:pb-0">
-      {groups.map(({ category, winners }) => {
-        if (winners.length === 0) return null;
-
-        return (
-          <Card
-            key={category.id}
-            data-category-card
-            className="pm-print-avoid-break w-full rounded-lg border border-border bg-card shadow-lg print:border print:border-black/30 print:bg-white print:shadow-none"
-          >
+      {nonEmptyGroups.map(({ category, winners }, printIndex) => (
+        <Card
+          key={category.id}
+          data-category-card="true"
+          data-print-index={printIndex}
+          className="pm-print-avoid-break w-full rounded-lg border border-border bg-card shadow-lg print:border print:border-black/30 print:bg-white print:shadow-none"
+        >
             <CardHeader className="flex flex-col gap-2 rounded-t-lg bg-gradient-to-r from-primary/10 via-card to-success/10 pb-4 print:bg-white print:pb-1.5">
               <CardTitle className="flex items-center justify-between text-xl print:text-base">
                 <span className="font-bold text-foreground print:text-black">{category.name}</span>
@@ -134,9 +135,8 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                 </table>
               </div>
             </CardContent>
-          </Card>
-        );
-      })}
+        </Card>
+      ))}
     </div>
   );
 }
