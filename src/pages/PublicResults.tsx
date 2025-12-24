@@ -196,7 +196,7 @@ export default function PublicResults() {
               <div className="flex items-center gap-2">
                 <BrochureLink url={tournament.brochure_url} />
                 <Button variant="outline" asChild>
-                  <Link to={`/p/${slug}/details`}>
+                  <Link to={`/p/${slug}`}>
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Details
                   </Link>

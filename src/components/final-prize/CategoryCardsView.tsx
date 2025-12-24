@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Medal, Trophy } from 'lucide-react';
 import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
-import { getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
+import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 
 interface CategoryCardsViewProps {
   groups: FinalPrizeCategoryGroup[];
@@ -56,6 +56,8 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                   <tbody className="divide-y divide-border/60 print:divide-black/20">
                     {winners.map(winner => {
                       const awardFlags = getAwardFlagsForPrizeRow(winner);
+                      const trophyDisplay = getAwardDisplayClasses('trophy');
+                      const medalDisplay = getAwardDisplayClasses('medal');
 
                       return (
                         <tr key={winner.prizeId} className="align-top">
@@ -64,19 +66,23 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                           <div className="space-y-0.5">
                             <div className="flex flex-wrap items-center gap-2 font-semibold text-foreground print:gap-1 print:text-black">
                               {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
-                                <span className="inline-flex items-center gap-1.5 text-accent">
+                                <span className="inline-flex items-center gap-1.5">
                                   {awardFlags.hasTrophy && (
-                                    <span className="inline-flex items-center gap-1.5 text-accent">
+                                    <span className={`inline-flex items-center gap-1.5 ${trophyDisplay.iconClass}`}>
                                       <Trophy className="h-5 w-5" aria-hidden />
-                                      <span className="hidden text-xs font-semibold uppercase tracking-wide text-accent print:inline">Trophy</span>
-                                      <span className="sr-only">Trophy</span>
+                                      <span className={`hidden text-xs font-semibold uppercase tracking-wide print:inline ${trophyDisplay.labelClass}`}>
+                                        {trophyDisplay.label}
+                                      </span>
+                                      <span className="sr-only">{trophyDisplay.label}</span>
                                     </span>
                                   )}
                                   {awardFlags.hasMedal && (
-                                    <span className="inline-flex items-center gap-1.5 text-success">
+                                    <span className={`inline-flex items-center gap-1.5 ${medalDisplay.iconClass}`}>
                                       <Medal className="h-5 w-5" aria-hidden />
-                                      <span className="hidden text-xs font-semibold uppercase tracking-wide text-success print:inline">Medal</span>
-                                      <span className="sr-only">Medal</span>
+                                      <span className={`hidden text-xs font-semibold uppercase tracking-wide print:inline ${medalDisplay.labelClass}`}>
+                                        {medalDisplay.label}
+                                      </span>
+                                      <span className="sr-only">{medalDisplay.label}</span>
                                     </span>
                                   )}
                                 </span>
@@ -97,10 +103,12 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                         <td className="py-2 pr-3 font-semibold text-success print:text-black">{formatCurrencyINR(winner.amount)}</td>
                         <td className="py-2 pr-3 text-center">
                           {awardFlags.hasTrophy ? (
-                            <span className="inline-flex items-center justify-center text-accent">
+                            <span className={`inline-flex items-center justify-center ${trophyDisplay.iconClass}`}>
                               <Trophy className="h-4 w-4 print:hidden" aria-hidden />
-                              <span className="hidden text-[9px] font-semibold uppercase tracking-wide text-accent print:inline">Trophy</span>
-                              <span className="sr-only">Trophy</span>
+                              <span className={`hidden text-[9px] font-semibold uppercase tracking-wide print:inline ${trophyDisplay.labelClass}`}>
+                                {trophyDisplay.label}
+                              </span>
+                              <span className="sr-only">{trophyDisplay.label}</span>
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground print:text-black/40">—</span>
@@ -108,10 +116,12 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                         </td>
                         <td className="py-2 text-center">
                           {awardFlags.hasMedal ? (
-                            <span className="inline-flex items-center justify-center text-secondary">
+                            <span className={`inline-flex items-center justify-center ${medalDisplay.iconClass}`}>
                               <Medal className="h-4 w-4 print:hidden" aria-hidden />
-                              <span className="hidden text-[9px] font-semibold uppercase tracking-wide text-secondary print:inline">Medal</span>
-                              <span className="sr-only">Medal</span>
+                              <span className={`hidden text-[9px] font-semibold uppercase tracking-wide print:inline ${medalDisplay.labelClass}`}>
+                                {medalDisplay.label}
+                              </span>
+                              <span className="sr-only">{medalDisplay.label}</span>
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground print:text-black/40">—</span>

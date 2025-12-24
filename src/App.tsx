@@ -18,7 +18,6 @@ import ConflictReview from "./pages/ConflictReview";
 import Finalize from "./pages/Finalize";
 import FinalPrizeView from "./pages/FinalPrizeView";
 import PublishSuccess from "./pages/PublishSuccess";
-import PublicTournament from "./pages/PublicTournament";
 import PublicHome from "./pages/PublicHome";
 import PublicResults from "./pages/PublicResults";
 import PublicTournamentDetails from "./pages/PublicTournamentDetails";
@@ -53,7 +52,7 @@ const App = () => {
             <Routes>
               {/* Public routes (no auth required) */}
               <Route path="/" element={<PublicHome />} />
-              <Route path="/p/:slug" element={<PublicTournament />} />
+              <Route path="/p/:slug" element={<PublicTournamentDetails />} />
               <Route path="/p/:slug/results" element={<PublicResults />} />
               <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
               <Route path="/t/:id/public" element={<PublicWinnersPage />} />

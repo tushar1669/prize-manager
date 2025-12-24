@@ -14,7 +14,7 @@
  * 
  * Output:
  *   - Saves screenshots to public/previews/
- *   - Files: category-cards.png, ceremony-script.png, poster-grid.png, arbiter-sheet.png
+ *   - Files: category-cards.png, poster-grid.png, arbiter-sheet.png
  * 
  * Note:
  *   This is a placeholder script. Implement with Playwright when ready to generate

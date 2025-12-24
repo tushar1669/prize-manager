@@ -15,6 +15,7 @@ import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { formatCurrencyINR } from "@/utils/currency";
 import { BrochureLink } from "@/components/public/BrochureLink";
+import { PublicBackButton } from "@/components/public/PublicBackButton";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
@@ -25,8 +26,9 @@ export default function PublicWinnersPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, city, is_published, brochure_url')
+        .select('id, title, start_date, end_date, city, brochure_url')
         .eq('id', id)
+        .eq('is_published', true)
         .maybeSingle();
 
       if (error) throw error;
@@ -68,6 +70,9 @@ export default function PublicWinnersPage() {
   return (
     <div className="min-h-screen bg-background text-foreground print:bg-white print:text-black">
       <div className="container mx-auto px-4 py-8 pm-print-page print:px-4 print:py-3">
+        <div className="mb-4 print:hidden">
+          <PublicBackButton />
+        </div>
         <Card className="mb-6 bg-card border-border print:border-black print:bg-white">
           <CardHeader className="print:pb-2">
             <CardTitle className="text-3xl font-bold text-foreground print:text-2xl print:text-black">{tournament.title}</CardTitle>
@@ -85,109 +90,96 @@ export default function PublicWinnersPage() {
             <div className="mb-4 print:hidden">
               <BrochureLink url={tournament.brochure_url} />
             </div>
-            {!tournament.is_published && (
-              <Alert className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>This tournament is not yet published</AlertDescription>
-              </Alert>
-            )}
-            
-            {tournament.is_published && (
-              <div className="flex gap-4 mb-4 print:mb-2">
+            <div className="flex gap-4 mb-4 print:mb-2">
+              <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
+                {totalPrizes} Winners
+              </Badge>
+              {totalCash > 0 && (
                 <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
-                  {totalPrizes} Winners
+                  ₹{totalCash.toLocaleString('en-IN')} Total Prize
                 </Badge>
-                {totalCash > 0 && (
-                  <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
-                    ₹{totalCash.toLocaleString('en-IN')} Total Prize
-                  </Badge>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        {tournament.is_published && (
-          <Card className="bg-card border-border print:border-black print:bg-white">
-            <CardHeader className="print:pb-2">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-2xl font-bold text-foreground print:text-lg print:text-black">Winners</CardTitle>
-                {typeof version === 'number' && (
-                  <Badge variant="outline" className="text-xs border-border print:border-black print:text-black">Allocations v{version}</Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="print:px-2">
-              {!prizeData?.winners || prizeData.winners.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8 print:text-black/70">
-                  No winners allocated yet
-                </div>
-              ) : (
-                <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 mb-6 print:hidden">
-                    <TabsTrigger value="v1">Category Cards</TabsTrigger>
-                    <TabsTrigger value="table">Table View</TabsTrigger>
-                    <TabsTrigger value="poster">Poster Grid</TabsTrigger>
-                    <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="v1" className={activeView !== 'v1' ? 'print:hidden' : ''}>
-                    <CategoryCardsView groups={categories} />
-                  </TabsContent>
-
-                  <TabsContent value="table" className={activeView !== 'table' ? 'print:hidden' : ''}>
-                    <Table className="print:text-[11px]">
-                      <TableHeader className="print:bg-black/5">
-                        <TableRow className="border-border print:border-black">
-                          <TableHead className="w-16 text-base print:text-black print:text-[11px]">Place</TableHead>
-                          <TableHead className="text-base print:text-black print:text-[11px]">Category</TableHead>
-                          <TableHead className="text-base print:text-black print:text-[11px]">Player</TableHead>
-                          <TableHead className="w-20 text-base print:text-black print:text-[11px]">SNo</TableHead>
-                          <TableHead className="w-20 text-base print:text-black print:text-[11px]">Rank</TableHead>
-                          <TableHead className="text-base print:text-black print:text-[11px]">Club</TableHead>
-                          <TableHead className="w-24 text-base print:text-black print:text-[11px]">State</TableHead>
-                          <TableHead className="w-32 text-right text-base print:text-black print:text-[11px]">Prize</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {prizeData.winners.map((winner, idx) => (
-                          <TableRow key={idx} className="border-border print:border-black/20">
-                            <TableCell className="font-bold text-base text-foreground print:text-[11px] print:text-black">{winner.place}</TableCell>
-                            <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.categoryName}</TableCell>
-                            <TableCell className="font-semibold text-base text-foreground print:text-[11px] print:text-black">{winner.playerName}</TableCell>
-                            <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.sno || '—'}</TableCell>
-                            <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.rank || '—'}</TableCell>
-                            <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.club || '—'}</TableCell>
-                            <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.state || '—'}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2 print:gap-1">
-                                {winner.hasTrophy && <Trophy className="h-5 w-5 text-accent print:h-3 print:w-3 print:text-black" />}
-                                {winner.hasMedal && <Medal className="h-5 w-5 text-success print:h-3 print:w-3 print:text-black" />}
-                                {winner.amount > 0 && (
-                                  <span className="font-bold text-base text-success print:text-[11px] print:text-black">
-                                    {formatCurrencyINR(winner.amount)}
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TabsContent>
-
-                  <TabsContent value="poster" className={activeView !== 'poster' ? 'print:hidden' : ''}>
-                    {tournament?.id && <PosterGridView winners={prizeData.winners} tournamentId={tournament.id} />}
-                  </TabsContent>
-
-                  <TabsContent value="arbiter" className={activeView !== 'arbiter' ? 'print:hidden' : ''}>
-                    <ArbiterSheetView winners={prizeData.winners} />
-                  </TabsContent>
-                </Tabs>
+        <Card className="bg-card border-border print:border-black print:bg-white">
+          <CardHeader className="print:pb-2">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-2xl font-bold text-foreground print:text-lg print:text-black">Winners</CardTitle>
+              {typeof version === 'number' && (
+                <Badge variant="outline" className="text-xs border-border print:border-black print:text-black">Allocations v{version}</Badge>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </CardHeader>
+          <CardContent className="print:px-2">
+            {!prizeData?.winners || prizeData.winners.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 print:text-black/70">
+                No winners allocated yet
+              </div>
+            ) : (
+              <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
+                <TabsList className="grid w-full grid-cols-4 mb-6 print:hidden">
+                  <TabsTrigger value="v1">Category Cards</TabsTrigger>
+                  <TabsTrigger value="table">Table View</TabsTrigger>
+                  <TabsTrigger value="poster">Poster Grid</TabsTrigger>
+                  <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="v1" className={activeView !== 'v1' ? 'print:hidden' : ''}>
+                  <CategoryCardsView groups={categories} />
+                </TabsContent>
+
+                <TabsContent value="table" className={activeView !== 'table' ? 'print:hidden' : ''}>
+                  <Table className="print:text-[11px]">
+                    <TableHeader className="print:bg-black/5">
+                      <TableRow className="border-border print:border-black">
+                        <TableHead className="w-16 text-base print:text-black print:text-[11px]">Place</TableHead>
+                        <TableHead className="text-base print:text-black print:text-[11px]">Category</TableHead>
+                        <TableHead className="text-base print:text-black print:text-[11px]">Player</TableHead>
+                        <TableHead className="w-20 text-base print:text-black print:text-[11px]">Rank</TableHead>
+                        <TableHead className="text-base print:text-black print:text-[11px]">Club</TableHead>
+                        <TableHead className="w-24 text-base print:text-black print:text-[11px]">State</TableHead>
+                        <TableHead className="w-32 text-right text-base print:text-black print:text-[11px]">Prize</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {prizeData.winners.map((winner, idx) => (
+                        <TableRow key={idx} className="border-border print:border-black/20">
+                          <TableCell className="font-bold text-base text-foreground print:text-[11px] print:text-black">{winner.place}</TableCell>
+                          <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.categoryName}</TableCell>
+                          <TableCell className="font-semibold text-base text-foreground print:text-[11px] print:text-black">{winner.playerName}</TableCell>
+                          <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.rank || '—'}</TableCell>
+                          <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.club || '—'}</TableCell>
+                          <TableCell className="text-base text-muted-foreground print:text-[11px] print:text-black/70">{winner.state || '—'}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2 print:gap-1">
+                              {winner.hasTrophy && <Trophy className="h-5 w-5 text-accent print:h-3 print:w-3 print:text-black" />}
+                              {winner.hasMedal && <Medal className="h-5 w-5 text-success print:h-3 print:w-3 print:text-black" />}
+                              {winner.amount > 0 && (
+                                <span className="font-bold text-base text-success print:text-[11px] print:text-black">
+                                  {formatCurrencyINR(winner.amount)}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+
+                <TabsContent value="poster" className={activeView !== 'poster' ? 'print:hidden' : ''}>
+                  {tournament?.id && <PosterGridView winners={prizeData.winners} tournamentId={tournament.id} />}
+                </TabsContent>
+
+                <TabsContent value="arbiter" className={activeView !== 'arbiter' ? 'print:hidden' : ''}>
+                  <ArbiterSheetView winners={prizeData.winners} />
+                </TabsContent>
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="mt-6 text-center text-sm text-muted-foreground print:hidden">
           <Link to="/" className="hover:underline">
