@@ -13,10 +13,12 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
+    "test:smoke": "playwright test --project=chromium --grep @smoke",
     "test:swiss": "playwright test tests/import-swiss-manager.spec.ts --trace=on",
     "test:alloc": "playwright test tests/allocator-null-safety.spec.ts --trace=on",
     "test:ux": "playwright test tests/ux-improvements.spec.ts --trace=on",
-    "qa": "npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux"
+    "qa": "npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux",
+    "playwright:install": "npx playwright install --with-deps"
   },
   "engines": {
     "node": ">=20 <21"
