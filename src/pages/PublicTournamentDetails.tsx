@@ -63,7 +63,7 @@ export default function PublicTournamentDetails() {
         .maybeSingle();
 
       if (queryError) throw queryError;
-      return data as TournamentDetails | null;
+      return (data as unknown) as TournamentDetails | null;
     },
     enabled: !!slug,
   });
