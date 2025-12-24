@@ -2,11 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Calendar, MapPin, Clock } from "lucide-react";
+import { Calendar, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
-import { classifyTimeControl, type TimeControlCategory } from "@/utils/timeControl";
-
 type PublicTournament = {
   id: string;
   title: string;
@@ -16,15 +13,6 @@ type PublicTournament = {
   venue: string | null;
   public_slug: string;
   created_at: string | null;
-  time_control_base_minutes: number | null;
-  time_control_increment_seconds: number | null;
-  time_control_category: TimeControlCategory | null;
-};
-
-const badgeVariants: Record<Exclude<TimeControlCategory, "UNKNOWN">, BadgeProps["variant"]> = {
-  BLITZ: "destructive",
-  RAPID: "default",
-  CLASSICAL: "secondary",
 };
 
 function formatDate(dateString: string | null) {
@@ -43,20 +31,13 @@ function formatDateRange(startDate: string | null, endDate: string | null) {
   return null;
 }
 
-function formatTimeControl(base: number | null | undefined, inc: number | null | undefined) {
-  if (!base && !inc) return null;
-  if (!base) return `+${inc}`;
-  if (!inc) return `${base}`;
-  return `${base} + ${inc}`;
-}
-
 export default function PublicHome() {
   const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
     queryFn: async (): Promise<PublicTournament[]> => {
       const { data, error } = await supabase
         .from('tournaments')
-        .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds, time_control_category')
+        .select('id, title, start_date, end_date, city, venue, public_slug, created_at')
         .eq('is_published', true)
         .eq('is_archived', false)
         .is('deleted_at', null)
@@ -69,30 +50,6 @@ export default function PublicHome() {
   });
 
   const tournamentList: PublicTournament[] = tournaments ?? [];
-
-  // Helper function for rendering time control - must be defined before early returns
-  const renderTimeControl = (t: PublicTournament) => {
-    const formatted = formatTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
-    const categoryFromFields = t.time_control_category && t.time_control_category !== "UNKNOWN" ? t.time_control_category : null;
-    const classified = classifyTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds);
-    const category = categoryFromFields ?? (classified !== "UNKNOWN" ? classified : null);
-
-    if (!formatted && !category) return null;
-
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Clock className="h-4 w-4" />
-        <div className="flex items-center gap-2">
-          {category && badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">] && (
-            <Badge variant={badgeVariants[category as Exclude<TimeControlCategory, "UNKNOWN">]} className="text-[10px] tracking-wide">
-              {category}
-            </Badge>
-          )}
-          {formatted && <span className="font-medium text-foreground">{formatted}</span>}
-        </div>
-      </div>
-    );
-  };
 
   if (isLoading) {
     return (
@@ -156,44 +113,33 @@ export default function PublicHome() {
               tournamentList.map((tournament) => {
                 const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
                 const location = [tournament.city, tournament.venue].filter(Boolean).join(" • ") || null;
-                const timeControl = renderTimeControl(tournament);
 
                 return (
                   <Card
                     key={tournament.id}
-                    className="group relative flex flex-col justify-between rounded-2xl border bg-card/60 p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-lg hover:border-primary/40"
+                    className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/70 p-5 shadow-sm"
                   >
                     <CardHeader className="space-y-2 p-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 space-y-2">
-                          <CardTitle className="text-xl font-semibold leading-tight text-foreground">{tournament.title}</CardTitle>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            {(dateRange || tournament.start_date) && (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                <span>{dateRange ?? "—"}</span>
-                              </div>
-                            )}
-                            {location && (
-                              <div className="flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
-                                <span>{location}</span>
-                              </div>
-                            )}
+                      <CardTitle className="text-xl font-semibold leading-tight text-foreground">{tournament.title}</CardTitle>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        {(dateRange || tournament.start_date) && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>{dateRange ?? "—"}</span>
                           </div>
-                        </div>
+                        )}
+                        {location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-4 w-4" />
+                            <span>{location}</span>
+                          </div>
+                        )}
                       </div>
-                      {timeControl && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="font-medium text-foreground">Format:</span>
-                          {timeControl}
-                        </div>
-                      )}
                     </CardHeader>
 
-                    <CardContent className="p-0 pt-4">
-                      <Button variant="outline" size="sm" asChild className="group-hover:border-primary/60 group-hover:text-primary">
-                        <Link to={`/p/${tournament.public_slug}/details`} className="gap-2">
+                    <CardContent className="p-0">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/p/${tournament.public_slug}`} className="gap-2">
                           View Details
                         </Link>
                       </Button>

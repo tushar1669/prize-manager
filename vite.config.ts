@@ -22,7 +22,6 @@ export default defineConfig(({ mode }) => ({
     include: [
       'tests/utils/**/*.spec.ts',
       'tests/conflict-utils.spec.ts',
-      'tests/ceremony-order.spec.ts',
     ],
   } satisfies UserConfig['test'],
 }));

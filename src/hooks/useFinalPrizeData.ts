@@ -18,7 +18,6 @@ export interface FinalPrizeWinnerRow {
   hasMedal: boolean;
   playerId: string;
   playerName: string;
-  sno?: string | null;
   rank?: number | null;
   club?: string | null;
   state?: string | null;
@@ -121,7 +120,6 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     'name',
     'full_name',
     'rank',
-    'sno',
     'club',
     'state',
   ]);
@@ -147,7 +145,6 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
         hasMedal: !!prize.has_medal,
         playerId: player.id,
         playerName: getPlayerDisplayName(player),
-        sno: player.sno,
         rank: player.rank,
         club: player.club,
         state: player.state,
