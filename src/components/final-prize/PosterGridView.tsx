@@ -56,10 +56,7 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
               className="poster-grid-card pm-print-avoid-break flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow-lg print:border-black/30 print:bg-white print:p-3 print:shadow-none"
             >
               <div className="flex flex-wrap items-start justify-between gap-2 text-sm font-semibold text-foreground print:text-xs print:text-black">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground print:text-black/70">
-                    Category
-                  </span>
+                <div className="flex items-center">
                   <Badge className="rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
                     {winner.categoryName}
                   </Badge>
