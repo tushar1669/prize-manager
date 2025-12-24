@@ -36,7 +36,7 @@ export type ErrorRow = {
 
 const IST_TIME_ZONE = 'Asia/Kolkata';
 
-function sanitizeFilename(name: string) {
+export function sanitizeFilename(name: string) {
   return name.replace(/[^\w\-.]+/g, '_').slice(0, 80);
 }
 

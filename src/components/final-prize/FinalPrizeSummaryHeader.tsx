@@ -1,14 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
-import { Share2, Printer } from 'lucide-react';
-import { useCallback } from 'react';
+import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
+import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
+import { Share2, Printer, Download } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
 interface FinalPrizeSummaryHeaderProps {
   tournamentTitle?: string;
   city?: string | null;
   dateRange?: string;
+  winners: FinalPrizeWinnerRow[];
   totals: {
     totalPrizes: number;
     totalCash: number;
@@ -17,7 +20,29 @@ interface FinalPrizeSummaryHeaderProps {
   };
 }
 
-export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, totals }: FinalPrizeSummaryHeaderProps) {
+export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals }: FinalPrizeSummaryHeaderProps) {
+  const exportRows = useMemo(
+    () =>
+      winners.map((winner, index) => ({
+        'Category Order': winner.categoryOrder ?? index + 1,
+        'Category Name': winner.categoryName ?? '',
+        'Place': winner.place,
+        'Player Name': winner.playerName ?? '',
+        'Rank': winner.rank ?? '',
+        'Amount': winner.amount ?? 0,
+        'Trophy': winner.hasTrophy ? 'Yes' : 'No',
+        'Medal': winner.hasMedal ? 'Yes' : 'No',
+        'Club/Institution': winner.club ?? '',
+        'State': winner.state ?? '',
+      })),
+    [winners]
+  );
+
+  const arbiterRows = useMemo(
+    () => exportRows.map(row => ({ ...row, Signature: '' })),
+    [exportRows]
+  );
+
   const handleCopyLink = useCallback(() => {
     try {
       navigator.clipboard.writeText(window.location.href);
@@ -31,6 +56,29 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
+
+  const handleExportXlsx = useCallback(() => {
+    if (winners.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const safeSlug = sanitizeFilename(tournamentTitle || 'final_prize');
+    const filename = `${safeSlug}_final_prizes_${today}.xlsx`;
+
+    const success = downloadWorkbookXlsx(filename, {
+      Winners: exportRows,
+      'Poster Grid': exportRows,
+      'Arbiter Sheet': arbiterRows,
+    });
+
+    if (success) {
+      toast.success(`Exported ${exportRows.length} rows to ${filename}`);
+    } else {
+      toast.error('Export failed');
+    }
+  }, [arbiterRows, exportRows, tournamentTitle, winners.length]);
 
   return (
     <>
@@ -61,6 +109,14 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, tota
               className="rounded-full border-primary text-primary hover:bg-primary/10"
             >
               <Share2 className="mr-2 h-4 w-4" /> Copy link
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportXlsx}
+              className="rounded-full border-primary text-primary hover:bg-primary/10"
+            >
+              <Download className="mr-2 h-4 w-4" /> Export XLSX
             </Button>
             <Button size="sm" onClick={handlePrint} className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover">
               <Printer className="mr-2 h-4 w-4" /> Print
