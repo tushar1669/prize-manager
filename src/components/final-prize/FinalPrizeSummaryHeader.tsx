@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
 import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
+import { buildFinalPrizeExportRows } from '@/utils/finalPrizeExport';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { Share2, Printer, Download } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -22,19 +23,7 @@ interface FinalPrizeSummaryHeaderProps {
 
 export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals }: FinalPrizeSummaryHeaderProps) {
   const exportRows = useMemo(
-    () =>
-      winners.map((winner, index) => ({
-        'Category Order': winner.categoryOrder ?? index + 1,
-        'Category Name': winner.categoryName ?? '',
-        'Place': winner.place,
-        'Player Name': winner.playerName ?? '',
-        'Rank': winner.rank ?? '',
-        'Amount': winner.amount ?? 0,
-        'Trophy': winner.hasTrophy ? 'Yes' : 'No',
-        'Medal': winner.hasMedal ? 'Yes' : 'No',
-        'Club/Institution': winner.club ?? '',
-        'State': winner.state ?? '',
-      })),
+    () => buildFinalPrizeExportRows(winners),
     [winners]
   );
 

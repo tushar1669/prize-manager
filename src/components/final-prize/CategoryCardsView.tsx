@@ -65,39 +65,24 @@ export function CategoryCardsView({ groups }: CategoryCardsViewProps) {
                         <td className="py-2 pr-3 font-semibold text-foreground print:text-black">{winner.place}</td>
                         <td className="py-2 pr-3">
                           <div className="space-y-0.5">
-                            <div className="flex flex-wrap items-center gap-2 font-semibold text-foreground print:gap-1 print:text-black">
-                              {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
-                                <span className="inline-flex items-center gap-1.5">
-                                  {awardFlags.hasTrophy && (
-                                    <span className={`inline-flex items-center gap-1.5 ${trophyDisplay.iconClass}`}>
-                                      <Trophy className="h-5 w-5" aria-hidden />
-                                      <span className={`hidden text-xs font-semibold uppercase tracking-wide print:inline ${trophyDisplay.labelClass}`}>
-                                        {trophyDisplay.label}
-                                      </span>
-                                      <span className="sr-only">{trophyDisplay.label}</span>
-                                    </span>
-                                  )}
-                                  {awardFlags.hasMedal && (
-                                    <span className={`inline-flex items-center gap-1.5 ${medalDisplay.iconClass}`}>
-                                      <Medal className="h-5 w-5" aria-hidden />
-                                      <span className={`hidden text-xs font-semibold uppercase tracking-wide print:inline ${medalDisplay.labelClass}`}>
-                                        {medalDisplay.label}
-                                      </span>
-                                      <span className="sr-only">{medalDisplay.label}</span>
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                              <span>{winner.playerName}</span>
-                              {winner.state && (
-                                <Badge variant="secondary" className="rounded-full border-success/20 bg-success/10 text-xs text-success print:border print:border-black/40 print:bg-white print:text-[9px] print:text-black">
-                                  {winner.state}
-                                </Badge>
-                              )}
+                            <div className="font-semibold text-foreground print:text-black">
+                              {winner.playerName}
                             </div>
-                            <div className="text-xs text-muted-foreground print:text-[9px] print:text-black/60">
-                              {winner.club ?? '—'}
-                            </div>
+                            {(() => {
+                              const metaParts = [winner.club, winner.state]
+                                .map(part => part?.toString().trim())
+                                .filter(Boolean);
+
+                              if (metaParts.length === 0) {
+                                return null;
+                              }
+
+                              return (
+                                <div className="text-xs text-muted-foreground print:text-[9px] print:text-black/60">
+                                  {metaParts.join(' • ')}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="py-2 pr-3 text-muted-foreground print:text-black">{winner.rank ?? '—'}</td>
