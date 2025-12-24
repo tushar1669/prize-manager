@@ -67,6 +67,7 @@ export default function FinalPrizeView() {
           tournamentTitle={data.tournament?.title}
           city={data.tournament?.city}
           dateRange={dateRange}
+          winners={data.winners}
           totals={data.totals}
         />
       )}
