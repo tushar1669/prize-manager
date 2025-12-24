@@ -167,25 +167,40 @@ a[href*="lovableproject.com"][aria-label*="Lovable"] {
   }
 
   /* Poster grid sizing */
-  .poster-grid {
+  .pm-poster-grid {
     width: 210mm !important;
-  }
-
-  .poster-grid {
     margin-left: auto !important;
     margin-right: auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .poster-grid-cards {
+  .pm-poster-grid .poster-grid-cards {
     align-content: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
   }
 
-  .poster-grid-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .pm-poster-grid .poster-grid-card {
+    min-height: 52mm;
+    padding: 10px !important;
+    gap: 8px !important;
+    border: 1px solid #1f2937 !important;
+    background: #ffffff !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .poster-grid-card {
-    min-height: 58mm;
+  .pm-poster-grid .poster-grid-card * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .pm-poster-grid .poster-grid-name {
+    font-size: 1.05rem !important;
   }
 
   /* Remove shadows in print for cleaner look */
