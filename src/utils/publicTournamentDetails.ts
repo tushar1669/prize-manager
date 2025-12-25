@@ -43,15 +43,8 @@ type SupabaseQueryResult<T> = {
   status?: number;
 };
 
-type SupabaseClientLike = {
-  from: (table: string) => {
-    select: (fields: string) => {
-      eq: (column: string, value: string) => {
-        maybeSingle: () => Promise<SupabaseQueryResult<TournamentDetails>>;
-      };
-    };
-  };
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClientLike = any;
 
 type SupabaseQueryError = Error & {
   status?: number;
