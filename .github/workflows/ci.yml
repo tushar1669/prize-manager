@@ -29,7 +29,7 @@ jobs:
           npm config set fetch-retry-maxtimeout 60000
 
       - name: Install dependencies (with fallback)
-        run: npm ci --no-audit --fund=false || npm install --no-audit --fund=false
+        run: npm ci --no-audit --fund=false
 
       - name: CSV Guard
         run: npm run assert:no-csv
@@ -42,6 +42,14 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Restore Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
