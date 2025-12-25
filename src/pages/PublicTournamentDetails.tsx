@@ -10,63 +10,22 @@ import { BrochureLink } from "@/components/public/BrochureLink";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { formatCurrencyINR } from "@/utils/currency";
 import { classifyTimeControl } from "@/utils/timeControl";
-
-type TournamentDetails = {
-  id: string;
-  title: string;
-  start_date: string | null;
-  end_date: string | null;
-  venue?: string | null;
-  city?: string | null;
-  event_code?: string | null;
-  notes?: string | null;
-  brochure_url?: string | null;
-  chessresults_url?: string | null;
-  public_results_url?: string | null;
-  public_slug?: string | null;
-  time_control_base_minutes?: number | null;
-  time_control_increment_seconds?: number | null;
-  chief_arbiter?: string | null;
-  tournament_director?: string | null;
-  entry_fee_amount?: number | null;
-  cash_prize_total?: number | null;
-};
+import {
+  fetchPublicTournamentDetails,
+  getPublicTournamentDetailsErrorMessage,
+  isClientError,
+} from "@/utils/publicTournamentDetails";
 
 export default function PublicTournamentDetails() {
   const { slug } = useParams();
   const { data: t, isLoading, error } = useQuery({
     queryKey: ['public-tournament-details', slug],
-    queryFn: async (): Promise<TournamentDetails | null> => {
-      const { data, error: queryError } = await supabase
-        .from("published_tournaments")
-        .select([
-          "id",
-          "title",
-          "start_date",
-          "end_date",
-          "venue",
-          "city",
-          "event_code",
-          "notes",
-          "brochure_url",
-          "chessresults_url",
-          "public_results_url",
-          "public_slug",
-          "time_control_base_minutes",
-          "time_control_increment_seconds",
-          "chief_arbiter",
-          "tournament_director",
-          "entry_fee_amount",
-          "cash_prize_total",
-        ].join(", "))
-        .eq("slug", slug as string)
-        .maybeSingle();
-
-      if (queryError) throw queryError;
-      return (data as unknown) as TournamentDetails | null;
-    },
+    queryFn: () => fetchPublicTournamentDetails(supabase, slug as string),
     enabled: !!slug,
+    retry: (failureCount, queryError) => !isClientError(queryError) && failureCount < 3,
+    refetchOnWindowFocus: false,
   });
+  const errorMessage = getPublicTournamentDetailsErrorMessage(error, import.meta.env.DEV);
 
   const { grouped, isLoading: resultsLoading } = useFinalPrizeData(t?.id);
 
@@ -159,7 +118,7 @@ export default function PublicTournamentDetails() {
             {error ? (
               <Card>
                 <CardContent className="pt-6 text-center text-muted-foreground">
-                  Unable to load tournament details.
+                  {errorMessage}
                 </CardContent>
               </Card>
             ) : !t ? (
