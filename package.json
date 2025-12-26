@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "assert:no-csv": "node scripts/assert-no-csv.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "bootstrap": "bash scripts/bootstrap.sh",
