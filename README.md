@@ -54,6 +54,13 @@ npm run test
 npm run build
 ```
 
+## How to run smoke locally
+
+```bash
+npm install
+npm run test:smoke
+```
+
 ## Troubleshooting
 - **Main Prize missing (individual mode)**: TournamentSetup auto-creates a `Main Prize` category if none exists when prize_mode = individual, and CategoryPrizesEditor prevents disabling/deleting the main category. If the main category is missing, reload Setup to trigger the ensure step and re-run allocations.
 - **Add Prize not saving (team prizes)**: Draft rows could be overwritten by refetch hydration when array references changed. The TeamPrizesEditor now memoizes `prizesByGroup` and TeamGroupPrizesTable gates hydration while edits are dirty. If rows disappear, ensure you saved changes (watch for the “Unsaved changes” hint) and that the refetch completed.
