@@ -19,4 +19,8 @@ echo
 echo "✨ Step 4/4: UX improvements tests"
 npm run test:ux
 echo
+
+echo "🌐 Step 5/5: Public pages smoke tests"
+npx playwright test --grep @smoke
+echo
 echo "✅ QA suite complete"
