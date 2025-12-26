@@ -1,24 +1,38 @@
 import { z } from "zod";
 
-// Tournament Details schema
+// Helper for optional URL fields - validates URL format if provided, allows empty string
+const optionalUrl = (maxLen = 500) => 
+  z.string()
+    .max(maxLen, `URL must be less than ${maxLen} characters`)
+    .refine(
+      (val) => !val || val === '' || /^https?:\/\/.+/.test(val),
+      { message: "Must be a valid URL starting with http:// or https://" }
+    )
+    .optional()
+    .or(z.literal(''));
+
+// Tournament Details schema with comprehensive input validation
 export const tournamentDetailsSchema = z.object({
-  title: z.string().min(1, "Title is required").max(200, "Title must be less than 200 characters"),
+  title: z.string()
+    .trim()
+    .min(1, "Title is required")
+    .max(200, "Title must be less than 200 characters"),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().min(1, "End date is required"),
-  venue: z.string().optional(),
-  city: z.string().optional(),
-  event_code: z.string().optional(),
-  notes: z.string().optional(),
-  brochure_url: z.string().optional(),
-  chessresults_url: z.string().url().optional().or(z.literal('')),
-  public_results_url: z.string().url().optional().or(z.literal('')),
-  // New metadata fields (all optional)
-  time_control_base_minutes: z.number().int().min(0).nullable().optional(),
-  time_control_increment_seconds: z.number().int().min(0).nullable().optional(),
-  chief_arbiter: z.string().max(200).optional(),
-  tournament_director: z.string().max(200).optional(),
-  entry_fee_amount: z.number().min(0).nullable().optional(),
-  cash_prize_total: z.number().min(0).nullable().optional()
+  venue: z.string().trim().max(200, "Venue must be less than 200 characters").optional(),
+  city: z.string().trim().max(100, "City must be less than 100 characters").optional(),
+  event_code: z.string().trim().max(50, "Event code must be less than 50 characters").optional(),
+  notes: z.string().trim().max(5000, "Notes must be less than 5000 characters").optional(),
+  brochure_url: z.string().max(500, "Brochure URL must be less than 500 characters").optional(),
+  chessresults_url: optionalUrl(500),
+  public_results_url: optionalUrl(500),
+  // Metadata fields with sensible limits
+  time_control_base_minutes: z.number().int().min(0).max(1440, "Max 1440 minutes").nullable().optional(),
+  time_control_increment_seconds: z.number().int().min(0).max(3600, "Max 3600 seconds").nullable().optional(),
+  chief_arbiter: z.string().trim().max(200, "Chief arbiter name must be less than 200 characters").optional(),
+  tournament_director: z.string().trim().max(200, "Tournament director name must be less than 200 characters").optional(),
+  entry_fee_amount: z.number().min(0).max(1000000, "Entry fee seems too high").nullable().optional(),
+  cash_prize_total: z.number().min(0).max(100000000, "Prize total seems too high").nullable().optional()
 }).refine(data => {
   if (data.start_date && data.end_date) {
     return new Date(data.end_date) >= new Date(data.start_date);
