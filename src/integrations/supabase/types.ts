@@ -786,19 +786,28 @@ export type Database = {
       published_tournaments: {
         Row: {
           brochure_url: string | null
+          cash_prize_total: number | null
           chessresults_url: string | null
+          chief_arbiter: string | null
           city: string | null
           created_at: string | null
           end_date: string | null
+          entry_fee_amount: number | null
+          event_code: string | null
           id: string | null
           is_published: boolean | null
           notes: string | null
           public_results_url: string | null
           public_slug: string | null
+          publication_slug: string | null
           published_at: string | null
           slug: string | null
           start_date: string | null
+          time_control_base_minutes: number | null
+          time_control_category: string | null
+          time_control_increment_seconds: number | null
           title: string | null
+          tournament_director: string | null
           venue: string | null
           version: number | null
         }
