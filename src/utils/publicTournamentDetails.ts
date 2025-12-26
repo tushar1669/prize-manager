@@ -90,16 +90,53 @@ const isMissingEventCodeError = (error: PostgrestError) => {
   return message.includes(MISSING_EVENT_CODE_SNIPPET) || details.includes(MISSING_EVENT_CODE_SNIPPET);
 };
 
+type SlugFilter = "indexed" | "computed";
+
 const fetchBySelect = async (
   supabaseClient: SupabaseClientLike,
   slug: string,
-  fields: string
+  fields: string,
+  slugFilter: SlugFilter
 ) => {
-  return supabaseClient
-    .from("published_tournaments")
-    .select(fields)
-    .eq("slug", slug)
-    .maybeSingle();
+  const baseQuery = supabaseClient.from("published_tournaments").select(fields);
+  const query =
+    slugFilter === "indexed"
+      ? baseQuery.or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
+      : baseQuery.eq("slug", slug);
+  return query.maybeSingle();
+};
+
+const fetchWithLegacySupport = async (
+  supabaseClient: SupabaseClientLike,
+  slug: string,
+  fullSelect: string,
+  legacySelect: string,
+  slugFilter: SlugFilter
+) => {
+  const { data, error, status } = await fetchBySelect(
+    supabaseClient,
+    slug,
+    fullSelect,
+    slugFilter
+  );
+
+  if (error) {
+    if (status === 400 && isMissingEventCodeError(error)) {
+      const legacyResult = await fetchBySelect(
+        supabaseClient,
+        slug,
+        legacySelect,
+        slugFilter
+      );
+      if (legacyResult.error) {
+        throw toSupabaseQueryError(legacyResult.error, legacyResult.status);
+      }
+      return legacyResult;
+    }
+    throw toSupabaseQueryError(error, status);
+  }
+
+  return { data, error, status };
 };
 
 export const isClientError = (error: unknown) => {
@@ -125,18 +162,25 @@ export async function fetchPublicTournamentDetails(
   const fullSelect = PUBLIC_TOURNAMENT_DETAILS_FIELDS.join(", ");
   const legacySelect = PUBLIC_TOURNAMENT_DETAILS_LEGACY_FIELDS.join(", ");
 
-  const { data, error, status } = await fetchBySelect(supabaseClient, slug, fullSelect);
+  const indexedResult = await fetchWithLegacySupport(
+    supabaseClient,
+    slug,
+    fullSelect,
+    legacySelect,
+    "indexed"
+  );
 
-  if (error) {
-    if (status === 400 && isMissingEventCodeError(error)) {
-      const legacyResult = await fetchBySelect(supabaseClient, slug, legacySelect);
-      if (legacyResult.error) {
-        throw toSupabaseQueryError(legacyResult.error, legacyResult.status);
-      }
-      return legacyResult.data;
-    }
-    throw toSupabaseQueryError(error, status);
+  if (indexedResult.data) {
+    return indexedResult.data;
   }
 
-  return data;
+  const fallbackResult = await fetchWithLegacySupport(
+    supabaseClient,
+    slug,
+    fullSelect,
+    legacySelect,
+    "computed"
+  );
+
+  return fallbackResult.data;
 }
