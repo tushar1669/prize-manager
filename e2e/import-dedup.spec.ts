@@ -10,10 +10,23 @@ import {
 function createStubClient(matchMap: Record<number, DedupExistingPlayer[]>): SupabaseClient {
   return {
     rpc: async (_fn: string, _payload: Record<string, unknown>) => {
-      const rows = Object.entries(matchMap).map(([row, matches]) => ({
-        row: Number(row),
-        matches,
-      }));
+      const rows = Object.entries(matchMap).flatMap(([row, matches]) =>
+        matches.map(match => ({
+          cand_idx: Number(row),
+          player_id: match.id,
+          name: match.name,
+          dob: match.dob ?? null,
+          rating: match.rating ?? null,
+          fide_id: match.fide_id ?? null,
+          city: match.city ?? null,
+          state: match.state ?? null,
+          club: match.club ?? null,
+          gender: match.gender ?? null,
+          disability: match.disability ?? null,
+          special_notes: match.special_notes ?? null,
+          federation: match.federation ?? null,
+        })),
+      );
 
       return { data: rows, error: null } as { data: unknown; error: null };
     },
