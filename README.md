@@ -35,6 +35,15 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md)
 - [State Code Auto-Extraction](./docs/import-state-extraction.md)
 
+## Docs index (A–Z product docs)
+- [Product Working Notes](./docs/PRODUCT_WORKING.md)
+- [Algorithm Rules](./docs/ALGORITHM_RULES.md)
+- [Algorithm (Plain English)](./docs/ALGORITHM_PLAIN_ENGLISH.md)
+- [Rules & Settings Reference](./docs/RULES_AND_SETTINGS_REFERENCE.md)
+- [Architecture & Data Model](./docs/ARCHITECTURE_AND_DATA_MODEL.md)
+- [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
+- [Troubleshooting](./docs/TROUBLESHOOTING.md)
+
 ## Security & Roles
 - [Security & Access Control](./docs/SECURITY_ACCESS_CONTROL.md) – roles, master allowlist, verification lifecycle, route guards
 - [Auth Callback Flow](./docs/AUTH_CALLBACK.md) – PKCE, hash tokens, redirect rules, resend confirmation
