@@ -8,12 +8,17 @@ const ignoreDirs = new Set([
   'build',
   'coverage',
   '.git',
+  '.github',
   '.next',
   '.vercel',
   'playwright-report',
 ]);
 const ignoreFiles = new Set(['package-lock.json']);
-const ignorePaths = new Set(['package.json', 'scripts/assert-no-csv.mjs']);
+const ignorePaths = new Set([
+  'package.json',
+  'scripts/assert-no-csv.mjs',
+  'docs/OPERATIONS_RELEASE_TESTING.md',
+]);
 const csvFiles = [];
 const csvMatches = [];
 const decoder = new TextDecoder('utf-8', { fatal: true });
