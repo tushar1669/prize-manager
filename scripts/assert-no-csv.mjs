@@ -6,32 +6,27 @@ const ignoreDirs = new Set([
   'node_modules',
   'dist',
   'build',
-  '.next',
-  '.git',
   'coverage',
+  '.git',
+  '.next',
+  '.vercel',
   'playwright-report',
 ]);
-const ignoreFiles = new Set([
-  'package-lock.json',
-  'pnpm-lock.yaml',
-  'yarn.lock',
-  'npm-shrinkwrap.json',
-]);
-const ignorePaths = new Set([
-  '.github/workflows/ci.yml',
-  'docs/OPERATIONS_RELEASE_TESTING.md',
-  'package.json',
-  'scripts/assert-no-csv.mjs',
-]);
+const ignoreFiles = new Set(['package-lock.json']);
+const ignorePaths = new Set(['package.json', 'scripts/assert-no-csv.mjs']);
+const csvFiles = [];
+const csvMatches = [];
+const decoder = new TextDecoder('utf-8', { fatal: true });
 
-const matches = [];
+const toRelative = (filePath) =>
+  path.relative(rootDir, filePath).split(path.sep).join('/');
 
 const shouldIgnoreDir = (dirPath, dirName) => {
   if (ignoreDirs.has(dirName)) {
     return true;
   }
-  const relPath = path.relative(rootDir, dirPath);
-  if (relPath === 'supabase' && dirName === '.branches') {
+  const relativeDir = toRelative(dirPath);
+  if (relativeDir === 'supabase' && dirName === '.temp') {
     return true;
   }
   return false;
@@ -41,17 +36,19 @@ const shouldIgnoreFile = (filePath, fileName) => {
   if (ignoreFiles.has(fileName)) {
     return true;
   }
-  if (fileName.endsWith('.lock')) {
-    return true;
-  }
-  const relPath = path.relative(rootDir, filePath).replaceAll(path.sep, '/');
-  return ignorePaths.has(relPath);
+  return ignorePaths.has(toRelative(filePath));
 };
 
 const scanFile = async (filePath) => {
+  if (path.extname(filePath).toLowerCase() === '.csv') {
+    csvFiles.push(toRelative(filePath));
+    return;
+  }
+
   let contents;
   try {
-    contents = await fs.readFile(filePath, 'utf8');
+    const buffer = await fs.readFile(filePath);
+    contents = decoder.decode(buffer);
   } catch {
     return;
   }
@@ -60,11 +57,12 @@ const scanFile = async (filePath) => {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (/csv/i.test(line)) {
-      matches.push({
-        file: path.relative(rootDir, filePath),
+      csvMatches.push({
+        file: toRelative(filePath),
         lineNumber: index + 1,
         line,
       });
+      break;
     }
   }
 };
@@ -95,13 +93,23 @@ const walkDir = async (dirPath) => {
 
 await walkDir(rootDir);
 
-if (matches.length > 0) {
-  for (const match of matches) {
-    const snippet = match.line.trim();
-    console.log(`${match.file}:${match.lineNumber}: ${snippet}`);
+if (csvFiles.length > 0) {
+  console.error('CSV files are not allowed:');
+  for (const file of csvFiles) {
+    console.error(`- ${file}`);
   }
-  console.error(`Found ${matches.length} matching line(s) containing "csv".`);
+}
+
+if (csvMatches.length > 0) {
+  console.error('Found "csv" text in files:');
+  for (const match of csvMatches) {
+    const snippet = match.line.trim();
+    console.error(`${match.file}:${match.lineNumber}: ${snippet}`);
+  }
+}
+
+if (csvFiles.length > 0 || csvMatches.length > 0) {
   process.exit(1);
 }
 
-console.log('No "csv" references found.');
+console.log('No "csv" files or references found.');
