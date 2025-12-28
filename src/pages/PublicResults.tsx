@@ -25,17 +25,31 @@ export default function PublicResults() {
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament', slug],
     queryFn: async (): Promise<PublishedTournamentBasic | null> => {
-      const { data, error } = await supabase
+      // Try indexed slug columns first (publication_slug or public_slug)
+      const { data: indexedData, error: indexedError } = await supabase
+        .from('published_tournaments')
+        .select('id, title, slug, brochure_url')
+        .or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
+        .maybeSingle();
+
+      if (indexedError) throw indexedError;
+      if (indexedData) {
+        console.log(`[public] anon fetch ok slug=${slug} (indexed)`);
+        return indexedData as unknown as PublishedTournamentBasic | null;
+      }
+
+      // Fallback to computed slug column
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from('published_tournaments')
         .select('id, title, slug, brochure_url')
         .eq('slug', slug as string)
         .maybeSingle();
 
-      if (error) throw error;
-      if (data) {
-        console.log(`[public] anon fetch ok slug=${slug}`);
+      if (fallbackError) throw fallbackError;
+      if (fallbackData) {
+        console.log(`[public] anon fetch ok slug=${slug} (fallback)`);
       }
-      return data as unknown as PublishedTournamentBasic | null;
+      return fallbackData as unknown as PublishedTournamentBasic | null;
     },
     enabled: !!slug,
   });
