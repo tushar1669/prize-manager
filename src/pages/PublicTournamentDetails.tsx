@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ export default function PublicTournamentDetails() {
     enabled: !!slug,
     retry: (failureCount, queryError) => !isClientError(queryError) && failureCount < 3,
     refetchOnWindowFocus: false,
+    staleTime: 60_000,
   });
   const errorMessage = getPublicTournamentDetailsErrorMessage(error, import.meta.env.DEV);
 
@@ -70,14 +71,14 @@ export default function PublicTournamentDetails() {
   return (
     <>
       {/* Organizer sign in (public pages) */}
-      <a
-        href="/auth"
+      <Link
+        to="/auth"
         aria-label="Organizer sign in"
         className="fixed top-4 right-4 z-50 text-sm text-zinc-300 hover:text-white underline"
         data-testid="organizer-signin-link"
       >
         Organizer sign in
-      </a>
+      </Link>
 
       <div className="min-h-screen bg-background">
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border print:bg-white print:border-black/30">
@@ -224,15 +225,6 @@ export default function PublicTournamentDetails() {
                       Links
                     </div>
                     <div className="flex flex-wrap gap-3 text-sm">
-                      {t.brochure_url ? (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={t.brochure_url} target="_blank" rel="noreferrer">
-                            Brochure
-                          </a>
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">No brochure link</span>
-                      )}
                       {t.chessresults_url && (
                         <Button variant="outline" size="sm" asChild>
                           <a href={t.chessresults_url} target="_blank" rel="noreferrer">
@@ -246,6 +238,9 @@ export default function PublicTournamentDetails() {
                             External Final Results
                           </a>
                         </Button>
+                      )}
+                      {!t.chessresults_url && !t.public_results_url && (
+                        <span className="text-muted-foreground">No additional links</span>
                       )}
                     </div>
                   </div>

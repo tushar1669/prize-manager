@@ -213,6 +213,7 @@ export function useFinalPrizeData(tournamentId?: string) {
     queryKey: ['final-prize-data', tournamentId],
     enabled: !!tournamentId,
     queryFn: () => fetchFinalPrizeData(tournamentId as string),
+    staleTime: 60_000,
   });
 
   const grouped = useMemo(() => {
