@@ -57,7 +57,7 @@ export default function PublicTournamentDetails() {
     ? classifyTimeControl(t.time_control_base_minutes, t.time_control_increment_seconds)
     : "UNKNOWN";
 
-  if (isLoading || resultsLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="max-w-3xl mx-auto p-6">
