@@ -8,7 +8,7 @@ const statusChipVariants = cva(
       status: {
         draft: "bg-status-draft text-muted-foreground",
         finalized: "bg-primary/20 text-primary border border-primary/30",
-        published: "bg-accent/20 text-accent-foreground border border-accent/30",
+        published: "bg-green-500/20 text-green-400 border border-green-500/30",
       },
     },
     defaultVariants: {

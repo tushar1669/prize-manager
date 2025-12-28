@@ -52,6 +52,7 @@ export default function PublicResults() {
       return fallbackData as unknown as PublishedTournamentBasic | null;
     },
     enabled: !!slug,
+    staleTime: 60_000,
   });
 
   const { data: results, isLoading: resultsLoading } = useQuery({
@@ -157,6 +158,7 @@ export default function PublicResults() {
       return { rows, version };
     },
     enabled: !!tournament?.id,
+    staleTime: 60_000,
   });
 
   if (tournamentLoading || resultsLoading) {
@@ -182,14 +184,14 @@ export default function PublicResults() {
   return (
     <>
       {/* Organizer sign in (public pages) */}
-      <a
-        href="/auth"
+      <Link
+        to="/auth"
         aria-label="Organizer sign in"
         className="fixed top-4 right-4 z-50 text-sm text-zinc-300 hover:text-white underline"
         data-testid="organizer-signin-link"
       >
         Organizer sign in
-      </a>
+      </Link>
 
       <div className="min-h-screen bg-background">
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">

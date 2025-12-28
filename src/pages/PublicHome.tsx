@@ -52,6 +52,7 @@ export default function PublicHome() {
       if (error) throw error;
       return (data as unknown as PublicTournament[]) ?? [];
     },
+    staleTime: 60_000,
   });
 
   const tournamentList: PublicTournament[] = tournaments ?? [];
@@ -85,14 +86,14 @@ export default function PublicHome() {
   return (
     <>
       {/* Organizer sign in (public pages) */}
-      <a
-        href="/auth"
+      <Link
+        to="/auth"
         aria-label="Organizer sign in"
         className="fixed top-4 right-4 z-50 text-sm text-zinc-300 hover:text-white underline"
         data-testid="organizer-signin-link"
       >
         Organizer sign in
-      </a>
+      </Link>
 
       <div className="min-h-screen bg-background">
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">

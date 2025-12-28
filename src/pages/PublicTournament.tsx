@@ -44,6 +44,7 @@ export default function PublicTournament() {
       return data as unknown as PublishedTournament | null;
     },
     enabled: !!slug,
+    staleTime: 60_000,
   });
 
   const { data: hasResults } = useQuery({
@@ -55,6 +56,7 @@ export default function PublicTournament() {
       return allocations.length > 0;
     },
     enabled: !!tournament?.id,
+    staleTime: 60_000,
   });
 
   if (isLoading) {
@@ -82,14 +84,14 @@ export default function PublicTournament() {
   return (
     <>
       {/* Organizer sign in (public pages) */}
-      <a
-        href="/auth"
+      <Link
+        to="/auth"
         aria-label="Organizer sign in"
         className="fixed top-4 right-4 z-50 text-sm text-zinc-300 hover:text-white underline"
         data-testid="organizer-signin-link"
       >
         Organizer sign in
-      </a>
+      </Link>
 
       <div className="min-h-screen bg-background">
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
