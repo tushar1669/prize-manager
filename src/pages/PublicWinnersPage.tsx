@@ -38,6 +38,7 @@ export default function PublicWinnersPage() {
       return data;
     },
     enabled: !!id,
+    staleTime: 60_000,
   });
 
   const { data: prizeData, isLoading: prizeLoading, grouped } = useFinalPrizeData(tournament?.id);

@@ -218,6 +218,26 @@ export default function TournamentSetup() {
     enabled: !!id && id !== 'new'
   });
 
+  // Fetch rule_config for allocation rules display
+  const { data: ruleConfig } = useQuery({
+    queryKey: ['rule_config', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rule_config')
+        .select('strict_age, allow_unrated_in_rating, multi_prize_policy, main_vs_side_priority_mode')
+        .eq('tournament_id', id)
+        .maybeSingle();
+      
+      if (error && (error as { code?: string }).code !== 'PGRST116') {
+        console.error('[setup] rule_config fetch error', error);
+        return null;
+      }
+      return data;
+    },
+    enabled: !!id && id !== 'new',
+    staleTime: 60_000,
+  });
+
   // Reset form only when tournament ID changes, not on every refetch
   useEffect(() => {
     if (tournament && !detailsForm.formState.isDirty) {
@@ -1802,13 +1822,26 @@ export default function TournamentSetup() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      <RuleChip icon="lock" locked>One-Prize Rule</RuleChip>
-                      <RuleChip icon="trend">Main Priority</RuleChip>
-                      <RuleChip icon="alert">Strict Age: ON</RuleChip>
-                      <RuleChip>Unrated in Rating: OFF</RuleChip>
-                      <RuleChip>Tie Rule: Prefer Main</RuleChip>
-                    </div>
+                    {ruleConfig ? (
+                      <div className="flex flex-wrap gap-2">
+                        <RuleChip icon="lock" locked>
+                          {ruleConfig.multi_prize_policy === 'single' ? 'One-Prize Rule' 
+                            : ruleConfig.multi_prize_policy === 'main_plus_one_side' ? 'Main+1 Side'
+                            : 'Unlimited Prizes'}
+                        </RuleChip>
+                        <RuleChip icon="trend">
+                          {ruleConfig.main_vs_side_priority_mode === 'main_first' ? 'Main Priority' : 'Place Priority'}
+                        </RuleChip>
+                        <RuleChip icon="alert">
+                          Strict Age: {ruleConfig.strict_age ? 'ON' : 'OFF'}
+                        </RuleChip>
+                        <RuleChip>
+                          Unrated in Rating: {ruleConfig.allow_unrated_in_rating ? 'ON' : 'OFF'}
+                        </RuleChip>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Not configured</div>
+                    )}
                   </CardContent>
                 </Card>
 
