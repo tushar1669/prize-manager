@@ -31,17 +31,29 @@ export default function PublicTournament() {
   const { data: tournament, isLoading } = useQuery({
     queryKey: ['public-tournament', slug],
     queryFn: async (): Promise<PublishedTournament | null> => {
-      const { data, error } = await supabase
+      const { data: indexedData, error: indexedError } = await supabase
+        .from('published_tournaments')
+        .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, slug, version')
+        .or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
+        .maybeSingle();
+
+      if (indexedError) throw indexedError;
+      if (indexedData) {
+        console.log(`[public] anon fetch ok slug=${slug} (indexed)`);
+        return indexedData as unknown as PublishedTournament | null;
+      }
+
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from('published_tournaments')
         .select('id, title, start_date, end_date, city, venue, notes, public_slug, brochure_url, chessresults_url, public_results_url, slug, version')
         .eq('slug', slug as string)
         .maybeSingle();
 
-      if (error) throw error;
-      if (data) {
-        console.log(`[public] anon fetch ok slug=${slug}`);
+      if (fallbackError) throw fallbackError;
+      if (fallbackData) {
+        console.log(`[public] anon fetch ok slug=${slug} (fallback)`);
       }
-      return data as unknown as PublishedTournament | null;
+      return fallbackData as unknown as PublishedTournament | null;
     },
     enabled: !!slug,
     staleTime: 60_000,
