@@ -354,7 +354,7 @@ CREATE TABLE rule_config (
   multi_prize_policy TEXT DEFAULT 'single', -- 'single' | 'main_plus_one_side' | 'unlimited'
   main_vs_side_priority_mode TEXT DEFAULT 'place_first', -- 'place_first' | 'main_first'
   prefer_main_on_equal_value BOOLEAN DEFAULT false, -- legacy, now derived from main_vs_side_priority_mode
-  category_priority_order JSONB DEFAULT '[]',
+  category_priority_order JSONB DEFAULT '[]', -- reserved (not used by allocator)
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

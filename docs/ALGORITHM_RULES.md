@@ -84,12 +84,15 @@ Every rule below is **numbered** and includes a summary + exact code pointers (p
 
 ## R13. Team (institution) prize allocation is separate from individual prizes
 - **Summary:** Team prizes group players by a configured field, score top‑K players, apply gender slots, and rank institutions by points → rank sum → best rank → name.
-- **Where in code:** supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132; `getRankPoints`, lines ~152–158; `buildTeam`, lines ~195–259; `compareInstitutions`, lines ~171–189; allocation loop in `Deno.serve`, lines ~278–606.
+- **Where in code:** supabase/functions/_shared/teamPrizes.ts → `getRankPoints`, `buildTeam`, `compareInstitutions`; supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132; allocation loop in `Deno.serve`, lines ~214–568.
 
 ## R14. Public team prizes are recomputed for published tournaments
-- **Summary:** Public pages call `publicTeamPrizes`, which repeats the team‑allocation logic and enforces `tournaments.is_published = true`.
-- **Where in code:** supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~123–395; published guard, lines ~172–214.
+- **Summary:** Public pages call `publicTeamPrizes`, which reuses the shared team‑allocation logic and enforces `tournaments.is_published = true`.
+- **Where in code:** supabase/functions/_shared/teamPrizes.ts → shared team scoring helpers; supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~91–337; published guard, lines ~140–182.
 
 ## R15. Import dedup & conflict rules influence rank inputs
 - **Summary:** Import conflict detection groups likely duplicate rows by FIDE ID, Name+DOB, or SNo; dedup scoring/merge policy can change the final player list and ranks used in allocation.
 - **Where in code:** src/utils/conflictUtils.ts → `detectConflictsInDraft`, lines ~194–286; src/utils/dedup.ts → `scoreCandidate`/`applyMergePolicy`, lines ~113–184.
+
+## Deprecated / reserved settings (not used by allocator)
+- `rule_config.prefer_category_rank_on_tie` and `rule_config.category_priority_order` are stored in the DB but are not read by the allocator and are not exposed in the UI.

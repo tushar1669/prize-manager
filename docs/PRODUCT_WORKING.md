@@ -39,5 +39,5 @@
 - **Team prizes:** Public team prizes are recomputed by `publicTeamPrizes` and gated by `tournaments.is_published`. (supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~172–214)
 
 ## Known duplication / drift risk (for audits)
-- **Team prize allocation logic is duplicated** in `allocateInstitutionPrizes` and `publicTeamPrizes`. Both implement grouping, scoring, and sorting; any future rule change must be applied in both functions. (supabase/functions/allocateInstitutionPrizes/index.ts → `buildTeam`/`compareInstitutions`, lines ~195–259 & ~171–189; supabase/functions/publicTeamPrizes/index.ts → `buildTeam`, lines ~75–116)
-- **Rule config fields stored but unused:** `category_priority_order` and `prefer_category_rank_on_tie` are fetched but not applied by the allocator. (src/pages/ConflictReview.tsx → `rule-config` query, lines ~150–170; supabase/functions/allocatePrizes/index.ts has no reads for these keys)
+- **Team prize allocation logic is shared** between organizer and public edge functions via `supabase/functions/_shared/teamPrizes.ts`, avoiding drift. (supabase/functions/_shared/teamPrizes.ts → shared team helpers; supabase/functions/allocateInstitutionPrizes/index.ts and supabase/functions/publicTeamPrizes/index.ts import the module)
+- **Rule config fields deprecated in UI:** `category_priority_order` and `prefer_category_rank_on_tie` remain stored in DB but are not used by the allocator and are no longer exposed in UI queries. (docs/RULES_AND_SETTINGS_REFERENCE.md → Deprecated / reserved settings)

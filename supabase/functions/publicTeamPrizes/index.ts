@@ -1,10 +1,19 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
+import {
+  buildTeam,
+  compareInstitutions,
+  getRankPoints,
+  isFemale,
+  type TeamPrizePlayer,
+} from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "publicTeamPrizes";
 
 const corsHeaders = CORS_HEADERS;
+
+// Team prize scoring logic lives in _shared/teamPrizes.ts to prevent drift.
 
 /**
  * Public Team Prizes Endpoint
@@ -52,73 +61,7 @@ const GROUP_BY_COLUMN_MAP: Record<string, keyof Player> = {
   'type_label': 'type_label',
 };
 
-function isFemale(gender: string | null): boolean {
-  return gender?.toUpperCase() === 'F';
-}
-
-function isNotF(gender: string | null): boolean {
-  return !isFemale(gender);
-}
-
-function getRankPoints(rank: number, maxRank: number): number {
-  return maxRank + 1 - rank;
-}
-
-interface TeamPlayer {
-  id: string;
-  name: string;
-  rank: number;
-  points: number;
-  gender: string | null;
-}
-
-function buildTeam(
-  players: TeamPlayer[],
-  teamSize: number,
-  femaleSlots: number,
-  maleSlots: number
-): { team: TeamPlayer[] } | null {
-  const females = players.filter(p => isFemale(p.gender));
-  const notFs = players.filter(p => isNotF(p.gender));
-
-  females.sort((a, b) => b.points - a.points || a.rank - b.rank);
-  notFs.sort((a, b) => b.points - a.points || a.rank - b.rank);
-
-  const team: TeamPlayer[] = [];
-  const usedIds = new Set<string>();
-
-  if (femaleSlots > 0) {
-    if (females.length < femaleSlots) return null;
-    for (let i = 0; i < femaleSlots; i++) {
-      team.push(females[i]);
-      usedIds.add(females[i].id);
-    }
-  }
-
-  if (maleSlots > 0) {
-    if (notFs.length < maleSlots) return null;
-    for (let i = 0; i < maleSlots; i++) {
-      team.push(notFs[i]);
-      usedIds.add(notFs[i].id);
-    }
-  }
-
-  const remainingSlots = teamSize - team.length;
-  if (remainingSlots > 0) {
-    const remaining = [
-      ...females.filter(p => !usedIds.has(p.id)),
-      ...notFs.filter(p => !usedIds.has(p.id)),
-    ];
-    remaining.sort((a, b) => b.points - a.points || a.rank - b.rank);
-    if (remaining.length < remainingSlots) return null;
-    for (let i = 0; i < remainingSlots; i++) {
-      team.push(remaining[i]);
-      usedIds.add(remaining[i].id);
-    }
-  }
-
-  return { team };
-}
+type TeamPlayer = TeamPrizePlayer;
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -347,12 +290,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Sort
-      scoredInstitutions.sort((a, b) => {
-        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-        if (a.rank_sum !== b.rank_sum) return a.rank_sum - b.rank_sum;
-        if (a.best_individual_rank !== b.best_individual_rank) return a.best_individual_rank - b.best_individual_rank;
-        return a.key.localeCompare(b.key);
-      });
+      scoredInstitutions.sort(compareInstitutions);
 
       // Assign winners
       const prizesWithWinners = groupPrizes.map((prize, idx) => ({
