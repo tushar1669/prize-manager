@@ -1,77 +1,43 @@
 # Product Working Notes (repo-grounded)
 
 ## Key discovery points (routes, core utilities, DB objects, tests)
-- App routes for public, auth, and organizer flows live in `src/App.tsx` (src/App.tsx → App). 
-- Allocation engine and eligibility rules are implemented in the `allocatePrizes` edge function (supabase/functions/allocatePrizes/index.ts → Deno.serve, evaluateEligibility, prizeKey, makePrizeComparator). 
-- Team/institution prize allocation logic is implemented separately in `allocateInstitutionPrizes` (supabase/functions/allocateInstitutionPrizes/index.ts → Deno.serve, buildTeam, compareInstitutions). 
-- Player import parsing is handled in the client hook plus the `parseWorkbook` edge function (src/hooks/useExcelParser.tsx → useExcelParser; supabase/functions/parseWorkbook/index.ts → Deno.serve). 
-- Import conflict detection and dedup heuristics live in `conflictUtils` and `dedup` (src/utils/conflictUtils.ts → detectConflictsInDraft; src/utils/dedup.ts → scoreCandidate, applyMergePolicy). 
-- Publish flow uses a `publish_tournament` RPC and updates `publications`/`tournaments` (src/pages/Finalize.tsx → publishMutation). 
-- Public read model is backed by the `published_tournaments` view (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments). 
-- Print/export is handled via in-browser print HTML and XLSX exports (src/utils/print.ts → buildWinnersPrintHtml, openPrintWindow; src/components/final-prize/FinalPrizeSummaryHeader.tsx → handleExportXlsx). 
-- Playwright E2E coverage is in `e2e/*.spec.ts` (e2e/allocate-flow.spec.ts → test.describe; e2e/public-smoke.spec.ts → test.describe). 
+- **Core allocator:** Individual prize allocation is implemented in the `allocatePrizes` edge function (supabase/functions/allocatePrizes/index.ts → `Deno.serve`, lines ~344–1124; `evaluateEligibility`, lines ~1281–1514; `makePrizeComparator`, lines ~1623–1659).
+- **Finalize writes allocations:** Final allocations are stored in `allocations` via the `finalize` edge function. (supabase/functions/finalize/index.ts → `Deno.serve`, lines ~150–214)
+- **Team allocator (organizer + public):** Team prizes are computed in `allocateInstitutionPrizes` (organizer views) and `publicTeamPrizes` (public pages). (supabase/functions/allocateInstitutionPrizes/index.ts → `Deno.serve`, lines ~278–606; supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~123–395)
+- **Public read model:** Public pages read from the `published_tournaments` view only. (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → `CREATE VIEW public.published_tournaments`, lines ~6–28; src/pages/PublicHome.tsx → `PublicHome`, lines ~25–118)
+- **Player import pipeline:** Client parsing + server parsing are handled in `useExcelParser` and `parseWorkbook`. (src/hooks/useExcelParser.tsx → `useExcelParser`; supabase/functions/parseWorkbook/index.ts → `Deno.serve`)
+- **Dedup/conflict logic:** Import conflicts and dedup merge policy live in `conflictUtils` and `dedup`. (src/utils/conflictUtils.ts → `detectConflictsInDraft`, lines ~194–286; src/utils/dedup.ts → `scoreCandidate`/`applyMergePolicy`, lines ~113–184)
+- **Public results fetch:** Public results read the latest finalized allocation version via `getLatestAllocations`. (src/utils/getLatestAllocations.ts → `getLatestAllocations`, lines ~12–45)
 
-## What the product does (one-page overview)
-- Prize Manager is a web app for managing chess tournament prize allocations from setup to publication, as described by the organizer dashboard copy and the prize allocation flows (src/pages/Dashboard.tsx → Dashboard; src/pages/Finalize.tsx → Finalize). 
-- Organizers create tournaments, configure categories/prizes, import players, run allocations, and publish public pages for results and details (src/pages/Dashboard.tsx → createMutation; src/pages/TournamentSetup.tsx → TournamentSetup; src/pages/PlayerImport.tsx → PlayerImport; src/pages/ConflictReview.tsx → ConflictReview; src/pages/Finalize.tsx → Finalize; src/pages/PublishSuccess.tsx → PublishSuccess). 
-- Public viewers can browse published tournaments and results without authentication using `/`, `/p/:slug`, and `/p/:slug/results` (src/App.tsx → App; src/pages/PublicHome.tsx → PublicHome; src/pages/PublicTournamentDetails.tsx → PublicTournamentDetails; src/pages/PublicResults.tsx → PublicResults). 
-- Publication state is controlled by `tournaments.is_published` and the `publications` versioning model exposed through the `published_tournaments` view (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments; src/pages/Finalize.tsx → publishMutation). 
+## What the product does (one‑page overview)
+- Prize Manager lets organizers configure tournament rules, import players, preview allocations, commit winners, and publish public results. (src/pages/Dashboard.tsx → `Dashboard`, lines ~169–270; src/pages/TournamentSetup.tsx → `TournamentSetup`, lines ~1750–2550; src/pages/ConflictReview.tsx → `ConflictReview`, lines ~184–916; src/pages/Finalize.tsx → `Finalize`, lines ~620–990)
+- Public viewers access published tournaments through `/` and `/p/:slug/...` routes, which read from `published_tournaments`. (src/App.tsx → `App`, lines ~34–170; src/pages/PublicHome.tsx → `PublicHome`, lines ~25–118; src/pages/PublicResults.tsx → `PublicResults`, lines ~28–120)
 
-## User roles
-- **Organizer**: default role for authenticated users; can create and manage their tournaments and access organizer routes (src/hooks/useUserRole.tsx → useUserRole; src/components/ProtectedRoute.tsx → ProtectedRoute). 
-- **Master/Admin**: users with `role === "master"` and allowlist email gain master-only routes like `/master-dashboard` and `/admin/tournaments` (src/hooks/useUserRole.tsx → useUserRole; src/components/ProtectedRoute.tsx → ProtectedRoute; src/App.tsx → App). 
-- **Public viewer**: unauthenticated visitors who access public routes for published tournaments and results (src/App.tsx → App; supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments). 
+## Main workflows (end‑to‑end)
 
-## Main workflows (end-to-end)
+### 1) Create / Setup tournament
+- **Flow summary:** Organizers create a tournament on the dashboard and configure details in `/t/:id/setup`. (src/pages/Dashboard.tsx → `createMutation`, lines ~169–220; src/pages/TournamentSetup.tsx → `TournamentSetup`, lines ~1750–2550)
 
-### a) Create / Setup tournament
-- **Flow summary:** Organizers create a draft tournament on the dashboard and land on the setup page for details and configuration (src/pages/Dashboard.tsx → createMutation; src/pages/Dashboard.tsx → navigate(`/t/${data.id}/setup?tab=details`)). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/dashboard` → `Dashboard` for listing and creating tournaments (src/App.tsx → App; src/pages/Dashboard.tsx → Dashboard). 
-  - Route `/t/:id/setup` → `TournamentSetup` for details and configuration (src/App.tsx → App; src/pages/TournamentSetup.tsx → TournamentSetup). 
-  - Form validation for tournament details uses `tournamentDetailsSchema` (src/lib/validations.ts → tournamentDetailsSchema). 
+### 2) Prize + category setup
+- **Flow summary:** Organizers create categories/prizes, edit criteria (age/rating/gender/etc.), and set category order for brochure priority. (src/pages/TournamentSetup.tsx → `TournamentSetup`, lines ~1750–2550; src/pages/CategoryOrderReview.tsx → `CategoryOrderReview`, lines ~178–380)
 
-### b) Prize / categories setup
-- **Flow summary:** Organizers configure categories, activate/deactivate them, and define prizes for each category (src/pages/TournamentSetup.tsx → TournamentSetup; src/components/prizes/CategoryPrizesEditor.tsx → CategoryPrizesEditor). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/t/:id/setup?tab=prizes` → `TournamentSetup` prize tab (src/App.tsx → App; src/pages/TournamentSetup.tsx → TournamentSetup). 
-  - Category prize editing UI is `CategoryPrizesEditor` (src/components/prizes/CategoryPrizesEditor.tsx → CategoryPrizesEditor). 
-  - Category criteria (rules) are edited in the criteria sheet embedded in `TournamentSetup` (src/pages/TournamentSetup.tsx → TournamentSetup). 
-  - Category ordering review uses `/t/:id/order-review` (src/App.tsx → App; src/pages/CategoryOrderReview.tsx → CategoryOrderReview). 
-  - Team prize configuration uses `TeamPrizesEditor` and `TeamPrizeRulesSheet` (src/components/team-prizes/TeamPrizesEditor.tsx → TeamPrizesEditor; src/components/team-prizes/TeamPrizeRulesSheet.tsx → TeamPrizeRulesSheet). 
+### 3) Player import + dedup
+- **Flow summary:** Import a Swiss‑Manager ranking file, auto‑map columns, resolve conflicts, and deduplicate before saving players. (src/pages/PlayerImport.tsx → `PlayerImport`, lines ~186–980; src/utils/conflictUtils.ts → `detectConflictsInDraft`, lines ~194–286; src/utils/dedup.ts → `runDedupPass`, lines ~306–451)
 
-### c) Player import + mapping + dedup + conflict handling
-- **Flow summary:** Organizers upload an Excel workbook, auto-map columns, optionally use server parsing, review conflicts/dedup decisions, and import players (src/pages/PlayerImport.tsx → PlayerImport; src/hooks/useExcelParser.tsx → useExcelParser). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/t/:id/import` → `PlayerImport` (src/App.tsx → App; src/pages/PlayerImport.tsx → PlayerImport). 
-  - Auto-mapping and header detection run in `useExcelParser` with `detectHeaderRow` (src/hooks/useExcelParser.tsx → useExcelParser; src/utils/sheetDetection.ts → detectHeaderRow). 
-  - Server-side parsing uses the `parseWorkbook` edge function (supabase/functions/parseWorkbook/index.ts → Deno.serve). 
-  - Column mapping UI uses `ColumnMappingDialog` (src/pages/PlayerImport.tsx → PlayerImport). 
-  - Conflict detection uses `detectConflictsInDraft` (src/utils/conflictUtils.ts → detectConflictsInDraft). 
-  - Dedup suggestions and merge policy live in `runDedupPass` and `applyMergePolicy` (src/utils/dedup.ts → runDedupPass; src/utils/dedup.ts → applyMergePolicy). 
-  - Dedup review UI uses `DeduplicationWizard` (src/pages/PlayerImport.tsx → PlayerImport; src/components/dedup/DeduplicationWizard.tsx → DeduplicationWizard). 
+### 4) Allocation preview + manual overrides
+- **Flow summary:** Preview runs `allocatePrizes`, then users resolve conflicts or apply overrides in Review Allocations. (src/pages/ConflictReview.tsx → `allocateMutation`, lines ~184–226; supabase/functions/allocatePrizes/index.ts → `Deno.serve`, lines ~344–1124)
 
-### d) Allocation + finalize
-- **Flow summary:** The allocation preview runs the `allocatePrizes` edge function, conflict review resolves manual overrides, and finalization commits allocations (supabase/functions/allocatePrizes/index.ts → Deno.serve; src/pages/ConflictReview.tsx → ConflictReview; supabase/functions/finalize/index.ts → Deno.serve). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/t/:id/review` → `ConflictReview` for allocation preview and manual overrides (src/App.tsx → App; src/pages/ConflictReview.tsx → ConflictReview). 
-  - Route `/t/:id/finalize` → `Finalize` for committing allocations (src/App.tsx → App; src/pages/Finalize.tsx → Finalize). 
-  - Allocation preview invokes `allocatePrizes` (supabase/functions/allocatePrizes/index.ts → Deno.serve). 
-  - Finalization invokes `finalize` edge function to write allocations (src/pages/Finalize.tsx → finalizeMutation; supabase/functions/finalize/index.ts → Deno.serve). 
+### 5) Finalize + publish
+- **Flow summary:** Finalize writes `allocations` and publishing exposes results via `published_tournaments`. (src/pages/Finalize.tsx → `finalizeMutation` and `publishMutation`, lines ~331–936; supabase/functions/finalize/index.ts → `Deno.serve`, lines ~150–214; supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → view definition, lines ~6–28)
 
-### e) Print/export (PDF + XLSX)
-- **Flow summary:** Organizers can open a print preview (save to PDF via browser) or export XLSX files for winners (src/pages/Finalize.tsx → handleExportWinnersPdf; src/components/final-prize/FinalPrizeSummaryHeader.tsx → handleExportXlsx). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/t/:id/final/:view` → `FinalPrizeView` with print-friendly tabs (src/App.tsx → App; src/pages/FinalPrizeView.tsx → FinalPrizeView). 
-  - Print-preview HTML is generated in `buildWinnersPrintHtml` and opened via `openPrintWindow` (src/utils/print.ts → buildWinnersPrintHtml, openPrintWindow). 
-  - XLSX export for final prizes uses `buildFinalPrizeExportRows` and `downloadWorkbookXlsx` (src/components/final-prize/FinalPrizeSummaryHeader.tsx → handleExportXlsx; src/utils/finalPrizeExport.ts → buildFinalPrizeExportRows; src/utils/excel.ts → downloadWorkbookXlsx). 
-  - **PDF export via server function:** NOT FOUND IN REPO (no UI invoking `generatePdf`). 
+### 6) Public results + exports
+- **Flow summary:** Public pages load published tournaments + finalized allocations; exports use PDF/print/XLSX tooling. (src/pages/PublicResults.tsx → `PublicResults`, lines ~28–120; src/utils/print.ts → `buildWinnersPrintHtml`; src/components/final-prize/FinalPrizeSummaryHeader.tsx → `handleExportXlsx`)
 
-### f) Publish + public pages (/, /p/:slug, /results)
-- **Flow summary:** Publishing creates a public slug/version and marks the tournament as published; public pages read from the `published_tournaments` view (src/pages/Finalize.tsx → publishMutation; supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments). 
-- **Where in code (routes/pages/components/hooks):**
-  - Route `/t/:id/publish` → `PublishSuccess` confirmation page (src/App.tsx → App; src/pages/PublishSuccess.tsx → PublishSuccess). 
-  - Route `/` → `PublicHome` lists published tournaments (src/App.tsx → App; src/pages/PublicHome.tsx → PublicHome). 
-  - Route `/p/:slug` → `PublicTournamentDetails` uses `fetchPublicTournamentDetails` (src/App.tsx → App; src/pages/PublicTournamentDetails.tsx → PublicTournamentDetails; src/utils/publicTournamentDetails.ts → fetchPublicTournamentDetails). 
-  - Route `/p/:slug/results` → `PublicResults` for published winners (src/App.tsx → App; src/pages/PublicResults.tsx → PublicResults). 
-  - Route `/results` requested in task: NOT FOUND IN REPO (src/App.tsx → App). 
+## Data access surfaces (public vs organizer)
+- **Published tournaments view:** Public pages query `published_tournaments` only; it filters `is_published = true` and excludes archived/deleted tournaments. (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → `CREATE VIEW public.published_tournaments`, lines ~6–28)
+- **Allocations:** Final winners live in `allocations` with versioning; `getLatestAllocations` reads the latest version. (src/utils/getLatestAllocations.ts → `getLatestAllocations`, lines ~12–45)
+- **Team prizes:** Public team prizes are recomputed by `publicTeamPrizes` and gated by `tournaments.is_published`. (supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~172–214)
+
+## Known duplication / drift risk (for audits)
+- **Team prize allocation logic is duplicated** in `allocateInstitutionPrizes` and `publicTeamPrizes`. Both implement grouping, scoring, and sorting; any future rule change must be applied in both functions. (supabase/functions/allocateInstitutionPrizes/index.ts → `buildTeam`/`compareInstitutions`, lines ~195–259 & ~171–189; supabase/functions/publicTeamPrizes/index.ts → `buildTeam`, lines ~75–116)
+- **Rule config fields stored but unused:** `category_priority_order` and `prefer_category_rank_on_tie` are fetched but not applied by the allocator. (src/pages/ConflictReview.tsx → `rule-config` query, lines ~150–170; supabase/functions/allocatePrizes/index.ts has no reads for these keys)
