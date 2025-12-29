@@ -1,10 +1,19 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
+import {
+  buildTeam,
+  compareInstitutions,
+  getRankPoints,
+  isFemale,
+  isNotF,
+} from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
+
+// Team prize scoring logic lives in _shared/teamPrizes.ts to prevent drift.
 
 /**
  * Institution Prize Allocation - Phase 2 Module
@@ -129,151 +138,6 @@ const GROUP_BY_COLUMN_MAP: Record<string, keyof Player> = {
   'group_label': 'group_label',
   'type_label': 'type_label',
 };
-
-/**
- * Check if a player is female (gender = 'F')
- */
-function isFemale(gender: string | null): boolean {
-  return gender?.toUpperCase() === 'F';
-}
-
-/**
- * Check if a player is "not F" (male, unknown, null - consistent with main allocator's Boys (not F))
- */
-function isNotF(gender: string | null): boolean {
-  return !isFemale(gender);
-}
-
-/**
- * Get player's score based on rank (higher rank = lower score)
- * Score = (maxRank + 1) - rank
- * This ensures rank 1 gets the highest score
- */
-function getRankPoints(rank: number, maxRank: number): number {
-  return maxRank + 1 - rank;
-}
-
-/**
- * Compare players for sorting: by points DESC, then rank ASC (tie-break)
- */
-function comparePlayersByScore(a: { rank: number; points: number }, b: { rank: number; points: number }): number {
-  // Higher points first
-  if (b.points !== a.points) {
-    return b.points - a.points;
-  }
-  // Lower rank wins tie-break
-  return a.rank - b.rank;
-}
-
-/**
- * Compare institutions for ranking
- */
-function compareInstitutions(
-  a: { total_points: number; rank_sum: number; best_individual_rank: number; key: string },
-  b: { total_points: number; rank_sum: number; best_individual_rank: number; key: string }
-): number {
-  // Higher total_points first
-  if (b.total_points !== a.total_points) {
-    return b.total_points - a.total_points;
-  }
-  // Lower rank_sum wins tie-break
-  if (a.rank_sum !== b.rank_sum) {
-    return a.rank_sum - b.rank_sum;
-  }
-  // Lower best_individual_rank wins
-  if (a.best_individual_rank !== b.best_individual_rank) {
-    return a.best_individual_rank - b.best_individual_rank;
-  }
-  // Alphabetical by institution name
-  return a.key.localeCompare(b.key);
-}
-
-/**
- * Build a team for an institution with gender slot requirements
- * Returns null if the institution cannot form a valid team
- */
-function buildTeam(
-  players: Array<{ id: string; name: string; rank: number; points: number; gender: string | null }>,
-  teamSize: number,
-  femaleSlots: number,
-  maleSlots: number
-): { team: TeamPlayerInfo[]; reason?: string } | null {
-  // Separate by gender
-  const females = players.filter(p => isFemale(p.gender));
-  const notFs = players.filter(p => isNotF(p.gender));
-
-  // Sort each pool by points (desc), then rank (asc)
-  females.sort(comparePlayersByScore);
-  notFs.sort(comparePlayersByScore);
-
-  const team: TeamPlayerInfo[] = [];
-  const usedIds = new Set<string>();
-
-  // Step 1: Fill required female slots
-  if (femaleSlots > 0) {
-    if (females.length < femaleSlots) {
-      return null; // Not enough female players
-    }
-    for (let i = 0; i < femaleSlots; i++) {
-      const p = females[i];
-      team.push({
-        player_id: p.id,
-        name: p.name,
-        rank: p.rank,
-        points: p.points,
-        gender: p.gender,
-      });
-      usedIds.add(p.id);
-    }
-  }
-
-  // Step 2: Fill required male slots
-  if (maleSlots > 0) {
-    if (notFs.length < maleSlots) {
-      return null; // Not enough male/notF players
-    }
-    for (let i = 0; i < maleSlots; i++) {
-      const p = notFs[i];
-      team.push({
-        player_id: p.id,
-        name: p.name,
-        rank: p.rank,
-        points: p.points,
-        gender: p.gender,
-      });
-      usedIds.add(p.id);
-    }
-  }
-
-  // Step 3: Fill remaining slots with best available (any gender)
-  const remainingSlots = teamSize - team.length;
-  if (remainingSlots > 0) {
-    // Combine remaining players from both pools
-    const remaining = [
-      ...females.filter(p => !usedIds.has(p.id)),
-      ...notFs.filter(p => !usedIds.has(p.id)),
-    ];
-    remaining.sort(comparePlayersByScore);
-
-    if (remaining.length < remainingSlots) {
-      return null; // Not enough players total
-    }
-
-    for (let i = 0; i < remainingSlots; i++) {
-      const p = remaining[i];
-      team.push({
-        player_id: p.id,
-        name: p.name,
-        rank: p.rank,
-        points: p.points,
-        gender: p.gender,
-      });
-      usedIds.add(p.id);
-    }
-  }
-
-  return { team };
-}
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
@@ -529,7 +393,13 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const { team } = result;
+        const team = result.team.map(p => ({
+          player_id: p.id,
+          name: p.name,
+          rank: p.rank,
+          points: p.points,
+          gender: p.gender,
+        }));
         const total_points = team.reduce((sum, p) => sum + p.points, 0);
         const rank_sum = team.reduce((sum, p) => sum + p.rank, 0);
         const best_individual_rank = Math.min(...team.map(p => p.rank));

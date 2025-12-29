@@ -30,7 +30,6 @@ export default function Settings() {
       allow_unrated_in_rating: false,
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
-      category_priority_order: [],
       main_vs_side_priority_mode: 'place_first' as const,
       age_band_policy: 'non_overlapping' as const,
       multi_prize_policy: 'single' as const
@@ -62,7 +61,6 @@ export default function Settings() {
     allow_missing_dob_for_age?: boolean;
     max_age_inclusive?: boolean;
     prefer_main_on_equal_value?: boolean;
-    category_priority_order?: string[];
     main_vs_side_priority_mode?: 'main_first' | 'place_first';
     age_band_policy?: 'non_overlapping' | 'overlapping';
     multi_prize_policy?: 'single' | 'main_plus_one_side' | 'unlimited';
@@ -75,7 +73,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, category_priority_order, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -100,7 +98,6 @@ export default function Settings() {
           allow_unrated_in_rating: ruleData.allow_unrated_in_rating,
           allow_missing_dob_for_age: ruleData.allow_missing_dob_for_age,
           max_age_inclusive: ruleData.max_age_inclusive,
-          category_priority_order: ruleData.category_priority_order || [],
           main_vs_side_priority_mode: mainVsSidePriorityMode,
           age_band_policy: ruleData.age_band_policy || 'non_overlapping',
           multi_prize_policy: ruleData.multi_prize_policy || 'single'

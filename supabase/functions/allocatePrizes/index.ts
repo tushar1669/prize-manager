@@ -546,9 +546,7 @@ Deno.serve(async (req) => {
       allow_unrated_in_rating: false,
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
-      prefer_category_rank_on_tie: false,
       prefer_main_on_equal_value: true,
-      category_priority_order: ['main', 'others'],
       main_vs_side_priority_mode: 'place_first' as MainVsSidePriorityMode,
       tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
@@ -1274,7 +1272,6 @@ type AllocationRules = {
   tieBreakStrategy?: TieBreakStrategy;
   prefer_main_on_equal_value?: boolean;
   age_band_policy?: 'non_overlapping' | 'overlapping';
-  prefer_category_rank_on_tie?: boolean;
   [key: string]: unknown;
 };
 

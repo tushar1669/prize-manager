@@ -12,8 +12,6 @@ This table maps **rule keys** to their **UI location**, **DB storage**, and **co
 | `rule_config.main_vs_side_priority_mode` | `place_first`, `main_first` | Default `place_first` in Settings. | `/t/:id/settings` → `Settings`. | `rule_config.main_vs_side_priority_mode`. | supabase/functions/allocatePrizes/index.ts → `makePrizeComparator`, lines ~1623–1659. |
 | `rule_config.multi_prize_policy` | `single`, `main_plus_one_side`, `unlimited` | Default `single` in Settings. | `/t/:id/settings` → `Settings`. | `rule_config.multi_prize_policy`. | supabase/functions/allocatePrizes/index.ts → `canPlayerTakePrize`, lines ~314–332. |
 | `rule_config.prefer_main_on_equal_value` | `true/false` | Legacy fallback; when `main_vs_side_priority_mode` is missing, this is mapped to `main_first` vs `place_first`. | Not exposed in UI. | `rule_config.prefer_main_on_equal_value`. | supabase/functions/allocatePrizes/index.ts → `Deno.serve` rule merge, lines ~576–584. |
-| `rule_config.category_priority_order` **(unused)** | JSON array | Stored but not read by allocator. | Not exposed in UI. | `rule_config.category_priority_order`. | **Unused** in allocation code (no reads outside Settings/ConflictReview). |
-| `rule_config.prefer_category_rank_on_tie` **(unused)** | `true/false` | Stored but not read by allocator. | Not exposed in UI. | `rule_config.prefer_category_rank_on_tie`. | **Unused** in allocation code (no reads outside ConflictReview). |
 | `rule_config.tie_break_strategy` **(API-only)** | `rating_then_name`, `none`, or array `['rating','name']` | Default `rating_then_name` in allocator; can be overridden per API call. | No UI. Override via `allocatePrizes` request body. | **Not present** in DB types. | supabase/functions/allocatePrizes/index.ts → `normalizeTieBreakStrategy`, lines ~24–30; `Deno.serve`, lines ~560–573. |
 | `categories.criteria_json.min_age` / `max_age` | Integer ages | No defaults; enforced only when present and `strict_age` is on. | Category criteria sheet in Tournament Setup. | `categories.criteria_json`. | supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1351–1404. |
 | `categories.criteria_json.gender` | `F`, `M_OR_UNKNOWN`, or empty (open) | Empty = open; youngest categories override via `category_type`. | Category criteria sheet in Tournament Setup. | `categories.criteria_json`. | supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1316–1350. |
@@ -27,6 +25,10 @@ This table maps **rule keys** to their **UI location**, **DB storage**, and **co
 | `institution_prize_groups.group_by` | `club`, `city`, `state`, `group_label`, `type_label` | Default `club` in Team Prize Rules sheet. | Tournament Setup → Team Prize Rules sheet. | `institution_prize_groups.group_by`. | supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132. |
 | `institution_prize_groups.team_size`, `female_slots`, `male_slots` | Integers | Defaults to 4/0/0 in Team Prize Rules sheet. | Tournament Setup → Team Prize Rules sheet. | `institution_prize_groups.*`. | supabase/functions/allocateInstitutionPrizes/index.ts → `buildTeam`, lines ~195–259. |
 | `institution_prize_groups.scoring_mode` | `by_top_k_score` | Only option today. | Tournament Setup → Team Prize Rules sheet. | `institution_prize_groups.scoring_mode`. | supabase/functions/allocateInstitutionPrizes/index.ts → scoring loop in `Deno.serve`, lines ~481–552. |
+
+## Deprecated / reserved settings (not used by allocator)
+- `rule_config.category_priority_order` (stored in DB; not surfaced in UI; allocator does not read it).
+- `rule_config.prefer_category_rank_on_tie` (stored in DB; not surfaced in UI; allocator does not read it).
 
 ## Notes
 - **Manual overrides** are entered in the Review Allocations UI and sent directly to `allocatePrizes` (not stored as settings). (src/pages/ConflictReview.tsx → `allocateMutation`, lines ~184–226)
