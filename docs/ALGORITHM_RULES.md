@@ -1,101 +1,95 @@
 # Allocation Algorithm Rules (repo-grounded)
 
-> Every rule below includes a one-sentence summary, inputs, decision logic, where it lives, and where a user configures it (if applicable).
+Every rule below is **numbered** and includes a summary + exact code pointers (path + function + line range).
 
-## Rule: Active category and prize selection
-- **Rule in one sentence:** Only active categories and prizes are considered in allocation. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Inputs:** `categories.is_active`, `prizes.is_active` for the tournament. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Decision logic:** `allocatePrizes` filters categories where `is_active !== false` and prizes where `is_active !== false` before building the prize queue. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Where it lives:** `activeCategories`/`activePrizes` computation in `allocatePrizes`. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Where user configures it:** Category toggle in `CategoryPrizesEditor` on the setup page (UI), which updates category active status. (src/components/prizes/CategoryPrizesEditor.tsx → CategoryPrizesEditor; src/pages/TournamentSetup.tsx → TournamentSetup)
+## R1. Only active categories and prizes are allocatable
+- **Summary:** Allocation ignores categories/prizes where `is_active = false`. 
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` (activeCategories/activePrizes filtering, lines ~468–505).
+- **Inputs:** `categories.is_active`, `prizes.is_active`.
 
-## Rule: Prize priority ordering (global prize queue)
-- **Rule in one sentence:** Prizes are globally ranked by cash amount, then prize type, then place, then main-vs-side, then category order, then prize id. (supabase/functions/allocatePrizes/index.ts → prizeKey, makePrizeComparator)
-- **Inputs:** `prizes.cash_amount`, `prizes.has_trophy`, `prizes.has_medal`, `prizes.place`, `categories.is_main`, `categories.order_idx`, `prizes.id`. (supabase/functions/allocatePrizes/index.ts → prizeKey)
-- **Decision logic:** `makePrizeComparator` sorts by cash (desc), prize type (trophy/medal/none), place (asc), main flag, category order, and id. (supabase/functions/allocatePrizes/index.ts → makePrizeComparator, prizeKey)
-- **Where it lives:** `prizeKey`, `getPrizeTypeScore`, `makePrizeComparator`. (supabase/functions/allocatePrizes/index.ts → prizeKey, getPrizeTypeScore, makePrizeComparator)
-- **Where user configures it:** `main_vs_side_priority_mode` can shift where main-vs-side is applied (Settings page). (src/pages/Settings.tsx → Settings; supabase/functions/allocatePrizes/index.ts → makePrizeComparator)
+## R2. Tournament start date anchors age calculations
+- **Summary:** Player age is computed against the tournament `start_date` (fallback: today). 
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` (tournament fetch + `tournamentStartDate`, lines ~423–436); `yearsOn`, lines ~1154–1162.
+- **Inputs:** `tournaments.start_date`, `players.dob`.
 
-## Rule: Main vs non-main priority mode
-- **Rule in one sentence:** When cash/type are equal, tournaments can choose whether main prizes always outrank side prizes or whether place outranks main/side. (supabase/functions/allocatePrizes/index.ts → makePrizeComparator)
-- **Inputs:** `rule_config.main_vs_side_priority_mode` (or `prefer_main_on_equal_value` fallback), and `categories.is_main`. (supabase/functions/allocatePrizes/index.ts → Deno.serve, makePrizeComparator)
-- **Decision logic:** `makePrizeComparator` uses `main_first` to apply main-vs-side before place; `place_first` applies place before main. (supabase/functions/allocatePrizes/index.ts → makePrizeComparator)
-- **Where it lives:** `makePrizeComparator` and `rules.main_vs_side_priority_mode`. (supabase/functions/allocatePrizes/index.ts → makePrizeComparator, Deno.serve)
-- **Where user configures it:** Tournament Settings → `main_vs_side_priority_mode`. (src/pages/Settings.tsx → Settings; src/lib/validations.ts → ruleConfigSchema)
+## R3. Age band policy can transform overlapping U‑X categories
+- **Summary:** With `age_band_policy = non_overlapping`, categories with `max_age` are grouped by `max_age`, then assigned disjoint min/max bands; with `overlapping`, raw min/max are used.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` (age band derivation, lines ~585–666); `evaluateEligibility`, lines ~1351–1404.
+- **Inputs:** `rule_config.age_band_policy`, `criteria_json.min_age`, `criteria_json.max_age`.
 
-## Rule: Single vs multi-prize policy
-- **Rule in one sentence:** Allocation can enforce one prize per player, allow one main + one side, or allow unlimited prizes. (supabase/functions/allocatePrizes/index.ts → canPlayerTakePrize)
-- **Inputs:** `rule_config.multi_prize_policy`, prize category `is_main`, and existing assignments per player. (supabase/functions/allocatePrizes/index.ts → canPlayerTakePrize)
-- **Decision logic:** `canPlayerTakePrize` blocks or allows prizes based on policy (`single`, `main_plus_one_side`, `unlimited`). (supabase/functions/allocatePrizes/index.ts → canPlayerTakePrize)
-- **Where it lives:** `canPlayerTakePrize` and `rules.multi_prize_policy`. (supabase/functions/allocatePrizes/index.ts → canPlayerTakePrize, Deno.serve)
-- **Where user configures it:** Tournament Settings → `multi_prize_policy`. (src/pages/Settings.tsx → Settings; src/lib/validations.ts → ruleConfigSchema)
+## R4. Eligibility is determined per category by criteria_json + rule config
+- **Summary:** Players are eligible only if they pass gender, age, rating, location, group/type, and disability filters. 
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1281–1514.
+- **Inputs:** `categories.criteria_json.*`, `players.*`, `rule_config.*`.
 
-## Rule: Standard category winner selection (rank-first)
-- **Rule in one sentence:** For standard categories, the best-ranked eligible player wins, with tie-breaks by rating and name. (supabase/functions/allocatePrizes/index.ts → compareEligibleByRankRatingName)
-- **Inputs:** `players.rank`, `players.rating`, `players.name`, `rules.tie_break_strategy`. (supabase/functions/allocatePrizes/index.ts → compareEligibleByRankRatingName, normalizeTieBreakStrategy)
-- **Decision logic:** Sort by rank ascending, then configured tie-break fields (`rating`, then `name` by default). (supabase/functions/allocatePrizes/index.ts → compareEligibleByRankRatingName, normalizeTieBreakStrategy)
-- **Where it lives:** `compareEligibleByRankRatingName` and `normalizeTieBreakStrategy`. (supabase/functions/allocatePrizes/index.ts → compareEligibleByRankRatingName, normalizeTieBreakStrategy)
-- **Where user configures it:** API override via `tieBreakStrategy` in `allocatePrizes` request; UI configuration NOT FOUND IN REPO. (supabase/functions/allocatePrizes/index.ts → AllocatePrizesRequest)
+### R4.a Gender eligibility
+- **Summary:** `F` = female‑only (missing/unknown fails); `M` or `M_OR_UNKNOWN` = “not F” (boys + unknown); empty = open.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1316–1350; `normGender`, lines ~1146–1152.
 
-## Rule: Youngest category winner selection
-- **Rule in one sentence:** Youngest categories select the youngest eligible player by DOB, then break ties by rank, rating, and name. (supabase/functions/allocatePrizes/index.ts → compareYoungestEligible)
-- **Inputs:** `players.dob`, `players.rank`, `players.rating`, `players.name`, `category_type`. (supabase/functions/allocatePrizes/index.ts → compareYoungestEligible, isYoungestCategory)
-- **Decision logic:** Sort by DOB (most recent), then rank, rating, name. (supabase/functions/allocatePrizes/index.ts → compareYoungestEligible)
-- **Where it lives:** `compareYoungestEligible` and `isYoungestCategory`. (supabase/functions/allocatePrizes/index.ts → compareYoungestEligible, isYoungestCategory)
-- **Where user configures it:** Category type set to `youngest_female` or `youngest_male` in criteria sheet. (src/pages/TournamentSetup.tsx → TournamentSetup; supabase/functions/allocatePrizes/index.ts → isYoungestCategory)
+### R4.b Age eligibility
+- **Summary:** When strict age is on, `min_age`/`max_age` (or derived bands) are enforced; missing DOB can be allowed/blocked.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1351–1404.
 
-## Rule: Gender eligibility
-- **Rule in one sentence:** Categories can restrict eligibility to female-only, boys-only (not F), or open, based on `criteria_json.gender` and category type. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Inputs:** `criteria_json.gender`, `category_type`, `players.gender`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, normGender)
-- **Decision logic:** `evaluateEligibility` interprets `F` as female-only and `M`/`M_OR_UNKNOWN` as "not F". (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Where it lives:** `evaluateEligibility`, `normGender`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, normGender)
-- **Where user configures it:** Category criteria sheet (`criteria_json.gender`) in Tournament Setup. (src/pages/TournamentSetup.tsx → TournamentSetup)
+### R4.c Rating + unrated eligibility
+- **Summary:** Rating categories enforce min/max for rated players; unrated handling depends on `unrated_only`, `include_unrated`, and legacy `allow_unrated_in_rating`.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1406–1488.
 
-## Rule: Age eligibility (including age bands)
-- **Rule in one sentence:** Age eligibility is enforced using `min_age`/`max_age` bounds, optionally transformed into non-overlapping bands. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, Deno.serve)
-- **Inputs:** `criteria_json.min_age`, `criteria_json.max_age`, `rules.strict_age`, `rules.allow_missing_dob_for_age`, `rules.max_age_inclusive`, `rules.age_band_policy`, `players.dob`, `tournament.start_date`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, Deno.serve)
-- **Decision logic:** If `age_band_policy=non_overlapping`, `allocatePrizes` derives disjoint bands for categories sharing max age; eligibility uses effective min/max bounds with optional DOB-missing handling. (supabase/functions/allocatePrizes/index.ts → Deno.serve, evaluateEligibility)
-- **Where it lives:** age band derivation in `allocatePrizes`, eligibility checks in `evaluateEligibility`. (supabase/functions/allocatePrizes/index.ts → Deno.serve, evaluateEligibility)
-- **Where user configures it:** Settings page (`age_band_policy`, `allow_missing_dob_for_age`, `max_age_inclusive`, `strict_age`) and category criteria (`min_age`, `max_age`). (src/pages/Settings.tsx → Settings; src/pages/TournamentSetup.tsx → TournamentSetup)
+### R4.d Location filters (state/city/club)
+- **Summary:** Allowed lists use alias normalization; missing location fails when a list is present.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `matchesLocation` + helpers, lines ~1216–1262; `evaluateEligibility`, lines ~1490–1526.
 
-## Rule: Rating eligibility (min/max + unrated handling)
-- **Rule in one sentence:** Rating categories can enforce min/max ratings and control whether unrated players are allowed or excluded. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Inputs:** `criteria_json.min_rating`, `criteria_json.max_rating`, `criteria_json.unrated_only`, `criteria_json.include_unrated`, `rules.allow_unrated_in_rating`, `players.rating`, `players.unrated`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Decision logic:** `evaluateEligibility` handles unrated-only categories, explicit include/exclude of unrated players, and min/max rating checks for rated players. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Where it lives:** `evaluateEligibility`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Where user configures it:** Category criteria sheet (`min_rating`, `max_rating`, `include_unrated`, `unrated_only`) and Settings (`allow_unrated_in_rating`). (src/pages/TournamentSetup.tsx → TournamentSetup; src/pages/Settings.tsx → Settings)
+### R4.e Group/type/disability filters
+- **Summary:** Group/type are matched case‑insensitively; disability uses list inclusion.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1488–1514.
 
-## Rule: Location, group, type, and disability filters
-- **Rule in one sentence:** Categories can restrict eligibility by state, city, club, group label, type label, or disability list. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Inputs:** `criteria_json.allowed_states`, `allowed_cities`, `allowed_clubs`, `allowed_groups`, `allowed_types`, `allowed_disabilities`, and player fields. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility)
-- **Decision logic:** `evaluateEligibility` checks membership in allowed lists with alias normalization for location fields and case-insensitive matching for group/type. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, matchesLocation)
-- **Where it lives:** `evaluateEligibility`, `matchesLocation`, `normalizeAllowedList`. (supabase/functions/allocatePrizes/index.ts → evaluateEligibility, matchesLocation)
-- **Where user configures it:** Category criteria sheet in Tournament Setup (state/city/club/group/type/disability inputs). (src/pages/TournamentSetup.tsx → TournamentSetup)
+### R4.f Youngest categories require DOB
+- **Summary:** Youngest categories (`youngest_female`, `youngest_male`) fail eligibility if DOB is missing.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1349–1354; `isYoungestCategory`, lines ~1718–1721.
 
-## Rule: Conflict detection for identical prize priority
-- **Rule in one sentence:** If a player is eligible for multiple prizes with identical priority keys, a tie conflict is generated. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Inputs:** `prizeKey` values per eligible prize. (supabase/functions/allocatePrizes/index.ts → prizeKey, Deno.serve)
-- **Decision logic:** `allocatePrizes` groups eligible prizes by `prizeKey` and emits conflicts when a group has 2+ prizes. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Where it lives:** conflict detection in `allocatePrizes`. (supabase/functions/allocatePrizes/index.ts → Deno.serve)
-- **Where user configures it:** NOT FOUND IN REPO (no UI or config to change conflict detection). 
+## R5. Prize priority queue is global and deterministic
+- **Summary:** Prizes are ordered globally by cash → prize type → (main‑vs‑side toggle) → place → main → brochure order → prize id.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `prizeKey`, lines ~1596–1614; `makePrizeComparator`, lines ~1623–1659; queue sort in `Deno.serve`, lines ~688–706.
+- **Inputs:** `prizes.cash_amount`, `prizes.has_trophy`, `prizes.has_medal`, `prizes.place`, `categories.is_main`, `categories.order_idx`, `rule_config.main_vs_side_priority_mode`.
 
-## Rule: Team/Institution prize allocation
-- **Rule in one sentence:** Team prizes group players by institution field, score top-K players by rank points, and apply tie-breaks on team totals. (supabase/functions/allocateInstitutionPrizes/index.ts → Deno.serve)
-- **Inputs:** `institution_prize_groups.group_by`, `team_size`, `female_slots`, `male_slots`, players’ `club/city/state/group_label/type_label`, and `rank`. (supabase/functions/allocateInstitutionPrizes/index.ts → GROUP_BY_COLUMN_MAP, buildTeam, getRankPoints)
-- **Decision logic:** Build teams that satisfy gender slot requirements, compute total points via `(max_rank + 1 - rank)`, and rank institutions by total_points, rank_sum, best_individual_rank, then name. (supabase/functions/allocateInstitutionPrizes/index.ts → buildTeam, getRankPoints, compareInstitutions)
-- **Where it lives:** `allocateInstitutionPrizes` edge function. (supabase/functions/allocateInstitutionPrizes/index.ts → Deno.serve)
-- **Where user configures it:** Team prize rules in `TeamPrizeRulesSheet` (group_by, team_size, female_slots, male_slots, scoring_mode). (src/components/team-prizes/TeamPrizeRulesSheet.tsx → TeamPrizeRulesSheet; src/components/team-prizes/types.ts → GROUP_BY_OPTIONS)
+## R6. Winner selection is rank‑first with deterministic tie‑breaks
+- **Summary:** Standard categories pick lowest tournament rank; ties follow configured tie‑break fields (rating then name by default). 
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `compareEligibleByRankRatingName`, lines ~1683–1715; `normalizeTieBreakStrategy`, lines ~24–30.
+- **Inputs:** `players.rank`, `players.rating`, `players.name`, `rule_config.tie_break_strategy` (or request override).
 
-## Rule: Import conflict detection (pre-dedup)
-- **Rule in one sentence:** Import conflicts are detected by FIDE ID, Name+DOB, or SNo collisions, with rank-only ties ignored. (src/utils/conflictUtils.ts → detectConflictsInDraft, isRankOnlyCollision)
-- **Inputs:** incoming row fields `fide_id`, `name`, `dob`, `dob_raw`, `sno`, `rank`. (src/utils/conflictUtils.ts → buildFideKey, buildNameDobKey, buildSnoKey)
-- **Decision logic:** `detectConflictsInDraft` checks FIDE first, then Name+DOB (skipping when FIDE IDs differ), then SNo. (src/utils/conflictUtils.ts → detectConflictsInDraft, shouldGroupAsNameDobConflict)
-- **Where it lives:** `conflictUtils`. (src/utils/conflictUtils.ts → detectConflictsInDraft)
-- **Where user configures it:** NOT FOUND IN REPO (conflict detection rules are fixed). 
+## R7. Youngest categories use DOB, then rank/rating/name
+- **Summary:** Youngest categories sort by most recent DOB (youngest), then rank, rating, and name. 
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `compareYoungestEligible`, lines ~1736–1766.
 
-## Rule: Import dedup scoring + merge policy
-- **Rule in one sentence:** Dedup scoring combines name, FIDE ID, DOB, and rating similarity; merge policy fills blanks and optionally prefers newer ratings or preserves DOB. (src/utils/dedup.ts → scoreCandidate, applyMergePolicy)
-- **Inputs:** incoming player fields (`name`, `fide_id`, `dob`, `dob_raw`, `rating`) and existing player fields. (src/utils/dedup.ts → scoreCandidate, applyMergePolicy)
-- **Decision logic:** `scoreCandidate` assigns weighted scores (name=0.45, FIDE=0.4, DOB=0.25, rating diff bonuses) and caps at 1.0; `applyMergePolicy` decides which fields to update based on policy flags. (src/utils/dedup.ts → scoreCandidate, applyMergePolicy)
-- **Where it lives:** `dedup.ts`. (src/utils/dedup.ts → scoreCandidate, applyMergePolicy)
-- **Where user configures it:** Default merge policy is set by feature flags; UI override NOT FOUND IN REPO. (src/utils/featureFlags.ts → IMPORT_MERGE_POLICY_DEFAULTS)
+## R8. Per‑player prize cap is enforced after eligibility
+- **Summary:** `multi_prize_policy` controls whether a player can win 1 prize, 1 main + 1 side, or unlimited.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `canPlayerTakePrize`, lines ~314–332; applied in `Deno.serve`, lines ~803–826.
+- **Inputs:** `rule_config.multi_prize_policy`, `categories.is_main`.
+
+## R9. Manual overrides are applied before auto allocation
+- **Summary:** Overrides are evaluated for eligibility; if ineligible and not forced, a conflict is emitted and the assignment is skipped.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` override loop, lines ~732–789.
+- **Inputs:** `allocatePrizes` request `overrides`.
+
+## R10. Unfilled prizes are recorded with reason codes
+- **Summary:** If no eligible players remain for a prize, it is marked unfilled with reason codes and coverage diagnostics.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` unfilled handling + coverage, lines ~825–906.
+
+## R11. Conflict detection only flags identical prize priority ties
+- **Summary:** A conflict is emitted when a player is eligible for 2+ prizes with **identical prizeKey** values.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → conflict detection in `Deno.serve`, lines ~1040–1085; `prizeKey`, lines ~1596–1614.
+
+## R12. Allocation preview is read‑only; finalize writes to DB
+- **Summary:** `allocatePrizes` returns winners/coverage without DB writes; `finalize` inserts `allocations` and updates tournament status.
+- **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` response, lines ~1068–1124; supabase/functions/finalize/index.ts → `Deno.serve`, lines ~150–214.
+
+## R13. Team (institution) prize allocation is separate from individual prizes
+- **Summary:** Team prizes group players by a configured field, score top‑K players, apply gender slots, and rank institutions by points → rank sum → best rank → name.
+- **Where in code:** supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132; `getRankPoints`, lines ~152–158; `buildTeam`, lines ~195–259; `compareInstitutions`, lines ~171–189; allocation loop in `Deno.serve`, lines ~278–606.
+
+## R14. Public team prizes are recomputed for published tournaments
+- **Summary:** Public pages call `publicTeamPrizes`, which repeats the team‑allocation logic and enforces `tournaments.is_published = true`.
+- **Where in code:** supabase/functions/publicTeamPrizes/index.ts → `Deno.serve`, lines ~123–395; published guard, lines ~172–214.
+
+## R15. Import dedup & conflict rules influence rank inputs
+- **Summary:** Import conflict detection groups likely duplicate rows by FIDE ID, Name+DOB, or SNo; dedup scoring/merge policy can change the final player list and ranks used in allocation.
+- **Where in code:** src/utils/conflictUtils.ts → `detectConflictsInDraft`, lines ~194–286; src/utils/dedup.ts → `scoreCandidate`/`applyMergePolicy`, lines ~113–184.

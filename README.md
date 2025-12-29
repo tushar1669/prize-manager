@@ -34,6 +34,10 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Prize Allocation Algorithm Specification](./docs/allocator/README.md)
 - [Organizer Guide: How Prizes Are Decided](./docs/allocator/organizer-guide.md)
 - [State Code Auto-Extraction](./docs/import-state-extraction.md)
+- [Algorithm (Plain English)](./docs/ALGORITHM_PLAIN_ENGLISH.md)
+- [Algorithm Rules Reference](./docs/ALGORITHM_RULES.md)
+- [Rules & Settings Reference](./docs/RULES_AND_SETTINGS_REFERENCE.md)
+- [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
 
 ## Docs index (A–Z product docs)
 - [Product Working Notes](./docs/PRODUCT_WORKING.md)
