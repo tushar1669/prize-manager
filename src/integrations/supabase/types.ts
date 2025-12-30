@@ -609,10 +609,12 @@ export type Database = {
           age_band_policy: string | null
           allow_missing_dob_for_age: boolean | null
           allow_unrated_in_rating: boolean | null
+          category_priority_order: Json | null
           created_at: string | null
           main_vs_side_priority_mode: string
           max_age_inclusive: boolean | null
           multi_prize_policy: string | null
+          prefer_category_rank_on_tie: boolean | null
           prefer_main_on_equal_value: boolean | null
           strict_age: boolean | null
           tournament_id: string
@@ -622,10 +624,12 @@ export type Database = {
           age_band_policy?: string | null
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
+          category_priority_order?: Json | null
           created_at?: string | null
           main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
+          prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null
           tournament_id: string
@@ -635,10 +639,12 @@ export type Database = {
           age_band_policy?: string | null
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
+          category_priority_order?: Json | null
           created_at?: string | null
           main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
+          prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null
           tournament_id?: string
