@@ -71,6 +71,15 @@ export default function PublicWinnersPage() {
   return (
     <div className="min-h-screen bg-background text-foreground print:bg-white print:text-black">
       <div className="container mx-auto px-4 py-8 pm-print-page print:px-4 print:py-3">
+        <div className="mb-4 flex justify-center print:hidden">
+          <Link to="/" aria-label="Prize-Manager home">
+            <img
+              src="/brand/prize-manager-logo.png"
+              alt="Prize-Manager"
+              className="h-10 w-auto max-w-[220px] object-contain"
+            />
+          </Link>
+        </div>
         <div className="mb-4 print:hidden">
           <PublicBackButton />
         </div>

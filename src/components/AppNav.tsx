@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { GuardedLink } from "@/components/GuardedLink";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,7 @@ export function AppNav() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { role } = useUserRole();
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -30,9 +32,20 @@ export function AppNav() {
     <nav className="border-b border-border bg-card">
       <div className="container mx-auto px-6">
         <div className="flex h-16 items-center justify-between">
-          <GuardedLink to="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <Trophy className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold text-foreground">Prize Manager</span>
+          <GuardedLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            {logoFailed ? (
+              <>
+                <Trophy className="h-6 w-6 text-primary" />
+                <span className="text-xl font-semibold text-foreground">Prize Manager</span>
+              </>
+            ) : (
+              <img
+                src="/brand/prize-manager-logo.png"
+                alt="Prize-Manager"
+                className="h-8 w-auto max-w-[180px] object-contain"
+                onError={() => setLogoFailed(true)}
+              />
+            )}
           </GuardedLink>
 
           <div className="flex items-center gap-4">

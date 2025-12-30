@@ -84,6 +84,15 @@ export default function PublicTournamentDetails() {
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border print:bg-white print:border-black/30">
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-5xl mx-auto space-y-6">
+              <div className="flex justify-center">
+                <Link to="/" aria-label="Prize-Manager home">
+                  <img
+                    src="/brand/prize-manager-logo.png"
+                    alt="Prize-Manager"
+                    className="h-10 w-auto max-w-[220px] object-contain"
+                  />
+                </Link>
+              </div>
               <PublicBackButton />
               <div>
                 <h1 className="text-4xl font-bold text-foreground mb-2 print:text-black">{t?.title ?? "Tournament Details"}</h1>
