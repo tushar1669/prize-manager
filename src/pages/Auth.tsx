@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, AlertTriangle, Mail, Loader2 } from "lucide-react";
+import { AlertTriangle, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,9 +119,13 @@ export default function Auth() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 rounded-full bg-primary/10">
-              <Trophy className="h-10 w-10 text-primary" />
-            </div>
+            <Link to="/" aria-label="Prize-Manager home">
+              <img
+                src="/brand/prize-manager-logo.png"
+                alt="Prize-Manager"
+                className="h-10 w-auto max-w-[200px] object-contain"
+              />
+            </Link>
           </div>
           <CardTitle className="text-2xl">Prize Manager</CardTitle>
           <CardDescription>

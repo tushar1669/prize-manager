@@ -197,6 +197,15 @@ export default function PublicResults() {
       <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
         <div className="container mx-auto px-6 py-12">
           <div className="max-w-4xl mx-auto">
+            <div className="flex justify-center mb-6">
+              <Link to="/" aria-label="Prize-Manager home">
+                <img
+                  src="/brand/prize-manager-logo.png"
+                  alt="Prize-Manager"
+                  className="h-10 w-auto max-w-[220px] object-contain"
+                />
+              </Link>
+            </div>
             <div className="mb-6">
               <PublicBackButton />
             </div>
