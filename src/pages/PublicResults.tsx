@@ -11,6 +11,7 @@ import { BrochureLink } from "@/components/public/BrochureLink";
 import { getPlayerDisplayName } from "@/utils/playerName";
 import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
+import { PublicHeader } from "@/components/public/PublicHeader";
 
 type PublishedTournamentBasic = {
   id: string;
@@ -194,99 +195,91 @@ export default function PublicResults() {
       </Link>
 
       <div className="min-h-screen bg-background">
-      <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
-        <div className="container mx-auto px-6 py-12">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex justify-center mb-6">
-              <Link to="/" aria-label="Prize-Manager home">
-                <img
-                  src="/brand/prize-manager-logo.png"
-                  alt="Prize-Manager"
-                  className="h-10 w-auto max-w-[220px] object-contain"
-                />
-              </Link>
-            </div>
-            <div className="mb-6">
-              <PublicBackButton />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
-                <p className="text-lg text-muted-foreground">Final Results</p>
+        <PublicHeader />
+        <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
+          <div className="container mx-auto px-6 py-12">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-6">
+                <PublicBackButton />
               </div>
-              <div className="flex items-center gap-2">
-                <BrochureLink url={tournament.brochure_url} />
-                <Button variant="outline" asChild>
-                  <Link to={`/p/${slug}`}>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Details
-                  </Link>
-                </Button>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-4xl font-bold text-foreground mb-2">{tournament.title}</h1>
+                  <p className="text-lg text-muted-foreground">Final Results</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BrochureLink url={tournament.brochure_url} />
+                  <Button variant="outline" asChild>
+                    <Link to={`/p/${slug}`}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Details
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-6 py-12">
-        <div className="max-w-4xl mx-auto">
-          {!results?.rows || results.rows.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6 text-center text-muted-foreground">
-                No published results yet.
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent border-border bg-muted/50">
-                        <TableHead className="font-semibold">Category</TableHead>
-                        <TableHead className="font-semibold">Place</TableHead>
-                        <TableHead className="font-semibold">Player</TableHead>
-                        <TableHead className="font-semibold">Rank</TableHead>
-                        <TableHead className="font-semibold">Rating</TableHead>
-                        <TableHead className="font-semibold">State</TableHead>
-                        <TableHead className="font-semibold">Prize</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {results.rows.map((result, idx) => (
-                        <TableRow key={idx} className="border-border">
-                          <TableCell className="font-medium">{result.categoryName}</TableCell>
-                          <TableCell className="font-bold text-lg">{result.place}</TableCell>
-                          <TableCell className="font-medium text-foreground">{result.playerName}</TableCell>
-                          <TableCell className="text-muted-foreground">{result.rank}</TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {result.rating ?? 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{result.state || '-'}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {result.cashAmount > 0 && (
-                                <span className="font-medium text-accent">₹{result.cashAmount}</span>
-                              )}
-                              {result.hasTrophy && <Trophy className="h-4 w-4 text-yellow-500" />}
-                              {result.hasMedal && <Medal className="h-4 w-4 text-gray-400" />}
-                            </div>
-                          </TableCell>
+        <div className="container mx-auto px-6 py-12">
+          <div className="max-w-4xl mx-auto">
+            {!results?.rows || results.rows.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  No published results yet.
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent border-border bg-muted/50">
+                          <TableHead className="font-semibold">Category</TableHead>
+                          <TableHead className="font-semibold">Place</TableHead>
+                          <TableHead className="font-semibold">Player</TableHead>
+                          <TableHead className="font-semibold">Rank</TableHead>
+                          <TableHead className="font-semibold">Rating</TableHead>
+                          <TableHead className="font-semibold">State</TableHead>
+                          <TableHead className="font-semibold">Prize</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                      </TableHeader>
+                      <TableBody>
+                        {results.rows.map((result, idx) => (
+                          <TableRow key={idx} className="border-border">
+                            <TableCell className="font-medium">{result.categoryName}</TableCell>
+                            <TableCell className="font-bold text-lg">{result.place}</TableCell>
+                            <TableCell className="font-medium text-foreground">{result.playerName}</TableCell>
+                            <TableCell className="text-muted-foreground">{result.rank}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {result.rating ?? 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">{result.state || '-'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {result.cashAmount > 0 && (
+                                  <span className="font-medium text-accent">₹{result.cashAmount}</span>
+                                )}
+                                {result.hasTrophy && <Trophy className="h-4 w-4 text-yellow-500" />}
+                                {result.hasMedal && <Medal className="h-4 w-4 text-gray-400" />}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Team Prizes Section */}
-          {tournament?.id && (
-            <PublicTeamPrizesSection tournamentId={tournament.id} />
-          )}
+            {/* Team Prizes Section */}
+            {tournament?.id && (
+              <PublicTeamPrizesSection tournamentId={tournament.id} />
+            )}
+          </div>
         </div>
-      </div>
     </div>
     </>
   );

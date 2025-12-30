@@ -29,7 +29,7 @@ export function AppNav() {
   };
 
   return (
-    <nav className="border-b border-border bg-card">
+    <nav className="border-b border-border bg-card/95">
       <div className="container mx-auto px-6">
         <div className="flex h-16 items-center justify-between">
           <GuardedLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -42,7 +42,7 @@ export function AppNav() {
               <img
                 src="/brand/prize-manager-logo.png"
                 alt="Prize-Manager"
-                className="h-8 w-auto max-w-[180px] object-contain"
+                className="h-7 w-auto max-w-[140px] object-contain shrink-0 sm:h-8 sm:max-w-[180px]"
                 onError={() => setLogoFailed(true)}
               />
             )}

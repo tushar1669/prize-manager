@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
+import { PublicHeader } from "@/components/public/PublicHeader";
 
 type PublishedTournament = {
   id: string;
@@ -106,83 +107,84 @@ export default function PublicTournament() {
       </Link>
 
       <div className="min-h-screen bg-background">
-      <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
-        <div className="container mx-auto px-6 py-16">
-          <div className="max-w-4xl mx-auto">
-            <PublicBackButton className="mb-6" />
-            <div className="flex items-start gap-4 mb-6">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Trophy className="h-8 w-8 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold text-foreground mb-3">
-                  {tournament.title}
-                </h1>
-                <div className="flex flex-wrap gap-4 text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      {new Date(tournament.start_date).toLocaleDateString()} - {new Date(tournament.end_date).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {tournament.city && (
+        <PublicHeader />
+        <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
+          <div className="container mx-auto px-6 py-16">
+            <div className="max-w-4xl mx-auto">
+              <PublicBackButton className="mb-6" />
+              <div className="flex items-start gap-4 mb-6">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <Trophy className="h-8 w-8 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-4xl font-bold text-foreground mb-3">
+                    {tournament.title}
+                  </h1>
+                  <div className="flex flex-wrap gap-4 text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      <span>{tournament.venue ? `${tournament.venue}, ` : ''}{tournament.city}</span>
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        {new Date(tournament.start_date).toLocaleDateString()} - {new Date(tournament.end_date).toLocaleDateString()}
+                      </span>
                     </div>
-                  )}
+                    {tournament.city && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span>{tournament.venue ? `${tournament.venue}, ` : ''}{tournament.city}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <Card className="bg-card">
-              <CardContent className="pt-6">
-                <div className="flex flex-wrap gap-2">
-                  <BrochureLink url={tournament.brochure_url} />
-                  
-                  {tournament.chessresults_url && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={tournament.chessresults_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                        <ExternalLink className="h-4 w-4" />
-                        ChessResults
-                      </a>
-                    </Button>
-                  )}
-                  
-                  {showFinalRanks && (
-                    <Button variant="default" size="sm" asChild>
-                      {tournament.public_results_url ? (
-                        <a href={tournament.public_results_url} target="_blank" rel="noopener noreferrer" className="gap-2">
-                          Final Ranks
-                          <ExternalLink className="h-3 w-3" />
+              <Card className="bg-card">
+                <CardContent className="pt-6">
+                  <div className="flex flex-wrap gap-2">
+                    <BrochureLink url={tournament.brochure_url} />
+                    
+                    {tournament.chessresults_url && (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={tournament.chessresults_url} target="_blank" rel="noopener noreferrer" className="gap-2">
+                          <ExternalLink className="h-4 w-4" />
+                          ChessResults
                         </a>
-                      ) : (
-                        <Link to={`/p/${slug}/results`} className="gap-2">
-                          Final Ranks
-                        </Link>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                      </Button>
+                    )}
+                    
+                    {showFinalRanks && (
+                      <Button variant="default" size="sm" asChild>
+                        {tournament.public_results_url ? (
+                          <a href={tournament.public_results_url} target="_blank" rel="noopener noreferrer" className="gap-2">
+                            Final Ranks
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <Link to={`/p/${slug}/results`} className="gap-2">
+                            Final Ranks
+                          </Link>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto px-6 py-12">
+          <div className="max-w-4xl mx-auto">
+            {tournament.notes && (
+              <Card>
+                <CardContent className="pt-6">
+                  <h2 className="text-xl font-bold text-foreground mb-3">About</h2>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{tournament.notes}</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>
-
-      <div className="container mx-auto px-6 py-12">
-        <div className="max-w-4xl mx-auto">
-          {tournament.notes && (
-            <Card>
-              <CardContent className="pt-6">
-                <h2 className="text-xl font-bold text-foreground mb-3">About</h2>
-                <p className="text-muted-foreground whitespace-pre-wrap">{tournament.notes}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    </div>
     </>
   );
 }

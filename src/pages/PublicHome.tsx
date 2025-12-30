@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, Timer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { classifyTimeControl } from "@/utils/timeControl";
+import { PublicHeader } from "@/components/public/PublicHeader";
 
 type PublicTournament = {
   id: string;
@@ -96,18 +97,10 @@ export default function PublicHome() {
       </Link>
 
       <div className="min-h-screen bg-background">
+        <PublicHeader />
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-4xl mx-auto text-center">
-              <div className="flex justify-center mb-6">
-                <Link to="/" aria-label="Prize-Manager home">
-                  <img
-                    src="/brand/prize-manager-logo.png"
-                    alt="Prize-Manager"
-                    className="h-10 w-auto max-w-[220px] object-contain"
-                  />
-                </Link>
-              </div>
               <h1 className="text-4xl font-bold text-foreground mb-4">Tournament Results</h1>
               <p className="text-lg text-muted-foreground">
                 View published tournament results and prize allocations

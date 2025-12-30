@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { AlertTriangle, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { PublicHeader } from "@/components/public/PublicHeader";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -115,70 +116,63 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Link to="/" aria-label="Prize-Manager home">
-              <img
-                src="/brand/prize-manager-logo.png"
-                alt="Prize-Manager"
-                className="h-10 w-auto max-w-[200px] object-contain"
-              />
-            </Link>
-          </div>
-          <CardTitle className="text-2xl">Prize Manager</CardTitle>
-          <CardDescription>
-            {isLogin ? "Sign in to manage your tournaments" : "Create an account to get started"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Localhost warning on signup only */}
-          {!isLogin && isLocalhost && (
-            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                You're on localhost. Email confirmation links will redirect here, which may fail in production. 
-                For production, use the deployed URL.
-              </p>
-            </div>
-          )}
-
-          {/* Resend confirmation section - shown after signup or when user requests */}
-          {showResend && !isLogin && (
-            <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Mail className="h-4 w-4" />
-                Didn't receive the email?
+    <div className="min-h-screen bg-background">
+      <PublicHeader />
+      <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Prize Manager</CardTitle>
+            <CardDescription>
+              {isLogin ? "Sign in to manage your tournaments" : "Create an account to get started"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Localhost warning on signup only */}
+            {!isLogin && isLocalhost && (
+              <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  You're on localhost. Email confirmation links will redirect here, which may fail in production. 
+                  For production, use the deployed URL.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Input
-                  type="email"
-                  placeholder="your@email.com"
-                  value={resendEmail}
-                  onChange={(e) => setResendEmail(e.target.value)}
-                />
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  className="w-full" 
-                  onClick={handleResendConfirmation}
-                  disabled={resendLoading}
-                >
-                  {resendLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    'Resend Confirmation Email'
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Resend confirmation section - shown after signup or when user requests */}
+            {showResend && !isLogin && (
+              <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Mail className="h-4 w-4" />
+                  Didn't receive the email?
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    type="email"
+                    placeholder="your@email.com"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    className="w-full" 
+                    onClick={handleResendConfirmation}
+                    disabled={resendLoading}
+                  >
+                    {resendLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      'Resend Confirmation Email'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -266,9 +260,10 @@ export default function Auth() {
                 {isLogin ? "Sign up" : "Sign in"}
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
