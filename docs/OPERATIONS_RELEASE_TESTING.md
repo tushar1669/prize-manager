@@ -5,6 +5,7 @@
 - **Lint:** `npm run lint` (package.json → scripts.lint).
 - **Unit tests:** `npm run test:unit` (package.json → scripts.test:unit).
 - **Playwright smoke:** `npm run test:smoke` (package.json → scripts.test:smoke). If Playwright browsers are unavailable, record as not executed.
+- **Database migrations:** apply Supabase migrations before deploy (e.g., `supabase db push` or `supabase migration up` for the target project).
 - **CI e2e subsets:** CI also runs `npm run test:swiss`, `npm run test:alloc`, `npm run test:ux`, plus `npm run assert:no-csv`. (package.json → scripts.*)
 
 ## Local testing commands (quick copy/paste)
@@ -31,3 +32,7 @@ npm run test:smoke
 ## Common pitfalls
 - **Playwright browsers missing:** `pretest:smoke` runs `scripts/ensure-playwright-browsers.mjs`. If `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` is set, browsers are not installed and the smoke suite will fail. (scripts/ensure-playwright-browsers.mjs → skipDownload logic)
 github/workflows/ci.yml → CSV Guard; package.json → scripts)
+
+## Schema drift guard (recommended)
+- **Doc note:** Always apply Supabase migrations before deploy to keep runtime schemas aligned with code.
+- **Minimal CI check:** run `supabase db diff --linked --schema public` and fail if the diff is non-empty, to detect drift between migrations and the linked project.
