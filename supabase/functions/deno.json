@@ -1,11 +1,9 @@
 {
   "nodeModulesDir": "auto",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["@supabase/functions-js/edge-runtime"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "deno.ns"]
   },
   "imports": {
-    "@supabase/functions-js": "jsr:@supabase/functions-js@2.5.0",
     "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.58.0",
     "@supabase/realtime-js": "npm:@supabase/realtime-js@2.75.1"
   }
