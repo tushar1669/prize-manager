@@ -12,7 +12,7 @@ const defaultRules = {
   max_age_inclusive: true,
   prefer_category_rank_on_tie: false,
   category_priority_order: ['main', 'others'],
-  main_vs_side_priority_mode: 'place_first' as const,
+  main_vs_side_priority_mode: 'main_first' as const,
   tie_break_strategy: 'rating_then_name' as const,
   verbose_logs: false,
 };
@@ -87,7 +87,11 @@ function verifyRankInvariant(
   const prizeQueue = categories.flatMap(cat => 
     cat.prizes.map(p => ({ cat, p }))
   );
-  prizeQueue.sort((a, b) => allocator.cmpPrize(a, b));
+  const prizeComparator = allocator.makePrizeComparator({
+    main_vs_side_priority_mode: (rules as { main_vs_side_priority_mode?: AllocatorModule.MainVsSidePriorityMode })
+      .main_vs_side_priority_mode,
+  });
+  prizeQueue.sort((a, b) => prizeComparator(a, b));
   
   // Process prizes in order
   for (const { cat, p } of prizeQueue) {
@@ -173,7 +177,11 @@ function runAllocationAndVerify(
   const prizeQueue = categories.flatMap(cat => 
     cat.prizes.map(p => ({ cat, p }))
   );
-  prizeQueue.sort((a, b) => allocator.cmpPrize(a, b));
+  const prizeComparator = allocator.makePrizeComparator({
+    main_vs_side_priority_mode: (rules as { main_vs_side_priority_mode?: AllocatorModule.MainVsSidePriorityMode })
+      .main_vs_side_priority_mode,
+  });
+  prizeQueue.sort((a, b) => prizeComparator(a, b));
   
   const winners: Winner[] = [];
   const assignedPlayers = new Set<string>();

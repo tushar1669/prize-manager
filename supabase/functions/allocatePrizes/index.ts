@@ -545,7 +545,7 @@ Deno.serve(async (req) => {
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
       prefer_main_on_equal_value: true,
-      main_vs_side_priority_mode: 'place_first' as MainVsSidePriorityMode,
+      main_vs_side_priority_mode: 'main_first' as MainVsSidePriorityMode,
       tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
       // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
     const ruleOverride = ruleConfigOverride as Record<string, unknown> | undefined;
     const mainVsSidePriorityMode = ((ruleOverride?.main_vs_side_priority_mode ??
       ruleConfig?.main_vs_side_priority_mode ??
-      (rules.prefer_main_on_equal_value ? 'main_first' : 'place_first')) as MainVsSidePriorityMode);
+      (rules.prefer_main_on_equal_value === false ? 'place_first' : 'main_first')) as MainVsSidePriorityMode);
     rules.main_vs_side_priority_mode = mainVsSidePriorityMode;
 
     // Determine age band policy
@@ -697,7 +697,7 @@ Deno.serve(async (req) => {
 
     // Use main_vs_side_priority_mode from rules to determine priority behavior
     const prizeComparator = makePrizeComparator({
-      main_vs_side_priority_mode: rules.main_vs_side_priority_mode ?? 'place_first'
+      main_vs_side_priority_mode: rules.main_vs_side_priority_mode ?? 'main_first'
     });
     prizeQueue.sort(prizeComparator);
 
@@ -1682,7 +1682,7 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
  * place in Main.
  */
 export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsSidePriorityMode } = {}) => {
-  const preferMainFirst = opts.main_vs_side_priority_mode === 'main_first';
+  const preferMainFirst = opts.main_vs_side_priority_mode !== 'place_first';
   
   return (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
     const ak = prizeKey(a.cat, a.p), bk = prizeKey(b.cat, b.p);
@@ -1717,14 +1717,14 @@ export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsS
 };
 
 /**
- * Default comparator for prize priority queue (main_vs_side_priority_mode = 'place_first').
+ * Default comparator for prize priority queue (main_vs_side_priority_mode = 'main_first').
  * 
- * Priority: cash → trophy/medal → place → main vs sub → brochure order → prize id
+ * Priority: cash → trophy/medal → main vs sub (for mixed) → place → brochure order → prize id
  * 
- * This is the legacy behavior where place beats main (Side 1st beats Main 4th).
+ * This is the default behavior where main wins over side (when cash/type match).
  * Exported for backward-compatible tests.
  */
-export const cmpPrize = makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+export const cmpPrize = makePrizeComparator({ main_vs_side_priority_mode: 'main_first' });
 
 /**
  * Deterministic comparator for eligible players (standard categories).

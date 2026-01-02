@@ -147,7 +147,7 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
   const ageBandPolicy = rc.age_band_policy || 'non_overlapping';
   const multiPrizePolicy = rc.multi_prize_policy || 'single';
   const mainVsSidePriorityMode = rc.main_vs_side_priority_mode
-    || (rc.prefer_main_on_equal_value ? 'main_first' : 'place_first');
+    ?? (rc.prefer_main_on_equal_value === false ? 'place_first' : 'main_first');
   
   const prizeStackingLabel = multiPrizePolicy === 'unlimited' 
     ? 'Unlimited stacking' 

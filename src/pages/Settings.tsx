@@ -31,7 +31,7 @@ export default function Settings() {
       allow_unrated_in_rating: false,
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
-      main_vs_side_priority_mode: 'place_first' as const,
+      main_vs_side_priority_mode: 'main_first' as const,
       age_band_policy: 'non_overlapping' as const,
       multi_prize_policy: 'single' as const,
       age_cutoff_policy: 'JAN1_TOURNAMENT_YEAR' as const,
@@ -96,8 +96,7 @@ export default function Settings() {
       const ruleData = data as RuleConfigData | null;
       if (ruleData) {
         const mainVsSidePriorityMode = ruleData.main_vs_side_priority_mode
-          || (ruleData.prefer_main_on_equal_value ? 'main_first' : 'place_first')
-          || 'place_first';
+          ?? (ruleData.prefer_main_on_equal_value === false ? 'place_first' : 'main_first');
         form.reset({
           strict_age: ruleData.strict_age,
           allow_unrated_in_rating: ruleData.allow_unrated_in_rating,
@@ -347,9 +346,9 @@ export default function Settings() {
                       <FormDescription className="text-sm text-muted-foreground mt-1 mb-4">
                         Decide which prize wins when cash and prize type match
                       </FormDescription>
-                      <FormControl>
-                        <RadioGroup
-                          value={field.value || 'place_first'}
+                        <FormControl>
+                          <RadioGroup
+                          value={field.value || 'main_first'}
                           onValueChange={field.onChange}
                           className="space-y-3"
                         >

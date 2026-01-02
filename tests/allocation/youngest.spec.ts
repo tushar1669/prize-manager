@@ -11,7 +11,7 @@ const defaultRules = {
   max_age_inclusive: true,
   prefer_category_rank_on_tie: false,
   category_priority_order: ['main', 'others'],
-  main_vs_side_priority_mode: 'place_first' as const,
+  main_vs_side_priority_mode: 'main_first' as const,
   tie_break_strategy: 'rating_then_name' as const,
   verbose_logs: false,
 };
