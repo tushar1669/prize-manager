@@ -20,6 +20,7 @@ type TieBreakField = 'rating' | 'name';
 type TieBreakStrategy = 'rating_then_name' | 'none' | TieBreakField[];
 export type MultiPrizePolicy = 'single' | 'main_plus_one_side' | 'unlimited';
 export type MainVsSidePriorityMode = 'main_first' | 'place_first';
+export type AgeCutoffPolicy = 'JAN1_TOURNAMENT_YEAR' | 'TOURNAMENT_START_DATE' | 'CUSTOM_DATE';
 
 export function normalizeTieBreakStrategy(strategy: TieBreakStrategy | undefined): TieBreakField[] {
   if (Array.isArray(strategy)) return strategy.filter((s): s is TieBreakField => s === 'rating' || s === 'name');
@@ -458,9 +459,6 @@ Deno.serve(async (req) => {
 
     if (tournamentError || !tournament) throw new Error(`Tournament not found: ${tournamentError?.message}`);
 
-    // Use tournament start_date for age calculation, fallback to today
-    const tournamentStartDate = tournament.start_date ? new Date(tournament.start_date) : new Date();
-
     // 2) Fetch categories with prizes (order by order_idx for brochure order)
     // NOTE: category_type is stored in criteria_json.category_type until DB migration adds the column
     const { data: categories, error: categoriesError } = await supabaseClient
@@ -554,6 +552,8 @@ Deno.serve(async (req) => {
       age_band_policy: 'non_overlapping' as 'non_overlapping' | 'overlapping',
       // NEW: Per-player prize cap policy (defaults to legacy single-prize behaviour)
       multi_prize_policy: 'single' as MultiPrizePolicy,
+      age_cutoff_policy: 'JAN1_TOURNAMENT_YEAR' as AgeCutoffPolicy,
+      age_cutoff_date: null as string | null,
     };
 
     const rules = {
@@ -581,7 +581,12 @@ Deno.serve(async (req) => {
 
     // Determine age band policy
     const ageBandPolicy = (rules.age_band_policy ?? 'non_overlapping') as 'non_overlapping' | 'overlapping';
-    console.log(`[alloc] tid=${tournamentId} players=${playerRows.length} categories=${activeCategories.length} prizes=${activePrizes.length} ageBandPolicy=${ageBandPolicy}`);
+    const ageCutoffDate = resolveAgeCutoffDate(
+      tournament.start_date,
+      rules.age_cutoff_policy,
+      rules.age_cutoff_date
+    );
+    console.log(`[alloc] tid=${tournamentId} players=${playerRows.length} categories=${activeCategories.length} prizes=${activePrizes.length} ageBandPolicy=${ageBandPolicy} ageCutoffPolicy=${rules.age_cutoff_policy ?? 'JAN1_TOURNAMENT_YEAR'} ageCutoffDate=${toIsoDateString(ageCutoffDate)}`);
 
     // 4.5) Compute effective age bands for non-overlapping policy
     // This transforms overlapping Under-X categories into disjoint age bands
@@ -737,7 +742,7 @@ Deno.serve(async (req) => {
       const force = override.force === true;
 
       const evaluation = (prizeContext && player)
-        ? evaluateEligibility(player, prizeContext.cat, rules, tournamentStartDate, effectiveAgeBands)
+        ? evaluateEligibility(player, prizeContext.cat, rules, ageCutoffDate, effectiveAgeBands)
         : null;
       const eligible = evaluation?.eligible === true;
 
@@ -798,7 +803,7 @@ Deno.serve(async (req) => {
       const failCodes = new Set<string>();
 
       for (const player of playerRows) {
-        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate, effectiveAgeBands);
+        const evaluation = evaluateEligibility(player, cat, rules, ageCutoffDate, effectiveAgeBands);
         logGenderEligibility(cat, player, evaluation);
         if (rules.verbose_logs) {
           const status = evaluation.eligible ? 'eligible' : 'ineligible';
@@ -1041,7 +1046,7 @@ Deno.serve(async (req) => {
     const playerEligiblePrizes = new Map<string, Array<{ cat: CategoryRow; p: PrizeRow }>>();
     for (const { cat, p } of prizeQueue) {
       for (const player of playerRows) {
-        const evaluation = evaluateEligibility(player, cat, rules, tournamentStartDate, effectiveAgeBands);
+        const evaluation = evaluateEligibility(player, cat, rules, ageCutoffDate, effectiveAgeBands);
         if (evaluation.eligible) {
           if (!playerEligiblePrizes.has(player.id)) {
             playerEligiblePrizes.set(player.id, []);
@@ -1162,8 +1167,42 @@ const parseIsoDateParts = (value: string | null | undefined): { year: number; mo
   return { year, month, day };
 };
 
+const buildUtcDateFromIso = (value: string | null | undefined): Date | null => {
+  const parts = parseIsoDateParts(value);
+  if (!parts) return null;
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+};
+
 const toIsoDateString = (date: Date): string =>
   `${date.getUTCFullYear()}-${padTwo(date.getUTCMonth() + 1)}-${padTwo(date.getUTCDate())}`;
+
+export const resolveAgeCutoffDate = (
+  tournamentStartDate: string | null | undefined,
+  policy: AgeCutoffPolicy | string | null | undefined,
+  customDate: string | null | undefined
+): Date => {
+  const today = new Date();
+  const normalizedPolicy = (policy ?? 'JAN1_TOURNAMENT_YEAR') as AgeCutoffPolicy;
+
+  if (normalizedPolicy === 'CUSTOM_DATE') {
+    const custom = buildUtcDateFromIso(customDate);
+    if (custom) return custom;
+    console.warn('[alloc.ageCutoff] CUSTOM_DATE selected but age_cutoff_date missing; falling back to today.');
+    return today;
+  }
+
+  const startDate = buildUtcDateFromIso(tournamentStartDate);
+  if (!startDate) {
+    console.warn(`[alloc.ageCutoff] start_date missing for policy ${normalizedPolicy}; falling back to today.`);
+    return today;
+  }
+
+  if (normalizedPolicy === 'TOURNAMENT_START_DATE') {
+    return startDate;
+  }
+
+  return new Date(Date.UTC(startDate.getUTCFullYear(), 0, 1));
+};
 
 export const getAgeOnDate = (dobISO: string | null | undefined, asOfISO: string | null | undefined): number | null => {
   const dobParts = parseIsoDateParts(dobISO);
@@ -1295,6 +1334,8 @@ type AllocationRules = {
   tieBreakStrategy?: TieBreakStrategy;
   prefer_main_on_equal_value?: boolean;
   age_band_policy?: 'non_overlapping' | 'overlapping';
+  age_cutoff_policy?: AgeCutoffPolicy;
+  age_cutoff_date?: string | null;
   [key: string]: unknown;
 };
 

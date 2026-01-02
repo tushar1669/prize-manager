@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +33,9 @@ export default function Settings() {
       max_age_inclusive: true,
       main_vs_side_priority_mode: 'place_first' as const,
       age_band_policy: 'non_overlapping' as const,
-      multi_prize_policy: 'single' as const
+      multi_prize_policy: 'single' as const,
+      age_cutoff_policy: 'JAN1_TOURNAMENT_YEAR' as const,
+      age_cutoff_date: null
     }
   });
 
@@ -64,6 +67,8 @@ export default function Settings() {
     main_vs_side_priority_mode?: 'main_first' | 'place_first';
     age_band_policy?: 'non_overlapping' | 'overlapping';
     multi_prize_policy?: 'single' | 'main_plus_one_side' | 'unlimited';
+    age_cutoff_policy?: 'JAN1_TOURNAMENT_YEAR' | 'TOURNAMENT_START_DATE' | 'CUSTOM_DATE';
+    age_cutoff_date?: string | null;
     tournament_id?: string;
   };
 
@@ -73,7 +78,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, age_cutoff_policy, age_cutoff_date, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -100,7 +105,9 @@ export default function Settings() {
           max_age_inclusive: ruleData.max_age_inclusive,
           main_vs_side_priority_mode: mainVsSidePriorityMode,
           age_band_policy: ruleData.age_band_policy || 'non_overlapping',
-          multi_prize_policy: ruleData.multi_prize_policy || 'single'
+          multi_prize_policy: ruleData.multi_prize_policy || 'single',
+          age_cutoff_policy: ruleData.age_cutoff_policy || 'JAN1_TOURNAMENT_YEAR',
+          age_cutoff_date: ruleData.age_cutoff_date || null
         });
       }
       return data;
@@ -118,6 +125,7 @@ export default function Settings() {
         .upsert({
           tournament_id: id,
           ...values,
+          age_cutoff_date: values.age_cutoff_date || null,
           main_vs_side_priority_mode: values.main_vs_side_priority_mode,
           prefer_main_on_equal_value: values.main_vs_side_priority_mode === 'main_first',
           updated_at: new Date().toISOString()
@@ -246,6 +254,86 @@ export default function Settings() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="age_cutoff_policy"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground font-medium">
+                        Age Eligibility Cutoff
+                      </FormLabel>
+                      <FormDescription className="text-sm text-muted-foreground mt-1 mb-4">
+                        Choose which date is used to calculate player ages.
+                      </FormDescription>
+                      <FormControl>
+                        <RadioGroup
+                          value={field.value || 'JAN1_TOURNAMENT_YEAR'}
+                          onValueChange={field.onChange}
+                          className="space-y-3"
+                        >
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="JAN1_TOURNAMENT_YEAR" id="age-cutoff-jan1" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="age-cutoff-jan1" className="font-medium cursor-pointer">
+                                Jan 1 of tournament year (default)
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Age is computed as of January 1 in the tournament’s start year.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="TOURNAMENT_START_DATE" id="age-cutoff-start" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="age-cutoff-start" className="font-medium cursor-pointer">
+                                Tournament start date
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Age is computed as of the tournament start date.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="CUSTOM_DATE" id="age-cutoff-custom" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="age-cutoff-custom" className="font-medium cursor-pointer">
+                                Custom date
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Use a specific cutoff date for age eligibility.
+                              </p>
+                            </div>
+                          </div>
+                        </RadioGroup>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch('age_cutoff_policy') === 'CUSTOM_DATE' && (
+                  <FormField
+                    control={form.control}
+                    name="age_cutoff_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-medium">
+                          Custom Age Cutoff Date
+                        </FormLabel>
+                        <FormDescription className="text-sm text-muted-foreground mt-1">
+                          Enter the cutoff date used to calculate ages (YYYY-MM-DD).
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
 
 
                 <FormField
@@ -416,6 +504,16 @@ export default function Settings() {
                   <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
+                  <li>
+                    Age Cutoff:{' '}
+                    <strong>
+                      {form.watch('age_cutoff_policy') === 'CUSTOM_DATE'
+                        ? `Custom (${form.watch('age_cutoff_date') || 'unset'})`
+                        : form.watch('age_cutoff_policy') === 'TOURNAMENT_START_DATE'
+                        ? 'Tournament start date'
+                        : 'Jan 1 of tournament year'}
+                    </strong>
+                  </li>
                   <li>
                     Main vs Place Priority:{' '}
                     <strong>

@@ -190,6 +190,30 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     });
   });
 
+  describe('resolveAgeCutoffDate', () => {
+    const iso = (date: Date) => date.toISOString().slice(0, 10);
+
+    it('defaults to January 1 of the tournament start year', () => {
+      const cutoff = allocator.resolveAgeCutoffDate('2026-04-14', undefined, null);
+      expect(iso(cutoff)).toBe('2026-01-01');
+    });
+
+    it('supports tournament start date policy', () => {
+      const cutoff = allocator.resolveAgeCutoffDate('2026-04-14', 'TOURNAMENT_START_DATE', null);
+      expect(iso(cutoff)).toBe('2026-04-14');
+    });
+
+    it('supports custom date policy', () => {
+      const cutoff = allocator.resolveAgeCutoffDate('2026-04-14', 'CUSTOM_DATE', '2025-07-15');
+      expect(iso(cutoff)).toBe('2025-07-15');
+    });
+
+    it('derives the cutoff year from the tournament start date (no hard-coded year)', () => {
+      const cutoff = allocator.resolveAgeCutoffDate('2037-09-02', 'JAN1_TOURNAMENT_YEAR', null);
+      expect(iso(cutoff)).toBe('2037-01-01');
+    });
+  });
+
   const runAllocation = (
     categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: unknown; prizes: unknown[] }>,
     players: Array<unknown>,
