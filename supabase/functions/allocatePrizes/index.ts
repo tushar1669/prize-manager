@@ -1149,15 +1149,38 @@ export const normGender = (g?: string | null): string | null => {
   return null;
 };
 
+const padTwo = (value: number): string => String(value).padStart(2, '0');
+
+const parseIsoDateParts = (value: string | null | undefined): { year: number; month: number; day: number } | null => {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+};
+
+const toIsoDateString = (date: Date): string =>
+  `${date.getUTCFullYear()}-${padTwo(date.getUTCMonth() + 1)}-${padTwo(date.getUTCDate())}`;
+
+export const getAgeOnDate = (dobISO: string | null | undefined, asOfISO: string | null | undefined): number | null => {
+  const dobParts = parseIsoDateParts(dobISO);
+  const asOfParts = parseIsoDateParts(asOfISO);
+  if (!dobParts || !asOfParts) return null;
+  let age = asOfParts.year - dobParts.year;
+  if (
+    asOfParts.month < dobParts.month ||
+    (asOfParts.month === dobParts.month && asOfParts.day < dobParts.day)
+  ) {
+    age -= 1;
+  }
+  return age;
+};
+
 export const yearsOn = (dobISO: string | null | undefined, onDate: Date): number | null => {
-  if (!dobISO) return null;
-  const d = new Date(dobISO);
-  if (Number.isNaN(d.getTime())) return null;
-  let y = onDate.getFullYear() - d.getFullYear();
-  const m = onDate.getMonth() - d.getMonth();
-  const day = onDate.getDate() - d.getDate();
-  if (m < 0 || (m === 0 && day < 0)) y -= 1;
-  return y;
+  return getAgeOnDate(dobISO, toIsoDateString(onDate));
 };
 
 // Detect rating category purely by presence of rating bounds

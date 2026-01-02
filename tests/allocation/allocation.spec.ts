@@ -174,6 +174,22 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     multi_prize_policy: 'single' as const,
   };
 
+  describe('getAgeOnDate', () => {
+    it('computes age using a January 1st cutoff in 2026', () => {
+      expect(allocator.getAgeOnDate('2011-01-01', '2026-01-01')).toBe(15);
+      expect(allocator.getAgeOnDate('2011-01-02', '2026-01-01')).toBe(14);
+    });
+
+    it('computes age using a December 31st cutoff in 2026', () => {
+      expect(allocator.getAgeOnDate('2011-12-31', '2026-12-31')).toBe(15);
+    });
+
+    it('handles leap-day birthdays around non-leap cutoffs', () => {
+      expect(allocator.getAgeOnDate('2012-02-29', '2026-02-28')).toBe(13);
+      expect(allocator.getAgeOnDate('2012-02-29', '2026-03-01')).toBe(14);
+    });
+  });
+
   const runAllocation = (
     categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: unknown; prizes: unknown[] }>,
     players: Array<unknown>,
