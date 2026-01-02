@@ -14,14 +14,12 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "npm:@supabase/supabase-js@2": "@supabase/supabase-js",
     },
   },
   test: {
     environment: 'jsdom',
     globals: true,
-    include: [
-      'tests/utils/**/*.spec.ts',
-      'tests/conflict-utils.spec.ts',
-    ],
+    include: ['tests/**/*.spec.ts'],
   } satisfies UserConfig['test'],
 }));

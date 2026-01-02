@@ -214,6 +214,45 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     });
   });
 
+  it('smoke-checks default age cutoff and deterministic allocation', () => {
+    const ageCutoffDate = allocator.resolveAgeCutoffDate('2024-06-15', undefined, null);
+    expect(ageCutoffDate.toISOString().slice(0, 10)).toBe('2024-01-01');
+
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [{ id: 'main-1', place: 1, cash_amount: 5000, has_trophy: true, has_medal: false }],
+      },
+      {
+        id: 'u12',
+        name: 'Under 12',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_age: 12 },
+        prizes: [{ id: 'u12-1', place: 1, cash_amount: 1000, has_trophy: false, has_medal: true }],
+      },
+    ];
+
+    const players = [
+      { id: 'p1', name: 'Player 1', rank: 1, rating: 1800, dob: '2009-02-01', gender: 'M', state: 'MH' },
+      { id: 'p2', name: 'Player 2', rank: 2, rating: 1700, dob: '2012-05-10', gender: 'F', state: 'MH' },
+      { id: 'p3', name: 'Player 3', rank: 3, rating: 1600, dob: '2013-08-20', gender: 'M', state: 'MH' },
+      { id: 'p4', name: 'Player 4', rank: 4, rating: 1500, dob: '2011-11-15', gender: 'F', state: 'MH' },
+      { id: 'p5', name: 'Player 5', rank: 5, rating: 1400, dob: '2014-01-30', gender: 'M', state: 'MH' },
+    ];
+
+    const { winners } = runAllocation(categories, players, defaultRules, ageCutoffDate);
+
+    expect(winners).toEqual([
+      { prizeId: 'main-1', playerId: 'p1' },
+      { prizeId: 'u12-1', playerId: 'p2' },
+    ]);
+  });
+
   const runAllocation = (
     categories: Array<{ id: string; name: string; is_main: boolean; order_idx: number; criteria_json?: unknown; prizes: unknown[] }>,
     players: Array<unknown>,

@@ -18,7 +18,7 @@ const corsHeaders = CORS_HEADERS;
 /**
  * Institution Prize Allocation - Phase 2 Module
  * 
- * This is a SEPARATE module from the main allocatePrizes function.
+ * This is a SEPARATE module from the main individual allocation function.
  * It handles team/institution prizes (Best School, Best Academy, etc.)
  * 
  * Key differences from individual prizes:
