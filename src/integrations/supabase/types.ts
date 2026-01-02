@@ -607,6 +607,8 @@ export type Database = {
       rule_config: {
         Row: {
           age_band_policy: string | null
+          age_cutoff_date: string | null
+          age_cutoff_policy: string
           allow_missing_dob_for_age: boolean | null
           allow_unrated_in_rating: boolean | null
           category_priority_order: Json | null
@@ -622,6 +624,8 @@ export type Database = {
         }
         Insert: {
           age_band_policy?: string | null
+          age_cutoff_date?: string | null
+          age_cutoff_policy?: string
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
@@ -637,6 +641,8 @@ export type Database = {
         }
         Update: {
           age_band_policy?: string | null
+          age_cutoff_date?: string | null
+          age_cutoff_policy?: string
           allow_missing_dob_for_age?: boolean | null
           allow_unrated_in_rating?: boolean | null
           category_priority_order?: Json | null
