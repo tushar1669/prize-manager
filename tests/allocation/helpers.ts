@@ -7,7 +7,7 @@ export const defaultRules = {
   max_age_inclusive: true,
   prefer_category_rank_on_tie: false,
   category_priority_order: ['main', 'others'],
-  main_vs_side_priority_mode: 'place_first' as AllocatorModule.MainVsSidePriorityMode,
+  main_vs_side_priority_mode: 'main_first' as AllocatorModule.MainVsSidePriorityMode,
   tie_break_strategy: 'rating_then_name' as const,
   verbose_logs: false,
   multi_prize_policy: 'single' as AllocatorModule.MultiPrizePolicy,
@@ -59,7 +59,10 @@ export function runAllocation(
     cat.prizes.map(p => ({ cat, p }))
   );
 
-  prizeQueue.sort((a, b) => allocator.cmpPrize(a, b));
+  const prizeComparator = allocator.makePrizeComparator({
+    main_vs_side_priority_mode: rules.main_vs_side_priority_mode,
+  });
+  prizeQueue.sort((a, b) => prizeComparator(a, b));
 
   const winners: AllocationResult['winners'] = [];
   const unfilled: AllocationResult['unfilled'] = [];

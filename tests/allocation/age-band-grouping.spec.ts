@@ -35,7 +35,7 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
     max_age_inclusive: true,
     prefer_category_rank_on_tie: false,
     category_priority_order: ['main', 'others'],
-    main_vs_side_priority_mode: 'place_first' as const,
+    main_vs_side_priority_mode: 'main_first' as const,
     tie_break_strategy: 'rating_then_name' as const,
     verbose_logs: false,
     age_band_policy: 'non_overlapping' as const,
@@ -51,7 +51,11 @@ describe('Age band grouping for Boy/Girl pairs (non_overlapping policy)', () => 
     const prizeQueue = categories.flatMap(cat =>
       cat.prizes.map(p => ({ cat: { ...cat, prizes: undefined } as unknown, p }))
     );
-    prizeQueue.sort(allocator.cmpPrize);
+    const prizeComparator = allocator.makePrizeComparator({
+      main_vs_side_priority_mode: (rules as { main_vs_side_priority_mode?: AllocatorModule.MainVsSidePriorityMode })
+        .main_vs_side_priority_mode,
+    });
+    prizeQueue.sort(prizeComparator);
 
     // Compute effective age bands using the same logic as allocatePrizes
     const effectiveAgeBands = new Map<string, { category_id: string; effective_min_age: number; effective_max_age: number }>();

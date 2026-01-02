@@ -106,13 +106,13 @@ describe('Prize Priority Hierarchy', () => {
       expect(allocator.cmpPrize(medal, nothing)).toBeLessThan(0); // medal wins
     });
 
-    // NEW: Place is now priority 3, BEFORE main vs subcategory
-    it('3. lower place number wins EVEN when main vs subcategory differs (place before main)', () => {
+    // NEW: Main-first is now priority 3 when comparing Main vs Side
+    it('3. main category wins even with a worse place when comparing Main vs Side', () => {
       const sub1st = makeEntry({ is_main: false }, { place: 1, cash_amount: 500, has_trophy: true });
       const main2nd = makeEntry({ is_main: true }, { place: 2, cash_amount: 500, has_trophy: true });
       
-      // Place 1 beats Place 2, even though main=true on the 2nd place prize
-      expect(allocator.cmpPrize(sub1st, main2nd)).toBeLessThan(0); // 1st place wins
+      // Main wins over Side before place is considered
+      expect(allocator.cmpPrize(main2nd, sub1st)).toBeLessThan(0); // main wins
     });
 
     it('4. main category beats subcategory when cash, type, AND place are equal', () => {
@@ -137,13 +137,45 @@ describe('Prize Priority Hierarchy', () => {
     });
   });
 
+  describe('makePrizeComparator default', () => {
+    const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
+      cat: {
+        id: cat.id ?? 'cat-1',
+        name: cat.name ?? 'Test',
+        is_main: cat.is_main ?? false,
+        order_idx: cat.order_idx ?? 0,
+        criteria_json: cat.criteria_json ?? {},
+        prizes: []
+      } as Category,
+      p: {
+        id: prize.id ?? 'prize-1',
+        place: prize.place ?? 1,
+        cash_amount: prize.cash_amount ?? 0,
+        has_trophy: prize.has_trophy ?? false,
+        has_medal: prize.has_medal ?? false,
+        is_active: true
+      } as Prize
+    });
+
+    it('defaults to main_first when mode is unset', () => {
+      const main4th = makeEntry({ is_main: true }, { place: 4, cash_amount: 500, has_trophy: true });
+      const side1st = makeEntry({ is_main: false }, { place: 1, cash_amount: 500, has_trophy: true });
+
+      const comparator = allocator.makePrizeComparator();
+      const entries = [side1st, main4th];
+      entries.sort(comparator);
+
+      expect(entries[0].cat.is_main).toBe(true);
+    });
+  });
+
   /**
-   * NEW TEST SECTION: "Place before Main" scenarios (toggle OFF - default)
+   * NEW TEST SECTION: "Place before Main" scenarios (place_first mode)
    * 
-   * These test the default behavior where place number
+   * These test the place-first behavior where place number
    * is compared BEFORE main vs subcategory when cash + trophy/medal are equal.
    */
-  describe('Place before Main scenarios (toggle OFF - default)', () => {
+  describe('Place before Main scenarios (place_first mode)', () => {
     const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
       cat: {
         id: cat.id ?? 'cat-1',
@@ -174,8 +206,9 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'rating-1', place: 1, cash_amount: 8500, has_trophy: true }
       );
 
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entries = [main8th, rating1st];
-      entries.sort(allocator.cmpPrize);
+      entries.sort(comparator);
 
       // Rating 1st should come first (place 1 < place 8)
       expect(entries[0].p.id).toBe('rating-1');
@@ -192,8 +225,9 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'rating-7', place: 7, cash_amount: 8500, has_trophy: true }
       );
 
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entries = [rating7th, main6th];
-      entries.sort(allocator.cmpPrize);
+      entries.sort(comparator);
 
       // Main 6th should come first (place 6 < place 7)
       expect(entries[0].p.id).toBe('main-6');
@@ -210,8 +244,9 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'rating-8', place: 8, cash_amount: 8500, has_trophy: true }
       );
 
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entries = [main9th, rating8th];
-      entries.sort(allocator.cmpPrize);
+      entries.sort(comparator);
 
       // Rating 8th should come first (place 8 < place 9)
       expect(entries[0].p.id).toBe('rating-8');
@@ -229,8 +264,9 @@ describe('Prize Priority Hierarchy', () => {
         { id: 'rating-b-1', place: 1, cash_amount: 5000, has_trophy: true }
       );
 
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
       const entries = [ratingB1st, ratingA1st];
-      entries.sort(allocator.cmpPrize);
+      entries.sort(comparator);
 
       // Rating A should come first (lower order_idx = earlier in brochure)
       expect(entries[0].p.id).toBe('rating-a-1');
@@ -283,7 +319,7 @@ describe('Prize Priority Hierarchy', () => {
       expect(entries[0].cat.is_main).toBe(true);
     });
 
-    it('Side 1st still beats Main 4th when toggle OFF (default)', () => {
+    it('Side 1st still beats Main 4th when toggle OFF (place_first)', () => {
       const main4th = makeEntry(
         { is_main: true, name: 'Main' },
         { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
@@ -465,7 +501,7 @@ describe('Prize Priority Hierarchy', () => {
       expect(entriesOff[0].p.id).toBe('main-2');
     });
 
-    it('Case 5 (invalid DB value): defaults to place_first behavior', () => {
+    it('Case 5 (invalid DB value): defaults to main_first behavior', () => {
       const main4th = makeEntry(
         { is_main: true, name: 'Main' },
         { id: 'main-4', place: 4, cash_amount: 8000, has_trophy: true }
@@ -481,7 +517,7 @@ describe('Prize Priority Hierarchy', () => {
       const entries = [main4th, side1st];
       entries.sort(comparator);
 
-      expect(entries[0].p.id).toBe('side-1');
+      expect(entries[0].p.id).toBe('main-4');
     });
   });
 
@@ -510,7 +546,8 @@ describe('Prize Priority Hierarchy', () => {
         { cat: subCat, p: subCat.prizes[0] }
       ];
       
-      entries.sort(allocator.cmpPrize);
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+      entries.sort(comparator);
       
       // 1st place in subcategory should beat 2nd place in main (place before main)
       expect(entries[0].cat.name).toBe('Under 1600');
@@ -541,7 +578,8 @@ describe('Prize Priority Hierarchy', () => {
         { cat: mainCat, p: mainCat.prizes[0] }
       ];
       
-      entries.sort(allocator.cmpPrize);
+      const comparator = allocator.makePrizeComparator({ main_vs_side_priority_mode: 'place_first' });
+      entries.sort(comparator);
       
       // When both are 1st place, main should win
       expect(entries[0].cat.name).toBe('Main');
