@@ -22,8 +22,8 @@ export function PublicHeader({ className }: PublicHeaderProps) {
                 src="/brand/prize-manager-logo-transparent-cropped.png"
                 alt="Prize Manager"
                 width={240}
-                height={48}
-                className="h-10 sm:h-11 md:h-12 w-auto object-contain"
+                height={64}
+                className="h-12 sm:h-14 md:h-16 w-auto object-contain"
                 fetchPriority="high"
                 loading="eager"
                 decoding="async"
