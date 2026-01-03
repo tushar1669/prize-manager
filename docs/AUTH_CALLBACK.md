@@ -84,7 +84,7 @@ await supabase.auth.resend({
 
 **Critical:** Always uses `window.location.origin` to ensure redirects work across:
 - Production domain
-- Preview URLs (`.lovableproject.com`)
+- Preview URLs (`preview.prize-manager.com`)
 - Localhost (development)
 
 ---
@@ -148,7 +148,7 @@ In dev/preview environments only, shows:
 
 **Cause:** Supabase Auth → URL Configuration must include all valid redirect URLs:
 - Production: `https://your-domain.com/auth/callback`
-- Preview: `https://your-project.lovableproject.com/auth/callback`
+- Preview: `https://preview.prize-manager.com/auth/callback`
 - Localhost: `http://localhost:5173/auth/callback` (dev only)
 
 **Fix:** Add all required URLs to Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
