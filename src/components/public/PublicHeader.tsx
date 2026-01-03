@@ -11,7 +11,7 @@ export function PublicHeader({ className }: PublicHeaderProps) {
         <div className="flex h-16 items-center justify-between">
           <Link to="/" aria-label="Prize-Manager home" className="flex items-center gap-3">
             <img
-              src="/brand/prize-manager-logo-transparent-cropped.png"
+              src="/brand/prize-manager-logo.png"
               alt="Prize-Manager"
               className="h-7 w-auto max-w-[140px] object-contain shrink-0 sm:h-8 sm:max-w-[180px]"
             />
