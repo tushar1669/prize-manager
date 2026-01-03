@@ -162,6 +162,7 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
           const signUpButton = page.getByRole('button', { name: /sign up/i });
           if (await signUpButton.isVisible()) {
             await signUpButton.click();
+            await page.getByRole('button', { name: /create account/i }).click();
             await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
           }
         });
