@@ -12,7 +12,7 @@ export function PublicHeader({ className }: PublicHeaderProps) {
   return (
     <header className={`sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-sm ${className ?? ""}`.trim()}>
       <div className="container mx-auto px-4 sm:px-6">
-        <div className="flex h-16 sm:h-18 md:h-20 items-center justify-between py-3">
+        <div className="flex h-16 sm:h-18 md:h-20 items-center justify-between">
           {/* Left: Logo */}
           <div className="flex items-center h-full">
             <Link to="/" aria-label="Go to Prize Manager home" className="flex items-center shrink-0">
@@ -24,7 +24,7 @@ export function PublicHeader({ className }: PublicHeaderProps) {
                   alt="Prize Manager"
                   width={240}
                   height={64}
-                  className="h-14 sm:h-16 md:h-20 w-auto block object-contain"
+                  className="h-16 sm:h-18 md:h-20 w-auto block object-contain"
                   fetchPriority="high"
                   loading="eager"
                   decoding="async"
