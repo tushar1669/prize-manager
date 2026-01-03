@@ -16,7 +16,6 @@ const isDevOrPreview = () => {
   const origin = window.location.origin;
   return origin.includes('localhost') || 
          origin.includes('127.0.0.1') || 
-         origin.includes('lovableproject.com') ||
          origin.includes('preview');
 };
 
