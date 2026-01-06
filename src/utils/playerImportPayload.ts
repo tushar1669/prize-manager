@@ -38,6 +38,9 @@ export interface ParsedPlayer extends PlayerImportRow {
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
   _rank_autofilled?: boolean;
+  rank_original?: number | null;
+  rank_imputed?: boolean;
+  tie_anchor_rank?: number | null;
   group_label?: string | null;
   type_label?: string | null;
   tags_json?: Json;

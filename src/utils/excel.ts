@@ -167,9 +167,9 @@ export function downloadPlayersXlsx(
   const worksheetData = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(worksheetData);
 
-  // Apply date format for DOB column (column F)
+  // Apply date format for DOB column (column I)
   for (let r = 1; r < worksheetData.length; r++) {
-    const cellAddress = XLSX.utils.encode_cell({ c: 5, r });
+    const cellAddress = XLSX.utils.encode_cell({ c: 8, r });
     const cell = ws[cellAddress];
     if (cell && cell.v instanceof Date) {
       cell.z = 'yyyy-mm-dd';
@@ -554,6 +554,9 @@ export function downloadCleanedPlayersXlsx(
   // Friendly column headers matching DB field names
   const headers = [
     'rank',
+    'rank_original',
+    'rank_imputed',
+    'tie_anchor_rank',
     'sno',
     'name',
     'rating',
@@ -572,9 +575,20 @@ export function downloadCleanedPlayersXlsx(
 
   const rows = players.map(player => {
     const dobDate = toExcelDate(player.dob as string | undefined);
+    const rankValue = player.rank != null ? Number(player.rank) : null;
+    const rankOriginal =
+      player.rank_original !== undefined
+        ? (player.rank_original != null ? Number(player.rank_original) : null)
+        : rankValue;
+    const rankImputed = Boolean(player.rank_imputed);
+    const tieAnchorRank =
+      player.tie_anchor_rank != null ? Number(player.tie_anchor_rank) : null;
     
     return [
-      player.rank != null ? Number(player.rank) : null,
+      rankValue,
+      rankOriginal,
+      rankImputed,
+      tieAnchorRank,
       player.sno != null && player.sno !== '' ? Number(player.sno) : null,
       getPlayerDisplayName(player as { full_name?: string | null; name?: string | null }),
       player.rating != null && player.rating !== '' ? Number(player.rating) : null,
@@ -607,6 +621,9 @@ export function downloadCleanedPlayersXlsx(
   // Set column widths
   (ws as unknown)['!cols'] = [
     { wch: 6 },  // rank
+    { wch: 12 }, // rank_original
+    { wch: 12 }, // rank_imputed
+    { wch: 14 }, // tie_anchor_rank
     { wch: 6 },  // sno
     { wch: 28 }, // name
     { wch: 8 },  // rating

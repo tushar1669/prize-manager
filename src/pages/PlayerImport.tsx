@@ -24,6 +24,13 @@ import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import * as XLSX from "xlsx";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -57,8 +64,10 @@ import {
   normalizeRating,
   inferUnrated,
   fillSingleGapRanksInPlace,
+  imputeContinuousRanksFromTies,
   normalizeGrColumn,
   normalizeTypeColumn,
+  type TieRankImputationReport,
 } from '@/utils/valueNormalizers';
 import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
@@ -419,6 +428,8 @@ export default function PlayerImport() {
   const [parseStatus, setParseStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [parseError, setParseError] = useState<string | null>(null);
   const [autoFilledRankCount, setAutoFilledRankCount] = useState(0);
+  const [tieRankReport, setTieRankReport] = useState<TieRankImputationReport | null>(null);
+  const [showTieRankDetails, setShowTieRankDetails] = useState(false);
   const [statesExtractedCount, setStatesExtractedCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
@@ -1384,6 +1395,13 @@ export default function PlayerImport() {
     setDirty('import', mappedPlayers.length > 0);
   }, [mappedPlayers.length, setDirty]);
 
+  useEffect(() => {
+    if (mappedPlayers.length === 0) {
+      setTieRankReport(null);
+      setShowTieRankDetails(false);
+    }
+  }, [mappedPlayers.length]);
+
   // Auth & role for organizer guard
   const { user } = useAuth();
   const { isMaster } = useUserRole();
@@ -1850,7 +1868,12 @@ export default function PlayerImport() {
           });
           return player as ParsedPlayer;
         });
-        setMappedPlayers(mapped);
+        const tieRankResult = imputeContinuousRanksFromTies(mapped, {
+          rankKey: "rank",
+          rowNumberKey: "_originalIndex"
+        });
+        setTieRankReport(tieRankResult.report);
+        setMappedPlayers(tieRankResult.rows);
       })();
       toast.info('Columns auto-mapped successfully');
     }
@@ -2060,6 +2083,12 @@ export default function PlayerImport() {
     })
     // Filter out footer rows (no rank & no name)
     .filter(p => !isFooterRow(p));
+
+    const tieRankResult = imputeContinuousRanksFromTies(mapped, {
+      rankKey: "rank",
+      rowNumberKey: "_originalIndex"
+    });
+    setTieRankReport(tieRankResult.report);
 
     fillSingleGapRanksInPlace(mapped);
 
@@ -2714,6 +2743,25 @@ export default function PlayerImport() {
                 </CardContent>
               </Card>
             )}
+            {tieRankReport?.totalImputed > 0 && mappedPlayers.length > 0 && (
+              <Alert className="border-blue-200 bg-blue-50/80">
+                <AlertTitle>Tie ranks detected</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2">
+                  <span>
+                    Tie ranks detected. We filled {tieRankReport.totalImputed} blank rank
+                    {tieRankReport.totalImputed === 1 ? '' : 's'} into continuous ranks for prize allocation.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto w-fit p-0"
+                    onClick={() => setShowTieRankDetails(true)}
+                  >
+                    View details
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
             {autoFilledRankCount > 0 && mappedPlayers.length > 0 && (
               <Alert className="border-blue-200 bg-blue-50/80">
                 <AlertTitle>Ranks auto-filled</AlertTitle>
@@ -3158,6 +3206,55 @@ export default function PlayerImport() {
           </div>
         )}
       </div>
+
+      <Dialog open={showTieRankDetails} onOpenChange={setShowTieRankDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tie rank imputation details</DialogTitle>
+            <DialogDescription>
+              Blank rank cells between tied entries were filled to keep continuous rankings for prize allocation.
+            </DialogDescription>
+          </DialogHeader>
+          {tieRankReport?.rows.length ? (
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Row</TableHead>
+                    <TableHead>Anchor rank</TableHead>
+                    <TableHead>Imputed rank</TableHead>
+                    <TableHead>Next printed rank</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tieRankReport.rows.map((row) => (
+                    <TableRow key={`${row.rowIndex}-${row.imputedRank}`}>
+                      <TableCell>{row.excelRowNumber ?? row.rowIndex + 1}</TableCell>
+                      <TableCell>{row.tieAnchorRank}</TableCell>
+                      <TableCell>{row.imputedRank}</TableCell>
+                      <TableCell>{row.nextPrintedRank ?? '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No imputed ranks to display.</p>
+          )}
+          {tieRankReport?.warnings.length ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-900">
+              <div className="font-medium">Warnings</div>
+              <ul className="mt-2 list-disc pl-5">
+                {tieRankReport.warnings.map((warning) => (
+                  <li key={`${warning.rowIndex}-${warning.message}`}>
+                    Row {warning.excelRowNumber ?? warning.rowIndex + 1}: {warning.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <ColumnMappingDialog
         open={showMappingDialog}
