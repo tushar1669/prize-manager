@@ -15,6 +15,8 @@ type PlayerRow = {
   unrated?: boolean | string | number | null;
   dob?: string | null;
   dob_raw?: string | null;
+  dob_original?: string | null;
+  dob_was_imputed_from_year?: boolean | null;
   _dobInferred?: boolean | null;
   dob_inferred?: boolean | null;
   gender?: string | null;
@@ -562,7 +564,8 @@ export function downloadCleanedPlayersXlsx(
     'rating',
     'unrated',
     'dob',
-    'dob_raw',
+    'dob_original',
+    'dob_was_imputed_from_year',
     'gender',
     'fide_id',
     'federation',
@@ -594,7 +597,8 @@ export function downloadCleanedPlayersXlsx(
       player.rating != null && player.rating !== '' ? Number(player.rating) : null,
       player.unrated != null ? Boolean(player.unrated) : null,
       dobDate,
-      player.dob_raw ?? player.dob ?? null,
+      player.dob_original ?? player.dob_raw ?? player.dob ?? null,
+      Boolean(player.dob_was_imputed_from_year ?? false),
       player.gender ?? null,
       player.fide_id ?? null,
       player.federation ?? null,
@@ -609,9 +613,9 @@ export function downloadCleanedPlayersXlsx(
   const worksheetData = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(worksheetData);
 
-  // Apply date format for DOB column (column F)
+  // Apply date format for DOB column (column I)
   for (let r = 1; r < worksheetData.length; r++) {
-    const cellAddress = XLSX.utils.encode_cell({ c: 5, r });
+    const cellAddress = XLSX.utils.encode_cell({ c: 8, r });
     const cell = ws[cellAddress];
     if (cell && cell.v instanceof Date) {
       cell.z = 'yyyy-mm-dd';
@@ -629,7 +633,8 @@ export function downloadCleanedPlayersXlsx(
     { wch: 8 },  // rating
     { wch: 9 },  // unrated
     { wch: 12 }, // dob
-    { wch: 14 }, // dob_raw
+    { wch: 14 }, // dob_original
+    { wch: 18 }, // dob_was_imputed_from_year
     { wch: 8 },  // gender
     { wch: 14 }, // fide_id
     { wch: 11 }, // federation

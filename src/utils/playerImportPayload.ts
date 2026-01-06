@@ -34,6 +34,8 @@ export interface ParsedPlayer extends PlayerImportRow {
   fide_id?: string | null;
   federation?: string | null;
   dob_raw?: string | null;
+  dob_original?: string | null;
+  dob_was_imputed_from_year?: boolean;
   _dobInferred?: boolean;
   _dobInferredReason?: string;
   _rawUnrated?: unknown;
