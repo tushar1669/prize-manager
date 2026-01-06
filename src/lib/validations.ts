@@ -75,7 +75,7 @@ export type CategoryForm = z.infer<typeof categorySchema>;
 
 // Player Import schema
 export const playerImportSchema = z.object({
-  rank: z.number().min(1, "Rank must be a positive integer"),
+  rank: z.number().int().min(1, "Rank must be a positive integer"),
   sno: z.number().int().positive().nullable().optional(), // Start Number (distinct from rank)
   name: z.string().trim().min(1, "Name is required and cannot be empty").max(100, "Name must be less than 100 characters"),
   rating: z.number().min(0, "Rating cannot be negative").nullable().optional(),

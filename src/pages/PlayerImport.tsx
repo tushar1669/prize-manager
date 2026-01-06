@@ -65,6 +65,7 @@ import {
   inferUnrated,
   fillSingleGapRanksInPlace,
   imputeContinuousRanksFromTies,
+  normalizeRankValue,
   normalizeGrColumn,
   normalizeTypeColumn,
   type TieRankImputationReport,
@@ -1904,22 +1905,7 @@ export default function PlayerImport() {
 
         // Phase 6: Apply value normalizers
         if (fieldKey === 'rank') {
-          if (value == null) {
-            value = null;
-          } else if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (!trimmed) {
-              value = null;
-            } else {
-              const parsed = Number(trimmed);
-              value = Number.isFinite(parsed) ? parsed : null;
-            }
-          } else if (typeof value === 'number') {
-            value = Number.isFinite(value) ? value : null;
-          } else {
-            const parsed = Number(value);
-            value = Number.isFinite(parsed) ? parsed : null;
-          }
+          value = normalizeRankValue(value);
         } else if (fieldKey === 'sno') {
           value = value ? Number(value) : null;
         } else if (fieldKey === 'rating') {
@@ -3232,7 +3218,9 @@ export default function PlayerImport() {
                       <TableCell>{row.excelRowNumber ?? row.rowIndex + 1}</TableCell>
                       <TableCell>{row.tieAnchorRank}</TableCell>
                       <TableCell>{row.imputedRank}</TableCell>
-                      <TableCell>{row.nextPrintedRank ?? '-'}</TableCell>
+                      <TableCell>
+                        {row.nextPrintedRank == null ? '(end of sheet)' : row.nextPrintedRank}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
