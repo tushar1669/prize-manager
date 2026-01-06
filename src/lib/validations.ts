@@ -81,8 +81,8 @@ export const playerImportSchema = z.object({
   rating: z.number().min(0, "Rating cannot be negative").nullable().optional(),
   dob: z.string()
     .regex(
-      /^(\d{4}(-\d{2}-\d{2})?|\d{4}[\\/-]00[\\/-]00|\d{4})$/, 
-      "Date must be YYYY-MM-DD, YYYY/00/00, or YYYY"
+      /^\d{4}-\d{2}-\d{2}$/, 
+      "Date must be YYYY-MM-DD"
     )
     .nullable()
     .optional(),

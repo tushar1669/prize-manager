@@ -256,7 +256,7 @@ function ensureImputationFields(row: Record<string, unknown>, rankValue: number 
   }
 }
 
-type TieRankWritableRow = Record<string, any> & {
+type TieRankWritableRow = Record<string, unknown> & {
   rank_imputed?: boolean;
   tie_anchor_rank?: number;
 };

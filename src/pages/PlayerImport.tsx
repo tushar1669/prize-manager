@@ -55,7 +55,7 @@ import {
 } from '@/utils/excel';
 import {
   HEADER_ALIASES,
-  normalizeDobForImport,
+  sanitizeDobForImport,
   normalizeHeaderForMatching,
   selectBestRatingColumn,
   inferImportSource,
@@ -395,20 +395,59 @@ const extractUnknownColumn = (msg: string): string | null => {
   return null;
 };
 
+type DobSanitizationResult = {
+  dob: string | null;
+  dob_original: string | null;
+  wasImputedFromYear: boolean;
+  inferred: boolean;
+  inferredReason?: string;
+};
+
+type DobImputationRow = {
+  rowNumber: number;
+  rank: number | null;
+  dob_original: string | null;
+  dob_saved: string | null;
+};
+
+type DobImputationReport = {
+  totalImputed: number;
+  rows: DobImputationRow[];
+};
+
 // Helper: normalize DOB to YYYY-MM-DD, handling partial dates
-const toISODate = (d: unknown): { dob: string | null; dob_raw: string | null; inferred: boolean; inferredReason?: string } => {
-  if (!d) return { dob: null, dob_raw: null, inferred: false };
+const toISODate = (d: unknown): DobSanitizationResult => {
+  if (!d) {
+    return {
+      dob: null,
+      dob_original: null,
+      wasImputedFromYear: false,
+      inferred: false
+    };
+  }
   
   // Handle Excel serial dates
   if (typeof d === 'number') {
     const jsDate = new Date(Math.round((d - 25569) * 86400 * 1000));
-    if (isNaN(jsDate.getTime())) return { dob: null, dob_raw: String(d), inferred: false };
+    if (isNaN(jsDate.getTime())) {
+      return {
+        dob: null,
+        dob_original: String(d),
+        wasImputedFromYear: false,
+        inferred: false
+      };
+    }
     const normalized = jsDate.toISOString().slice(0, 10);
-    return { dob: normalized, dob_raw: normalized, inferred: false };
+    return {
+      dob: normalized,
+      dob_original: normalized,
+      wasImputedFromYear: false,
+      inferred: false
+    };
   }
   
   // Use centralized normalization
-  return normalizeDobForImport(String(d));
+  return sanitizeDobForImport(String(d));
 };
 
 export default function PlayerImport() {
@@ -431,6 +470,8 @@ export default function PlayerImport() {
   const [autoFilledRankCount, setAutoFilledRankCount] = useState(0);
   const [tieRankReport, setTieRankReport] = useState<TieRankImputationReport | null>(null);
   const [showTieRankDetails, setShowTieRankDetails] = useState(false);
+  const [dobImputationReport, setDobImputationReport] = useState<DobImputationReport | null>(null);
+  const [showDobImputationDetails, setShowDobImputationDetails] = useState(false);
   const [statesExtractedCount, setStatesExtractedCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
@@ -1400,6 +1441,8 @@ export default function PlayerImport() {
     if (mappedPlayers.length === 0) {
       setTieRankReport(null);
       setShowTieRankDetails(false);
+      setDobImputationReport(null);
+      setShowDobImputationDetails(false);
     }
   }, [mappedPlayers.length]);
 
@@ -1776,110 +1819,6 @@ export default function PlayerImport() {
     }
   };
 
-  // Auto-mapping useEffect - runs AFTER headers state is committed
-  useEffect(() => {
-    if (headers.length === 0 || parsedData.length === 0) return;
-    if (hasMappedRef.current) return;
-
-    hasMappedRef.current = true;
-
-    console.log('[import] Running auto-mapping with', headers.length, 'headers');
-
-    const autoMapping: Record<string, string> = {};
-    const normalizedAliases: Record<string, string[]> = {};
-    const nameCandidates: string[] = [];
-
-    const genderConfig = genderConfigRef.current;
-    const headerlessGender = genderConfig?.headerlessGenderColumn;
-    const genderCandidate = genderConfig?.preferredColumn;
-    if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
-      autoMapping.gender = genderCandidate;
-      if (genderConfig?.preferredSource === 'headerless_after_name') {
-        console.log("[import] gender source: headerless column after Name (not 'fs')");
-      }
-    }
-
-    if (isFeatureEnabled('RATING_PRIORITY')) {
-      const bestRating = selectBestRatingColumn(headers);
-      if (bestRating) {
-        autoMapping.rating = bestRating;
-      }
-    }
-
-    Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
-      normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
-    });
-
-    headers.forEach(h => {
-      const normalized = normalizeHeaderForMatching(h);
-      for (const [field, aliases] of Object.entries(normalizedAliases)) {
-        if (!autoMapping[field] && aliases.includes(normalized)) {
-          autoMapping[field] = h;
-          break;
-        }
-      }
-
-      if (normalizedAliases.name?.includes(normalized)) {
-        nameCandidates.push(h);
-      }
-    });
-
-    if (!autoMapping.full_name) {
-      const explicitFullName = headers.find(h =>
-        normalizedAliases.full_name?.includes(normalizeHeaderForMatching(h))
-      );
-      if (explicitFullName) {
-        autoMapping.full_name = explicitFullName;
-      }
-    }
-
-    if (!autoMapping.full_name && nameCandidates.length > 1) {
-      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
-      if (duplicateName) {
-        autoMapping.full_name = duplicateName;
-      }
-    }
-
-    if (!autoMapping.name && autoMapping.full_name) {
-      autoMapping.name = autoMapping.full_name;
-    }
-
-    console.log('[import] Auto-mapped fields:', autoMapping);
-    console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
-
-    if (!autoMapping.rank || !autoMapping.name) {
-      console.warn('[import] Missing required fields:', {
-        rank: !autoMapping.rank,
-        name: !autoMapping.name
-      });
-      setShowMappingDialog(true);
-      toast.warning('Please map required fields: Rank and Name');
-    } else {
-      console.log('[import] Auto-mapping successful');
-      // handleMappingConfirm is declared below but referenced here, call it directly
-      setShowMappingDialog(false);
-      void (async () => {
-        // Inline the auto-mapping logic to avoid circular reference
-        const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
-          const rowRecord = row as Record<string, unknown>;
-          const player: Record<string, unknown> = { _originalIndex: idx + 1 };
-          Object.keys(autoMapping).forEach((fieldKey) => {
-            const col = autoMapping[fieldKey];
-            player[fieldKey] = rowRecord[col];
-          });
-          return player as ParsedPlayer;
-        });
-        const tieRankResult = imputeContinuousRanksFromTies(mapped, {
-          rankKey: "rank",
-          rowNumberKey: "_originalIndex"
-        });
-        setTieRankReport(tieRankResult.report);
-        setMappedPlayers(tieRankResult.rows);
-      })();
-      toast.info('Columns auto-mapped successfully');
-    }
-  }, [headers, parsedData]);
-
   // Helper: Consider footer rows as non-data when both rank and name are missing/empty
   const isFooterRow = useCallback((p: Record<string, unknown>) => {
     const r = p?.rank;
@@ -1926,7 +1865,9 @@ export default function PlayerImport() {
         } else if (fieldKey === 'dob' && value != null && value !== '') {
           const result = toISODate(value);
           player.dob = result.dob;
-          player.dob_raw = result.dob_raw;
+          player.dob_original = result.dob_original;
+          player.dob_raw = result.dob_original;
+          player.dob_was_imputed_from_year = result.wasImputedFromYear;
           player._dobInferred = result.inferred;
           player._dobInferredReason = result.inferredReason;
           return; // Skip setting value below since we handled it
@@ -2107,6 +2048,22 @@ export default function PlayerImport() {
       console.info(`[import.state] Auto-extracted ${autoExtractedStateCount} state codes from Ident column`);
       toast.info(`${autoExtractedStateCount} state codes auto-extracted from Ident column`);
     }
+
+    const dobImputedRows = mapped
+      .filter(player => player.dob_was_imputed_from_year)
+      .map(player => ({
+        rowNumber: player._originalIndex,
+        rank: Number.isFinite(Number(player.rank)) ? Number(player.rank) : null,
+        dob_original: player.dob_original ?? player.dob_raw ?? null,
+        dob_saved: player.dob ?? null
+      }));
+
+    setDobImputationReport(
+      dobImputedRows.length > 0
+        ? { totalImputed: dobImputedRows.length, rows: dobImputedRows }
+        : null
+    );
+    setShowDobImputationDetails(false);
 
     // Phase 5: Validate with detailed breakdown
     const errors: { row: number; errors: string[] }[] = [];
@@ -2401,6 +2358,91 @@ export default function PlayerImport() {
     runDedupe,
     showError,
   ]);
+
+  // Auto-mapping useEffect - runs AFTER headers state is committed
+  useEffect(() => {
+    if (headers.length === 0 || parsedData.length === 0) return;
+    if (hasMappedRef.current) return;
+
+    hasMappedRef.current = true;
+
+    console.log('[import] Running auto-mapping with', headers.length, 'headers');
+
+    const autoMapping: Record<string, string> = {};
+    const normalizedAliases: Record<string, string[]> = {};
+    const nameCandidates: string[] = [];
+
+    const genderConfig = genderConfigRef.current;
+    const genderCandidate = genderConfig?.preferredColumn;
+    if (genderCandidate && !GENDER_DENYLIST.has(normalizeHeaderForMatching(genderCandidate))) {
+      autoMapping.gender = genderCandidate;
+      if (genderConfig?.preferredSource === 'headerless_after_name') {
+        console.log("[import] gender source: headerless column after Name (not 'fs')");
+      }
+    }
+
+    if (isFeatureEnabled('RATING_PRIORITY')) {
+      const bestRating = selectBestRatingColumn(headers);
+      if (bestRating) {
+        autoMapping.rating = bestRating;
+      }
+    }
+
+    Object.entries(HEADER_ALIASES).forEach(([field, aliases]) => {
+      normalizedAliases[field] = aliases.map(normalizeHeaderForMatching);
+    });
+
+    headers.forEach(h => {
+      const normalized = normalizeHeaderForMatching(h);
+      for (const [field, aliases] of Object.entries(normalizedAliases)) {
+        if (!autoMapping[field] && aliases.includes(normalized)) {
+          autoMapping[field] = h;
+          break;
+        }
+      }
+
+      if (normalizedAliases.name?.includes(normalized)) {
+        nameCandidates.push(h);
+      }
+    });
+
+    if (!autoMapping.full_name) {
+      const explicitFullName = headers.find(h =>
+        normalizedAliases.full_name?.includes(normalizeHeaderForMatching(h))
+      );
+      if (explicitFullName) {
+        autoMapping.full_name = explicitFullName;
+      }
+    }
+
+    if (!autoMapping.full_name && nameCandidates.length > 1) {
+      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
+      if (duplicateName) {
+        autoMapping.full_name = duplicateName;
+      }
+    }
+
+    if (!autoMapping.name && autoMapping.full_name) {
+      autoMapping.name = autoMapping.full_name;
+    }
+
+    console.log('[import] Auto-mapped fields:', autoMapping);
+    console.log('[import] Mapped field count:', Object.keys(autoMapping).length);
+
+    if (!autoMapping.rank || !autoMapping.name) {
+      console.warn('[import] Missing required fields:', {
+        rank: !autoMapping.rank,
+        name: !autoMapping.name
+      });
+      setShowMappingDialog(true);
+      toast.warning('Please map required fields: Rank and Name');
+    } else {
+      console.log('[import] Auto-mapping successful');
+      setShowMappingDialog(false);
+      void handleMappingConfirm(autoMapping);
+      toast.info('Columns auto-mapped successfully');
+    }
+  }, [headers, parsedData, handleMappingConfirm]);
 
   // Register Cmd/Ctrl+S
   const { registerOnSave } = useDirty();
@@ -2742,6 +2784,25 @@ export default function PlayerImport() {
                     variant="link"
                     className="h-auto w-fit p-0"
                     onClick={() => setShowTieRankDetails(true)}
+                  >
+                    View details
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            {dobImputationReport?.totalImputed > 0 && mappedPlayers.length > 0 && (
+              <Alert className="border-blue-200 bg-blue-50/80">
+                <AlertTitle>DOB year-only detected</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2">
+                  <span>
+                    DOB year-only detected. Converted {dobImputationReport.totalImputed} value
+                    {dobImputationReport.totalImputed === 1 ? '' : 's'} from YYYY/00/00 or YYYY to YYYY-01-01 for database compatibility.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto w-fit p-0"
+                    onClick={() => setShowDobImputationDetails(true)}
                   >
                     View details
                   </Button>
@@ -3241,6 +3302,43 @@ export default function PlayerImport() {
               </ul>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDobImputationDetails} onOpenChange={setShowDobImputationDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>DOB year-only conversion details</DialogTitle>
+            <DialogDescription>
+              Year-only DOB values were converted to January 1 to keep imports compatible with the database.
+            </DialogDescription>
+          </DialogHeader>
+          {dobImputationReport?.rows.length ? (
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Row</TableHead>
+                    <TableHead>Rank</TableHead>
+                    <TableHead>DOB original</TableHead>
+                    <TableHead>DOB saved</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dobImputationReport.rows.map((row) => (
+                    <TableRow key={`${row.rowNumber}-${row.rank ?? 'na'}`}>
+                      <TableCell>{row.rowNumber}</TableCell>
+                      <TableCell>{row.rank ?? ''}</TableCell>
+                      <TableCell>{row.dob_original ?? ''}</TableCell>
+                      <TableCell>{row.dob_saved ?? ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No DOB conversions to display.</p>
+          )}
         </DialogContent>
       </Dialog>
 
