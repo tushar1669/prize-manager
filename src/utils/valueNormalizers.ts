@@ -221,9 +221,18 @@ export type TieRankImputationReport = {
   warnings: TieRankImputationWarning[];
 };
 
-const normalizeRankValue = (value: unknown): number | null => {
+export const normalizeRankValue = (value: unknown): number | null => {
   if (value == null) return null;
-  const num = typeof value === "number" ? value : Number(String(value).trim());
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
+
+  const num = Number(trimmed);
   if (!Number.isFinite(num) || num <= 0) return null;
   return num;
 };
@@ -302,7 +311,37 @@ export function imputeContinuousRanksFromTies<T extends Record<string, unknown>>
       continue;
     }
 
-    if (nextRank == null || nextRank <= anchorRank) {
+    if (nextRank == null) {
+      const imputedRanks: number[] = [];
+      for (let offset = 1; offset <= blankCount; offset += 1) {
+        const rowIndex = startIndex + offset - 1;
+        const targetRow = rows[rowIndex] as unknown as TieRankWritableRow;
+        const imputedRank = anchorRank + offset;
+        targetRow[rankKey] = imputedRank;
+        targetRow.rank_imputed = true;
+        targetRow.tie_anchor_rank = anchorRank;
+        imputedRanks.push(imputedRank);
+        report.rows.push({
+          rowIndex,
+          excelRowNumber: getExcelRowNumber(targetRow, rowNumberKey),
+          tieAnchorRank: anchorRank,
+          imputedRank,
+          nextPrintedRank: null
+        });
+      }
+
+      report.groups.push({
+        tieAnchorRank: anchorRank,
+        startRowIndex: startIndex,
+        endRowIndex: endIndex,
+        imputedRanks
+      });
+      report.totalImputed += blankCount;
+      i -= 1;
+      continue;
+    }
+
+    if (nextRank <= anchorRank) {
       const excelRowNumber = getExcelRowNumber(rows[startIndex], rowNumberKey);
       report.warnings.push({
         rowIndex: startIndex,
