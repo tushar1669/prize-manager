@@ -748,7 +748,7 @@ Deno.serve(async (req) => {
     const start = performance.now();
     const { bytes, fileName, contentType } = await parseBody(req);
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    console.log(`[import.srv] start bytes=${bytes.byteLength} name=${fileName}`);
+    console.log(`[import.srv] start bytes=${bytes.byteLength}`);
 
     // TODO: Lock CORS to app origin in PR-114
     const fileHash = await sha256Hex(bufferSlice);
@@ -779,12 +779,24 @@ Deno.serve(async (req) => {
     }) as Record<string, unknown>[];
 
     const genderConfig = analyzeGenderColumns(dataRows as Record<string, unknown>[]);
-    
+
+    const shouldGenderDebug = genderDebugTournamentIds.has(tournamentId);
+    const genderDebugCounts: Record<string, number> | null = shouldGenderDebug
+      ? {
+          FMG: 0,
+          F_PREFIX: 0,
+          FS: 0,
+          Headerless: 0,
+          ExplicitGender: 0,
+          None: 0
+        }
+      : null;
+
     // Log gender config for debug tournaments
-    if (genderDebugTournamentIds.has(tournamentId)) {
+    if (shouldGenderDebug) {
       console.log(`[import.gender-config] ${JSON.stringify(genderConfig)}`);
     }
-    
+
     const rowsWithGender = dataRows.map((row) => {
       const typedRow = row as Record<string, unknown>;
       const typeRaw = (typedRow.type_label ?? typedRow.type ?? typedRow.Type ?? typedRow.TYPE) as
@@ -796,13 +808,7 @@ Deno.serve(async (req) => {
 
       const genderInference = inferGenderForRow(typedRow, genderConfig, typeRaw ?? null, groupRaw ?? null);
 
-      // TEMP: gender debug logging for tracked tournaments
-      if (genderDebugTournamentIds.has(tournamentId)) {
-        const fsRaw = genderConfig.fsColumn ? typedRow[genderConfig.fsColumn] : undefined;
-        const headerlessGenderRaw = genderConfig.headerlessGenderColumn
-          ? typedRow[genderConfig.headerlessGenderColumn]
-          : undefined;
-
+      if (genderDebugCounts) {
         const femaleSignalSource = (() => {
           if (genderInference.female_signal_source === "FMG") return "FMG";
           if (genderInference.female_signal_source === "F_PREFIX") return "F_PREFIX";
@@ -811,23 +817,7 @@ Deno.serve(async (req) => {
           if (genderInference.sources.includes("gender_column")) return "ExplicitGender";
           return "None";
         })();
-
-        const ratingValue =
-          (typedRow.rating as unknown) ?? typedRow.rtg ?? (typedRow as Record<string, unknown>).Rtg ?? (typedRow as Record<string, unknown>).RTG;
-
-        console.log(
-          `[import.gender-debug] ${JSON.stringify({
-            rank: typedRow.rank ?? null,
-            name: typedRow.name ?? null,
-            rating: ratingValue ?? null,
-            fs_raw: fsRaw ?? null,
-            headerless_gender_raw: headerlessGenderRaw ?? null,
-            type_raw: typeRaw ?? null,
-            group_raw: groupRaw ?? null,
-            gender_normalized: genderInference.gender ?? null,
-            female_signal_source: femaleSignalSource
-          })}`
-        );
+        genderDebugCounts[femaleSignalSource] = (genderDebugCounts[femaleSignalSource] ?? 0) + 1;
       }
 
       return {
@@ -842,6 +832,10 @@ Deno.serve(async (req) => {
     const source = inferSource(trimmedHeaders, dataRows as Record<string, unknown>[]);
     const durationMs = Math.round(performance.now() - start);
     const rowCount = dataRows.length;
+
+    if (genderDebugCounts) {
+      console.log(`[import.gender-debug] rows=${rowCount} signals=${JSON.stringify(genderDebugCounts)}`);
+    }
 
     console.log(`[import.srv] ok rows=${rowCount} sheet=${sheetName} headerRow=${headerRowIndex + 1} duration_ms=${durationMs}`);
 
