@@ -171,6 +171,27 @@ type LastFileInfo = {
 
 const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
 
+const isImportDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('DEBUG_IMPORT') === '1';
+};
+
+const maskImportValue = (value: unknown): string => {
+  if (value == null) return '';
+  const text = String(value).trim();
+  if (!text) return '';
+  return `${text.slice(0, 2)}***`;
+};
+
+const logImportDebug = (message: string, payload?: Record<string, unknown>) => {
+  if (!isImportDebugEnabled()) return;
+  if (payload) {
+    console.log(message, payload);
+  } else {
+    console.log(message);
+  }
+};
+
 const RICHNESS_FIELDS = [
   'name',
   'full_name',
@@ -217,6 +238,12 @@ const CONFLICT_LABELS: Record<ConflictKeyKind, string> = {
   fide: 'FIDE ID',
   nameDob: 'Name + DOB',
   sno: 'SNo',
+};
+
+const getConflictRowIndex = (row: Record<string, unknown> | undefined): number | null => {
+  if (!row) return null;
+  const idx = (row as ParsedPlayer)._originalIndex;
+  return typeof idx === 'number' ? idx : null;
 };
 
 const CONFLICT_FIELD_DEFS = [
@@ -578,7 +605,11 @@ export default function PlayerImport() {
         const aIndex = extractIndex(pair.a);
         const bIndex = extractIndex(pair.b);
         const winner = pickMergeWinner(pair);
-        console.log('[conflict.merge] applying merge', { keyKind: pair.keyKind, key: pair.key });
+        console.log('[conflict.merge] applying merge', {
+          keyKind: pair.keyKind,
+          aRow: getConflictRowIndex(pair.a),
+          bRow: getConflictRowIndex(pair.b),
+        });
         if (winner === 'a') {
           mergeConflictRows(getPlayerByIndex(aIndex), pair.b);
           if (bIndex != null) {
@@ -1935,7 +1966,11 @@ export default function PlayerImport() {
           if (extractedState) {
             player.state = extractedState;
             player._stateAutoExtracted = true;
-            console.log(`[import.state] Auto-extracted state '${extractedState}' from Ident: ${identValue}`);
+            logImportDebug('[import.state] Auto-extracted state from ident', {
+              row: idx + 1,
+              state: extractedState,
+              ident: maskImportValue(identValue),
+            });
           }
         }
       }
@@ -1961,7 +1996,13 @@ export default function PlayerImport() {
 
       // Debug: log first few PC players to verify mapping
       if (grInfo.group_label?.toUpperCase() === 'PC' && idx < 5) {
-        console.log(`[import.gr] PC player detected: rank=${player.rank}, name=${player.full_name ?? player.name}, grValue=${grValue}, group_label=${grInfo.group_label}`);
+        logImportDebug('[import.gr] PC player detected', {
+          row: idx + 1,
+          rank: player.rank ?? null,
+          name: maskImportValue(player.full_name ?? player.name),
+          gr_value: maskImportValue(grValue),
+          group_label: grInfo.group_label ?? null,
+        });
       }
 
       player.group_label = grInfo.group_label;
@@ -2074,7 +2115,7 @@ export default function PlayerImport() {
           
           // Collect sample rows (max 3 per reason)
           if (skippedBreakdown[reason].sample.length < 3) {
-            skippedBreakdown[reason].sample.push(`Row ${player._originalIndex}: ${player.full_name || player.name || 'N/A'}`);
+            skippedBreakdown[reason].sample.push(`Row ${player._originalIndex}`);
           }
         });
         
@@ -2252,7 +2293,14 @@ export default function PlayerImport() {
       bySno: detectedConflicts.filter(c => c.keyKind === 'sno').length
     });
 
-    console.log('[conflict.samples]', detectedConflicts.slice(0, 3));
+    console.log(
+      '[conflict.samples]',
+      detectedConflicts.slice(0, 3).map(conflict => ({
+        keyKind: conflict.keyKind,
+        aRow: getConflictRowIndex(conflict.a),
+        bRow: getConflictRowIndex(conflict.b),
+      })),
+    );
 
     setConflicts(detectedConflicts);
     setConflictResolutions(prev => {
