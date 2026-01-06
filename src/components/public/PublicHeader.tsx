@@ -24,7 +24,7 @@ export function PublicHeader({ className }: PublicHeaderProps) {
                   alt="Prize Manager"
                   width={240}
                   height={64}
-                  className="h-16 sm:h-18 md:h-20 w-auto block object-contain"
+                  className="h-16 sm:h-18 md:h-20 w-auto block object-contain brightness-0 invert"
                   fetchPriority="high"
                   loading="eager"
                   decoding="async"
