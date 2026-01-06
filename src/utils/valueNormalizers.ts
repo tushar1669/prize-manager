@@ -192,3 +192,161 @@ export function fillSingleGapRanksInPlace(
     }
   }
 }
+
+export type TieRankImputationGroup = {
+  tieAnchorRank: number;
+  startRowIndex: number;
+  endRowIndex: number;
+  imputedRanks: number[];
+};
+
+export type TieRankImputationRow = {
+  rowIndex: number;
+  excelRowNumber?: number;
+  tieAnchorRank: number;
+  imputedRank: number;
+  nextPrintedRank?: number | null;
+};
+
+export type TieRankImputationWarning = {
+  rowIndex: number;
+  excelRowNumber?: number;
+  message: string;
+};
+
+export type TieRankImputationReport = {
+  totalImputed: number;
+  groups: TieRankImputationGroup[];
+  rows: TieRankImputationRow[];
+  warnings: TieRankImputationWarning[];
+};
+
+const normalizeRankValue = (value: unknown): number | null => {
+  if (value == null) return null;
+  const num = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return num;
+};
+
+function getExcelRowNumber(row: Record<string, unknown>, rowNumberKey?: string): number | undefined {
+  if (!rowNumberKey) return undefined;
+  const raw = row[rowNumberKey];
+  const value = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function ensureImputationFields(row: Record<string, unknown>, rankValue: number | null): void {
+  if (row.rank_original === undefined) {
+    row.rank_original = rankValue ?? null;
+  }
+  if (row.rank_imputed === undefined) {
+    row.rank_imputed = false;
+  }
+  if (row.tie_anchor_rank === undefined) {
+    row.tie_anchor_rank = null;
+  }
+}
+
+export function imputeContinuousRanksFromTies<T extends Record<string, unknown>>(
+  rows: T[],
+  {
+    rankKey = "rank",
+    rowNumberKey,
+  }: {
+    rankKey?: string;
+    rowNumberKey?: string;
+  } = {},
+): { rows: T[]; report: TieRankImputationReport } {
+  const report: TieRankImputationReport = {
+    totalImputed: 0,
+    groups: [],
+    rows: [],
+    warnings: []
+  };
+
+  let anchorRank: number | null = null;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const currentRank = normalizeRankValue(row[rankKey]);
+    ensureImputationFields(row, currentRank);
+
+    if (currentRank != null) {
+      anchorRank = currentRank;
+      continue;
+    }
+
+    const startIndex = i;
+    while (i < rows.length && normalizeRankValue(rows[i][rankKey]) == null) {
+      const blankRow = rows[i];
+      ensureImputationFields(blankRow, normalizeRankValue(blankRow[rankKey]));
+      i += 1;
+    }
+    const endIndex = i - 1;
+    const nextRank = i < rows.length ? normalizeRankValue(rows[i][rankKey]) : null;
+    const blankCount = endIndex - startIndex + 1;
+
+    if (anchorRank == null) {
+      const excelRowNumber = getExcelRowNumber(rows[startIndex], rowNumberKey);
+      report.warnings.push({
+        rowIndex: startIndex,
+        excelRowNumber,
+        message: "Cannot impute rank without anchor."
+      });
+      i -= 1;
+      continue;
+    }
+
+    if (nextRank == null || nextRank <= anchorRank) {
+      const excelRowNumber = getExcelRowNumber(rows[startIndex], rowNumberKey);
+      report.warnings.push({
+        rowIndex: startIndex,
+        excelRowNumber,
+        message: "Cannot impute rank without a following printed rank."
+      });
+      i -= 1;
+      continue;
+    }
+
+    const expectedGap = nextRank - anchorRank - 1;
+    if (expectedGap !== blankCount) {
+      const excelRowNumber = getExcelRowNumber(rows[startIndex], rowNumberKey);
+      report.warnings.push({
+        rowIndex: startIndex,
+        excelRowNumber,
+        message: "Cannot impute rank without a continuous tie sequence."
+      });
+      i -= 1;
+      continue;
+    }
+
+    const imputedRanks: number[] = [];
+    for (let offset = 1; offset <= blankCount; offset += 1) {
+      const rowIndex = startIndex + offset - 1;
+      const targetRow = rows[rowIndex];
+      const imputedRank = anchorRank + offset;
+      targetRow[rankKey] = imputedRank;
+      targetRow.rank_imputed = true;
+      targetRow.tie_anchor_rank = anchorRank;
+      imputedRanks.push(imputedRank);
+      report.rows.push({
+        rowIndex,
+        excelRowNumber: getExcelRowNumber(targetRow, rowNumberKey),
+        tieAnchorRank: anchorRank,
+        imputedRank,
+        nextPrintedRank: nextRank
+      });
+    }
+
+    report.groups.push({
+      tieAnchorRank: anchorRank,
+      startRowIndex: startIndex,
+      endRowIndex: endIndex,
+      imputedRanks
+    });
+    report.totalImputed += blankCount;
+    i -= 1;
+  }
+
+  return { rows, report };
+}
