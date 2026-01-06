@@ -13,6 +13,42 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+async function ensureTournamentAccess(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  tournamentId: string
+): Promise<Response | null> {
+  if (!tournamentId) {
+    return null;
+  }
+
+  const { data: tournamentAccess, error: tournamentAccessError } = await supabase
+    .from("tournaments")
+    .select("id, owner_id")
+    .eq("id", tournamentId)
+    .maybeSingle();
+
+  if (tournamentAccessError) {
+    throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
+  }
+
+  const { data: isMaster, error: roleError } = await supabase
+    .rpc("has_role", { _user_id: userId, _role: "master" });
+
+  if (roleError) {
+    throw new Error(`Failed to check user role: ${roleError.message}`);
+  }
+
+  if (!tournamentAccess || (tournamentAccess.owner_id !== userId && !isMaster)) {
+    return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Not authorized for tournament" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  return null;
+}
+
 function normalizeHeader(header: unknown): string {
   return String(header ?? "").trim();
 }
@@ -704,6 +740,11 @@ Deno.serve(async (req) => {
   ]);
 
   try {
+    const accessResponse = await ensureTournamentAccess(supabase, authData.user.id, tournamentId);
+    if (accessResponse) {
+      return accessResponse;
+    }
+
     const start = performance.now();
     const { bytes, fileName, contentType } = await parseBody(req);
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
