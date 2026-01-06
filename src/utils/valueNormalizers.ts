@@ -323,7 +323,8 @@ export function imputeContinuousRanksFromTies<T extends Record<string, unknown>>
     const imputedRanks: number[] = [];
     for (let offset = 1; offset <= blankCount; offset += 1) {
       const rowIndex = startIndex + offset - 1;
-      const targetRow = rows[rowIndex];
+      // Cast to mutable record for in-place mutation (function is documented as mutating)
+      const targetRow = rows[rowIndex] as Record<string, unknown>;
       const imputedRank = anchorRank + offset;
       targetRow[rankKey] = imputedRank;
       targetRow.rank_imputed = true;
