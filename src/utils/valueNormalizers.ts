@@ -247,6 +247,11 @@ function ensureImputationFields(row: Record<string, unknown>, rankValue: number 
   }
 }
 
+type TieRankWritableRow = Record<string, any> & {
+  rank_imputed?: boolean;
+  tie_anchor_rank?: number;
+};
+
 export function imputeContinuousRanksFromTies<T extends Record<string, unknown>>(
   rows: T[],
   {
@@ -324,7 +329,7 @@ export function imputeContinuousRanksFromTies<T extends Record<string, unknown>>
     for (let offset = 1; offset <= blankCount; offset += 1) {
       const rowIndex = startIndex + offset - 1;
       // Cast to mutable record for in-place mutation (function is documented as mutating)
-      const targetRow = rows[rowIndex] as Record<string, unknown>;
+      const targetRow = rows[rowIndex] as unknown as TieRankWritableRow;
       const imputedRank = anchorRank + offset;
       targetRow[rankKey] = imputedRank;
       targetRow.rank_imputed = true;
