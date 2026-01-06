@@ -5,18 +5,39 @@ import { CORS_HEADERS, hasPingQueryParam, pingResponse } from "../_shared/health
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "parseWorkbook";
 
+const { ["Access-Control-Allow-Origin"]: _unused, ...BASE_CORS_HEADERS } = CORS_HEADERS;
 const corsHeaders = {
-  ...CORS_HEADERS,
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tournament-id, x-file-name, x-sha256",
+  ...BASE_CORS_HEADERS,
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-tournament-id, x-file-name, x-sha256",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const ALLOWED_ORIGINS = new Set(
+  (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+
+function resolveAllowedOrigin(origin: string | null): string | null {
+  if (!origin) return null;
+  return ALLOWED_ORIGINS.has(origin) ? origin : null;
+}
+
+function buildCorsHeaders(origin: string | null): Record<string, string> {
+  if (!origin) {
+    return {};
+  }
+  return { ...corsHeaders, "Access-Control-Allow-Origin": origin };
+}
 
 async function ensureTournamentAccess(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  tournamentId: string
+  tournamentId: string,
+  responseHeaders: Record<string, string>
 ): Promise<Response | null> {
   if (!tournamentId) {
     return null;
@@ -42,7 +63,7 @@ async function ensureTournamentAccess(
   if (!tournamentAccess || (tournamentAccess.owner_id !== userId && !isMaster)) {
     return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Not authorized for tournament" }), {
       status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...responseHeaders, "Content-Type": "application/json" }
     });
   }
 
@@ -703,21 +724,32 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 }
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get("origin");
+  const allowedOrigin = resolveAllowedOrigin(origin);
+  if (origin && !allowedOrigin) {
+    return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Origin not allowed" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  const corsHeadersForRequest = buildCorsHeaders(allowedOrigin);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeadersForRequest });
   }
 
   // Health check: ?ping=1 (parseWorkbook uses binary body, so only query param ping)
   if (hasPingQueryParam(req)) {
     console.log(`[${FUNCTION_NAME}] ping via query param`);
-    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeaders);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeadersForRequest);
   }
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
     });
   }
 
@@ -727,7 +759,7 @@ Deno.serve(async (req) => {
   if (authError || !authData?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
     });
   }
 
@@ -740,7 +772,12 @@ Deno.serve(async (req) => {
   ]);
 
   try {
-    const accessResponse = await ensureTournamentAccess(supabase, authData.user.id, tournamentId);
+    const accessResponse = await ensureTournamentAccess(
+      supabase,
+      authData.user.id,
+      tournamentId,
+      corsHeadersForRequest
+    );
     if (accessResponse) {
       return accessResponse;
     }
@@ -750,7 +787,6 @@ Deno.serve(async (req) => {
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     console.log(`[import.srv] start bytes=${bytes.byteLength}`);
 
-    // TODO: Lock CORS to app origin in PR-114
     const fileHash = await sha256Hex(bufferSlice);
     if (providedHash && providedHash !== fileHash) {
       console.warn(`[import.srv] hash mismatch header=${providedHash} computed=${fileHash}`);
@@ -869,14 +905,14 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify(responseBody), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "parse failed";
     console.error(`[import.srv] error message=${message}`);
     return new Response(JSON.stringify({ error: message }), {
       status: 503,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
     });
   }
 });
