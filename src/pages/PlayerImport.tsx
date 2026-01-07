@@ -180,6 +180,20 @@ type LastFileInfo = {
 };
 
 const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
+const ABBREV_NAME_PATTERN = /^[A-Z]\.\s/i;
+
+const hasAbbreviatedNameEvidence = (names: Array<string | null | undefined>): boolean => {
+  const cleaned = names
+    .map(name => String(name ?? '').trim())
+    .filter(Boolean);
+  if (cleaned.length < 5) return false;
+
+  const abbrevCount = cleaned.filter(name => ABBREV_NAME_PATTERN.test(name)).length;
+  if (abbrevCount === 0) return false;
+
+  const ratio = abbrevCount / cleaned.length;
+  return abbrevCount >= 3 || ratio >= 0.2;
+};
 
 const isImportDebugEnabled = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -516,6 +530,12 @@ export default function PlayerImport() {
     source: 'unknown'
   });
   const importStartedAtRef = useRef<number | null>(null);
+  const nameHeaderCandidates = useMemo(() => {
+    const normalizedNameHeaders = new Set(
+      [...HEADER_ALIASES.name, ...(HEADER_ALIASES.full_name ?? [])].map(normalizeHeaderForMatching)
+    );
+    return headers.filter(header => normalizedNameHeaders.has(normalizeHeaderForMatching(header)));
+  }, [headers]);
 
   const persistImportLog = useCallback(async (payload: ImportLogInsert) => {
     if (!IMPORT_LOGS_ENABLED) {
@@ -1865,6 +1885,8 @@ export default function PlayerImport() {
     
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
+    const hasMultipleNameColumns = nameHeaderCandidates.length > 1;
+    const shouldAutofillFullName = !mapping.full_name && nameHeaderCandidates.length === 1;
 
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
@@ -2043,6 +2065,14 @@ export default function PlayerImport() {
     // Filter out footer rows (no rank & no name)
     .filter(p => !isFooterRow(p));
 
+    if (shouldAutofillFullName) {
+      mapped.forEach(player => {
+        if (!player.full_name && player.name) {
+          player.full_name = player.name;
+        }
+      });
+    }
+
     const tieRankResult = imputeContinuousRanksFromTies(mapped, {
       rankKey: "rank",
       rowNumberKey: "_originalIndex"
@@ -2179,9 +2209,22 @@ export default function PlayerImport() {
       // Check full_name coverage - show banner if mostly missing
       const fullNameCount = validPlayers.filter(p => p.full_name).length;
       const fullNameCoverage = fullNameCount / totalValid;
-      if (fullNameCoverage < 0.1 && totalValid >= 5) {
+      const abbreviatedNameEvidence = hasAbbreviatedNameEvidence(
+        validPlayers.map(player => player.name)
+      );
+      const shouldShowFullNameWarning =
+        fullNameCoverage < 0.1
+        && totalValid >= 5
+        && (hasMultipleNameColumns || abbreviatedNameEvidence);
+      if (shouldShowFullNameWarning) {
         setFullNameMissingBanner(true);
-        console.log('[import.coverage] Full names mostly missing', { fullNameCount, totalValid, fullNameCoverage });
+        console.log('[import.coverage] Full names mostly missing', {
+          fullNameCount,
+          totalValid,
+          fullNameCoverage,
+          hasMultipleNameColumns,
+          abbreviatedNameEvidence,
+        });
       } else {
         setFullNameMissingBanner(false);
       }
@@ -2385,6 +2428,7 @@ export default function PlayerImport() {
     importConfig,
     importSource,
     isFooterRow,
+    nameHeaderCandidates,
     parsedData,
     replaceExisting,
     runDedupe,
@@ -2504,6 +2548,23 @@ export default function PlayerImport() {
     registerOnSave,
     startImportFlow,
   ]);
+
+  const applyFullNameFromName = useCallback(() => {
+    setMappedPlayers(prev =>
+      prev.map(player => {
+        if (player.full_name && String(player.full_name).trim() !== '') {
+          return player;
+        }
+        const nameValue = player.name;
+        if (!nameValue || String(nameValue).trim() === '') {
+          return player;
+        }
+        return { ...player, full_name: nameValue };
+      })
+    );
+    setFullNameMissingBanner(false);
+    toast.success('Full Name set from Name');
+  }, []);
 
   const hasData = mappedPlayers.length > 0;
   const validationErrorCount = validationErrors.length;
@@ -3172,6 +3233,15 @@ export default function PlayerImport() {
                         variant="link"
                         size="sm"
                         className="p-0 h-auto ml-1 text-amber-700 dark:text-amber-400 underline"
+                        onClick={applyFullNameFromName}
+                      >
+                        Set Full Name = Name
+                      </Button>
+                      <span className="mx-1">·</span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-amber-700 dark:text-amber-400 underline"
                         onClick={() => setShowMappingDialog(true)}
                       >
                         Fix mapping
