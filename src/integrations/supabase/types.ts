@@ -688,7 +688,6 @@ export type Database = {
           id: string
           is_archived: boolean
           is_published: boolean
-          latest_import_quality: Json | null
           notes: string | null
           owner_id: string
           public_results_url: string | null
@@ -718,7 +717,6 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_published?: boolean
-          latest_import_quality?: Json | null
           notes?: string | null
           owner_id: string
           public_results_url?: string | null
@@ -748,7 +746,6 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_published?: boolean
-          latest_import_quality?: Json | null
           notes?: string | null
           owner_id?: string
           public_results_url?: string | null

@@ -74,7 +74,7 @@ const parseImportSummary = (meta: unknown): ImportSummary | null => {
               typed.nextPrintedRank == null ? null : asNumber(typed.nextPrintedRank),
           };
         })
-        .filter((row): row is TieRankSummaryRow => row != null)
+        .filter((row): row is NonNullable<typeof row> => row != null)
     : [];
 
   const tieWarnings = Array.isArray((tieRanksObj as { warnings?: unknown }).warnings)
@@ -88,7 +88,7 @@ const parseImportSummary = (meta: unknown): ImportSummary | null => {
             message: String(typed.message ?? ""),
           };
         })
-        .filter((warning): warning is TieRankSummaryWarning => warning != null)
+        .filter((warning): warning is NonNullable<typeof warning> => warning != null)
     : [];
 
   const dobRows = Array.isArray((dobObj as { rows?: unknown }).rows)
@@ -127,15 +127,6 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
     queryKey: ["import-quality", tournamentId],
     enabled: Boolean(tournamentId),
     queryFn: async () => {
-      const { data: tournament, error: tournamentError } = await supabase
-        .from("tournaments")
-        .select("latest_import_quality")
-        .eq("id", tournamentId)
-        .maybeSingle();
-
-      if (tournamentError) throw tournamentError;
-      if (tournament?.latest_import_quality) return tournament.latest_import_quality;
-
       if (!IMPORT_LOGS_ENABLED) return null;
 
       const { data, error } = await supabase
