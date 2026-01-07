@@ -24,6 +24,7 @@ import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
+import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
 import { filterEmptyColumns, formatExportValue } from "@/utils/exportColumns";
 import { groupWinnersByCategory } from "@/utils/finalizeWinners";
@@ -697,6 +698,8 @@ export default function Finalize() {
               </div>
             </CardContent>
           </Card>
+
+          {id && <ImportQualityNotes tournamentId={id} />}
 
           <Card>
             <CardHeader>

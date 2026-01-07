@@ -1228,6 +1228,36 @@ export default function PlayerImport() {
       if (IMPORT_LOGS_ENABLED && id) {
         const context = logContextRef.current;
         const lastFile = lastFileInfoRef.current;
+        const importSummary = {
+          created_at: new Date().toISOString(),
+          tournament_id: id,
+          import_mode: replaceExisting ? 'replace' : 'append',
+          rowCounts: {
+            parsed: context?.totalRows ?? players.length,
+            validated: context?.acceptedRows ?? totalImported,
+            imported: totalImported,
+          },
+          tieRanks: tieRankReport
+            ? {
+                totalImputed: tieRankReport.totalImputed,
+                rows: tieRankReport.rows,
+                warnings: tieRankReport.warnings,
+              }
+            : {
+                totalImputed: 0,
+                rows: [],
+                warnings: [],
+              },
+          dob: dobImputationReport
+            ? {
+                totalImputed: dobImputationReport.totalImputed,
+                rows: dobImputationReport.rows,
+              }
+            : {
+                totalImputed: 0,
+                rows: [],
+              },
+        };
         const payload: ImportLogInsert = {
           tournament_id: id,
           imported_by: user?.id ?? null,
@@ -1249,6 +1279,8 @@ export default function PlayerImport() {
             validation_skipped: skippedFromValidation,
             import_config: { ...importConfig },
             dedupe_summary: dedupeMeta,
+            import_success: results.failed.length === 0,
+            import_summary: importSummary,
           })),
         };
 
