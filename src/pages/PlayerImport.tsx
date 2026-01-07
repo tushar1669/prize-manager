@@ -1326,6 +1326,14 @@ export default function PlayerImport() {
       };
 
       // Import quality data is stored in import_logs.meta.import_summary
+      // QA checklist:
+      // - After migration + successful Replace import, Review & Allocate shows counts and "View details".
+      // - Refresh keeps it visible.
+      const isLatestQualityMissingColumn = (error: { message?: string } | null) =>
+        Boolean(
+          error?.message?.includes('latest_import_quality') &&
+          error.message.includes('does not exist'),
+        );
 
       if (IMPORT_LOGS_ENABLED && id) {
         const payload: ImportLogInsert = {
@@ -1359,6 +1367,21 @@ export default function PlayerImport() {
             queryClient.invalidateQueries({ queryKey: ['import-logs', id] }).catch(() => {});
           }
         });
+      }
+
+      if (IMPORT_LOGS_ENABLED && id && results.failed.length === 0) {
+        const { error } = await supabase
+          .from('tournaments')
+          .update({ latest_import_quality: importSummary })
+          .eq('id', id);
+
+        if (error) {
+          if (isLatestQualityMissingColumn(error)) {
+            console.warn('[import] latest_import_quality missing; skipping persistence.');
+          } else {
+            console.warn('[import] Failed to persist latest import quality summary.', error.message);
+          }
+        }
       }
 
       logContextRef.current = null;

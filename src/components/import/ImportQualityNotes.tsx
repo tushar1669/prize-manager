@@ -44,6 +44,11 @@ type ImportQualityNotesProps = {
   tournamentId: string;
 };
 
+type ImportQualityData = {
+  summary: ImportSummary;
+  persistenceEnabled: boolean;
+};
+
 const asNumber = (value: unknown, fallback = 0) =>
   Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -103,7 +108,7 @@ const parseImportSummary = (meta: unknown): ImportSummary | null => {
             dob_saved: asString(typed.dob_saved),
           };
         })
-        .filter((row): row is DobSummaryRow => row != null)
+        .filter((row): row is NonNullable<typeof row> => row != null)
     : [];
 
   return {
@@ -123,11 +128,32 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
   const [showTieRankDetails, setShowTieRankDetails] = useState(false);
   const [showDobDetails, setShowDobDetails] = useState(false);
 
-  const { data } = useQuery({
+  const { data } = useQuery<ImportQualityData | null>({
     queryKey: ["import-quality", tournamentId],
     enabled: Boolean(tournamentId),
     queryFn: async () => {
       if (!IMPORT_LOGS_ENABLED) return null;
+
+      const isMissingColumnError = (error: { message?: string } | null) =>
+        Boolean(
+          error?.message?.includes("latest_import_quality") &&
+            error.message.includes("does not exist"),
+        );
+
+      const { data: tournamentData, error: tournamentError } = await supabase
+        .from("tournaments")
+        .select("latest_import_quality")
+        .eq("id", tournamentId)
+        .maybeSingle();
+
+      if (tournamentError && !isMissingColumnError(tournamentError)) {
+        throw tournamentError;
+      }
+
+      if (!tournamentError && tournamentData?.latest_import_quality) {
+        const summary = parseImportSummary(tournamentData.latest_import_quality);
+        return summary ? { summary, persistenceEnabled: true } : null;
+      }
 
       const { data, error } = await supabase
         .from("import_logs")
@@ -139,13 +165,15 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
         .maybeSingle();
 
       if (error) throw error;
-      return data?.meta ?? null;
+      const summary = parseImportSummary(data?.meta ?? null);
+      return summary
+        ? { summary, persistenceEnabled: !tournamentError }
+        : null;
     },
   });
 
   if (!data) return null;
-  const summary = parseImportSummary(data);
-  if (!summary) return null;
+  const summary = data.summary;
 
   const tieImputed = summary.tieRanks.totalImputed;
   const dobImputed = summary.dob.totalImputed;
@@ -160,6 +188,11 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
         <CardTitle className="text-base font-semibold">Data Quality Notes</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
+        {!data.persistenceEnabled && (
+          <p className="text-xs text-muted-foreground">
+            Persistence not enabled (DB not migrated).
+          </p>
+        )}
         {showTie && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-medium">Tie ranks filled:</span>
