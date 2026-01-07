@@ -25,6 +25,7 @@ import { IneligibilityTooltip } from "@/components/allocation/IneligibilityToolt
 import { AllocationDebugReport } from "@/components/allocation/AllocationDebugReport";
 import { AllocationOverviewPanel } from "@/components/allocation/AllocationOverviewPanel";
 import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
+import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { formatReasonCode } from "@/utils/reasonCodeLabels";
 import type { AllocationCoverageEntry } from "@/types/allocation";
@@ -574,6 +575,8 @@ export default function ConflictReview() {
             </div>
           </AlertDescription>
         </Alert>
+
+        {id && <ImportQualityNotes tournamentId={id} />}
 
         {previewCompleted && coverageData.length > 0 && (
           <AllocationDebugReport
