@@ -1245,39 +1245,47 @@ export default function PlayerImport() {
           }
         : null;
 
+      const context = logContextRef.current;
+      const lastFile = lastFileInfoRef.current;
+      const importSummary = {
+        created_at: new Date().toISOString(),
+        tournament_id: id,
+        import_mode: replaceExisting ? 'replace' : 'append',
+        rowCounts: {
+          parsed: context?.totalRows ?? players.length,
+          validated: context?.acceptedRows ?? totalImported,
+          imported: totalImported,
+        },
+        tieRanks: tieRankReport
+          ? {
+              totalImputed: tieRankReport.totalImputed,
+              rows: tieRankReport.rows,
+              warnings: tieRankReport.warnings,
+            }
+          : {
+              totalImputed: 0,
+              rows: [],
+              warnings: [],
+            },
+        dob: dobImputationReport
+          ? {
+              totalImputed: dobImputationReport.totalImputed,
+              rows: dobImputationReport.rows,
+            }
+          : {
+              totalImputed: 0,
+              rows: [],
+            },
+      };
+
+      if (id && results.failed.length === 0) {
+        await supabase
+          .from("tournaments")
+          .update({ latest_import_quality: { import_summary: importSummary } })
+          .eq("id", id);
+      }
+
       if (IMPORT_LOGS_ENABLED && id) {
-        const context = logContextRef.current;
-        const lastFile = lastFileInfoRef.current;
-        const importSummary = {
-          created_at: new Date().toISOString(),
-          tournament_id: id,
-          import_mode: replaceExisting ? 'replace' : 'append',
-          rowCounts: {
-            parsed: context?.totalRows ?? players.length,
-            validated: context?.acceptedRows ?? totalImported,
-            imported: totalImported,
-          },
-          tieRanks: tieRankReport
-            ? {
-                totalImputed: tieRankReport.totalImputed,
-                rows: tieRankReport.rows,
-                warnings: tieRankReport.warnings,
-              }
-            : {
-                totalImputed: 0,
-                rows: [],
-                warnings: [],
-              },
-          dob: dobImputationReport
-            ? {
-                totalImputed: dobImputationReport.totalImputed,
-                rows: dobImputationReport.rows,
-              }
-            : {
-                totalImputed: 0,
-                rows: [],
-              },
-        };
         const payload: ImportLogInsert = {
           tournament_id: id,
           imported_by: user?.id ?? null,
