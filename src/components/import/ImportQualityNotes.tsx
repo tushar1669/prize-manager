@@ -51,7 +51,8 @@ const asString = (value: unknown) => (value == null ? null : String(value));
 
 const parseImportSummary = (meta: unknown): ImportSummary | null => {
   if (!meta || typeof meta !== "object") return null;
-  const summary = (meta as { import_summary?: unknown }).import_summary;
+  const wrappedSummary = (meta as { import_summary?: unknown }).import_summary;
+  const summary = wrappedSummary && typeof wrappedSummary === "object" ? wrappedSummary : meta;
   if (!summary || typeof summary !== "object") return null;
   const tieRanksRaw = (summary as { tieRanks?: unknown }).tieRanks;
   const dobRaw = (summary as { dob?: unknown }).dob;
@@ -124,8 +125,19 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
 
   const { data } = useQuery({
     queryKey: ["import-quality", tournamentId],
-    enabled: IMPORT_LOGS_ENABLED && Boolean(tournamentId),
+    enabled: Boolean(tournamentId),
     queryFn: async () => {
+      const { data: tournament, error: tournamentError } = await supabase
+        .from("tournaments")
+        .select("latest_import_quality")
+        .eq("id", tournamentId)
+        .maybeSingle();
+
+      if (tournamentError) throw tournamentError;
+      if (tournament?.latest_import_quality) return tournament.latest_import_quality;
+
+      if (!IMPORT_LOGS_ENABLED) return null;
+
       const { data, error } = await supabase
         .from("import_logs")
         .select("id, imported_at, meta")
@@ -136,12 +148,12 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
         .maybeSingle();
 
       if (error) throw error;
-      return data ?? null;
+      return data?.meta ?? null;
     },
   });
 
-  if (!IMPORT_LOGS_ENABLED || !data?.meta) return null;
-  const summary = parseImportSummary(data.meta);
+  if (!data) return null;
+  const summary = parseImportSummary(data);
   if (!summary) return null;
 
   const tieImputed = summary.tieRanks.totalImputed;
@@ -167,13 +179,13 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
               className="h-auto p-0"
               onClick={() => setShowTieRankDetails(true)}
             >
-              View
+              View details
             </Button>
           </div>
         )}
         {showDob && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-medium">DOB normalized:</span>
+            <span className="font-medium">DOB year-only inferred:</span>
             <span>{dobImputed}</span>
             <Button
               type="button"
@@ -181,7 +193,7 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
               className="h-auto p-0"
               onClick={() => setShowDobDetails(true)}
             >
-              View
+              View details
             </Button>
           </div>
         )}
