@@ -169,7 +169,7 @@ export function downloadPlayersXlsx(
   const worksheetData = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(worksheetData);
 
-  // Apply date format for DOB column (column I)
+  // Apply date format for DOB column (column J)
   for (let r = 1; r < worksheetData.length; r++) {
     const cellAddress = XLSX.utils.encode_cell({ c: 8, r });
     const cell = ws[cellAddress];
@@ -561,6 +561,7 @@ export function downloadCleanedPlayersXlsx(
     'tie_anchor_rank',
     'sno',
     'name',
+    'full_name',
     'rating',
     'unrated',
     'dob',
@@ -594,6 +595,7 @@ export function downloadCleanedPlayersXlsx(
       tieAnchorRank,
       player.sno != null && player.sno !== '' ? Number(player.sno) : null,
       getPlayerDisplayName(player as { full_name?: string | null; name?: string | null }),
+      player.full_name ?? player.name ?? null,
       player.rating != null && player.rating !== '' ? Number(player.rating) : null,
       player.unrated != null ? Boolean(player.unrated) : null,
       dobDate,
@@ -615,7 +617,7 @@ export function downloadCleanedPlayersXlsx(
 
   // Apply date format for DOB column (column I)
   for (let r = 1; r < worksheetData.length; r++) {
-    const cellAddress = XLSX.utils.encode_cell({ c: 8, r });
+    const cellAddress = XLSX.utils.encode_cell({ c: 9, r });
     const cell = ws[cellAddress];
     if (cell && cell.v instanceof Date) {
       cell.z = 'yyyy-mm-dd';
@@ -630,6 +632,7 @@ export function downloadCleanedPlayersXlsx(
     { wch: 14 }, // tie_anchor_rank
     { wch: 6 },  // sno
     { wch: 28 }, // name
+    { wch: 28 }, // full_name
     { wch: 8 },  // rating
     { wch: 9 },  // unrated
     { wch: 12 }, // dob
