@@ -23,6 +23,17 @@ export function normalizeHeaderForMatching(header: string): string {
     .replace(/\s+/g, '_');     // Collapse spaces to underscore
 }
 
+const NAME_HEADER_PATTERN = /^name(_?\d+)?$/;
+
+export function isNameHeader(header: string): boolean {
+  const normalized = normalizeHeaderForMatching(header);
+  return NAME_HEADER_PATTERN.test(normalized);
+}
+
+export function getNameHeaderCandidates(headers: string[]): string[] {
+  return headers.filter(header => isNameHeader(header));
+}
+
 const SWISS_SIGNATURE_HEADERS = ['rank', 'sno', 'rtg', 'fideno'];
 const TEMPLATE_SIGNATURE_HEADERS = ['rank', 'name', 'rating', 'dob'];
 
