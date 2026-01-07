@@ -1278,12 +1278,7 @@ export default function PlayerImport() {
             },
       };
 
-      if (id && results.failed.length === 0) {
-        await supabase
-          .from("tournaments")
-          .update({ latest_import_quality: { import_summary: importSummary } })
-          .eq("id", id);
-      }
+      // Import quality data is stored in import_logs.meta.import_summary
 
       if (IMPORT_LOGS_ENABLED && id) {
         const payload: ImportLogInsert = {
