@@ -21,6 +21,13 @@ type TieRankSummaryWarning = {
   message: string;
 };
 
+type TieRankSummaryRange = {
+  tieAnchorRank: number;
+  startRowIndex: number;
+  endRowIndex: number;
+  imputedCount: number;
+};
+
 type DobSummaryRow = {
   rowNumber: number;
   rank: number | null;
@@ -28,15 +35,22 @@ type DobSummaryRow = {
   dob_saved: string | null;
 };
 
+type DobYearSummary = {
+  year: string;
+  count: number;
+};
+
 type ImportSummary = {
   tieRanks: {
     totalImputed: number;
     rows: TieRankSummaryRow[];
     warnings: TieRankSummaryWarning[];
+    ranges: TieRankSummaryRange[];
   };
   dob: {
     totalImputed: number;
     rows: DobSummaryRow[];
+    yearHistogram: DobYearSummary[];
   };
 };
 
@@ -54,7 +68,7 @@ const asNumber = (value: unknown, fallback = 0) =>
 
 const asString = (value: unknown) => (value == null ? null : String(value));
 
-const parseImportSummary = (meta: unknown): ImportSummary | null => {
+export const parseImportSummary = (meta: unknown): ImportSummary | null => {
   if (!meta || typeof meta !== "object") return null;
   const wrappedSummary = (meta as { import_summary?: unknown }).import_summary;
   const summary = wrappedSummary && typeof wrappedSummary === "object" ? wrappedSummary : meta;
@@ -96,6 +110,21 @@ const parseImportSummary = (meta: unknown): ImportSummary | null => {
         .filter((warning): warning is NonNullable<typeof warning> => warning != null)
     : [];
 
+  const tieRanges = Array.isArray((tieRanksObj as { ranges?: unknown }).ranges)
+    ? (tieRanksObj as { ranges: unknown[] }).ranges
+        .map((range) => {
+          if (!range || typeof range !== "object") return null;
+          const typed = range as TieRankSummaryRange;
+          return {
+            tieAnchorRank: asNumber(typed.tieAnchorRank),
+            startRowIndex: asNumber(typed.startRowIndex),
+            endRowIndex: asNumber(typed.endRowIndex),
+            imputedCount: asNumber(typed.imputedCount),
+          };
+        })
+        .filter((range): range is NonNullable<typeof range> => range != null)
+    : [];
+
   const dobRows = Array.isArray((dobObj as { rows?: unknown }).rows)
     ? (dobObj as { rows: unknown[] }).rows
         .map((row) => {
@@ -111,17 +140,81 @@ const parseImportSummary = (meta: unknown): ImportSummary | null => {
         .filter((row): row is NonNullable<typeof row> => row != null)
     : [];
 
+  const yearHistogram = Array.isArray((dobObj as { yearHistogram?: unknown }).yearHistogram)
+    ? (dobObj as { yearHistogram: unknown[] }).yearHistogram
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const typed = entry as DobYearSummary;
+          return {
+            year: String(typed.year ?? ""),
+            count: asNumber(typed.count),
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry != null && entry.year)
+    : [];
+
   return {
     tieRanks: {
       totalImputed: asNumber((tieRanksObj as { totalImputed?: unknown }).totalImputed),
       rows: tieRows,
       warnings: tieWarnings,
+      ranges: tieRanges,
     },
     dob: {
       totalImputed: asNumber((dobObj as { totalImputed?: unknown }).totalImputed),
       rows: dobRows,
+      yearHistogram,
     },
   };
+};
+
+export const fetchImportQualitySummary = async ({
+  tournamentId,
+  client = supabase,
+  importLogsEnabled = IMPORT_LOGS_ENABLED,
+}: {
+  tournamentId: string;
+  client?: typeof supabase;
+  importLogsEnabled?: boolean;
+}): Promise<ImportQualityData | null> => {
+  const isMissingColumnError = (error: { message?: string } | null) =>
+    Boolean(
+      error?.message?.includes("latest_import_quality") &&
+        (error.message.includes("does not exist") ||
+          error.message.includes("schema cache")),
+    );
+
+  const { data: tournamentData, error: tournamentError } = await client
+    .from("tournaments")
+    .select("latest_import_quality")
+    .eq("id", tournamentId)
+    .maybeSingle();
+
+  if (tournamentError && !isMissingColumnError(tournamentError)) {
+    throw tournamentError;
+  }
+
+  const summary = parseImportSummary(tournamentData?.latest_import_quality);
+  if (summary) {
+    return { summary, persistenceEnabled: !tournamentError };
+  }
+
+  if (!importLogsEnabled) return null;
+
+  const { data, error } = await client
+    .from("import_logs")
+    .select("id, imported_at, meta")
+    .eq("tournament_id", tournamentId)
+    .filter("meta->>import_success", "eq", "true")
+    .order("imported_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  const logSummary = parseImportSummary(data?.meta ?? null);
+  return logSummary
+    ? { summary: logSummary, persistenceEnabled: !tournamentError }
+    : null;
 };
 
 export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
@@ -131,48 +224,21 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
   const { data } = useQuery<ImportQualityData | null>({
     queryKey: ["import-quality", tournamentId],
     enabled: Boolean(tournamentId),
-    queryFn: async () => {
-      if (!IMPORT_LOGS_ENABLED) return null;
-
-      const isMissingColumnError = (error: { message?: string } | null) =>
-        Boolean(
-          error?.message?.includes("latest_import_quality") &&
-            error.message.includes("does not exist"),
-        );
-
-      const { data: tournamentData, error: tournamentError } = await supabase
-        .from("tournaments")
-        .select("latest_import_quality")
-        .eq("id", tournamentId)
-        .maybeSingle();
-
-      if (tournamentError && !isMissingColumnError(tournamentError)) {
-        throw tournamentError;
-      }
-
-      if (!tournamentError && tournamentData?.latest_import_quality) {
-        const summary = parseImportSummary(tournamentData.latest_import_quality);
-        return summary ? { summary, persistenceEnabled: true } : null;
-      }
-
-      const { data, error } = await supabase
-        .from("import_logs")
-        .select("id, imported_at, meta")
-        .eq("tournament_id", tournamentId)
-        .filter("meta->>import_success", "eq", "true")
-        .order("imported_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      const summary = parseImportSummary(data?.meta ?? null);
-      return summary
-        ? { summary, persistenceEnabled: !tournamentError }
-        : null;
-    },
+    queryFn: () => fetchImportQualitySummary({ tournamentId }),
   });
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <Card className="mb-6" data-testid="import-quality-notes-empty">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Data Quality Notes</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          No persisted import notes yet.
+        </CardContent>
+      </Card>
+    );
+  }
   const summary = data.summary;
 
   const tieImputed = summary.tieRanks.totalImputed;
@@ -256,6 +322,29 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
                 </TableBody>
               </Table>
             </div>
+          ) : summary.tieRanks.ranges.length ? (
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rows</TableHead>
+                    <TableHead>Anchor rank</TableHead>
+                    <TableHead>Imputed count</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {summary.tieRanks.ranges.map((range) => (
+                    <TableRow key={`${range.startRowIndex}-${range.tieAnchorRank}`}>
+                      <TableCell>
+                        {range.startRowIndex + 1}–{range.endRowIndex + 1}
+                      </TableCell>
+                      <TableCell>{range.tieAnchorRank}</TableCell>
+                      <TableCell>{range.imputedCount}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">No imputed ranks to display.</p>
           )}
@@ -300,6 +389,25 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
                       <TableCell>{row.rank ?? ""}</TableCell>
                       <TableCell>{row.dob_original ?? ""}</TableCell>
                       <TableCell>{row.dob_saved ?? ""}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : summary.dob.yearHistogram.length ? (
+            <div className="max-h-80 overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Year</TableHead>
+                    <TableHead>Converted count</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {summary.dob.yearHistogram.map((entry) => (
+                    <TableRow key={entry.year}>
+                      <TableCell>{entry.year}</TableCell>
+                      <TableCell>{entry.count}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

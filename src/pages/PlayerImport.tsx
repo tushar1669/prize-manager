@@ -1294,6 +1294,22 @@ export default function PlayerImport() {
 
       const context = logContextRef.current;
       const lastFile = lastFileInfoRef.current;
+      const MAX_IMPORT_SUMMARY_ROWS = 200;
+      const limitRows = <T,>(rows: T[]) => rows.slice(0, MAX_IMPORT_SUMMARY_ROWS);
+      const buildDobYearHistogram = (rows: DobImputationRow[]) => {
+        const counts = new Map<string, number>();
+        rows.forEach((row) => {
+          const raw = row.dob_original ?? row.dob_saved ?? "";
+          const match = String(raw).match(/^(\d{4})/);
+          if (!match) return;
+          const year = match[1];
+          counts.set(year, (counts.get(year) ?? 0) + 1);
+        });
+        return Array.from(counts.entries())
+          .map(([year, count]) => ({ year, count }))
+          .sort((a, b) => Number(a.year) - Number(b.year));
+      };
+
       const importSummary = {
         created_at: new Date().toISOString(),
         tournament_id: id,
@@ -1306,22 +1322,31 @@ export default function PlayerImport() {
         tieRanks: tieRankReport
           ? {
               totalImputed: tieRankReport.totalImputed,
-              rows: tieRankReport.rows,
-              warnings: tieRankReport.warnings,
+              rows: limitRows(tieRankReport.rows),
+              warnings: limitRows(tieRankReport.warnings),
+              ranges: tieRankReport.groups.map((group) => ({
+                tieAnchorRank: group.tieAnchorRank,
+                startRowIndex: group.startRowIndex,
+                endRowIndex: group.endRowIndex,
+                imputedCount: group.imputedRanks.length,
+              })),
             }
           : {
               totalImputed: 0,
               rows: [],
               warnings: [],
+              ranges: [],
             },
         dob: dobImputationReport
           ? {
               totalImputed: dobImputationReport.totalImputed,
-              rows: dobImputationReport.rows,
+              rows: limitRows(dobImputationReport.rows),
+              yearHistogram: buildDobYearHistogram(dobImputationReport.rows),
             }
           : {
               totalImputed: 0,
               rows: [],
+              yearHistogram: [],
             },
       };
 
@@ -1369,19 +1394,27 @@ export default function PlayerImport() {
         });
       }
 
-      if (IMPORT_LOGS_ENABLED && id && results.failed.length === 0) {
-        const { error } = await supabase
-          .from('tournaments')
-          .update({ latest_import_quality: importSummary })
-          .eq('id', id);
+      if (id && results.failed.length === 0) {
+        const persistLatestImportQuality = async () => {
+          try {
+            const { error } = await supabase
+              .from('tournaments')
+              .update({ latest_import_quality: importSummary })
+              .eq('id', id);
 
-        if (error) {
-          if (isLatestQualityMissingColumn(error)) {
-            console.warn('[import] latest_import_quality missing; skipping persistence.');
-          } else {
-            console.warn('[import] Failed to persist latest import quality summary.', error.message);
+            if (error) {
+              if (isLatestQualityMissingColumn(error)) {
+                console.warn('[import] latest_import_quality missing; skipping persistence.');
+              } else {
+                console.warn('[import] Failed to persist latest import quality summary.', error.message);
+              }
+            }
+          } catch (error) {
+            console.warn('[import] Failed to persist latest import quality summary.', error);
           }
-        }
+        };
+
+        void persistLatestImportQuality();
       }
 
       logContextRef.current = null;
