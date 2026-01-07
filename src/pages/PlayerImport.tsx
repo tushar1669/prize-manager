@@ -57,6 +57,7 @@ import {
   HEADER_ALIASES,
   sanitizeDobForImport,
   normalizeHeaderForMatching,
+  getNameHeaderCandidates,
   selectBestRatingColumn,
   inferImportSource,
 } from '@/utils/importSchema';
@@ -180,19 +181,68 @@ type LastFileInfo = {
 };
 
 const GENDER_DENYLIST = new Set(['fs', 'fed', 'federation']);
-const ABBREV_NAME_PATTERN = /^[A-Z]\.\s/i;
+const ABBREV_NAME_PATTERN = /^[A-Z]\.\s?/;
+const DOT_PATTERN = /\./g;
 
-const hasAbbreviatedNameEvidence = (names: Array<string | null | undefined>): boolean => {
-  const cleaned = names
-    .map(name => String(name ?? '').trim())
+type NameColumnStats = {
+  sampleCount: number;
+  avgTokens: number;
+  avgLength: number;
+  abbrevCount: number;
+  abbrevRatio: number;
+};
+
+const isAbbreviatedNameValue = (value: string): boolean => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (ABBREV_NAME_PATTERN.test(trimmed)) return true;
+  const dotCount = (trimmed.match(DOT_PATTERN) ?? []).length;
+  return dotCount >= 2;
+};
+
+const getNameColumnStats = (
+  rows: Array<Record<string, unknown>>,
+  column: string
+): NameColumnStats | null => {
+  const values = rows
+    .map(row => String(row[column] ?? '').trim())
     .filter(Boolean);
-  if (cleaned.length < 5) return false;
 
-  const abbrevCount = cleaned.filter(name => ABBREV_NAME_PATTERN.test(name)).length;
-  if (abbrevCount === 0) return false;
+  const sampleCount = values.length;
+  if (sampleCount < 5) return null;
 
-  const ratio = abbrevCount / cleaned.length;
-  return abbrevCount >= 3 || ratio >= 0.2;
+  const totals = values.reduce(
+    (acc, name) => {
+      const tokens = name.split(/\s+/).filter(Boolean).length;
+      acc.tokens += tokens;
+      acc.length += name.length;
+      if (isAbbreviatedNameValue(name)) {
+        acc.abbrev += 1;
+      }
+      return acc;
+    },
+    { tokens: 0, length: 0, abbrev: 0 }
+  );
+
+  return {
+    sampleCount,
+    avgTokens: totals.tokens / sampleCount,
+    avgLength: totals.length / sampleCount,
+    abbrevCount: totals.abbrev,
+    abbrevRatio: totals.abbrev / sampleCount,
+  };
+};
+
+const hasAbbreviatedNameEvidence = (stats: NameColumnStats | null): boolean => {
+  if (!stats) return false;
+  return stats.abbrevCount >= 3 || stats.abbrevRatio >= 0.2;
+};
+
+const looksFullerThan = (candidate: NameColumnStats | null, baseline: NameColumnStats | null): boolean => {
+  if (!candidate || !baseline) return false;
+  // Tiny heuristic: prefer clearly longer or more tokenized names.
+  return candidate.avgTokens > baseline.avgTokens + 0.25
+    || candidate.avgLength > baseline.avgLength + 3;
 };
 
 const isImportDebugEnabled = (): boolean => {
@@ -531,10 +581,7 @@ export default function PlayerImport() {
   });
   const importStartedAtRef = useRef<number | null>(null);
   const nameHeaderCandidates = useMemo(() => {
-    const normalizedNameHeaders = new Set(
-      [...HEADER_ALIASES.name, ...(HEADER_ALIASES.full_name ?? [])].map(normalizeHeaderForMatching)
-    );
-    return headers.filter(header => normalizedNameHeaders.has(normalizeHeaderForMatching(header)));
+    return getNameHeaderCandidates(headers);
   }, [headers]);
 
   const persistImportLog = useCallback(async (payload: ImportLogInsert) => {
@@ -1888,8 +1935,14 @@ export default function PlayerImport() {
     
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
-    const hasMultipleNameColumns = nameHeaderCandidates.length > 1;
-    const shouldAutofillFullName = !mapping.full_name && nameHeaderCandidates.length === 1;
+    const primaryNameHeader = nameHeaderCandidates[0] ?? null;
+    const selectedNameHeader = mapping.name && nameHeaderCandidates.includes(mapping.name)
+      ? mapping.name
+      : primaryNameHeader;
+    const alternateNameHeader = nameHeaderCandidates.find(header => header !== selectedNameHeader) ?? null;
+    const shouldAutofillFullName = !mapping.full_name
+      && Boolean(mapping.name)
+      && nameHeaderCandidates.includes(String(mapping.name));
 
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
@@ -2212,21 +2265,31 @@ export default function PlayerImport() {
       // Check full_name coverage - show banner if mostly missing
       const fullNameCount = validPlayers.filter(p => p.full_name).length;
       const fullNameCoverage = fullNameCount / totalValid;
-      const abbreviatedNameEvidence = hasAbbreviatedNameEvidence(
-        validPlayers.map(player => player.name)
-      );
+      const rawRows = parsedData as Record<string, unknown>[];
+      const selectedNameStats = selectedNameHeader
+        ? getNameColumnStats(rawRows, selectedNameHeader)
+        : null;
+      const alternateNameStats = alternateNameHeader
+        ? getNameColumnStats(rawRows, alternateNameHeader)
+        : null;
+      const abbreviatedNameEvidence = hasAbbreviatedNameEvidence(selectedNameStats);
+      const alternateLooksFuller = looksFullerThan(alternateNameStats, selectedNameStats);
+      const fullNameMappedElsewhere = Boolean(mapping.full_name && mapping.full_name !== mapping.name);
       const shouldShowFullNameWarning =
-        fullNameCoverage < 0.1
-        && totalValid >= 5
-        && (hasMultipleNameColumns || abbreviatedNameEvidence);
+        totalValid >= 5
+        && !fullNameMappedElsewhere
+        && abbreviatedNameEvidence
+        && alternateLooksFuller;
       if (shouldShowFullNameWarning) {
         setFullNameMissingBanner(true);
         console.log('[import.coverage] Full names mostly missing', {
           fullNameCount,
           totalValid,
           fullNameCoverage,
-          hasMultipleNameColumns,
+          selectedNameHeader,
+          alternateNameHeader,
           abbreviatedNameEvidence,
+          alternateLooksFuller,
         });
       } else {
         setFullNameMissingBanner(false);
@@ -2449,7 +2512,7 @@ export default function PlayerImport() {
 
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
-    const nameCandidates: string[] = [];
+    const primaryNameHeader = nameHeaderCandidates[0];
 
     const genderConfig = genderConfigRef.current;
     const genderCandidate = genderConfig?.preferredColumn;
@@ -2475,29 +2538,19 @@ export default function PlayerImport() {
       const normalized = normalizeHeaderForMatching(h);
       for (const [field, aliases] of Object.entries(normalizedAliases)) {
         if (!autoMapping[field] && aliases.includes(normalized)) {
+          if (field === 'name' && primaryNameHeader) {
+            break;
+          }
           autoMapping[field] = h;
           break;
         }
       }
-
-      if (normalizedAliases.name?.includes(normalized)) {
-        nameCandidates.push(h);
-      }
     });
 
-    if (!autoMapping.full_name) {
-      const explicitFullName = headers.find(h =>
-        normalizedAliases.full_name?.includes(normalizeHeaderForMatching(h))
-      );
-      if (explicitFullName) {
-        autoMapping.full_name = explicitFullName;
-      }
-    }
-
-    if (!autoMapping.full_name && nameCandidates.length > 1) {
-      const duplicateName = nameCandidates.find(candidate => candidate !== autoMapping.name);
-      if (duplicateName) {
-        autoMapping.full_name = duplicateName;
+    if (primaryNameHeader) {
+      autoMapping.name = primaryNameHeader;
+      if (!autoMapping.full_name) {
+        autoMapping.full_name = primaryNameHeader;
       }
     }
 
