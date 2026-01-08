@@ -1394,27 +1394,26 @@ export default function PlayerImport() {
         });
       }
 
+      // Persist import quality notes BEFORE navigating away
       if (id && results.failed.length === 0) {
-        const persistLatestImportQuality = async () => {
-          try {
-            const { error } = await supabase
-              .from('tournaments')
-              .update({ latest_import_quality: importSummary })
-              .eq('id', id);
+        try {
+          const { error } = await supabase
+            .from('tournaments')
+            .update({ latest_import_quality: importSummary })
+            .eq('id', id);
 
-            if (error) {
-              if (isLatestQualityMissingColumn(error)) {
-                console.warn('[import] latest_import_quality missing; skipping persistence.');
-              } else {
-                console.warn('[import] Failed to persist latest import quality summary.', error.message);
-              }
+          if (error) {
+            if (isLatestQualityMissingColumn(error)) {
+              console.warn('[import] latest_import_quality column missing; skipping persistence.');
+            } else {
+              console.error('[import] Failed to persist import quality:', error.message, error.details);
             }
-          } catch (error) {
-            console.warn('[import] Failed to persist latest import quality summary.', error);
+          } else {
+            console.log('[import] Persisted import quality notes successfully.');
           }
-        };
-
-        void persistLatestImportQuality();
+        } catch (err) {
+          console.error('[import] Exception persisting import quality:', err);
+        }
       }
 
       logContextRef.current = null;

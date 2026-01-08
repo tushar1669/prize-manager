@@ -150,7 +150,7 @@ export const parseImportSummary = (meta: unknown): ImportSummary | null => {
             count: asNumber(typed.count),
           };
         })
-        .filter((entry): entry is NonNullable<typeof entry> => entry != null && entry.year)
+        .filter((entry): entry is NonNullable<typeof entry> => entry != null && entry.year !== "")
     : [];
 
   return {
