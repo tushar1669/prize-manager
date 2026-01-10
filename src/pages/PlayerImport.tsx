@@ -60,6 +60,8 @@ import {
   getNameHeaderCandidates,
   selectBestRatingColumn,
   inferImportSource,
+  detectFullVsAbbrevName,
+  extractRuleUsedFields,
 } from '@/utils/importSchema';
 import {
   normalizeRating,
@@ -1644,6 +1646,11 @@ export default function PlayerImport() {
     return checkHasFemaleCategories(categories as Parameters<typeof checkHasFemaleCategories>[0]);
   }, [categories]);
 
+  // Compute which extra fields are used by prize category rules
+  const ruleUsedFields = useMemo(() => {
+    return extractRuleUsedFields(categories as Parameters<typeof extractRuleUsedFields>[0]);
+  }, [categories]);
+
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
   const tournamentSlug = (tournament as { slug?: string } | null | undefined)?.slug ?? 'tournament';
 
@@ -2567,7 +2574,36 @@ export default function PlayerImport() {
 
     const autoMapping: Record<string, string> = {};
     const normalizedAliases: Record<string, string[]> = {};
-    const primaryNameHeader = nameHeaderCandidates[0];
+    
+    // Determine best name column: use detectFullVsAbbrevName when 2+ Name columns exist
+    let primaryNameHeader = nameHeaderCandidates[0];
+    if (nameHeaderCandidates.length >= 2) {
+      const detection = detectFullVsAbbrevName(
+        parsedData as Record<string, unknown>[],
+        nameHeaderCandidates[0],
+        nameHeaderCandidates[1]
+      );
+      if (detection) {
+        primaryNameHeader = detection.fullNameColumn;
+        console.log('[import] name column pick', {
+          candidates: nameHeaderCandidates,
+          chosen: primaryNameHeader,
+          detection
+        });
+      } else {
+        console.log('[import] name column pick', {
+          candidates: nameHeaderCandidates,
+          chosen: primaryNameHeader,
+          detection: 'inconclusive - using first'
+        });
+      }
+    } else if (nameHeaderCandidates.length === 1) {
+      console.log('[import] name column pick', {
+        candidates: nameHeaderCandidates,
+        chosen: primaryNameHeader,
+        detection: 'single candidate'
+      });
+    }
 
     const genderConfig = genderConfigRef.current;
     const genderCandidate = genderConfig?.preferredColumn;
@@ -2976,9 +3012,9 @@ export default function PlayerImport() {
               </Card>
             )}
             {tieRankReport?.totalImputed > 0 && mappedPlayers.length > 0 && (
-              <Alert className="border-blue-200 bg-blue-50/80">
-                <AlertTitle>Tie ranks detected</AlertTitle>
-                <AlertDescription className="flex flex-col gap-2">
+              <Alert className="border-border bg-muted/50">
+                <AlertTitle className="text-foreground">Tie ranks detected</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 text-muted-foreground">
                   <span>
                     Tie ranks detected. We filled {tieRankReport.totalImputed} blank rank
                     {tieRankReport.totalImputed === 1 ? '' : 's'} into continuous ranks for prize allocation.
@@ -2995,9 +3031,9 @@ export default function PlayerImport() {
               </Alert>
             )}
             {dobImputationReport?.totalImputed > 0 && mappedPlayers.length > 0 && (
-              <Alert className="border-blue-200 bg-blue-50/80">
-                <AlertTitle>DOB year-only detected</AlertTitle>
-                <AlertDescription className="flex flex-col gap-2">
+              <Alert className="border-border bg-muted/50">
+                <AlertTitle className="text-foreground">DOB year-only detected</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 text-muted-foreground">
                   <span>
                     DOB year-only detected. Converted {dobImputationReport.totalImputed} value
                     {dobImputationReport.totalImputed === 1 ? '' : 's'} from YYYY/00/00 or YYYY to YYYY-01-01 for database compatibility.
@@ -3014,9 +3050,9 @@ export default function PlayerImport() {
               </Alert>
             )}
             {autoFilledRankCount > 0 && mappedPlayers.length > 0 && (
-              <Alert className="border-blue-200 bg-blue-50/80">
-                <AlertTitle>Ranks auto-filled</AlertTitle>
-                <AlertDescription>
+              <Alert className="border-border bg-muted/50">
+                <AlertTitle className="text-foreground">Ranks auto-filled</AlertTitle>
+                <AlertDescription className="text-muted-foreground">
                   {autoFilledRankCount} rank{autoFilledRankCount === 1 ? '' : 's'} were auto-filled based on
                   neighboring values. Please double-check before importing.
                 </AlertDescription>
@@ -3156,16 +3192,20 @@ export default function PlayerImport() {
                   <Table role="table" aria-label="Player import preview">
                     <TableHeader>
                       <TableRow>
+                        {/* Core columns: always visible */}
                         <TableHead scope="col">Rank</TableHead>
                         <TableHead scope="col">Name</TableHead>
                         <TableHead scope="col">Rating</TableHead>
                         <TableHead scope="col">DOB</TableHead>
                         <TableHead scope="col">Gender</TableHead>
-                        <TableHead scope="col">State</TableHead>
-                        <TableHead scope="col">City</TableHead>
-                        <TableHead scope="col">Club</TableHead>
-                        <TableHead scope="col">Disability</TableHead>
-                        <TableHead scope="col">Special Notes</TableHead>
+                        {/* Extra columns: only if used by prize rules */}
+                        {ruleUsedFields.has('state') && <TableHead scope="col">State</TableHead>}
+                        {ruleUsedFields.has('city') && <TableHead scope="col">City</TableHead>}
+                        {ruleUsedFields.has('club') && <TableHead scope="col">Club</TableHead>}
+                        {ruleUsedFields.has('disability') && <TableHead scope="col">Disability</TableHead>}
+                        {ruleUsedFields.has('group_label') && <TableHead scope="col">Group</TableHead>}
+                        {ruleUsedFields.has('type_label') && <TableHead scope="col">Type</TableHead>}
+                        {/* FIDE ID always shown for reference */}
                         <TableHead scope="col">FIDE ID</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3214,11 +3254,14 @@ export default function PlayerImport() {
                                 </div>
                               </TableCell>
                               <TableCell>{player.gender ?? ''}</TableCell>
-                              <TableCell>{player.state ?? ''}</TableCell>
-                              <TableCell>{player.city ?? ''}</TableCell>
-                              <TableCell>{player.club ?? ''}</TableCell>
-                              <TableCell>{player.disability ?? ''}</TableCell>
-                              <TableCell>{player.special_notes ?? ''}</TableCell>
+                              {/* Extra columns: only if used by prize rules */}
+                              {ruleUsedFields.has('state') && <TableCell>{player.state ?? ''}</TableCell>}
+                              {ruleUsedFields.has('city') && <TableCell>{player.city ?? ''}</TableCell>}
+                              {ruleUsedFields.has('club') && <TableCell>{player.club ?? ''}</TableCell>}
+                              {ruleUsedFields.has('disability') && <TableCell>{player.disability ?? ''}</TableCell>}
+                              {ruleUsedFields.has('group_label') && <TableCell>{player.group_label ?? ''}</TableCell>}
+                              {ruleUsedFields.has('type_label') && <TableCell>{player.type_label ?? ''}</TableCell>}
+                              {/* FIDE ID always shown */}
                               <TableCell>{player.fide_id ?? ''}</TableCell>
                             </TableRow>
                           );
