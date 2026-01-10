@@ -562,11 +562,11 @@ export default function ConflictReview() {
           className="mb-6"
         />
 
-        <Alert className="mb-6 border-primary/30 bg-primary/10 text-primary">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Allocation {isPreviewMode ? 'Preview' : 'Summary'}</AlertTitle>
+        <Alert className="mb-6 border-primary/30 bg-primary/10">
+          <AlertCircle className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-foreground">Allocation {isPreviewMode ? 'Preview' : 'Summary'}</AlertTitle>
           <AlertDescription>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-foreground">
               <div><span className="font-medium">Players:</span> {summaryCounts.players}</div>
               <div><span className="font-medium">Active prizes:</span> {summaryCounts.activePrizes}</div>
               <div><span className="font-medium">Winners:</span> {summaryCounts.winners}</div>
@@ -640,7 +640,7 @@ export default function ConflictReview() {
                             const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
                             
                             return (
-                              <Card key={conflict.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedConflict(conflict)}>
+                              <Card key={conflict.id} className="cursor-pointer transition-colors hover:bg-muted/50 hover:border-primary/50" onClick={() => setSelectedConflict(conflict)}>
                                 <CardHeader>
                                   <CardTitle className="text-base flex items-center gap-2">
                                     <Badge variant="destructive">
@@ -742,16 +742,7 @@ export default function ConflictReview() {
               })()}
             </div>
             <div className="space-y-4">
-              <Card>
-                <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div><strong>Players:</strong> {summaryCounts.players}</div>
-                  <div><strong>Active prizes:</strong> {summaryCounts.activePrizes}</div>
-                  <div><strong>Winners:</strong> {summaryCounts.winners}</div>
-                  <div><strong>Conflicts:</strong> {summaryCounts.conflicts}</div>
-                  <div><strong>Unfilled:</strong> {summaryCounts.unfilled}</div>
-                </CardContent>
-              </Card>
+              {/* Summary info is shown in the inline Alert above - no duplicate sidebar card */}
 
               <Card>
                 <CardHeader><CardTitle>Winners ({winners.length})</CardTitle></CardHeader>
