@@ -532,3 +532,86 @@ export function getSampleValues(
   }
   return values;
 }
+
+/**
+ * Extract player fields that are used by prize category rules.
+ * Inspects criteria_json from all categories to determine which fields
+ * should be shown in import preview.
+ * 
+ * @returns Set of player field names referenced by prize rules
+ */
+export function extractRuleUsedFields(
+  categories: Array<{
+    criteria_json?: {
+      gender?: string;
+      min_age?: number | null;
+      max_age?: number | null;
+      min_rating?: number | null;
+      max_rating?: number | null;
+      allowed_states?: string[];
+      allowed_cities?: string[];
+      allowed_clubs?: string[];
+      allowed_groups?: string[];
+      allowed_types?: string[];
+      disability?: string;
+    } | null;
+  }> | null | undefined
+): Set<string> {
+  const usedFields = new Set<string>();
+  
+  if (!categories || categories.length === 0) {
+    return usedFields;
+  }
+  
+  for (const cat of categories) {
+    const c = cat.criteria_json;
+    if (!c) continue;
+    
+    // Gender used
+    if (c.gender && c.gender.toUpperCase() !== 'OPEN') {
+      usedFields.add('gender');
+    }
+    
+    // Age rules use DOB
+    if (c.min_age != null || c.max_age != null) {
+      usedFields.add('dob');
+    }
+    
+    // Rating rules
+    if (c.min_rating != null || c.max_rating != null) {
+      usedFields.add('rating');
+    }
+    
+    // State filter
+    if (c.allowed_states && c.allowed_states.length > 0) {
+      usedFields.add('state');
+    }
+    
+    // City filter
+    if (c.allowed_cities && c.allowed_cities.length > 0) {
+      usedFields.add('city');
+    }
+    
+    // Club filter
+    if (c.allowed_clubs && c.allowed_clubs.length > 0) {
+      usedFields.add('club');
+    }
+    
+    // Group label filter
+    if (c.allowed_groups && c.allowed_groups.length > 0) {
+      usedFields.add('group_label');
+    }
+    
+    // Type label filter
+    if (c.allowed_types && c.allowed_types.length > 0) {
+      usedFields.add('type_label');
+    }
+    
+    // Disability filter
+    if (c.disability) {
+      usedFields.add('disability');
+    }
+  }
+  
+  return usedFields;
+}
