@@ -1,0 +1,2 @@
+ALTER TABLE tournaments
+ADD COLUMN IF NOT EXISTS verification_skipped BOOLEAN DEFAULT NULL;
