@@ -221,10 +221,17 @@ export default function Finalize() {
 
   const publishVersion = finalizeResult?.version ?? nextVersion ?? 1;
 
-  // Fetch summary data
+  // Fetch summary data including organizer-entered prize fund
   const { data: summary } = useQuery({
     queryKey: ['finalize-summary', id, winners],
     queryFn: async () => {
+      // Fetch tournament data including cash_prize_total (organizer-entered)
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('cash_prize_total')
+        .eq('id', id)
+        .maybeSingle();
+      
       // Fetch players count
       const { count: playerCount } = await supabase
         .from('players')
@@ -239,10 +246,11 @@ export default function Finalize() {
       
       const allPrizes = categories?.flatMap(c => c.prizes || []) || [];
       
-      // Calculate totals
-      const totalPrizeFund = allPrizes.reduce((sum, p) => sum + (Number(p.cash_amount) || 0), 0);
+      // Prize Fund (Configured) = sum of all defined prize amounts
+      const configuredPrizeFund = allPrizes.reduce((sum, p) => sum + (Number(p.cash_amount) || 0), 0);
       
-      const totalCashDistributed = winners.reduce((sum, w) => {
+      // Cash Distributed = sum of allocated winners' cash
+      const cashDistributed = winners.reduce((sum, w) => {
         const prize = allPrizes.find(p => p.id === w.prizeId);
         return sum + (Number(prize?.cash_amount) || 0);
       }, 0);
@@ -268,8 +276,9 @@ export default function Finalize() {
       return { 
         playerCount: playerCount || 0,
         categoryCount: categories?.length || 0,
-        totalPrizeFund,
-        totalCashDistributed,
+        organizerPrizeFund: Number(tournament?.cash_prize_total) || 0,
+        configuredPrizeFund,
+        cashDistributed,
         trophiesAwarded,
         medalsAwarded,
         mainPrizesCount,
@@ -682,7 +691,7 @@ export default function Finalize() {
               <CardTitle>Tournament Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-4 bg-muted rounded-lg">
                   <p className="text-3xl font-bold text-foreground">{summary?.playerCount || 0}</p>
                   <p className="text-sm text-muted-foreground mt-1">Total Players</p>
@@ -691,9 +700,21 @@ export default function Finalize() {
                   <p className="text-3xl font-bold text-foreground">{summary?.categoryCount || 0}</p>
                   <p className="text-sm text-muted-foreground mt-1">Prize Categories</p>
                 </div>
-                <div className="text-center p-4 bg-muted rounded-lg">
-                  <p className="text-3xl font-bold text-accent">₹{summary?.totalPrizeFund || 0}</p>
-                  <p className="text-sm text-muted-foreground mt-1">Total Prize Fund</p>
+              </div>
+              
+              {/* Prize Fund breakdown - three distinct values */}
+              <div className="grid grid-cols-3 gap-4 pt-2">
+                <div className="text-center p-4 bg-muted rounded-lg" title="Amount entered by organizer in tournament setup">
+                  <p className="text-2xl font-bold text-foreground">₹{summary?.organizerPrizeFund?.toLocaleString() || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Prize Fund (Organizer)</p>
+                </div>
+                <div className="text-center p-4 bg-muted rounded-lg" title="Sum of all configured prize amounts">
+                  <p className="text-2xl font-bold text-foreground">₹{summary?.configuredPrizeFund?.toLocaleString() || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Prize Fund (Configured)</p>
+                </div>
+                <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/20" title="Total cash allocated to winners">
+                  <p className="text-2xl font-bold text-primary">₹{summary?.cashDistributed?.toLocaleString() || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Cash Distributed</p>
                 </div>
               </div>
             </CardContent>
@@ -706,17 +727,25 @@ export default function Finalize() {
               <CardTitle>Allocation Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Winners & Unfilled counts */}
+              <div className="flex justify-between py-2 border-b border-border">
+                <span className="text-muted-foreground">Winners Allocated</span>
+                <span className="font-medium text-foreground">{winners.length}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-border">
+                <span className="text-muted-foreground">Unfilled Prizes</span>
+                <span className={`font-medium ${unfilled.length > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                  {unfilled.length}
+                </span>
+              </div>
+              {/* Breakdown by type */}
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Main Prizes Awarded</span>
-                <span className="font-medium text-foreground">{summary?.mainPrizesCount || 0} prizes</span>
+                <span className="font-medium text-foreground">{summary?.mainPrizesCount || 0}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Category Prizes Awarded</span>
-                <span className="font-medium text-foreground">{summary?.categoryPrizesCount || 0} prizes</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-muted-foreground">Total Cash Distributed</span>
-                <span className="font-medium text-accent">₹{summary?.totalCashDistributed || 0}</span>
+                <span className="font-medium text-foreground">{summary?.categoryPrizesCount || 0}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Trophies Awarded</span>
@@ -744,21 +773,8 @@ export default function Finalize() {
               <CardTitle>Winners ({winners.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                  <span className="font-medium text-foreground">Winners: {previewSummary.winners}</span>
-                  <span>·</span>
-                  <span className="font-medium text-foreground">Conflicts: {previewSummary.conflicts}</span>
-                  <span>·</span>
-                  <span className="font-medium text-foreground">Unfilled: {previewSummary.unfilled}</span>
-                </div>
-                {previewSummary.unfilled > 0 && (
-                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                    Some categories are unfilled — review before publishing
-                  </Badge>
-                )}
-              </div>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              {/* Summary info is shown in Allocation Summary card above - no duplicate bar */}
+              <div className="mb-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   Winners by category
                 </p>
