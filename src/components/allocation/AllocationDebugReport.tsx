@@ -143,7 +143,7 @@ function CategorySection({ summary, isExpanded, onToggle }: {
                     {entry.is_unfilled ? (
                       <Badge variant="destructive" className="text-xs">Unfilled</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 border-green-300">
+                      <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30">
                         Filled
                       </Badge>
                     )}
