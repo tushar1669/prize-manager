@@ -218,8 +218,8 @@ All colors MUST be HSL.
 
   /* Page break BEFORE each card EXCEPT the first (index 0) */
   [data-category-card][data-print-index]:not([data-print-index="0"]) {
-    break-before: page;
-    page-break-before: always;
+    break-before: auto;
+    page-break-before: auto;
   }
 
   /* Ensure first card has NO page break before it */
@@ -229,6 +229,16 @@ All colors MUST be HSL.
     break-inside: auto !important;
     page-break-inside: auto !important;
     -webkit-column-break-inside: auto !important;
+  }
+
+  .pm-poster-grid[data-print-mode="one-per-page"] .poster-grid-card[data-print-index]:not([data-print-index="0"]) {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .pm-poster-grid[data-print-mode="one-per-page"] .poster-grid-card[data-print-index="0"] {
+    break-before: auto;
+    page-break-before: auto;
   }
 
   /* Print settings note - only visible in print */
