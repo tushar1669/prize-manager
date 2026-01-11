@@ -23,7 +23,8 @@ export function normalizeHeaderForMatching(header: string): string {
     .replace(/\s+/g, '_');     // Collapse spaces to underscore
 }
 
-const NAME_HEADER_PATTERN = /^name(_?\d+)?$/;
+// Pattern matches: name, name_2, name (2), name_3, name (3), etc.
+const NAME_HEADER_PATTERN = /^name(_?\d+)?(\s*\(\d+\))?$/;
 
 export function isNameHeader(header: string): boolean {
   const normalized = normalizeHeaderForMatching(header);

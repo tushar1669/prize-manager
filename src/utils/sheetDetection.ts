@@ -1,6 +1,33 @@
 // src/utils/sheetDetection.ts
 // Multi-sheet header detection for Swiss-Manager files
 
+/**
+ * Make headers unique by appending (2), (3), etc. for duplicates.
+ * Empty cells get __EMPTY_COL_X placeholders.
+ * 
+ * This is critical for Swiss-Manager files which often have duplicate "Name" columns.
+ * Without deduplication, sheet_to_json() will overwrite values from the first column
+ * with the second, causing data loss.
+ */
+export function withUniqueHeaders(row: unknown[]): string[] {
+  const seen = new Map<string, number>();
+  return row.map((cell, idx) => {
+    const normalized = String(cell ?? '').trim();
+    if (normalized.length === 0) {
+      return `__EMPTY_COL_${idx}`;
+    }
+    
+    const count = seen.get(normalized) ?? 0;
+    seen.set(normalized, count + 1);
+    
+    if (count === 0) {
+      return normalized;
+    }
+    // Append (2), (3), etc. for duplicates
+    return `${normalized} (${count + 1})`;
+  });
+}
+
 export interface DetectedHeader {
   sheetName: string;
   headerRowIndex: number;
@@ -104,10 +131,9 @@ export function detectHeaderRow(
       
       // Only consider rows with positive score (threshold: 15 = ~2 core fields)
       if (score > 15) {
-        const headers = row.map((c, idx) => {
-          const header = String(c || '').trim();
-          return header.length > 0 ? header : `__EMPTY_COL_${idx}`;
-        });
+        // Use withUniqueHeaders to deduplicate duplicate column names (e.g., "Name", "Name")
+        // This prevents sheet_to_json from overwriting first "Name" with second
+        const headers = withUniqueHeaders(row);
         
         candidates.push({
           sheetName,
