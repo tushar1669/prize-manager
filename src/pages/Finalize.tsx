@@ -17,7 +17,6 @@ import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { buildWinnersPrintHtml, getWinnersExportColumns, openPrintWindow, type WinnersExportRow } from "@/utils/print";
-import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
