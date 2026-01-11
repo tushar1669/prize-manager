@@ -13,9 +13,18 @@ Chess organizers and arbiters who run Swiss-Manager (or compatible) events and n
 - Only Excel (.xls or .xlsx) files are supported.
 
 ## Player Import flow
-1. Upload the Swiss-Manager interim ranking Excel file.
+1. Upload the Swiss-Manager interim ranking Excel file at **`/t/:id/import`** (`src/pages/PlayerImport.tsx`).
 2. Map headers on the import screen. Auto-detection covers `Rank`, `SNo.`, `Name`, `Rtg/IRtg`, `Birth`, `fs` (gender), `Fide-No.`, and location fields. Headerless gender columns after the name column are detected when present.
 3. Review inferred player data and warnings before confirming the import.
+
+### Import preview table
+- **Always-on columns:** Rank, Name, Rating, DOB, Gender.
+- **Dynamic columns:** Additional columns appear only when needed by prize rules (`criteria_json`) — e.g., State, City, Club, Disability, Group, Type, and other configured criteria fields.
+- **Warnings and banners:** Tie ranks, DOB year-only, and ranks auto-filled banners use theme-safe styling for dark mode.
+
+### Known file quirk: Swiss-Manager duplicate “Name” columns
+- Swiss-Manager exports often include multiple **Name** columns (e.g., full name + abbreviated).
+- Client parsing deduplicates headers by renaming duplicates to **Name (2)**, **Name (3)**, etc., preventing `sheet_to_json` overwrite and allowing `detectFullVsAbbrevName()` to select the most complete name column. (`src/utils/sheetDetection.ts`, `src/components/ColumnMappingDialog.tsx`)
 
 ### Gender pipeline
 - **Primary:** `fs` column (`F` → Female; blank stays unknown).
@@ -45,18 +54,33 @@ Key settings include:
 - **Prize Stacking Policy** — `single` (one prize per player), `main_plus_one_side`, or `unlimited`
 
 ## Review & Allocate
+- **Route:** `/t/:id/review` (`src/pages/ConflictReview.tsx`).
 - Click **Preview Allocation** to generate a provisional allocation.
 - **Allocation Debug Report**
   - **Filled vs Unfilled** tabs show winners and missing prizes.
   - **Suspicious coverage** surfaces prizes with zero candidates or tight criteria.
   - **Diagnosis summary** explains why categories have zero eligible players (e.g., missing DOB, strict rating band, gender mismatch).
   - **"No eligible winner"** means no player matches the criteria after applying one-prize rules.
+  - **Contrast note:** The report highlights “success” states with the success token for readable contrast in dark mode.
 - **Exports**
   - **Coverage export (.xlsx):** prize-level eligibility, winner details, candidate counts before/after one-prize, reason codes, diagnosis summary.
   - **RCA export (.xlsx):** compares engine winners vs final winners with statuses (MATCH / OVERRIDDEN / NO_ELIGIBLE_WINNER), override reasons, and diagnostics.
 - **Commit Allocation**
   - Allowed when only non-critical prizes remain unfilled. Critical missing fields block commit until resolved.
   - Committing locks winners and updates the public winners page.
+- **Summary placement:** The summary block appears once, inline with the main results column (above the Winners/Unfilled panels). There is no duplicate sidebar summary.
+
+## Finalize & Publish
+- **Route:** `/t/:id/finalize` (`src/pages/Finalize.tsx`).
+- **Tournament Summary totals:**
+  - **Prize Fund (Organizer)** = `tournaments.cash_prize_total`.
+  - **Prize Fund (Configured)** = sum of `prizes.cash_amount`.
+  - **Cash Distributed** = sum of winners’ allocated prize cash.
+- **Allocation Summary counts:** Winners Allocated and Unfilled Prizes are shown alongside main/category/trophy/medal counts.
+
+## Print outputs
+- **`/t/:id/final/v1` (Card view):** Category cards flow dynamically; the layout no longer forces one-category-per-page, while still avoiding mid-card splits.
+- **`/t/:id/final/v3` (Poster grid):** A toolbar toggle lets you switch **Compact** vs **One per page**; the toggle itself is hidden in print output. (`src/components/final-prize/FinalPrizeSummaryHeader.tsx`)
 
 ## Team / Institution Prizes
 Team prizes (Best School, Best Academy, Best City, etc.) are configured separately from individual prizes.
