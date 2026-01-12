@@ -18,7 +18,6 @@ export function PublicHeader({ className }: PublicHeaderProps) {
                 variant="lockup"
                 alt="Prize Manager"
                 size="xl"
-                className="dark:brightness-0 dark:invert"
                 fetchPriority="high"
                 loading="eager"
                 decoding="async"

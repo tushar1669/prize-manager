@@ -8,6 +8,7 @@ const brandAssets = {
 
 type BrandLogoVariant = keyof typeof brandAssets;
 type BrandLogoSize = "sm" | "md" | "lg" | "xl";
+type BrandLogoTone = "color" | "mono";
 
 const sizeClasses: Record<BrandLogoSize, string> = {
   sm: "h-12 w-auto sm:h-14",
@@ -19,10 +20,11 @@ const sizeClasses: Record<BrandLogoSize, string> = {
 type BrandLogoProps = {
   variant?: BrandLogoVariant;
   size?: BrandLogoSize;
+  tone?: BrandLogoTone;
   className?: string;
   alt?: string;
-  opticalOffsetX?: number;
-  opticalOffsetY?: number;
+  xOffset?: number;
+  yOffset?: number;
   style?: CSSProperties;
   loading?: "eager" | "lazy";
   decoding?: "async" | "sync" | "auto";
@@ -32,29 +34,21 @@ type BrandLogoProps = {
 export function BrandLogo({
   variant = "lockup",
   size = "xl",
+  tone = "color",
   className,
   alt = "Prize Manager",
-  opticalOffsetX,
-  opticalOffsetY,
+  xOffset = 0,
+  yOffset = 0,
   style,
   loading,
   decoding,
   fetchPriority,
 }: BrandLogoProps) {
-  const defaultOffsets: Record<BrandLogoVariant, { x: number; y: number }> = {
-    lockup: { x: 0, y: -4 },
-    mark: { x: 0, y: 0 },
-  };
-
-  const resolvedOffsetX = opticalOffsetX ?? defaultOffsets[variant].x;
-  const resolvedOffsetY = opticalOffsetY ?? defaultOffsets[variant].y;
   const combinedStyle: CSSProperties = {
     ...style,
     transform: [
       style?.transform,
-      resolvedOffsetX !== 0 || resolvedOffsetY !== 0
-        ? `translate(${resolvedOffsetX}px, ${resolvedOffsetY}px)`
-        : null,
+      xOffset !== 0 || yOffset !== 0 ? `translate(${xOffset}px, ${yOffset}px)` : null,
     ]
       .filter(Boolean)
       .join(" ")
@@ -65,7 +59,12 @@ export function BrandLogo({
     <img
       src={brandAssets[variant]}
       alt={alt}
-      className={cn("block object-contain", sizeClasses[size], className)}
+      className={cn(
+        "block object-contain",
+        sizeClasses[size],
+        tone === "mono" && "dark:brightness-0 dark:invert",
+        className,
+      )}
       style={combinedStyle}
       loading={loading}
       decoding={decoding}
