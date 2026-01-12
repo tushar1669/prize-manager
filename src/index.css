@@ -71,6 +71,10 @@ All colors MUST be HSL.
   }
 }
 
+.poster-category-section {
+  display: contents;
+}
+
 @media print {
   @page {
     margin: 12mm;
@@ -162,6 +166,22 @@ All colors MUST be HSL.
     padding: 0 !important;
   }
 
+  .pm-poster-grid[data-print-mode="one-per-page"] .poster-grid-cards {
+    display: block;
+  }
+
+  .pm-poster-grid[data-print-mode="one-per-page"] .poster-category-section {
+    display: grid;
+    align-content: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8mm !important;
+    padding: 0 !important;
+  }
+
+  .pm-poster-grid[data-print-mode="one-per-page"] .poster-category-section:not(:first-child) {
+    break-before: page;
+  }
+
   .pm-poster-grid .poster-grid-card {
     min-height: 55mm;
     max-height: 80mm;
@@ -229,16 +249,6 @@ All colors MUST be HSL.
     break-inside: auto !important;
     page-break-inside: auto !important;
     -webkit-column-break-inside: auto !important;
-  }
-
-  .pm-poster-grid[data-print-mode="one-per-page"] .poster-grid-card[data-print-index]:not([data-print-index="0"]) {
-    break-before: page;
-    page-break-before: always;
-  }
-
-  .pm-poster-grid[data-print-mode="one-per-page"] .poster-grid-card[data-print-index="0"] {
-    break-before: auto;
-    page-break-before: auto;
   }
 
   /* Print settings note - only visible in print */
