@@ -74,4 +74,26 @@ describe('extractRuleUsedFields', () => {
     const fields = extractRuleUsedFields(categories);
     expect(fields.has('gender')).toBe(false);
   });
+
+  it('does NOT include federation when not used in any criteria', () => {
+    const categories = [
+      { criteria_json: { min_age: 10, max_age: 18 } },
+      { criteria_json: { allowed_states: ['MH', 'KA'] } }
+    ];
+    const fields = extractRuleUsedFields(categories);
+    expect(fields.has('federation')).toBe(false);
+    expect(fields.has('state')).toBe(true);
+    expect(fields.has('dob')).toBe(true);
+  });
+
+  it('does NOT include club/city/type when not referenced by criteria', () => {
+    const categories = [
+      { criteria_json: { gender: 'F' } }
+    ];
+    const fields = extractRuleUsedFields(categories);
+    expect(fields.has('gender')).toBe(true);
+    expect(fields.has('club')).toBe(false);
+    expect(fields.has('city')).toBe(false);
+    expect(fields.has('type_label')).toBe(false);
+  });
 });
