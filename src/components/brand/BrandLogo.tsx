@@ -7,9 +7,18 @@ const brandAssets = {
 } as const;
 
 type BrandLogoVariant = keyof typeof brandAssets;
+type BrandLogoSize = "sm" | "md" | "lg" | "xl";
+
+const sizeClasses: Record<BrandLogoSize, string> = {
+  sm: "h-6 w-auto sm:h-7",
+  md: "h-7 w-auto sm:h-8",
+  lg: "h-8 w-auto sm:h-10",
+  xl: "h-10 w-auto sm:h-12",
+};
 
 type BrandLogoProps = {
   variant?: BrandLogoVariant;
+  size?: BrandLogoSize;
   className?: string;
   alt?: string;
   opticalOffsetY?: number;
@@ -21,9 +30,10 @@ type BrandLogoProps = {
 
 export function BrandLogo({
   variant = "lockup",
+  size = "xl",
   className,
   alt = "Prize Manager",
-  opticalOffsetY,
+  opticalOffsetY = 0,
   style,
   loading,
   decoding,
@@ -31,7 +41,7 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const combinedStyle: CSSProperties = {
     ...style,
-    transform: [style?.transform, opticalOffsetY != null ? `translateY(${opticalOffsetY}px)` : null]
+    transform: [style?.transform, opticalOffsetY !== 0 ? `translateY(${opticalOffsetY}px)` : null]
       .filter(Boolean)
       .join(" ")
       .trim() || undefined,
@@ -41,7 +51,7 @@ export function BrandLogo({
     <img
       src={brandAssets[variant]}
       alt={alt}
-      className={cn("block object-contain", className)}
+      className={cn("block object-contain", sizeClasses[size], className)}
       style={combinedStyle}
       loading={loading}
       decoding={decoding}

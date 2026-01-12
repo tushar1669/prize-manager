@@ -30,13 +30,13 @@ export function AppNav() {
   return (
     <nav className="border-b border-border bg-card/95">
       <div className="container mx-auto px-6">
-        <div className="flex h-14 items-center justify-between">
+        <div className="flex h-16 items-center justify-between">
           <GuardedLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <BrandLogo
               variant="lockup"
               alt="Prize Manager"
-              className="h-7 w-auto max-w-[160px] shrink-0 sm:h-8 sm:max-w-[190px] dark:brightness-0 dark:invert"
-              opticalOffsetY={1}
+              size="xl"
+              className="shrink-0 dark:brightness-0 dark:invert"
               loading="eager"
               decoding="async"
             />
