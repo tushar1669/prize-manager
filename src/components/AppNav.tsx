@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
 import { GuardedLink } from "@/components/GuardedLink";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,17 +9,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trophy, User, LogOut, Settings } from "lucide-react";
+import { User, LogOut, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 export function AppNav() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { role } = useUserRole();
-  const [logoFailed, setLogoFailed] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -31,21 +30,16 @@ export function AppNav() {
   return (
     <nav className="border-b border-border bg-card/95">
       <div className="container mx-auto px-6">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-14 items-center justify-between">
           <GuardedLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            {logoFailed ? (
-              <>
-                <Trophy className="h-6 w-6 text-primary" />
-                <span className="text-xl font-semibold text-foreground">Prize Manager</span>
-              </>
-            ) : (
-              <img
-                src="/brand/prize-manager-logo.png"
-                alt="Prize-Manager"
-                className="h-7 w-auto max-w-[140px] object-contain shrink-0 sm:h-8 sm:max-w-[180px]"
-                onError={() => setLogoFailed(true)}
-              />
-            )}
+            <BrandLogo
+              variant="lockup"
+              alt="Prize Manager"
+              className="h-7 w-auto max-w-[160px] shrink-0 sm:h-8 sm:max-w-[190px] dark:brightness-0 dark:invert"
+              opticalOffsetY={1}
+              loading="eager"
+              decoding="async"
+            />
           </GuardedLink>
 
           <div className="flex items-center gap-4">
