@@ -30,7 +30,7 @@ export function AppNav() {
   return (
     <nav className="border-b border-border bg-card/95">
       <div className="container mx-auto px-6">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-24 items-center justify-between sm:h-28">
           <GuardedLink to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <BrandLogo
               variant="lockup"
