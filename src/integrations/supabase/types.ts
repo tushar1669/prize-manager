@@ -703,6 +703,7 @@ export type Database = {
           tournament_director: string | null
           updated_at: string | null
           venue: string | null
+          verification_skipped: boolean | null
         }
         Insert: {
           brochure_url?: string | null
@@ -733,6 +734,7 @@ export type Database = {
           tournament_director?: string | null
           updated_at?: string | null
           venue?: string | null
+          verification_skipped?: boolean | null
         }
         Update: {
           brochure_url?: string | null
@@ -763,6 +765,7 @@ export type Database = {
           tournament_director?: string | null
           updated_at?: string | null
           venue?: string | null
+          verification_skipped?: boolean | null
         }
         Relationships: []
       }
@@ -875,6 +878,7 @@ export type Database = {
           tournament_director: string | null
           updated_at: string | null
           venue: string | null
+          verification_skipped: boolean | null
         }[]
         SetofOptions: {
           from: "*"

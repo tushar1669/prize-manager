@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getNameHeaderCandidates } from '@/utils/importSchema';
+import { getNameHeaderCandidates, extractRuleUsedFields } from '@/utils/importSchema';
 import { withUniqueHeaders } from '@/utils/sheetDetection';
 
 describe('getNameHeaderCandidates', () => {
@@ -37,5 +37,41 @@ describe('withUniqueHeaders', () => {
     const result = withUniqueHeaders(rawRow);
 
     expect(result).toEqual(['Rank', '__EMPTY_COL_1', 'Name', '__EMPTY_COL_3', 'Rtg']);
+  });
+});
+
+describe('extractRuleUsedFields', () => {
+  it('returns empty set when no categories provided', () => {
+    expect(extractRuleUsedFields(null)).toEqual(new Set());
+    expect(extractRuleUsedFields(undefined)).toEqual(new Set());
+    expect(extractRuleUsedFields([])).toEqual(new Set());
+  });
+
+  it('detects state field from allowed_states criteria', () => {
+    const categories = [
+      { criteria_json: { allowed_states: ['KA', 'TN'] } }
+    ];
+    const fields = extractRuleUsedFields(categories);
+    expect(fields.has('state')).toBe(true);
+  });
+
+  it('detects multiple fields from mixed criteria', () => {
+    const categories = [
+      { criteria_json: { gender: 'F', min_age: 10, max_age: 14 } },
+      { criteria_json: { allowed_cities: ['Bangalore'], allowed_groups: ['A'] } }
+    ];
+    const fields = extractRuleUsedFields(categories);
+    expect(fields.has('gender')).toBe(true);
+    expect(fields.has('dob')).toBe(true);  // age rules use DOB
+    expect(fields.has('city')).toBe(true);
+    expect(fields.has('group_label')).toBe(true);
+  });
+
+  it('ignores OPEN gender (does not require gender field)', () => {
+    const categories = [
+      { criteria_json: { gender: 'OPEN' } }
+    ];
+    const fields = extractRuleUsedFields(categories);
+    expect(fields.has('gender')).toBe(false);
   });
 });
