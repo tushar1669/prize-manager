@@ -24,6 +24,26 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
     return publicUrl;
   }, [publicUrl]);
 
+  const groupedWinners = useMemo(() => {
+    const categoryMap = new Map<string, { id: string; name: string; winners: FinalPrizeWinnerRow[] }>();
+
+    winners.forEach(winner => {
+      const existing = categoryMap.get(winner.categoryId);
+
+      if (existing) {
+        existing.winners.push(winner);
+      } else {
+        categoryMap.set(winner.categoryId, {
+          id: winner.categoryId,
+          name: winner.categoryName,
+          winners: [winner],
+        });
+      }
+    });
+
+    return Array.from(categoryMap.values());
+  }, [winners]);
+
   const gridLayout = 'sm:grid-cols-2 lg:grid-cols-3';
 
   return (
@@ -56,61 +76,64 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
                 Compact
               </ToggleGroupItem>
               <ToggleGroupItem value="one-per-page" aria-label="One category per page">
-                One per page
+                One category per page
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
         </div>
       </div>
       <div className={`poster-grid-cards grid gap-4 ${gridLayout} print:gap-3`}>
-        {winners.map((winner, index) => {
-          const awardFlags = getAwardFlagsForPrizeRow(winner);
-          const trophyDisplay = getAwardDisplayClasses('trophy');
-          const medalDisplay = getAwardDisplayClasses('medal');
+        {groupedWinners.map(categoryGroup => (
+          <div key={categoryGroup.id} className="poster-category-section">
+            {categoryGroup.winners.map(winner => {
+              const awardFlags = getAwardFlagsForPrizeRow(winner);
+              const trophyDisplay = getAwardDisplayClasses('trophy');
+              const medalDisplay = getAwardDisplayClasses('medal');
 
-          return (
-            <div
-              key={winner.prizeId}
-              data-print-index={index}
-              className="poster-grid-card pm-print-avoid-break flex flex-col rounded-xl border border-border bg-card p-6 shadow-lg print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4 print:border-black/30 print:pb-2">
-                <Badge className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
-                  {winner.categoryName}
-                </Badge>
-                <span className="rounded-full bg-success/15 px-4 py-1.5 text-base font-bold text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
-                  #{winner.place}
-                </span>
-              </div>
+              return (
+                <div
+                  key={winner.prizeId}
+                  className="poster-grid-card pm-print-avoid-break flex flex-col rounded-xl border border-border bg-card p-6 shadow-lg print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4 print:border-black/30 print:pb-2">
+                    <Badge className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
+                      {winner.categoryName}
+                    </Badge>
+                    <span className="rounded-full bg-success/15 px-4 py-1.5 text-base font-bold text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
+                      #{winner.place}
+                    </span>
+                  </div>
 
-              <div className="poster-grid-name border-b border-border/60 py-4 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:border-black/30 print:py-2 print:text-xl print:text-black">
-                {winner.playerName}
-              </div>
+                  <div className="poster-grid-name border-b border-border/60 py-4 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:border-black/30 print:py-2 print:text-xl print:text-black">
+                    {winner.playerName}
+                  </div>
 
-              <div className="flex items-center justify-between gap-3 pt-4 print:pt-2">
-                <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
-                  {formatCurrencyINR(winner.amount)}
-                </span>
-                {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
-                  <span className="inline-flex items-center gap-2 print:text-black">
-                    {awardFlags.hasTrophy && (
-                      <span className={`inline-flex items-center ${trophyDisplay.iconClass}`}>
-                        <Trophy className="h-6 w-6" aria-hidden />
-                        <span className="sr-only">{trophyDisplay.label}</span>
+                  <div className="flex items-center justify-between gap-3 pt-4 print:pt-2">
+                    <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
+                      {formatCurrencyINR(winner.amount)}
+                    </span>
+                    {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
+                      <span className="inline-flex items-center gap-2 print:text-black">
+                        {awardFlags.hasTrophy && (
+                          <span className={`inline-flex items-center ${trophyDisplay.iconClass}`}>
+                            <Trophy className="h-6 w-6" aria-hidden />
+                            <span className="sr-only">{trophyDisplay.label}</span>
+                          </span>
+                        )}
+                        {awardFlags.hasMedal && (
+                          <span className={`inline-flex items-center ${medalDisplay.iconClass}`}>
+                            <Medal className="h-6 w-6" aria-hidden />
+                            <span className="sr-only">{medalDisplay.label}</span>
+                          </span>
+                        )}
                       </span>
                     )}
-                    {awardFlags.hasMedal && (
-                      <span className={`inline-flex items-center ${medalDisplay.iconClass}`}>
-                        <Medal className="h-6 w-6" aria-hidden />
-                        <span className="sr-only">{medalDisplay.label}</span>
-                      </span>
-                    )}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
       <div className="mt-8 grid gap-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-foreground sm:grid-cols-[minmax(5rem,7rem)_1fr] print:hidden">
         <div className="flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-card text-xs font-semibold uppercase tracking-wide text-primary">
