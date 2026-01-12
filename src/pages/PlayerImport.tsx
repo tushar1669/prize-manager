@@ -1651,6 +1651,39 @@ export default function PlayerImport() {
     return extractRuleUsedFields(categories as Parameters<typeof extractRuleUsedFields>[0]);
   }, [categories]);
 
+  /**
+   * Determine if an extra field should be shown in the preview table.
+   * Shows the field if:
+   * - It's required by prize category rules, OR
+   * - Data is actually present in mappedPlayers (first 50 rows have non-empty values)
+   * 
+   * This ensures organizers can verify fields like Federation even when
+   * they're not used by prize rules.
+   */
+  const shouldShowPreviewField = useMemo(() => {
+    // Build a set of fields that have data present in first 50 players
+    const fieldsWithData = new Set<string>();
+    const sampleSize = Math.min(50, mappedPlayers.length);
+    
+    const extraFields = ['state', 'city', 'club', 'disability', 'group_label', 'type_label', 'federation'] as const;
+    
+    for (const field of extraFields) {
+      for (let i = 0; i < sampleSize; i++) {
+        const player = mappedPlayers[i];
+        const value = player[field as keyof typeof player];
+        if (value != null && String(value).trim() !== '') {
+          fieldsWithData.add(field);
+          break; // Found at least one non-empty value, move to next field
+        }
+      }
+    }
+    
+    // Return a function that checks both rule usage and data presence
+    return (fieldName: string): boolean => {
+      return ruleUsedFields.has(fieldName) || fieldsWithData.has(fieldName);
+    };
+  }, [mappedPlayers, ruleUsedFields]);
+
   const isOrganizer = !!isMaster || (tournament && user && tournament.owner_id === user.id);
   const tournamentSlug = (tournament as { slug?: string } | null | undefined)?.slug ?? 'tournament';
 
@@ -3198,13 +3231,14 @@ export default function PlayerImport() {
                         <TableHead scope="col">Rating</TableHead>
                         <TableHead scope="col">DOB</TableHead>
                         <TableHead scope="col">Gender</TableHead>
-                        {/* Extra columns: only if used by prize rules */}
-                        {ruleUsedFields.has('state') && <TableHead scope="col">State</TableHead>}
-                        {ruleUsedFields.has('city') && <TableHead scope="col">City</TableHead>}
-                        {ruleUsedFields.has('club') && <TableHead scope="col">Club</TableHead>}
-                        {ruleUsedFields.has('disability') && <TableHead scope="col">Disability</TableHead>}
-                        {ruleUsedFields.has('group_label') && <TableHead scope="col">Group</TableHead>}
-                        {ruleUsedFields.has('type_label') && <TableHead scope="col">Type</TableHead>}
+                        {/* Extra columns: shown if used by prize rules OR data is present */}
+                        {shouldShowPreviewField('state') && <TableHead scope="col">State</TableHead>}
+                        {shouldShowPreviewField('city') && <TableHead scope="col">City</TableHead>}
+                        {shouldShowPreviewField('club') && <TableHead scope="col">Club</TableHead>}
+                        {shouldShowPreviewField('federation') && <TableHead scope="col">Federation</TableHead>}
+                        {shouldShowPreviewField('disability') && <TableHead scope="col">Disability</TableHead>}
+                        {shouldShowPreviewField('group_label') && <TableHead scope="col">Group</TableHead>}
+                        {shouldShowPreviewField('type_label') && <TableHead scope="col">Type</TableHead>}
                         {/* FIDE ID always shown for reference */}
                         <TableHead scope="col">FIDE ID</TableHead>
                       </TableRow>
@@ -3254,13 +3288,14 @@ export default function PlayerImport() {
                                 </div>
                               </TableCell>
                               <TableCell>{player.gender ?? ''}</TableCell>
-                              {/* Extra columns: only if used by prize rules */}
-                              {ruleUsedFields.has('state') && <TableCell>{player.state ?? ''}</TableCell>}
-                              {ruleUsedFields.has('city') && <TableCell>{player.city ?? ''}</TableCell>}
-                              {ruleUsedFields.has('club') && <TableCell>{player.club ?? ''}</TableCell>}
-                              {ruleUsedFields.has('disability') && <TableCell>{player.disability ?? ''}</TableCell>}
-                              {ruleUsedFields.has('group_label') && <TableCell>{player.group_label ?? ''}</TableCell>}
-                              {ruleUsedFields.has('type_label') && <TableCell>{player.type_label ?? ''}</TableCell>}
+                              {/* Extra columns: shown if used by prize rules OR data is present */}
+                              {shouldShowPreviewField('state') && <TableCell>{player.state ?? ''}</TableCell>}
+                              {shouldShowPreviewField('city') && <TableCell>{player.city ?? ''}</TableCell>}
+                              {shouldShowPreviewField('club') && <TableCell>{player.club ?? ''}</TableCell>}
+                              {shouldShowPreviewField('federation') && <TableCell>{player.federation ?? ''}</TableCell>}
+                              {shouldShowPreviewField('disability') && <TableCell>{player.disability ?? ''}</TableCell>}
+                              {shouldShowPreviewField('group_label') && <TableCell>{player.group_label ?? ''}</TableCell>}
+                              {shouldShowPreviewField('type_label') && <TableCell>{player.type_label ?? ''}</TableCell>}
                               {/* FIDE ID always shown */}
                               <TableCell>{player.fide_id ?? ''}</TableCell>
                             </TableRow>
