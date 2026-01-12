@@ -36,7 +36,7 @@ export function AppNav() {
               variant="lockup"
               alt="Prize Manager"
               size="xl"
-              className="shrink-0 dark:brightness-0 dark:invert"
+              className="shrink-0"
               loading="eager"
               decoding="async"
             />
