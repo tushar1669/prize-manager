@@ -20,7 +20,7 @@ export function usePendingApprovals() {
   const queryClient = useQueryClient();
 
   // Fetch pending organizers with their emails
-  const { data: pendingUsers, isLoading, error } = useQuery({
+  const { data: pendingUsers, isLoading, error, refetch } = useQuery({
     queryKey: ['pending-approvals'],
     queryFn: async (): Promise<PendingUser[]> => {
       // First get pending user_roles
@@ -55,6 +55,9 @@ export function usePendingApprovals() {
       }));
     },
     enabled: isMaster,
+    staleTime: 30_000, // 30 seconds
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000, // Auto-refetch every 60 seconds
   });
 
   // Approve mutation
@@ -113,5 +116,6 @@ export function usePendingApprovals() {
     reject: rejectMutation.mutate,
     isApproving: approveMutation.isPending,
     isRejecting: rejectMutation.isPending,
+    refetch,
   };
 }
