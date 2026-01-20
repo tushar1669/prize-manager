@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, UserCheck, UserX, Clock } from "lucide-react";
+import { AlertCircle, UserCheck, UserX, Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
@@ -26,6 +26,7 @@ export default function MasterDashboard() {
     reject,
     isApproving,
     isRejecting,
+    refetch: refetchPending,
   } = usePendingApprovals();
 
   // All users query (existing)
@@ -121,11 +122,22 @@ export default function MasterDashboard() {
                 <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 <CardTitle>Organizer Approvals</CardTitle>
               </div>
-              {pendingCount > 0 && (
-                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                  {pendingCount} pending
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {pendingCount > 0 && (
+                  <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                    {pendingCount} pending
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchPending()}
+                  disabled={pendingLoading}
+                  title="Refresh pending approvals"
+                >
+                  <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
             </div>
             <CardDescription>Review and approve new organizer registrations</CardDescription>
           </CardHeader>

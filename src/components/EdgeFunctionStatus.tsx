@@ -28,19 +28,15 @@ async function checkFunction(name: string): Promise<FunctionStatus> {
   const checkedAt = new Date().toISOString();
   
   try {
-    // Use authenticated invoke with ping mode
-    const { data, error } = await supabase.functions.invoke(name, {
-      method: 'POST',
-      body: { ping: true },
-    });
-
-    if (error) {
-      // Try GET with query param as fallback
+    // parseWorkbook expects binary bodies, so use GET with query param for health check
+    if (name === 'parseWorkbook') {
+      const session = await supabase.auth.getSession();
       const response = await fetch(
         `https://nvjjifnzwrueutbirpde.supabase.co/functions/v1/${name}?ping=1`,
         {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            'Authorization': `Bearer ${session.data.session?.access_token}`,
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52amppZm56d3J1ZXV0YmlycGRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3NDY3MzUsImV4cCI6MjA3NjMyMjczNX0.jYuZLE-HhF__ovFyHpIER9-_bABT7w0je1iOUrgDypY',
           },
         }
@@ -61,6 +57,22 @@ async function checkFunction(name: string): Promise<FunctionStatus> {
         name,
         status: 'ok',
         buildVersion: result.buildVersion || 'unknown',
+        checkedAt,
+      };
+    }
+
+    // Other functions: use POST with ping body
+    const { data, error } = await supabase.functions.invoke(name, {
+      method: 'POST',
+      body: { ping: true },
+    });
+
+    if (error) {
+      return {
+        name,
+        status: 'error',
+        buildVersion: null,
+        error: error.message || 'Invoke failed',
         checkedAt,
       };
     }
