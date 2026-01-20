@@ -12,6 +12,9 @@ verify_jwt = true
 [functions.generatePdf]
 verify_jwt = true
 
+[functions.parseWorkbook]
+verify_jwt = false
+
 [functions.pmPing]
 verify_jwt = false
 
