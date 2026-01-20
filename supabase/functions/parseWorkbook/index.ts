@@ -725,6 +725,24 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
+  
+  // CORS preflight and health-check handlers MUST run BEFORE origin allowlist
+  // to allow Master Dashboard health checks from any Lovable preview origin.
+  // These are safe because they don't access any data.
+  
+  // Health check: ?ping=1 (parseWorkbook uses binary body, so only query param ping)
+  // Responds with permissive CORS to allow browser-based health checks
+  if (hasPingQueryParam(req)) {
+    console.log(`[${FUNCTION_NAME}] ping via query param`);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION, CORS_HEADERS);
+  }
+  
+  // OPTIONS preflight with permissive CORS for health checks
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  // For actual parsing requests, enforce origin allowlist
   const allowedOrigin = resolveAllowedOrigin(origin);
   if (origin && !allowedOrigin) {
     return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Origin not allowed" }), {
@@ -734,16 +752,6 @@ Deno.serve(async (req) => {
   }
 
   const corsHeadersForRequest = buildCorsHeaders(allowedOrigin);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeadersForRequest });
-  }
-
-  // Health check: ?ping=1 (parseWorkbook uses binary body, so only query param ping)
-  if (hasPingQueryParam(req)) {
-    console.log(`[${FUNCTION_NAME}] ping via query param`);
-    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeadersForRequest);
-  }
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
