@@ -33,8 +33,9 @@ function buildCorsHeaders(origin: string | null): Record<string, string> {
   return { ...corsHeaders, "Access-Control-Allow-Origin": origin };
 }
 
+// deno-lint-ignore no-explicit-any
 async function ensureTournamentAccess(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   userId: string,
   tournamentId: string,
   responseHeaders: Record<string, string>
@@ -47,14 +48,14 @@ async function ensureTournamentAccess(
     .from("tournaments")
     .select("id, owner_id")
     .eq("id", tournamentId)
-    .maybeSingle();
+    .maybeSingle() as { data: { id: string; owner_id: string } | null; error: { message: string } | null };
 
   if (tournamentAccessError) {
     throw new Error(`Failed to load tournament access: ${tournamentAccessError.message}`);
   }
 
   const { data: isMaster, error: roleError } = await supabase
-    .rpc("has_role", { _user_id: userId, _role: "master" });
+    .rpc("has_role", { _user_id: userId, _role: "master" }) as { data: boolean | null; error: { message: string } | null };
 
   if (roleError) {
     throw new Error(`Failed to check user role: ${roleError.message}`);
