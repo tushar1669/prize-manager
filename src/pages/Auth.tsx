@@ -58,7 +58,7 @@ export default function Auth() {
         navigate("/dashboard");
       }
     } else {
-      const { error } = await signUp(email, password);
+      const { data, error } = await signUp(email, password);
       if (error) {
         // Handle common signup errors with friendly messages
         if (error.message.includes('already registered')) {
@@ -66,6 +66,10 @@ export default function Auth() {
         } else {
           toast.error(error.message);
         }
+      } else if (data?.user?.identities?.length === 0) {
+        toast.error("This email is already registered. Please sign in or resend confirmation.");
+        setResendEmail(email);
+        setShowResend(true);
       } else {
         toast.success("Account created! Please check your email to confirm.");
         // Show resend option after successful signup
