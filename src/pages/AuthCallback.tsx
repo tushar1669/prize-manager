@@ -58,6 +58,9 @@ export default function AuthCallback() {
         const refreshToken = hashParams.get('refresh_token');
         const errorParam = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
+        const token = searchParams.get('token');
+        const tokenHash = searchParams.get('token_hash');
+        const otpType = searchParams.get('type');
 
         // Build debug info
         const debug: DebugInfo = {
@@ -96,7 +99,43 @@ export default function AuthCallback() {
           return;
         }
 
-        // Case 2: PKCE flow - URL has ?code=...
+        // Case 2: OTP flow - URL has ?token=...&type=...
+        if (otpType && (token || tokenHash)) {
+          setFlowType('otp');
+          console.log('[auth-callback] OTP flow: verifying token');
+          toast.info('Verifying your email...');
+
+          const { data, error } = await supabase.auth.verifyOtp({
+            type: otpType as 'signup',
+            ...(token ? { token } : {}),
+            ...(tokenHash ? { token_hash: tokenHash } : {}),
+          });
+
+          if (error) {
+            console.error('[auth-callback] OTP verification error:', error);
+
+            if (error.message.toLowerCase().includes('expired') ||
+                error.message.toLowerCase().includes('invalid')) {
+              setStatus('expired');
+              setErrorMessage('This confirmation link has expired. Please request a new one.');
+              toast.error('Link expired');
+            } else {
+              setStatus('error');
+              setErrorMessage(error.message);
+              toast.error(error.message);
+            }
+            return;
+          }
+
+          console.log('[auth-callback] OTP verification successful');
+          toast.success('Email verified successfully!');
+          setStatus('success');
+
+          await redirectAfterAuth();
+          return;
+        }
+
+        // Case 3: PKCE flow - URL has ?code=...
         if (code) {
           setFlowType('pkce');
           console.log('[auth-callback] PKCE flow: exchanging code for session');
@@ -120,7 +159,7 @@ export default function AuthCallback() {
             return;
           }
           
-          console.log('[auth-callback] PKCE exchange successful, user:', data.user?.email);
+          console.log('[auth-callback] PKCE exchange successful');
           toast.success('Email verified successfully!');
           setStatus('success');
           
@@ -128,7 +167,7 @@ export default function AuthCallback() {
           return;
         }
 
-        // Case 3: Hash token flow - URL hash contains tokens
+        // Case 4: Hash token flow - URL hash contains tokens
         if (accessToken && refreshToken) {
           setFlowType('hash');
           console.log('[auth-callback] Hash flow: setting session from tokens');
@@ -155,7 +194,7 @@ export default function AuthCallback() {
             return;
           }
           
-          console.log('[auth-callback] Session set successfully, user:', data.user?.email);
+          console.log('[auth-callback] Session set successfully');
           toast.success('Signed in successfully!');
           setStatus('success');
           
@@ -163,20 +202,20 @@ export default function AuthCallback() {
           return;
         }
 
-        // Case 4: No auth parameters - check if already authenticated
+        // Case 5: No auth parameters - check if already authenticated
         console.log('[auth-callback] No auth params, checking existing session');
         
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setFlowType('existing-session');
-          console.log('[auth-callback] Already authenticated:', session.user.email);
+          console.log('[auth-callback] Already authenticated');
           setStatus('success');
           toast.success('Already signed in');
           await redirectAfterAuth();
           return;
         }
 
-        // Case 5: No tokens found and not authenticated - show recovery UI
+        // Case 6: No tokens found and not authenticated - show recovery UI
         console.warn('[auth-callback] No auth tokens and no existing session - showing recovery');
         setFlowType('missing');
         setStatus('missing');
