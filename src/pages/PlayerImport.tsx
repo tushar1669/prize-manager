@@ -2810,14 +2810,13 @@ export default function PlayerImport() {
                 </p>
 
                 <div className="flex items-center justify-center mb-4">
-                  <Button
+                  <button
                     type="button"
-                    variant="link"
-                    className="h-auto p-0 text-sm font-semibold text-foreground"
+                    className="bg-yellow-300 text-black px-2 py-1 rounded-md font-medium hover:bg-yellow-200 transition-colors"
                     onClick={() => setShowSwissManagerTip(true)}
                   >
                     Swiss-Manager export tip: enable ‘Print all columns’
-                  </Button>
+                  </button>
                 </div>
                 
                 {/* Phase 6: Import Options - shown before upload */}
@@ -3549,14 +3548,6 @@ export default function PlayerImport() {
               alt="Swiss-Manager export settings showing Print all columns option"
               className="max-w-full h-auto max-h-[70vh] object-contain"
             />
-            <a
-              href={imgSrc}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-medium text-primary underline underline-offset-4"
-            >
-              Open full image
-            </a>
           </div>
         </DialogContent>
       </Dialog>
