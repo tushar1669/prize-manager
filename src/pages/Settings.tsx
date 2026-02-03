@@ -243,6 +243,12 @@ export default function Settings() {
                         <FormDescription className="text-sm text-muted-foreground mt-1">
                           When enabled, players exactly at the maximum age remain eligible
                         </FormDescription>
+                        {/* Explicit comparison text */}
+                        <p className="text-xs text-primary font-medium mt-1">
+                          {field.value 
+                            ? 'Allows age == max (age ≤ max)' 
+                            : 'Excludes age == max (age < max)'}
+                        </p>
                       </div>
                       <FormControl>
                         <Switch

@@ -105,11 +105,12 @@ export default function AuthCallback() {
           console.log('[auth-callback] OTP flow: verifying token');
           toast.info('Verifying your email...');
 
-          const { data, error } = await supabase.auth.verifyOtp({
-            type: otpType as 'signup',
-            ...(token ? { token } : {}),
-            ...(tokenHash ? { token_hash: tokenHash } : {}),
-          });
+          // Build the OTP params - token_hash is required for VerifyTokenHashParams
+          const otpParams = tokenHash 
+            ? { type: otpType as 'signup', token_hash: tokenHash }
+            : { type: otpType as 'email', email: '', token: token || '' };
+          
+          const { data, error } = await supabase.auth.verifyOtp(otpParams);
 
           if (error) {
             console.error('[auth-callback] OTP verification error:', error);
