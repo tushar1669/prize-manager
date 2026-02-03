@@ -538,6 +538,7 @@ export default function PlayerImport() {
   const [showTieRankDetails, setShowTieRankDetails] = useState(false);
   const [dobImputationReport, setDobImputationReport] = useState<DobImputationReport | null>(null);
   const [showDobImputationDetails, setShowDobImputationDetails] = useState(false);
+  const [showSwissManagerTip, setShowSwissManagerTip] = useState(false);
   const [statesExtractedCount, setStatesExtractedCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
@@ -2806,6 +2807,17 @@ export default function PlayerImport() {
                 <p className="text-xs text-muted-foreground mb-6">
                   Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
+
+                <div className="flex items-center justify-center mb-4">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-sm font-semibold text-foreground"
+                    onClick={() => setShowSwissManagerTip(true)}
+                  >
+                    Swiss-Manager export tip: enable ‘Print all columns’
+                  </Button>
+                </div>
                 
                 {/* Phase 6: Import Options - shown before upload */}
                 <Card className="mb-6 text-left max-w-2xl mx-auto">
@@ -3521,6 +3533,24 @@ export default function PlayerImport() {
           </div>
         )}
       </div>
+
+      <Dialog open={showSwissManagerTip} onOpenChange={setShowSwissManagerTip}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Swiss-Manager export tip</DialogTitle>
+            <DialogDescription>
+              Swiss-Manager → Output Points/Results → tick ‘Print all columns’ → Save as Excel
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <img
+              src="/help/swiss-manager/print-all-columns.png"
+              alt="Swiss-Manager export settings showing Print all columns option"
+              className="max-w-full max-h-[70vh] object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showTieRankDetails} onOpenChange={setShowTieRankDetails}>
         <DialogContent className="max-w-2xl">
