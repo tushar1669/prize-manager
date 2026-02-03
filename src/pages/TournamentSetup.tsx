@@ -1862,7 +1862,7 @@ export default function TournamentSetup() {
                           {ruleConfig.main_vs_side_priority_mode === 'main_first' ? 'Main Priority' : 'Place Priority'}
                         </RuleChip>
                         <RuleChip icon="alert">
-                          Strict Age: {ruleConfig.strict_age ? 'ON' : 'OFF'}
+                          Age Rules: {ruleConfig.strict_age ? 'ON' : 'OFF'}
                         </RuleChip>
                         <RuleChip>
                           Unrated in Rating: {ruleConfig.allow_unrated_in_rating ? 'ON' : 'OFF'}
