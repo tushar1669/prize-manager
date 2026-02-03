@@ -111,6 +111,11 @@ export default function TournamentSetup() {
   
   // Track selected gender in criteria sheet for reactive warning
   const [criteriaGenderSelection, setCriteriaGenderSelection] = useState<string>('');
+  
+  // Track age input values for reactive helper text display
+  const [criteriaMaxAgeInput, setCriteriaMaxAgeInput] = useState<string>('');
+  const [criteriaMinAgeInput, setCriteriaMinAgeInput] = useState<string>('');
+  
   const ensuringMainCategory = useRef(false);
 
   // Delete category mutation (non-main only). FK CASCADE deletes prizes automatically.
@@ -218,13 +223,13 @@ export default function TournamentSetup() {
     enabled: !!id && id !== 'new'
   });
 
-  // Fetch rule_config for allocation rules display
+  // Fetch rule_config for allocation rules display (including age settings for helper text)
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule_config', id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, multi_prize_policy, main_vs_side_priority_mode')
+        .select('strict_age, allow_unrated_in_rating, multi_prize_policy, main_vs_side_priority_mode, max_age_inclusive, age_cutoff_policy, age_cutoff_date')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -237,6 +242,22 @@ export default function TournamentSetup() {
     enabled: !!id && id !== 'new',
     staleTime: 60_000,
   });
+  
+  // Helper to format age cutoff description for Edit Rules sheet
+  const getAgeCutoffDescription = useCallback(() => {
+    const policy = (ruleConfig as { age_cutoff_policy?: string })?.age_cutoff_policy ?? 'JAN1_TOURNAMENT_YEAR';
+    const customDate = (ruleConfig as { age_cutoff_date?: string })?.age_cutoff_date;
+    
+    if (policy === 'TOURNAMENT_START_DATE') {
+      return tournament?.start_date ? `tournament start (${tournament.start_date})` : 'tournament start';
+    } else if (policy === 'CUSTOM_DATE' && customDate) {
+      return customDate;
+    } else {
+      // JAN1_TOURNAMENT_YEAR (default)
+      const year = tournament?.start_date ? new Date(tournament.start_date).getFullYear() : new Date().getFullYear();
+      return `Jan 1, ${year}`;
+    }
+  }, [ruleConfig, tournament?.start_date]);
 
   // Reset form only when tournament ID changes, not on every refetch
   useEffect(() => {
@@ -401,6 +422,9 @@ export default function TournamentSetup() {
       // Initialize gender selection for reactive warning
       const storedGender = catCriteria?.gender;
       setCriteriaGenderSelection(storedGender === 'M' ? 'M_OR_UNKNOWN' : String(storedGender ?? ''));
+      // Initialize age input values for reactive helper text
+      setCriteriaMaxAgeInput(String(catCriteria?.max_age ?? ''));
+      setCriteriaMinAgeInput(String(catCriteria?.min_age ?? ''));
     }
   }, [criteriaSheet.open, criteriaSheet.category]);
 
@@ -2020,6 +2044,7 @@ export default function TournamentSetup() {
                   onClick={() => {
                     const el = document.getElementById('criteria-max-age') as HTMLInputElement;
                     if (el) el.value = '9';
+                    setCriteriaMaxAgeInput('9');
                   }}
                 >
                   U-9
@@ -2030,6 +2055,7 @@ export default function TournamentSetup() {
                   onClick={() => {
                     const el = document.getElementById('criteria-max-age') as HTMLInputElement;
                     if (el) el.value = '11';
+                    setCriteriaMaxAgeInput('11');
                   }}
                 >
                   U-11
@@ -2040,6 +2066,7 @@ export default function TournamentSetup() {
                   onClick={() => {
                     const el = document.getElementById('criteria-max-age') as HTMLInputElement;
                     if (el) el.value = '13';
+                    setCriteriaMaxAgeInput('13');
                   }}
                 >
                   U-13
@@ -2050,6 +2077,7 @@ export default function TournamentSetup() {
                   onClick={() => {
                     const el = document.getElementById('criteria-min-age') as HTMLInputElement;
                     if (el) el.value = '60';
+                    setCriteriaMinAgeInput('60');
                   }}
                 >
                   Veteran 60+
@@ -2091,11 +2119,20 @@ export default function TournamentSetup() {
                         placeholder="e.g., 9, 11, 13"
                         disabled={youngestCategory}
                         className={criteriaErrors.ageRange ? 'border-destructive' : ''}
-                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }))}
+                        onChange={(e) => {
+                          setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }));
+                          setCriteriaMaxAgeInput(e.target.value);
+                        }}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "Under X" categories. E.g., U-9 = max age 9.
                       </p>
+                      {/* Dynamic helper showing age comparison rule */}
+                      {criteriaMaxAgeInput && (
+                        <p className="text-xs text-primary mt-1 font-medium">
+                          Meaning: age {(ruleConfig as { max_age_inclusive?: boolean })?.max_age_inclusive !== false ? '≤' : '<'} {criteriaMaxAgeInput} on {getAgeCutoffDescription()}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="criteria-min-age">Min Age (for Veteran/Senior)</Label>
@@ -2107,11 +2144,20 @@ export default function TournamentSetup() {
                         placeholder="e.g., 60"
                         disabled={youngestCategory}
                         className={criteriaErrors.ageRange ? 'border-destructive' : ''}
-                        onChange={() => setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }))}
+                        onChange={(e) => {
+                          setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }));
+                          setCriteriaMinAgeInput(e.target.value);
+                        }}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         For "60+ Veteran" categories. Leave empty for no minimum.
                       </p>
+                      {/* Dynamic helper showing age comparison rule */}
+                      {criteriaMinAgeInput && (
+                        <p className="text-xs text-primary mt-1 font-medium">
+                          Meaning: age ≥ {criteriaMinAgeInput} on {getAgeCutoffDescription()}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {criteriaErrors.ageRange && (
