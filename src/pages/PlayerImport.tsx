@@ -2730,7 +2730,7 @@ export default function PlayerImport() {
   const hasUnresolvedConflicts = conflicts.length > 0 && unresolvedCount > 0;
   const allConflictsResolved = conflicts.length === 0 || unresolvedCount === 0;
   const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0 && allConflictsResolved;
-  const swissManagerImageUrl = import.meta.env.BASE_URL + 'help/swiss-manager/print-all-columns.png';
+  const imgSrc = `${import.meta.env.BASE_URL}help/swiss-manager/print-all-columns.png`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -3545,12 +3545,12 @@ export default function PlayerImport() {
           </DialogHeader>
           <div className="flex flex-col items-center gap-3">
             <img
-              src={swissManagerImageUrl}
+              src={imgSrc}
               alt="Swiss-Manager export settings showing Print all columns option"
               className="max-w-full h-auto max-h-[70vh] object-contain"
             />
             <a
-              href={swissManagerImageUrl}
+              href={imgSrc}
               target="_blank"
               rel="noreferrer"
               className="text-sm font-medium text-primary underline underline-offset-4"
