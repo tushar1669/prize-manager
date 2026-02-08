@@ -235,9 +235,9 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                 </div>
                 
                 <div className="space-y-1">
-                  <span className="text-muted-foreground">Age Rules</span>
+                  <span className="text-muted-foreground">Age Handling</span>
                   <p className="text-xs">
-                    {rc.strict_age ? 'Age rules enforced' : 'Age limits ignored'}
+                    {rc.strict_age ? 'Strict age enforcement' : 'Relaxed age rules'}
                     {rc.allow_missing_dob_for_age && ' · Missing DOB allowed'}
                   </p>
                 </div>

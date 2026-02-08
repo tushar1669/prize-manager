@@ -40,7 +40,6 @@ import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 import { TeamPrizesEditor } from '@/components/team-prizes';
 import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
-import { Switch } from "@/components/ui/switch";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -116,7 +115,6 @@ export default function TournamentSetup() {
   // Track age input values for reactive helper text display
   const [criteriaMaxAgeInput, setCriteriaMaxAgeInput] = useState<string>('');
   const [criteriaMinAgeInput, setCriteriaMinAgeInput] = useState<string>('');
-  const [criteriaMaxAgeInclusiveOverride, setCriteriaMaxAgeInclusiveOverride] = useState<boolean | null>(null);
   
   const ensuringMainCategory = useRef(false);
 
@@ -427,9 +425,6 @@ export default function TournamentSetup() {
       // Initialize age input values for reactive helper text
       setCriteriaMaxAgeInput(String(catCriteria?.max_age ?? ''));
       setCriteriaMinAgeInput(String(catCriteria?.min_age ?? ''));
-      setCriteriaMaxAgeInclusiveOverride(
-        typeof catCriteria?.max_age_inclusive === 'boolean' ? catCriteria.max_age_inclusive : null
-      );
     }
   }, [criteriaSheet.open, criteriaSheet.category]);
 
@@ -1862,7 +1857,7 @@ export default function TournamentSetup() {
                           {ruleConfig.main_vs_side_priority_mode === 'main_first' ? 'Main Priority' : 'Place Priority'}
                         </RuleChip>
                         <RuleChip icon="alert">
-                          Age Rules: {ruleConfig.strict_age ? 'ON' : 'OFF'}
+                          Strict Age: {ruleConfig.strict_age ? 'ON' : 'OFF'}
                         </RuleChip>
                         <RuleChip>
                           Unrated in Rating: {ruleConfig.allow_unrated_in_rating ? 'ON' : 'OFF'}
@@ -2109,13 +2104,8 @@ export default function TournamentSetup() {
                 allowed_states?: string[];
                 allowed_groups?: string[];
                 allowed_types?: string[];
-                max_age_inclusive?: boolean;
               };
               const youngestCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male';
-              const maxAgeOverrideActive = criteriaMaxAgeInclusiveOverride != null;
-              const effectiveMaxAgeInclusive = criteriaMaxAgeInclusiveOverride ?? ((ruleConfig as { max_age_inclusive?: boolean })?.max_age_inclusive ?? true);
-              const effectiveMaxAgeSymbol = effectiveMaxAgeInclusive ? '≤' : '<';
-              const maxAgeSourceLabel = maxAgeOverrideActive ? 'category override' : 'tournament default';
               return (
                 <>
                   <div className="grid grid-cols-2 gap-4">
@@ -2140,42 +2130,8 @@ export default function TournamentSetup() {
                       {/* Dynamic helper showing age comparison rule */}
                       {criteriaMaxAgeInput && (
                         <p className="text-xs text-primary mt-1 font-medium">
-                          Meaning: age {effectiveMaxAgeSymbol} {criteriaMaxAgeInput} on {getAgeCutoffDescription()} ({maxAgeSourceLabel})
+                          Meaning: age {(ruleConfig as { max_age_inclusive?: boolean })?.max_age_inclusive !== false ? '≤' : '<'} {criteriaMaxAgeInput} on {getAgeCutoffDescription()}
                         </p>
-                      )}
-                      {!youngestCategory && (
-                        <div className="mt-3 rounded-md border border-zinc-700/60 bg-zinc-900/40 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <Label htmlFor="criteria-max-age-inclusive">Include players exactly at max age</Label>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                ON = age ≤ max, OFF = age &lt; max
-                              </p>
-                            </div>
-                            <Switch
-                              id="criteria-max-age-inclusive"
-                              checked={effectiveMaxAgeInclusive}
-                              onCheckedChange={(checked) => {
-                                setCriteriaMaxAgeInclusiveOverride(checked);
-                              }}
-                            />
-                          </div>
-                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">
-                              Effective: age {effectiveMaxAgeSymbol} max on {getAgeCutoffDescription()} ({maxAgeSourceLabel})
-                            </p>
-                            {maxAgeOverrideActive && (
-                              <Button
-                                type="button"
-                                variant="link"
-                                className="h-auto px-0 text-xs"
-                                onClick={() => setCriteriaMaxAgeInclusiveOverride(null)}
-                              >
-                                Use tournament default
-                              </Button>
-                            )}
-                          </div>
-                        </div>
                       )}
                     </div>
                     <div>
@@ -2521,9 +2477,6 @@ export default function TournamentSetup() {
                 if (!isYoungest) {
                   if (maxAge != null && !isNaN(maxAge)) criteria.max_age = maxAge;
                   if (minAge != null && !isNaN(minAge)) criteria.min_age = minAge;
-                  if (criteriaMaxAgeInclusiveOverride != null) {
-                    criteria.max_age_inclusive = criteriaMaxAgeInclusiveOverride;
-                  }
                 }
 
                 // Only save rating fields if not unrated-only mode
