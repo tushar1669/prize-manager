@@ -192,10 +192,10 @@ export default function Settings() {
                     <FormItem className="flex items-center justify-between py-2">
                       <div>
                         <FormLabel className="text-foreground font-medium">
-                          Strict Age Eligibility
+                          Enforce age rules
                         </FormLabel>
                         <FormDescription className="text-sm text-muted-foreground mt-1">
-                          Players can only win prizes in their exact age category
+                          When OFF, age limits are ignored for prize eligibility.
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -506,7 +506,7 @@ export default function Settings() {
               </CardHeader>
               <CardContent>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
-                  <li>Strict Age: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
+                  <li>Age Rules: <strong>{form.watch('strict_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Allow Missing DOB for Age: <strong>{form.watch('allow_missing_dob_for_age') ? 'ON' : 'OFF'}</strong></li>
                   <li>Inclusive Max Age: <strong>{form.watch('max_age_inclusive') ? 'ON' : 'OFF'}</strong></li>
                   <li>

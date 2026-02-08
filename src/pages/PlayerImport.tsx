@@ -538,6 +538,7 @@ export default function PlayerImport() {
   const [showTieRankDetails, setShowTieRankDetails] = useState(false);
   const [dobImputationReport, setDobImputationReport] = useState<DobImputationReport | null>(null);
   const [showDobImputationDetails, setShowDobImputationDetails] = useState(false);
+  const [showSwissManagerTip, setShowSwissManagerTip] = useState(false);
   const [statesExtractedCount, setStatesExtractedCount] = useState(0);
   const [lastParseMode, setLastParseMode] = useState<'local' | 'server' | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
@@ -2729,6 +2730,7 @@ export default function PlayerImport() {
   const hasUnresolvedConflicts = conflicts.length > 0 && unresolvedCount > 0;
   const allConflictsResolved = conflicts.length === 0 || unresolvedCount === 0;
   const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0 && allConflictsResolved;
+  const imgSrc = `${import.meta.env.BASE_URL}help/swiss-manager/print-all-columns.png`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -2806,6 +2808,16 @@ export default function PlayerImport() {
                 <p className="text-xs text-muted-foreground mb-6">
                   Excel file with columns: rank, name, rating, DOB, gender, state, city
                 </p>
+
+                <div className="flex items-center justify-center mb-4">
+                  <button
+                    type="button"
+                    className="bg-yellow-300 text-black px-2 py-1 rounded-md font-medium hover:bg-yellow-200 transition-colors"
+                    onClick={() => setShowSwissManagerTip(true)}
+                  >
+                    Swiss-Manager export tip: enable ‘Print all columns’
+                  </button>
+                </div>
                 
                 {/* Phase 6: Import Options - shown before upload */}
                 <Card className="mb-6 text-left max-w-2xl mx-auto">
@@ -3521,6 +3533,24 @@ export default function PlayerImport() {
           </div>
         )}
       </div>
+
+      <Dialog open={showSwissManagerTip} onOpenChange={setShowSwissManagerTip}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Swiss-Manager export tip</DialogTitle>
+            <DialogDescription>
+              Swiss-Manager → Output Points/Results → tick ‘Print all columns’ → Save as Excel
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-3">
+            <img
+              src={imgSrc}
+              alt="Swiss-Manager export settings showing Print all columns option"
+              className="max-w-full h-auto max-h-[70vh] object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showTieRankDetails} onOpenChange={setShowTieRankDetails}>
         <DialogContent className="max-w-2xl">
