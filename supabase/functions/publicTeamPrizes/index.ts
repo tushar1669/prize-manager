@@ -176,12 +176,27 @@ Deno.serve(async (req: Request) => {
 
     const allPrizes = (prizes || []) as InstitutionPrize[];
 
+    const groupByColumns = Array.from(
+      new Set(
+        typedGroups
+          .map(group => GROUP_BY_COLUMN_MAP[group.group_by])
+          .filter((column): column is keyof Player => Boolean(column))
+      )
+    );
+
     // Load players
-    const { data: players, error: playersError } = await supabase
+    let playersQuery = supabase
       .from('players')
       .select('id, name, rank, gender, state, city, club, group_label, type_label')
       .eq('tournament_id', tournamentId)
       .order('rank');
+
+    if (groupByColumns.length > 0) {
+      const orFilter = groupByColumns.map(column => `${column}.not.is.null`).join(',');
+      playersQuery = playersQuery.or(orFilter);
+    }
+
+    const { data: players, error: playersError } = await playersQuery;
 
     if (playersError) throw new Error(`Failed to load players: ${playersError.message}`);
 
