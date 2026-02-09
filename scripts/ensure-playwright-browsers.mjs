@@ -16,4 +16,4 @@ if (fs.existsSync(chromiumPath)) {
   process.exit(0);
 }
 
-execSync("npx playwright install --with-deps chromium", { stdio: "inherit" });
+execSync("npx playwright install chromium", { stdio: "inherit" });
