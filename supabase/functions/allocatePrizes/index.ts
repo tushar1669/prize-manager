@@ -421,12 +421,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const genderDebugEnabled = tournamentId === GENDER_DEBUG_TOURNAMENT_ID;
+    const DEBUG = (Deno.env.get("ALLOCATE_PRIZES_DEBUG") ?? "") === "1";
+    const genderDebugEnabled = DEBUG && tournamentId === GENDER_DEBUG_TOURNAMENT_ID;
 
     // TEMP: gender debug logging for tournament 74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15
     const logGenderEligibility = (
       category: CategoryRow,
-      player: { name?: string | null; gender?: string | null },
+      player: { id?: string | null; gender?: string | null },
       evaluation: EligibilityResult
     ) => {
       if (!genderDebugEnabled) return;
@@ -439,9 +440,10 @@ Deno.serve(async (req) => {
 
       console.log(
         `[alloc.gender-debug] ${JSON.stringify({
+          tournament_id: tournamentId,
+          category_id: category.id,
           category_name: category.name,
-          player_name: player.name ?? null,
-          player_gender: player.gender ?? null,
+          player_id: player.id ?? null,
           passed_gender_check: passedGenderCheck,
           fail_reason: failReason
         })}`
@@ -920,7 +922,7 @@ Deno.serve(async (req) => {
 
       // Compute tie-break reason for logging
       let tieBreak: 'none' | TieBreakField | 'rank' = 'none';
-      let dobTiePlayers: string[] = [];
+      let dobTiePlayerIds: string[] = [];
       if (eligible.length > 1) {
         if (youngestCategory) {
           const first = eligible[0].player;
@@ -929,15 +931,18 @@ Deno.serve(async (req) => {
           const dobSecond = second.dob ? new Date(second.dob).getTime() : Number.NEGATIVE_INFINITY;
           if (dobFirst === dobSecond) {
             // Log all players with identical DOB for debugging
-            dobTiePlayers = eligible
+            dobTiePlayerIds = eligible
               .filter(e => {
                 const d = e.player.dob ? new Date(e.player.dob).getTime() : Number.NEGATIVE_INFINITY;
                 return d === dobFirst;
               })
-              .map(e => `${e.player.name}(rank=${e.player.rank ?? '?'})`);
+              .map(e => e.player.id)
+              .filter((id): id is string => Boolean(id));
             
-            if (dobTiePlayers.length > 1) {
-              console.log(`[alloc.youngest.dob_tie] prize=${p.id} DOB tie among: ${dobTiePlayers.join(', ')}`);
+            if (DEBUG && dobTiePlayerIds.length > 1) {
+              console.log(
+                `[alloc.youngest.dob_tie] prize=${p.id} tie_count=${dobTiePlayerIds.length} player_ids=${dobTiePlayerIds.join(',')}`
+              );
             }
             
             // Tie-break order: rank → rating → name
