@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ type PublicTournament = {
   time_control_increment_seconds: number | null;
 };
 
+const PAGE_SIZE = 20;
+
 function formatDate(dateString: string | null) {
   if (!dateString) return null;
   const date = new Date(dateString);
@@ -38,6 +41,10 @@ function formatDateRange(startDate: string | null, endDate: string | null) {
 }
 
 export default function PublicHome() {
+  const [tournamentList, setTournamentList] = useState<PublicTournament[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
     queryFn: async (): Promise<PublicTournament[]> => {
@@ -48,7 +55,8 @@ export default function PublicHome() {
         .eq('is_archived', false)
         .is('deleted_at', null)
         .order('start_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (error) throw error;
       return (data as unknown as PublicTournament[]) ?? [];
@@ -56,7 +64,40 @@ export default function PublicHome() {
     staleTime: 60_000,
   });
 
-  const tournamentList: PublicTournament[] = tournaments ?? [];
+  useEffect(() => {
+    if (tournaments) {
+      setTournamentList(tournaments);
+      setHasMore(tournaments.length === PAGE_SIZE);
+    }
+  }, [tournaments]);
+
+  const handleLoadMore = async () => {
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    const from = tournamentList.length;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error: loadError } = await supabase
+      .from('tournaments')
+      .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds')
+      .eq('is_published', true)
+      .eq('is_archived', false)
+      .is('deleted_at', null)
+      .order('start_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (loadError) {
+      setLoadMoreError("Unable to load more tournaments.");
+      setIsLoadingMore(false);
+      return;
+    }
+
+    const nextPage = (data as unknown as PublicTournament[]) ?? [];
+    setTournamentList((prev) => [...prev, ...nextPage]);
+    setHasMore(nextPage.length === PAGE_SIZE);
+    setIsLoadingMore(false);
+  };
 
   if (isLoading) {
     return (
@@ -159,6 +200,16 @@ export default function PublicHome() {
               })
             )}
           </div>
+          {loadMoreError && (
+            <p className="mt-6 text-center text-sm text-destructive">{loadMoreError}</p>
+          )}
+          {hasMore && tournamentList.length > 0 && (
+            <div className="mt-8 flex justify-center">
+              <Button variant="outline" onClick={handleLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </>
