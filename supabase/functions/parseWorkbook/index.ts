@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5?target=deno";
 import { CORS_HEADERS, hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
@@ -33,9 +34,8 @@ function buildCorsHeaders(origin: string | null): Record<string, string> {
   return { ...corsHeaders, "Access-Control-Allow-Origin": origin };
 }
 
-// deno-lint-ignore no-explicit-any
 async function ensureTournamentAccess(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   tournamentId: string,
   responseHeaders: Record<string, string>
