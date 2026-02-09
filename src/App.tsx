@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
@@ -44,6 +44,11 @@ const PageLoader = () => (
   </div>
 );
 
+const PublicTournamentDetailsRedirect = () => {
+  const { slug } = useParams();
+  return <Navigate to={`/p/${slug ?? ""}`} replace />;
+};
+
 const App = () => {
   useEffect(() => {
     console.log(
@@ -66,7 +71,7 @@ const App = () => {
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/p/:slug" element={<PublicTournamentDetails />} />
                 <Route path="/p/:slug/results" element={<PublicResults />} />
-                <Route path="/p/:slug/details" element={<PublicTournamentDetails />} />
+                <Route path="/p/:slug/details" element={<PublicTournamentDetailsRedirect />} />
                 <Route path="/t/:id/public" element={<PublicWinnersPage />} />
 
                 {/* Auth routes */}
