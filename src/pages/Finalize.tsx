@@ -1,32 +1,32 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown, ExternalLink, Loader2, ArrowRight } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, ArrowRight, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
-import { ENABLE_PDF_EXPORT, PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
+import { PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { buildWinnersPrintHtml, getWinnersExportColumns, openPrintWindow, type WinnersExportRow } from "@/utils/print";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { NoAllocationGuard } from "@/components/allocation/NoAllocationGuard";
 import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel";
-import { TeamPrizeResultsPanel } from "@/components/allocation/TeamPrizeResultsPanel";
-import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
-import { filterEmptyColumns, formatExportValue } from "@/utils/exportColumns";
-import { groupWinnersByCategory } from "@/utils/finalizeWinners";
+import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
+import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
+import { PosterGridView } from "@/components/final-prize/PosterGridView";
+import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
+import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
+import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
+import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
 
 interface Winner {
   prizeId: string;
@@ -66,9 +66,7 @@ interface CategoryRecord {
   is_main?: boolean | null;
 }
 
-type PlayerExportRow = Record<string, unknown>;
-
-const CATEGORY_PAGE_SIZE = 25;
+type FinalViewTab = 'v1' | 'v3' | 'v4' | 'v5';
 
 export default function Finalize() {
   const { id } = useParams();
@@ -97,7 +95,6 @@ export default function Finalize() {
   } = useFinalizeData(id, locationState);
 
   const previewMeta = locationState?.previewMeta ?? locationState?.meta ?? null;
-  // unfilled now comes from useFinalizeData hook above
   const fallbackConflicts = Array.isArray(locationState?.conflicts)
     ? locationState.conflicts.length
     : typeof locationState?.conflictsCount === 'number'
@@ -119,11 +116,8 @@ export default function Finalize() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { role } = useUserRole();
-  const [isExportingWinnersPdf, setIsExportingWinnersPdf] = useState(false);
-  const [isExportingWinnersXlsx, setIsExportingWinnersXlsx] = useState(false);
-  const [isExportingRankingXlsx, setIsExportingRankingXlsx] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
-  const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
+  const [activeView, setActiveView] = useState<FinalViewTab>('v1');
 
   // Debug log: which source was used (once per mount)
   useEffect(() => {
@@ -135,31 +129,7 @@ export default function Finalize() {
     });
   }, [dataSource, dataVersion, winners.length, unfilled.length]);
 
-  // Team prize results - always enabled in Finalize since allocations are finalized
-  const {
-    hasTeamPrizes,
-    data: teamPrizeResults,
-    isLoading: teamPrizeLoading,
-    error: teamPrizeError,
-  } = useTeamPrizeResults(id, { enabled: true });
-
-  // Fetch players and prizes to show winner details
-  const { data: playersList } = useQuery({
-    queryKey: ['players-finalize', id],
-    queryFn: async () => {
-      if (!id) return [];
-      
-      const { data, count, usedColumns } = await safeSelectPlayersByTournament(
-        id,
-        ['id', 'name', 'full_name', 'rating', 'rank']
-      );
-      
-      console.log('[finalize] Loaded players', { count, usedColumns });
-      return data;
-    },
-    enabled: !!id && winners.length > 0
-  });
-
+  // Fetch prizes for unfilled panel
   const { data: prizesList } = useQuery({
     queryKey: ['prizes-finalize', id],
     queryFn: async () => {
@@ -224,20 +194,17 @@ export default function Finalize() {
   const { data: summary } = useQuery({
     queryKey: ['finalize-summary', id, winners],
     queryFn: async () => {
-      // Fetch tournament data including cash_prize_total (organizer-entered)
       const { data: tournament } = await supabase
         .from('tournaments')
         .select('cash_prize_total')
         .eq('id', id)
         .maybeSingle();
       
-      // Fetch players count
       const { count: playerCount } = await supabase
         .from('players')
         .select('*', { count: 'exact', head: true })
         .eq('tournament_id', id);
       
-      // Fetch categories + prizes
       const { data: categories } = await supabase
         .from('categories')
         .select('*, prizes(*)')
@@ -245,10 +212,8 @@ export default function Finalize() {
       
       const allPrizes = categories?.flatMap(c => c.prizes || []) || [];
       
-      // Prize Fund (Configured) = sum of all defined prize amounts
       const configuredPrizeFund = allPrizes.reduce((sum, p) => sum + (Number(p.cash_amount) || 0), 0);
       
-      // Cash Distributed = sum of allocated winners' cash
       const cashDistributed = winners.reduce((sum, w) => {
         const prize = allPrizes.find(p => p.id === w.prizeId);
         return sum + (Number(prize?.cash_amount) || 0);
@@ -287,55 +252,46 @@ export default function Finalize() {
     enabled: !!id && winners.length > 0
   });
 
-  const prizeById = useMemo(() => {
-    return new Map(prizesList?.map(prize => [prize.id, prize]) ?? []);
-  }, [prizesList]);
+  // Final Prize Views data (powers the embedded tabs)
+  const { data: finalPrizeData, grouped: finalPrizeGrouped, isLoading: finalPrizeLoading } = useFinalPrizeData(id);
 
-  const playerById = useMemo(() => {
-    return new Map(playersList?.map(player => [player.id, player]) ?? []);
-  }, [playersList]);
+  // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
+  const exportRows = useMemo(
+    () => buildFinalPrizeExportRows(finalPrizeData?.winners ?? []),
+    [finalPrizeData?.winners]
+  );
 
-  const winnerRows = useMemo(() => {
-    return winners.map(winner => ({
-      winner,
-      prize: prizeById.get(winner.prizeId),
-      player: playerById.get(winner.playerId),
-    }));
-  }, [prizeById, playerById, winners]);
+  const arbiterRows = useMemo(
+    () => exportRows.map(row => ({ ...row, Signature: '' })),
+    [exportRows]
+  );
 
-  const winnersByCategory = useMemo(() => {
-    return groupWinnersByCategory(winnerRows);
-  }, [winnerRows]);
+  const handleTabExportXlsx = useCallback(() => {
+    if (!finalPrizeData?.winners?.length) {
+      toast.error('No data to export');
+      return;
+    }
 
-  const winnerExportRows = useMemo<WinnersExportRow[]>(() => {
-    return winnersByCategory.flatMap(group =>
-      group.winners.map(row => {
-        const criteria =
-          row.prize?.category_criteria &&
-          typeof row.prize.category_criteria === 'object' &&
-          !Array.isArray(row.prize.category_criteria)
-            ? (row.prize.category_criteria as Record<string, unknown>)
-            : {};
-        const allowedTypes = Array.isArray(criteria.allowed_types) ? criteria.allowed_types.filter(Boolean) : [];
-        const allowedGroups = Array.isArray(criteria.allowed_groups) ? criteria.allowed_groups.filter(Boolean) : [];
-        return {
-          category: row.prize?.category_name ?? 'Unknown Category',
-          prizePlace: row.prize?.place ?? null,
-          playerRank: row.player?.rank ?? null,
-          playerName: row.player?.name ?? 'N/A',
-          amount: row.prize?.cash_amount ?? null,
-          trophy: row.prize?.has_trophy ?? false,
-          medal: row.prize?.has_medal ?? false,
-          typeLabel: allowedTypes.length ? allowedTypes.join(', ') : null,
-          groupLabel: allowedGroups.length ? allowedGroups.join(', ') : null,
-        };
-      })
-    );
-  }, [winnersByCategory]);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeSlug = sanitizeFilename(finalPrizeData?.tournament?.title || 'final_prize');
+    const filename = `${safeSlug}_final_prizes_${today}.xlsx`;
 
-  const handleCategoryPageChange = (categoryId: string, page: number) => {
-    setCategoryPages(prev => ({ ...prev, [categoryId]: page }));
-  };
+    const success = downloadWorkbookXlsx(filename, {
+      Winners: exportRows,
+      'Poster Grid': exportRows,
+      'Arbiter Sheet': arbiterRows,
+    });
+
+    if (success) {
+      toast.success(`Exported ${exportRows.length} rows to ${filename}`);
+    } else {
+      toast.error('Export failed');
+    }
+  }, [arbiterRows, exportRows, finalPrizeData?.winners?.length, finalPrizeData?.tournament?.title]);
+
+  const handleTabPrint = useCallback(() => {
+    window.print();
+  }, []);
 
   const finalizeMutation = useMutation({
     mutationFn: async (winners: Winner[]) => {
@@ -359,7 +315,6 @@ export default function Finalize() {
     onError: (error: unknown) => {
       console.error('[finalize] error', error);
       
-      // Extract structured error from edge function response
       const errorContext =
         typeof error === 'object' && error !== null && 'context' in error
           ? (error as { context?: { body?: { error?: string; hint?: string } } }).context
@@ -475,155 +430,6 @@ export default function Finalize() {
     }
   });
 
-  const handleExportWinnersPdf = async () => {
-    if (!id) {
-      toast.error("Tournament ID missing");
-      return;
-    }
-
-    try {
-      if (!winnerExportRows.length) {
-        toast.error("No winners available to export");
-        return;
-      }
-      setIsExportingWinnersPdf(true);
-      const { data: tournament, error: tournamentError } = await supabase
-        .from("tournaments")
-        .select("title, city, start_date, end_date")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (tournamentError) {
-        throw tournamentError;
-      }
-
-      const html = buildWinnersPrintHtml(tournament ?? null, winnerExportRows);
-      const opened = openPrintWindow(html, `winners-${id}`);
-      if (!opened) {
-        throw new Error("Popup blocked. Allow popups to print or save as PDF.");
-      }
-      toast.success("Opened winners print preview — save as PDF from your browser.");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to open print preview";
-      toast.error(message);
-    } finally {
-      setIsExportingWinnersPdf(false);
-    }
-  };
-
-  const downloadXlsx = <T,>(rows: T[], columns: { label: string; value: (row: T) => unknown }[], filename: string, sheetName: string) => {
-    const headers = columns.map(column => column.label);
-    const data = rows.map(row => columns.map(column => formatExportValue(column.value(row))));
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-    XLSX.writeFile(workbook, filename);
-  };
-
-  const handleExportWinnersXlsx = async () => {
-    if (!id) {
-      toast.error("Tournament ID missing");
-      return;
-    }
-
-    try {
-      if (!winnerExportRows.length) {
-        toast.error("No winners available to export");
-        return;
-      }
-      setIsExportingWinnersXlsx(true);
-      const columns = filterEmptyColumns(winnerExportRows, getWinnersExportColumns());
-      downloadXlsx(winnerExportRows, columns, `winners-${id}.xlsx`, "Winners");
-      toast.success("Winners XLSX exported");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to export winners XLSX";
-      toast.error(message);
-    } finally {
-      setIsExportingWinnersXlsx(false);
-    }
-  };
-
-  const handleExportRankingXlsx = async () => {
-    if (!id) {
-      toast.error("Tournament ID missing");
-      return;
-    }
-
-    try {
-      setIsExportingRankingXlsx(true);
-      const preferredColumns = [
-        'rank',
-        'sno',
-        'name',
-        'full_name',
-        'rating',
-        'dob',
-        'dob_raw',
-        'gender',
-        'fide_id',
-        'federation',
-        'state',
-        'city',
-        'club',
-        'disability',
-        'unrated',
-        'group_label',
-        'type_label',
-        'special_notes',
-        'notes',
-      ];
-      const { data: players, usedColumns } = await safeSelectPlayersByTournament(
-        id,
-        preferredColumns,
-        { column: 'rank', ascending: true }
-      );
-
-      if (!players || players.length === 0) {
-        toast.error("No players available to export");
-        return;
-      }
-
-      const columnLabels: Record<string, string> = {
-        rank: 'Rank',
-        sno: 'SNo',
-        name: 'Name',
-        full_name: 'Full Name',
-        rating: 'Rating',
-        dob: 'DOB',
-        dob_raw: 'DOB Raw',
-        gender: 'Gender',
-        fide_id: 'FIDE ID',
-        federation: 'Federation',
-        state: 'State',
-        city: 'City',
-        club: 'Club',
-        disability: 'Disability',
-        unrated: 'Unrated',
-        group_label: 'Group',
-        type_label: 'Type',
-        special_notes: 'Special Notes',
-        notes: 'Notes',
-      };
-
-      const columns = filterEmptyColumns(
-        players as PlayerExportRow[],
-        usedColumns.map(column => ({
-          key: column,
-          label: columnLabels[column] ?? column.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          value: (row: PlayerExportRow) => row[column],
-        }))
-      );
-
-      downloadXlsx(players, columns, `ranking-${id}.xlsx`, "Ranking");
-      toast.success("Full ranking XLSX exported");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to export ranking XLSX";
-      toast.error(message);
-    } finally {
-      setIsExportingRankingXlsx(false);
-    }
-  };
-
   const handlePublish = () => {
     if (winners.length === 0) {
       toast.error("No allocations to finalize");
@@ -663,29 +469,36 @@ export default function Finalize() {
     return <NoAllocationGuard />;
   }
 
+  const isTeamTab = activeView === 'v5';
+
   return (
     <div className="min-h-screen bg-background">
-      <BackBar label="Back to Review" to={`/t/${id}/review`} />
-      <AppNav />
-      <ErrorPanel error={error} onDismiss={clearError} />
+      <div className="print:hidden">
+        <BackBar label="Back to Review" to={`/t/${id}/review`} />
+        <AppNav />
+        <ErrorPanel error={error} onDismiss={clearError} />
+      </div>
       
-      <div className="container mx-auto px-6 py-8 max-w-4xl">
-        <TournamentProgressBreadcrumbs />
-        
-        <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
-              <span className="text-xs rounded-full px-2 py-1 bg-muted">
-              v{publishVersion}
-              </span>
-            </div>
-          <p className="text-muted-foreground">
-            Review final allocations before publishing
-          </p>
+      <div className="container mx-auto px-6 py-8 max-w-4xl print:max-w-none print:px-0 print:py-0">
+        <div className="print:hidden">
+          <TournamentProgressBreadcrumbs />
+          
+          <div className="mb-8">
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
+                <span className="text-xs rounded-full px-2 py-1 bg-muted">
+                v{publishVersion}
+                </span>
+              </div>
+            <p className="text-muted-foreground">
+              Review final allocations before publishing
+            </p>
+          </div>
         </div>
 
         <div className="space-y-6">
-          <Card>
+          {/* Tournament Summary — UNCHANGED */}
+          <Card className="print:hidden">
             <CardHeader>
               <CardTitle>Tournament Summary</CardTitle>
             </CardHeader>
@@ -719,14 +532,16 @@ export default function Finalize() {
             </CardContent>
           </Card>
 
-          {id && <ImportQualityNotes tournamentId={id} />}
+          <div className="print:hidden">
+            {id && <ImportQualityNotes tournamentId={id} />}
+          </div>
 
-          <Card>
+          {/* Allocation Summary — UNCHANGED */}
+          <Card className="print:hidden">
             <CardHeader>
               <CardTitle>Allocation Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Winners & Unfilled counts */}
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Winners Allocated</span>
                 <span className="font-medium text-foreground">{winners.length}</span>
@@ -737,7 +552,6 @@ export default function Finalize() {
                   {unfilled.length}
                 </span>
               </div>
-              {/* Breakdown by type */}
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Main Prizes Awarded</span>
                 <span className="font-medium text-foreground">{summary?.mainPrizesCount || 0}</span>
@@ -758,167 +572,18 @@ export default function Finalize() {
           </Card>
 
           {/* Unfilled Prizes Panel */}
-          {prizesList && (
-            <UnfilledPrizesPanel
-              unfilled={unfilled}
-              prizes={prizesList}
-              categories={categoriesList}
-            />
-          )}
+          <div className="print:hidden">
+            {prizesList && (
+              <UnfilledPrizesPanel
+                unfilled={unfilled}
+                prizes={prizesList}
+                categories={categoriesList}
+              />
+            )}
+          </div>
 
-          {/* Winners Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Winners ({winners.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Summary info is shown in Allocation Summary card above - no duplicate bar */}
-              <div className="mb-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Winners by category
-                </p>
-              </div>
-
-              <Accordion
-                type="multiple"
-                defaultValue={winnersByCategory.map(group => group.id)}
-                className="rounded-md border border-border"
-              >
-                {winnersByCategory.map(group => {
-                  const pageIndex = categoryPages[group.id] ?? 0;
-                  const totalPages = Math.max(1, Math.ceil(group.winners.length / CATEGORY_PAGE_SIZE));
-                  const start = pageIndex * CATEGORY_PAGE_SIZE;
-                  const pageWinners = group.winners.slice(start, start + CATEGORY_PAGE_SIZE);
-                  return (
-                    <AccordionItem key={group.id} value={group.id}>
-                      <AccordionTrigger className="px-3 text-left">
-                        <div className="flex flex-1 items-center justify-between gap-2">
-                          <span className="font-medium text-foreground">{group.name}</span>
-                          <span className="text-xs text-muted-foreground">{group.winners.length} winners</span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="rounded-md border border-border bg-background/50 overflow-auto max-h-80">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b">
-                                <th className="text-left p-2">Place</th>
-                                <th className="text-left p-2">Player</th>
-                                <th className="text-left p-2">Rating</th>
-                                <th className="text-left p-2">Amount</th>
-                                <th className="text-left p-2">Notes</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pageWinners.map(row => (
-                                <tr key={row.winner.prizeId} className="border-b">
-                                  <td className="p-2">#{row.prize?.place ?? 'N/A'}</td>
-                                  <td className="p-2">{row.player?.name || 'N/A'}</td>
-                                  <td className="p-2">{row.player?.rating || 'N/A'}</td>
-                                  <td className="p-2">₹{row.prize?.cash_amount || 0}</td>
-                                  <td className="p-2 text-xs text-muted-foreground">
-                                    {row.winner.isManual ? 'Manual' : 'Auto'}
-                                    {row.prize?.has_trophy ? ' 🏆' : ''}
-                                    {row.prize?.has_medal ? ' 🥇' : ''}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {totalPages > 1 && (
-                          <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-2 text-xs text-muted-foreground">
-                            <span>
-                              Page {pageIndex + 1} of {totalPages}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCategoryPageChange(group.id, Math.max(0, pageIndex - 1))}
-                                disabled={pageIndex === 0}
-                              >
-                                Previous
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCategoryPageChange(group.id, Math.min(totalPages - 1, pageIndex + 1))}
-                                disabled={pageIndex >= totalPages - 1}
-                              >
-                                Next
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            </CardContent>
-          </Card>
-
-          {/* Team / Institution Prizes - only shown when configured */}
-          {hasTeamPrizes && (
-            <Card>
-              <CardContent className="pt-6">
-                <TeamPrizeResultsPanel
-                  data={teamPrizeResults}
-                  isLoading={teamPrizeLoading}
-                  error={teamPrizeError}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Options</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {ENABLE_PDF_EXPORT && (
-                <div className="space-y-2">
-                  <Button
-                    onClick={handleExportWinnersPdf}
-                    variant="outline"
-                    className="w-full justify-between"
-                    disabled={isExportingWinnersPdf || winners.length === 0}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4" />
-                      {isExportingWinnersPdf ? "Preparing Winners PDF…" : "Export Winners PDF"}
-                    </span>
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    onClick={handleExportWinnersXlsx}
-                    variant="secondary"
-                    className="w-full justify-between"
-                    disabled={isExportingWinnersXlsx || winners.length === 0}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4" />
-                      {isExportingWinnersXlsx ? "Exporting Winners XLSX…" : "Export Winners XLSX"}
-                    </span>
-                  </Button>
-                  <Button
-                    onClick={handleExportRankingXlsx}
-                    variant="outline"
-                    className="w-full justify-between"
-                    disabled={isExportingRankingXlsx}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4" />
-                      {isExportingRankingXlsx ? "Exporting Ranking XLSX…" : "Export Full Ranking XLSX"}
-                    </span>
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/50 bg-primary/5">
+          {/* Publish CTA — moved ABOVE Final Prize Views */}
+          <Card className="border-primary/50 bg-primary/5 print:hidden">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground mb-4">
                 By publishing, you create an immutable version (v{publishVersion}) of these allocations.
@@ -941,19 +606,74 @@ export default function Finalize() {
                 >
                   View Public Page
                 </Button>
-                <Button
-                  onClick={() => navigate(`/t/${id}/final/v1`)}
-                  disabled={!winners || winners.length === 0}
-                  variant="outline"
-                  className="w-full"
-                >
-                  Final Prize Views
-                </Button>
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex justify-between pt-4">
+          {/* Final Prize Views — embedded as tabs */}
+          <Card className="print:border-0 print:shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between print:hidden">
+              <CardTitle>Final Prize Views</CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTabExportXlsx}
+                  disabled={isTeamTab || !finalPrizeData?.winners?.length}
+                  className="rounded-full"
+                >
+                  <Download className="mr-2 h-4 w-4" /> Export XLSX
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleTabPrint}
+                  disabled={isTeamTab && !finalPrizeData?.winners?.length}
+                  className="rounded-full"
+                >
+                  <Printer className="mr-2 h-4 w-4" /> Print
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="print:p-0">
+              {finalPrizeLoading ? (
+                <div className="flex h-48 items-center justify-center text-muted-foreground">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Preparing prize data…
+                </div>
+              ) : (
+                <Tabs value={activeView} onValueChange={v => setActiveView(v as FinalViewTab)} className="w-full">
+                  <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-muted p-1 print:hidden">
+                    <TabsTrigger value="v1" className="rounded-md px-4 py-2 text-sm font-medium">
+                      Category Cards
+                    </TabsTrigger>
+                    <TabsTrigger value="v3" className="rounded-md px-4 py-2 text-sm font-medium">
+                      Poster Grid
+                    </TabsTrigger>
+                    <TabsTrigger value="v4" className="rounded-md px-4 py-2 text-sm font-medium">
+                      Arbiter Sheet
+                    </TabsTrigger>
+                    <TabsTrigger value="v5" className="rounded-md px-4 py-2 text-sm font-medium">
+                      Team Prizes
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="v1" className="m-0">
+                    <CategoryCardsView groups={finalPrizeGrouped.groups} />
+                  </TabsContent>
+                  <TabsContent value="v3" className="m-0">
+                    <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} />
+                  </TabsContent>
+                  <TabsContent value="v4" className="m-0">
+                    <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} />
+                  </TabsContent>
+                  <TabsContent value="v5" className="m-0">
+                    <TeamPrizesTabView tournamentId={id as string} />
+                  </TabsContent>
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bottom action bar */}
+          <div className="flex justify-between pt-4 print:hidden">
             <Button variant="outline" onClick={() => {
               if (!id) {
                 toast.error('Tournament ID missing');
