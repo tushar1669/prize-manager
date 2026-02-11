@@ -4,7 +4,7 @@ import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
 import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
 import { buildFinalPrizeExportRows } from '@/utils/finalPrizeExport';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
-import { Share2, Printer, Download } from 'lucide-react';
+import { Printer, Download } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
@@ -31,16 +31,6 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
     () => exportRows.map(row => ({ ...row, Signature: '' })),
     [exportRows]
   );
-
-  const handleCopyLink = useCallback(() => {
-    try {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success('Final prize list link copied');
-    } catch (error) {
-      console.error('[final-prize] copy failed', error);
-      toast.error('Could not copy link. Try manually.');
-    }
-  }, []);
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -94,14 +84,6 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCopyLink}
-              className="rounded-full border-primary text-primary hover:bg-primary/10"
-            >
-              <Share2 className="mr-2 h-4 w-4" /> Copy link
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={handleExportXlsx}
               className="rounded-full border-primary text-primary hover:bg-primary/10"
             >
@@ -126,7 +108,6 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
             <span>• {formatNumberIN(totals.categoryCount)} Categories</span>
           </div>
         </div>
-        {/* Print settings note */}
         <p className="pm-print-settings-note hidden mt-2 text-center text-xs text-black/50 print:block">
           For best results, enable "Background graphics" in your print settings.
         </p>
