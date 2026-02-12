@@ -5,6 +5,7 @@
 
 import { downloadWorkbookXlsx } from './excel';
 import type { RcaRow } from '@/types/rca';
+import { getReasonLabel, type UnfilledReasonCode } from '@/types/allocation';
 
 /**
  * Export RCA data to XLSX file.
@@ -23,39 +24,25 @@ export function exportRcaToXlsx(
     return false;
   }
 
+  const unfilledRows = rcaRows.filter(row => row.is_unfilled);
+  if (unfilledRows.length === 0) {
+    console.warn('[rca-export] No unfilled prize rows to export');
+    return false;
+  }
+
   // Transform RCA rows into flat objects for Excel
-  const rows = rcaRows.map(row => ({
-    tournament_slug: row.tournament_slug ?? '',
-    tournament_title: row.tournament_title ?? '',
-    category_name: row.category_name ?? '',
-    is_main: row.is_main ? 'Yes' : 'No',
-    prize_place: row.prize_place,
-    prize_label: row.prize_label ?? '',
-    prize_type: capitalize(row.prize_type ?? 'other'),
-    amount: row.amount ?? 0,
-    
-    engine_winner_player_id: row.engine_winner_player_id ?? '',
-    engine_winner_name: row.engine_winner_name ?? '',
-    engine_winner_rank: row.engine_winner_rank ?? '',
-    engine_winner_rating: row.engine_winner_rating ?? '',
-    
-    final_winner_player_id: row.final_winner_player_id ?? '',
-    final_winner_name: row.final_winner_name ?? '',
-    final_winner_rank: row.final_winner_rank ?? '',
-    final_winner_rating: row.final_winner_rating ?? '',
-    
-    status: row.status,
-    override_reason: row.override_reason ?? '',
-    
-    reason_code: row.reason_code ?? '',
-    reason_details: row.reason_details ?? '',
-    diagnosis_summary: row.diagnosis_summary ?? '',
-    
-    is_unfilled: row.is_unfilled ? 'Yes' : 'No',
-    is_blocked_by_one_prize: row.is_blocked_by_one_prize ? 'Yes' : 'No',
-    
-    candidates_before_one_prize: row.candidates_before_one_prize ?? 0,
-    candidates_after_one_prize: row.candidates_after_one_prize ?? 0,
+  const rows = unfilledRows.map(row => ({
+    Category: row.category_name ?? '',
+    Place: row.prize_place,
+    'Prize Label': row.prize_label ?? '',
+    'Prize Type': capitalize(row.prize_type ?? 'other'),
+    Amount: row.amount ?? 0,
+    'Root Cause': row.reason_code ? getReasonLabel(row.reason_code) : '',
+    Diagnosis: row.diagnosis_summary ?? row.reason_details ?? '',
+    Eligible: row.candidates_before_one_prize ?? 0,
+    Available: row.candidates_after_one_prize ?? 0,
+    'Suggested Fix': getSuggestedFix(row.reason_code),
+    'Fail Codes': (row.raw_fail_codes ?? []).join(', '),
   }));
 
   // Generate filename with timestamp
@@ -75,4 +62,29 @@ export function exportRcaToXlsx(
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+function getSuggestedFix(reasonCode: UnfilledReasonCode | null): string {
+  switch (reasonCode) {
+    case 'BLOCKED_BY_ONE_PRIZE_POLICY':
+      return 'Adjust prize amounts, add more prizes, or broaden criteria to increase candidate spread.';
+    case 'NO_ELIGIBLE_PLAYERS':
+      return 'Verify prize criteria and player import completeness.';
+    case 'TOO_STRICT_CRITERIA_RATING':
+      return 'Relax the rating requirement or widen rating bounds for this prize.';
+    case 'TOO_STRICT_CRITERIA_AGE':
+      return 'Relax age criteria and confirm DOB data is complete and valid.';
+    case 'TOO_STRICT_CRITERIA_GENDER':
+      return 'Relax gender criteria or update category definitions to match intended eligibility.';
+    case 'TOO_STRICT_CRITERIA_LOCATION':
+      return 'Relax location constraints (state/city/club) or verify player location data quality.';
+    case 'TOO_STRICT_CRITERIA_TYPE_OR_GROUP':
+      return 'Relax player type/group requirements or adjust group mappings.';
+    case 'CATEGORY_INACTIVE':
+      return 'Enable the category or remove/reassign this prize.';
+    case 'INTERNAL_ERROR':
+      return 'Contact support and include the tournament id for investigation.';
+    default:
+      return '';
+  }
 }
