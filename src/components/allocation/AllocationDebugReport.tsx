@@ -118,20 +118,20 @@ function CategorySection({
 
       {isExpanded && (
         <div className="border-t overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[700px] table-fixed text-sm">
             <thead className="bg-muted/30">
               <tr>
-                <th className="text-left py-2 px-3 font-medium">Place</th>
-                <th className="text-left py-2 px-3 font-medium">Prize</th>
+                <th className="w-20 text-left py-2 px-3 font-medium">Place</th>
+                <th className="w-28 text-left py-2 px-3 font-medium">Prize</th>
                 <th className="text-left py-2 px-3 font-medium">Winner</th>
-                <th className="text-right py-2 px-3 font-medium">Rank</th>
+                <th className="w-20 text-center py-2 px-3 font-medium">Rank</th>
                 {showAdvanced && (
                   <>
-                    <th className="text-right py-2 px-3 font-medium">
+                    <th className="w-24 text-center py-2 px-3 font-medium">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 cursor-help">
+                            <span className="inline-flex items-center justify-center gap-1 cursor-help">
                               Eligible
                               <Info className="h-3 w-3 text-muted-foreground" />
                             </span>
@@ -143,11 +143,11 @@ function CategorySection({
                         </Tooltip>
                       </TooltipProvider>
                     </th>
-                    <th className="text-right py-2 px-3 font-medium">
+                    <th className="w-24 text-center py-2 px-3 font-medium">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 cursor-help">
+                            <span className="inline-flex items-center justify-center gap-1 cursor-help">
                               Available
                               <Info className="h-3 w-3 text-muted-foreground" />
                             </span>
@@ -161,7 +161,7 @@ function CategorySection({
                     </th>
                   </>
                 )}
-                <th className="text-left py-2 px-3 font-medium">Status</th>
+                <th className="w-24 text-center py-2 px-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -175,7 +175,7 @@ function CategorySection({
                     key={entry.prize_id}
                     className={`border-t ${entry.is_unfilled ? "bg-destructive/5" : ""}`}
                   >
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 tabular-nums">
                       <span className="font-medium">
                         {formatOrdinal(entry.prize_place)}
                       </span>
@@ -213,12 +213,12 @@ function CategorySection({
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-right">
+                    <td className="py-2 px-3 text-center tabular-nums">
                       {entry.winner_rank ?? "—"}
                     </td>
                     {showAdvanced && (
                       <>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2 px-3 text-center tabular-nums">
                           <span
                             className={
                               entry.candidates_before_one_prize === 0
@@ -229,7 +229,7 @@ function CategorySection({
                             {entry.candidates_before_one_prize}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2 px-3 text-center tabular-nums">
                           <span
                             className={
                               entry.candidates_after_one_prize === 0 &&
@@ -245,7 +245,7 @@ function CategorySection({
                         </td>
                       </>
                     )}
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-3 text-center">
                       {entry.is_unfilled ? (
                         <Badge variant="destructive" className="text-xs">
                           Unfilled
