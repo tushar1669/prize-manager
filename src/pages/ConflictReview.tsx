@@ -771,8 +771,14 @@ export default function ConflictReview() {
             <Card>
               <Collapsible open={winnersExpanded} onOpenChange={setWinnersExpanded}>
                 <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer">
-                    <CardTitle>Winners ({winners.length})</CardTitle>
+                  <CardHeader className="cursor-pointer border-l-2 border-amber-400/60 pl-5">
+                    <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-2 w-2 rounded-full bg-amber-400/80"
+                      />
+                      Winners ({winners.length})
+                    </CardTitle>
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
