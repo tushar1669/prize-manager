@@ -1,31 +1,46 @@
-import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  AlertTriangle, 
-  CheckCircle2, 
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
   XCircle,
   Info,
   Layers,
   AlertCircle,
   Download,
-  FileSearch
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { IneligibilityTooltip } from './IneligibilityTooltip';
-import type { AllocationCoverageEntry, CategorySummary, UnfilledReasonCode } from '@/types/allocation';
-import { getReasonLabel } from '@/types/allocation';
-import { exportCoverageToXlsx } from '@/utils/allocationCoverageExport';
-import { exportRcaToXlsx } from '@/utils/allocationRcaExport';
-import { buildRcaRows, type WinnerEntry, type PlayerInfo } from '@/types/rca';
+  FileSearch,
+  Trophy,
+  Medal,
+} from "lucide-react";
+import { toast } from "sonner";
+import { IneligibilityTooltip } from "./IneligibilityTooltip";
+import type {
+  AllocationCoverageEntry,
+  CategorySummary,
+  UnfilledReasonCode,
+} from "@/types/allocation";
+import { getReasonLabel } from "@/types/allocation";
+import { exportCoverageToXlsx } from "@/utils/allocationCoverageExport";
+import { exportRcaToXlsx } from "@/utils/allocationRcaExport";
+import { buildRcaRows, type WinnerEntry, type PlayerInfo } from "@/types/rca";
 
 interface AllocationDebugReportProps {
   coverage: AllocationCoverageEntry[];
@@ -38,33 +53,58 @@ interface AllocationDebugReportProps {
 }
 
 // Badge variant based on reason code
-function getReasonBadgeVariant(code: string | null): 'destructive' | 'secondary' | 'outline' {
-  if (!code) return 'outline';
-  if (code === 'BLOCKED_BY_ONE_PRIZE_POLICY') return 'secondary';
-  if (code.startsWith('TOO_STRICT') || code === 'NO_ELIGIBLE_PLAYERS') return 'destructive';
-  return 'outline';
+function getReasonBadgeVariant(
+  code: string | null,
+): "destructive" | "secondary" | "outline" {
+  if (!code) return "outline";
+  if (code === "BLOCKED_BY_ONE_PRIZE_POLICY") return "secondary";
+  if (code.startsWith("TOO_STRICT") || code === "NO_ELIGIBLE_PLAYERS")
+    return "destructive";
+  return "outline";
+}
+
+function formatOrdinal(place: number): string {
+  const suffix = new Intl.PluralRules("en", { type: "ordinal" }).select(place);
+  if (suffix === "one") return `${place}st`;
+  if (suffix === "two") return `${place}nd`;
+  if (suffix === "few") return `${place}rd`;
+  return `${place}th`;
 }
 
 // Category row component for the "By Category" view
-function CategorySection({ summary, isExpanded, onToggle }: { 
-  summary: CategorySummary; 
+function CategorySection({
+  summary,
+  isExpanded,
+  onToggle,
+  showAdvanced,
+}: {
+  summary: CategorySummary;
   isExpanded: boolean;
   onToggle: () => void;
+  showAdvanced: boolean;
 }) {
   const hasUnfilled = summary.unfilled_prizes > 0;
-  
+
   return (
     <div className="border rounded-lg mb-3 overflow-hidden">
       <button
         onClick={onToggle}
-        className={`w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors ${
-          hasUnfilled ? 'bg-destructive/5' : ''
+        className={`group w-full flex items-center justify-between p-3 text-left hover:bg-muted/50 transition-colors ${
+          hasUnfilled ? "bg-destructive/5" : ""
         }`}
       >
         <div className="flex items-center gap-3">
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+          )}
           <span className="font-medium">{summary.category_name}</span>
-          {summary.is_main && <Badge variant="outline" className="text-xs">Main</Badge>}
+          {summary.is_main && (
+            <Badge variant="outline" className="text-xs">
+              Main
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
@@ -77,91 +117,150 @@ function CategorySection({ summary, isExpanded, onToggle }: {
           )}
         </div>
       </button>
-      
+
       {isExpanded && (
-        <div className="border-t">
+        <div className="border-t overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/30">
               <tr>
+                <th className="text-left py-2 px-3 font-medium">Place</th>
                 <th className="text-left py-2 px-3 font-medium">Prize</th>
-                <th className="text-left py-2 px-3 font-medium">Type / Amount</th>
                 <th className="text-left py-2 px-3 font-medium">Winner</th>
-                <th className="text-right py-2 px-3 font-medium">Before 1-prize</th>
-                <th className="text-right py-2 px-3 font-medium">After 1-prize</th>
+                <th className="text-right py-2 px-3 font-medium">Rank</th>
+                {showAdvanced && (
+                  <>
+                    <th className="text-right py-2 px-3 font-medium">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">
+                              Eligible
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Players matching criteria before applying
+                            one-player-one-prize.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">
+                              Available
+                              <Info className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Players still eligible after removing players who
+                            already won a prize.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
+                  </>
+                )}
                 <th className="text-left py-2 px-3 font-medium">Status</th>
-                <th className="text-left py-2 px-3 font-medium">Reason</th>
               </tr>
             </thead>
             <tbody>
-              {summary.coverage_entries.map((entry) => (
-                <tr 
-                  key={entry.prize_id} 
-                  className={`border-t ${entry.is_unfilled ? 'bg-destructive/5' : ''}`}
-                >
-                  <td className="py-2 px-3">
-                    <span className="font-medium">{entry.prize_label}</span>
-                  </td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-1">
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {entry.prize_type}
-                      </Badge>
-                      {entry.amount != null && entry.amount > 0 && (
-                        <span className="text-muted-foreground text-xs">₹{entry.amount}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-2 px-3">
-                    {entry.winner_name ? (
-                      <div className="text-xs">
-                        <div className="font-medium">{entry.winner_name}</div>
-                        <div className="text-muted-foreground">
-                          Rank {entry.winner_rank ?? 'N/A'} · Rating {entry.winner_rating ?? 'N/A'}
-                        </div>
+              {summary.coverage_entries.map((entry) => {
+                const iconData = entry as AllocationCoverageEntry & {
+                  has_trophy?: boolean;
+                  has_medal?: boolean;
+                };
+                return (
+                  <tr
+                    key={entry.prize_id}
+                    className={`border-t ${entry.is_unfilled ? "bg-destructive/5" : ""}`}
+                  >
+                    <td className="py-2 px-3">
+                      <span className="font-medium">
+                        {formatOrdinal(entry.prize_place)}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center gap-2 min-w-[120px]">
+                        {entry.amount != null && entry.amount > 0 && (
+                          <span className="font-medium">₹{entry.amount}</span>
+                        )}
+                        {iconData.has_trophy && (
+                          <Trophy
+                            className="h-4 w-4 text-amber-500"
+                            aria-label="Trophy"
+                          />
+                        )}
+                        {iconData.has_medal && (
+                          <Medal
+                            className="h-4 w-4 text-sky-500"
+                            aria-label="Medal"
+                          />
+                        )}
+                        {entry.amount == null &&
+                          !iconData.has_trophy &&
+                          !iconData.has_medal && (
+                            <span className="text-muted-foreground text-xs">
+                              —
+                            </span>
+                          )}
                       </div>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      {entry.winner_name ? (
+                        <span className="font-medium">{entry.winner_name}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {entry.winner_rank ?? "—"}
+                    </td>
+                    {showAdvanced && (
+                      <>
+                        <td className="py-2 px-3 text-right">
+                          <span
+                            className={
+                              entry.candidates_before_one_prize === 0
+                                ? "text-destructive font-medium"
+                                : ""
+                            }
+                          >
+                            {entry.candidates_before_one_prize}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span
+                            className={
+                              entry.candidates_after_one_prize === 0 &&
+                              entry.candidates_before_one_prize > 0
+                                ? "text-amber-600 font-medium"
+                                : entry.candidates_after_one_prize === 0
+                                  ? "text-destructive font-medium"
+                                  : ""
+                            }
+                          >
+                            {entry.candidates_after_one_prize}
+                          </span>
+                        </td>
+                      </>
                     )}
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <span className={entry.candidates_before_one_prize === 0 ? 'text-destructive font-medium' : ''}>
-                      {entry.candidates_before_one_prize}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <span className={
-                      entry.candidates_after_one_prize === 0 && entry.candidates_before_one_prize > 0 
-                        ? 'text-amber-600 font-medium' 
-                        : entry.candidates_after_one_prize === 0 
-                          ? 'text-destructive font-medium' 
-                          : ''
-                    }>
-                      {entry.candidates_after_one_prize}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3">
-                    {entry.is_unfilled ? (
-                      <Badge variant="destructive" className="text-xs">Unfilled</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30">
-                        Filled
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-1">
-                      {entry.reason_code && (
-                        <Badge variant={getReasonBadgeVariant(entry.reason_code)} className="text-xs">
-                          {getReasonLabel(entry.reason_code)}
+                    <td className="py-2 px-3">
+                      {entry.is_unfilled ? (
+                        <Badge variant="destructive" className="text-xs">
+                          Unfilled
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">
+                          Filled
                         </Badge>
                       )}
-                      {entry.raw_fail_codes.length > 0 && (
-                        <IneligibilityTooltip reasonCodes={entry.raw_fail_codes} />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -182,21 +281,49 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
         </div>
         <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
           <span className="capitalize">{entry.prize_type}</span>
-          {entry.amount != null && entry.amount > 0 && <span>· ₹{entry.amount}</span>}
+          {entry.amount != null && entry.amount > 0 && (
+            <span>· ₹{entry.amount}</span>
+          )}
         </div>
         {/* Diagnosis summary for 0-candidate cases */}
         {entry.diagnosis_summary && entry.candidates_before_one_prize === 0 && (
           <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
-            <span className="font-medium">Diagnosis:</span> {entry.diagnosis_summary}
+            <span className="font-medium">Diagnosis:</span>{" "}
+            {entry.diagnosis_summary}
           </div>
         )}
       </div>
       <div className="flex items-center gap-3">
         <div className="text-right text-xs">
-          <div>Before: <span className={entry.candidates_before_one_prize === 0 ? 'text-destructive font-medium' : ''}>{entry.candidates_before_one_prize}</span></div>
-          <div>After: <span className={entry.candidates_after_one_prize === 0 ? 'text-destructive font-medium' : ''}>{entry.candidates_after_one_prize}</span></div>
+          <div>
+            Before:{" "}
+            <span
+              className={
+                entry.candidates_before_one_prize === 0
+                  ? "text-destructive font-medium"
+                  : ""
+              }
+            >
+              {entry.candidates_before_one_prize}
+            </span>
+          </div>
+          <div>
+            After:{" "}
+            <span
+              className={
+                entry.candidates_after_one_prize === 0
+                  ? "text-destructive font-medium"
+                  : ""
+              }
+            >
+              {entry.candidates_after_one_prize}
+            </span>
+          </div>
         </div>
-        <Badge variant={getReasonBadgeVariant(entry.reason_code)} className="text-xs">
+        <Badge
+          variant={getReasonBadgeVariant(entry.reason_code)}
+          className="text-xs"
+        >
           {getReasonLabel(entry.reason_code)}
         </Badge>
         {entry.raw_fail_codes.length > 0 && (
@@ -210,11 +337,15 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
 // Suspicious entry row
 function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
   const isBlocedByOnePrize = entry.is_blocked_by_one_prize;
-  
+
   return (
-    <div className={`flex items-center justify-between p-3 border rounded-lg ${
-      isBlocedByOnePrize ? 'bg-amber-500/10 border-amber-300' : 'bg-destructive/5'
-    }`}>
+    <div
+      className={`flex items-center justify-between p-3 border rounded-lg ${
+        isBlocedByOnePrize
+          ? "bg-amber-500/10 border-amber-300"
+          : "bg-destructive/5"
+      }`}
+    >
       <div className="flex items-center gap-3">
         {isBlocedByOnePrize ? (
           <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -228,21 +359,25 @@ function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
             <span>{entry.prize_label}</span>
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {isBlocedByOnePrize 
+            {isBlocedByOnePrize
               ? `${entry.candidates_before_one_prize} player(s) eligible, but all already won prizes`
-              : `No players match the criteria`
-            }
+              : `No players match the criteria`}
           </div>
           {/* Diagnosis summary for 0-candidate cases */}
-          {entry.diagnosis_summary && entry.candidates_before_one_prize === 0 && (
-            <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
-              <span className="font-medium">Diagnosis:</span> {entry.diagnosis_summary}
-            </div>
-          )}
+          {entry.diagnosis_summary &&
+            entry.candidates_before_one_prize === 0 && (
+              <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+                <span className="font-medium">Diagnosis:</span>{" "}
+                {entry.diagnosis_summary}
+              </div>
+            )}
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Badge variant={isBlocedByOnePrize ? 'secondary' : 'destructive'} className="text-xs">
+        <Badge
+          variant={isBlocedByOnePrize ? "secondary" : "destructive"}
+          className="text-xs"
+        >
           {getReasonLabel(entry.reason_code)}
         </Badge>
         {entry.raw_fail_codes.length > 0 && (
@@ -253,59 +388,70 @@ function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
   );
 }
 
-export function AllocationDebugReport({ 
-  coverage, 
-  totalPlayers, 
-  totalPrizes, 
+export function AllocationDebugReport({
+  coverage,
+  totalPlayers,
+  totalPrizes,
   tournamentSlug,
   tournamentTitle,
   winners,
-  players
+  players,
 }: AllocationDebugReportProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(),
+  );
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleDownloadCoverage = () => {
-    const success = exportCoverageToXlsx(coverage, tournamentSlug || 'tournament');
+    const success = exportCoverageToXlsx(
+      coverage,
+      tournamentSlug || "tournament",
+    );
     if (success) {
-      toast.success('Coverage report downloaded (.xlsx)');
+      toast.success("Coverage report downloaded (.xlsx)");
     } else {
-      toast.error('Failed to download coverage report');
+      toast.error("Failed to download coverage report");
     }
   };
 
   const handleDownloadRca = () => {
     if (!winners || !players) {
-      toast.error('RCA data not available. Run Preview first.');
+      toast.error("RCA data not available. Run Preview first.");
       return;
     }
-    
+
     const rcaRows = buildRcaRows(
       coverage,
       winners,
       players,
-      tournamentSlug || 'tournament',
-      tournamentTitle || tournamentSlug || 'Tournament'
+      tournamentSlug || "tournament",
+      tournamentTitle || tournamentSlug || "Tournament",
     );
-    
-    console.log('[rca-export] Exporting', rcaRows.length, 'rows for', tournamentSlug);
-    
-    const success = exportRcaToXlsx(rcaRows, tournamentSlug || 'tournament');
+
+    console.log(
+      "[rca-export] Exporting",
+      rcaRows.length,
+      "rows for",
+      tournamentSlug,
+    );
+
+    const success = exportRcaToXlsx(rcaRows, tournamentSlug || "tournament");
     if (success) {
-      toast.success('RCA report downloaded (.xlsx)');
+      toast.success("RCA report downloaded (.xlsx)");
     } else {
-      toast.error('Failed to download RCA report');
+      toast.error("Failed to download RCA report");
     }
   };
 
   const canDownloadRca = Boolean(coverage.length > 0 && winners && players);
-  
+
   // Build category summaries
   const categorySummaries = useMemo(() => {
     const categoryMap = new Map<string, CategorySummary>();
-    
+
     for (const entry of coverage) {
-      const catId = entry.category_id || 'unknown';
+      const catId = entry.category_id || "unknown";
       if (!categoryMap.has(catId)) {
         categoryMap.set(catId, {
           category_id: catId,
@@ -318,7 +464,7 @@ export function AllocationDebugReport({
           coverage_entries: [],
         });
       }
-      
+
       const summary = categoryMap.get(catId)!;
       summary.total_prizes++;
       if (entry.is_unfilled) {
@@ -328,42 +474,48 @@ export function AllocationDebugReport({
       }
       summary.coverage_entries.push(entry);
     }
-    
+
     // Sort entries within each category by place
     for (const summary of categoryMap.values()) {
       summary.coverage_entries.sort((a, b) => a.prize_place - b.prize_place);
     }
-    
+
     // Return sorted by main first, then by order of appearance
     return Array.from(categoryMap.values()).sort((a, b) => {
       if (a.is_main !== b.is_main) return a.is_main ? -1 : 1;
       return 0;
     });
   }, [coverage]);
-  
+
   // Filter unfilled entries
-  const unfilledEntries = useMemo(() => 
-    coverage.filter(e => e.is_unfilled).sort((a, b) => {
-      // Sort by category, then place
-      if (a.category_name !== b.category_name) return a.category_name.localeCompare(b.category_name);
-      return a.prize_place - b.prize_place;
-    }),
-    [coverage]
+  const unfilledEntries = useMemo(
+    () =>
+      coverage
+        .filter((e) => e.is_unfilled)
+        .sort((a, b) => {
+          // Sort by category, then place
+          if (a.category_name !== b.category_name)
+            return a.category_name.localeCompare(b.category_name);
+          return a.prize_place - b.prize_place;
+        }),
+    [coverage],
   );
-  
+
   // Identify suspicious entries
-  const suspiciousEntries = useMemo(() => 
-    coverage.filter(e => 
-      // Blocked by one-prize policy
-      e.is_blocked_by_one_prize ||
-      // Zero candidates for "easy" categories (likely data issue)
-      (e.is_unfilled && e.candidates_before_one_prize === 0)
-    ),
-    [coverage]
+  const suspiciousEntries = useMemo(
+    () =>
+      coverage.filter(
+        (e) =>
+          // Blocked by one-prize policy
+          e.is_blocked_by_one_prize ||
+          // Zero candidates for "easy" categories (likely data issue)
+          (e.is_unfilled && e.candidates_before_one_prize === 0),
+      ),
+    [coverage],
   );
-  
+
   const toggleCategory = (catId: string) => {
-    setExpandedCategories(prev => {
+    setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) {
         next.delete(catId);
@@ -373,15 +525,15 @@ export function AllocationDebugReport({
       return next;
     });
   };
-  
+
   const expandAll = () => {
-    setExpandedCategories(new Set(categorySummaries.map(s => s.category_id)));
+    setExpandedCategories(new Set(categorySummaries.map((s) => s.category_id)));
   };
-  
+
   const collapseAll = () => {
     setExpandedCategories(new Set());
   };
-  
+
   // No coverage data available
   if (coverage.length === 0) {
     return (
@@ -394,10 +546,10 @@ export function AllocationDebugReport({
       </Alert>
     );
   }
-  
-  const filledCount = coverage.filter(e => !e.is_unfilled).length;
-  const unfilledCount = coverage.filter(e => e.is_unfilled).length;
-  
+
+  const filledCount = coverage.filter((e) => !e.is_unfilled).length;
+  const unfilledCount = coverage.filter((e) => e.is_unfilled).length;
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mb-6">
       <Card>
@@ -419,11 +571,13 @@ export function AllocationDebugReport({
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{filledCount} filled</Badge>
-                  {unfilledCount > 0 && <Badge variant="secondary">{unfilledCount} unfilled</Badge>}
+                  {unfilledCount > 0 && (
+                    <Badge variant="secondary">{unfilledCount} unfilled</Badge>
+                  )}
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:!text-yellow-300" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:!text-yellow-300" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                   )}
                 </div>
               </Button>
@@ -464,69 +618,98 @@ export function AllocationDebugReport({
             </div>
           </div>
         </CardHeader>
-        
+
         <CollapsibleContent>
           <CardContent>
             <Tabs defaultValue="by-category">
               <TabsList className="mb-4">
-                <TabsTrigger value="by-category" className="flex items-center gap-1">
+                <TabsTrigger
+                  value="by-category"
+                  className="flex items-center gap-1"
+                >
                   <Layers className="h-4 w-4" />
                   By Category
                 </TabsTrigger>
-                <TabsTrigger value="unfilled" className="flex items-center gap-1">
+                <TabsTrigger
+                  value="unfilled"
+                  className="flex items-center gap-1"
+                >
                   <XCircle className="h-4 w-4" />
                   Unfilled ({unfilledEntries.length})
                 </TabsTrigger>
-                <TabsTrigger value="suspicious" className="flex items-center gap-1">
+                <TabsTrigger
+                  value="suspicious"
+                  className="flex items-center gap-1"
+                >
                   <AlertTriangle className="h-4 w-4" />
                   Suspicious ({suspiciousEntries.length})
                 </TabsTrigger>
               </TabsList>
-              
+
               {/* By Category View */}
               <TabsContent value="by-category">
                 <div className="flex justify-end gap-2 mb-3">
-                  <Button variant="ghost" size="sm" onClick={expandAll}>Expand All</Button>
-                  <Button variant="ghost" size="sm" onClick={collapseAll}>Collapse All</Button>
+                  <Button
+                    variant={showAdvanced ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => setShowAdvanced((prev) => !prev)}
+                  >
+                    Advanced {showAdvanced ? "On" : "Off"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={expandAll}>
+                    Expand All
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={collapseAll}>
+                    Collapse All
+                  </Button>
                 </div>
                 <ScrollArea className="h-[500px] pr-4">
-                  {categorySummaries.map(summary => (
+                  {categorySummaries.map((summary) => (
                     <CategorySection
                       key={summary.category_id}
                       summary={summary}
                       isExpanded={expandedCategories.has(summary.category_id)}
                       onToggle={() => toggleCategory(summary.category_id)}
+                      showAdvanced={showAdvanced}
                     />
                   ))}
                 </ScrollArea>
               </TabsContent>
-              
+
               {/* Unfilled Prizes View */}
               <TabsContent value="unfilled">
                 {unfilledEntries.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-                    <h3 className="text-lg font-semibold">All prizes filled!</h3>
-                    <p className="text-sm text-muted-foreground">Every prize has been allocated to an eligible player.</p>
+                    <h3 className="text-lg font-semibold">
+                      All prizes filled!
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Every prize has been allocated to an eligible player.
+                    </p>
                   </div>
                 ) : (
                   <ScrollArea className="h-[500px] pr-4">
                     <div className="space-y-2">
-                      {unfilledEntries.map(entry => (
+                      {unfilledEntries.map((entry) => (
                         <UnfilledPrizeRow key={entry.prize_id} entry={entry} />
                       ))}
                     </div>
                   </ScrollArea>
                 )}
               </TabsContent>
-              
+
               {/* Suspicious Coverage View */}
               <TabsContent value="suspicious">
                 {suspiciousEntries.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-                    <h3 className="text-lg font-semibold">No suspicious entries</h3>
-                    <p className="text-sm text-muted-foreground">All allocations look reasonable.</p>
+                    <h3 className="text-lg font-semibold">
+                      No suspicious entries
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      All allocations look reasonable.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -534,13 +717,17 @@ export function AllocationDebugReport({
                       <AlertCircle className="h-4 w-4 text-amber-600" />
                       <AlertTitle>Suspicious entries found</AlertTitle>
                       <AlertDescription className="text-sm">
-                        These entries may indicate data issues or overly strict criteria. Review them carefully.
+                        These entries may indicate data issues or overly strict
+                        criteria. Review them carefully.
                       </AlertDescription>
                     </Alert>
                     <ScrollArea className="h-[450px] pr-4">
                       <div className="space-y-2">
-                        {suspiciousEntries.map(entry => (
-                          <SuspiciousEntryRow key={entry.prize_id} entry={entry} />
+                        {suspiciousEntries.map((entry) => (
+                          <SuspiciousEntryRow
+                            key={entry.prize_id}
+                            entry={entry}
+                          />
                         ))}
                       </div>
                     </ScrollArea>
