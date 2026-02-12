@@ -404,7 +404,10 @@ export function AllocationDebugReport({
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="group flex-1 justify-between p-0 h-auto hover:bg-transparent">
+              <Button
+                variant="ghost"
+                className="group flex-1 justify-between p-0 h-auto text-foreground hover:bg-transparent hover:!text-foreground"
+              >
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Layers className="h-5 w-5" />
                   Allocation Debug Report
@@ -418,9 +421,9 @@ export function AllocationDebugReport({
                   <Badge variant="outline">{filledCount} filled</Badge>
                   {unfilledCount > 0 && <Badge variant="secondary">{unfilledCount} unfilled</Badge>}
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-yellow-300" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:!text-yellow-300" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-yellow-300" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:!text-yellow-300" />
                   )}
                 </div>
               </Button>
