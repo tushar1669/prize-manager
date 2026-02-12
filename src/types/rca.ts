@@ -3,7 +3,7 @@
  * Used to compare engine-allocated winners vs final committed winners.
  */
 
-import type { AllocationCoverageEntry } from './allocation';
+import type { AllocationCoverageEntry, UnfilledReasonCode } from './allocation';
 
 /**
  * Status of a prize in the RCA export.
@@ -46,9 +46,10 @@ export interface RcaRow {
   override_reason: string | null;
   
   // Diagnostic info (for unfilled prizes)
-  reason_code: string | null;
+  reason_code: UnfilledReasonCode | null;
   reason_details: string | null;
   diagnosis_summary: string | null;
+  raw_fail_codes: string[];
   
   // Flags
   is_unfilled: boolean;
@@ -158,6 +159,7 @@ export function buildRcaRows(
       reason_code: entry.reason_code,
       reason_details: entry.reason_details,
       diagnosis_summary: entry.diagnosis_summary ?? null,
+      raw_fail_codes: entry.raw_fail_codes ?? [],
       
       is_unfilled: entry.is_unfilled,
       is_blocked_by_one_prize: entry.is_blocked_by_one_prize,
