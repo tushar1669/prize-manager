@@ -9,9 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight, Info } from "lucide-react";
+import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -518,6 +517,13 @@ export default function ConflictReview() {
     unfilled: previewMeta?.unfilledCount ?? unfilled.length,
   };
 
+  const coverageCriticalCount = coverageData.filter(c =>
+    c.is_unfilled &&
+    (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
+  ).length;
+  const coverageFilledCount = coverageData.filter(c => !c.is_unfilled).length;
+  const hasComputedAllocation = previewCompleted && (coverageData.length > 0 || summaryCounts.winners > 0 || summaryCounts.conflicts > 0 || summaryCounts.unfilled > 0);
+
   return (
     <div className="min-h-screen bg-background">
       <BackBar label="Back to Import" to={`/t/${id}/import`} />
@@ -592,7 +598,7 @@ export default function ConflictReview() {
 
         <Alert className="mb-6 border-primary/30 bg-primary/10">
           <AlertCircle className="h-4 w-4 text-primary" />
-          <AlertTitle className="text-foreground">Allocation {isPreviewMode ? 'Preview' : 'Summary'}</AlertTitle>
+          <AlertTitle className="text-foreground">Allocation Summary</AlertTitle>
           <AlertDescription>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-foreground">
               <div><span className="font-medium">Players:</span> {summaryCounts.players}</div>
@@ -600,6 +606,26 @@ export default function ConflictReview() {
               <div><span className="font-medium">Winners:</span> {summaryCounts.winners}</div>
               <div><span className="font-medium">Conflicts:</span> {summaryCounts.conflicts}</div>
               <div><span className="font-medium">Unfilled:</span> {summaryCounts.unfilled}</div>
+            </div>
+            <div className="mt-4 rounded-md border bg-background/70 p-3 text-sm">
+              {!hasComputedAllocation ? (
+                <p className="text-muted-foreground">Run Preview Allocation to compute winners and detect issues.</p>
+              ) : summaryCounts.conflicts > 0 ? (
+                <p className="text-destructive">{summaryCounts.conflicts} conflict(s) need review before finalizing.</p>
+              ) : coverageCriticalCount > 0 ? (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {coverageCriticalCount} critical issue(s) found. Fix these before committing.
+                </p>
+              ) : summaryCounts.unfilled > 0 ? (
+                <p className="text-foreground">
+                  {coverageFilledCount} of {coverageData.length > 0 ? coverageData.length : summaryCounts.activePrizes} prizes have winners.
+                  {" "}{summaryCounts.unfilled} prize(s) are unfilled.
+                </p>
+              ) : (
+                <p className="text-primary">
+                  All {coverageData.length > 0 ? coverageData.length : summaryCounts.activePrizes} prizes have eligible winners.
+                </p>
+              )}
             </div>
           </AlertDescription>
         </Alert>
@@ -639,15 +665,6 @@ export default function ConflictReview() {
         ) : (
           <div className="space-y-6">
             {(() => {
-              // Compute unfilled and critical counts from coverage data
-              const unfilledCount = coverageData.filter(c => c.is_unfilled).length;
-              const criticalCount = coverageData.filter(c =>
-                c.is_unfilled &&
-                (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
-              ).length;
-              const filledCount = coverageData.filter(c => !c.is_unfilled).length;
-              const totalPrizes = coverageData.length;
-
               if (conflicts.length > 0) {
                 // Show conflicts list
                 return (
@@ -706,66 +723,7 @@ export default function ConflictReview() {
                 );
               }
 
-              // Show status card based on critical/unfilled counts
-              if (criticalCount > 0) {
-                return (
-                  <Card className="border-amber-500/50 bg-amber-500/10">
-                    <CardContent className="py-12 text-center">
-                      <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Fix critical issues before committing</h3>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {criticalCount} prize(s) have critical errors (inactive category or internal error). 
-                        Review the debug report and fix these issues before you can commit.
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              }
-
-              if (unfilledCount > 0) {
-                return (
-                  <Card className="border-primary/30 bg-primary/5">
-                    <CardContent className="py-12 text-center">
-                      <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-                      <div className="flex items-center justify-center gap-2">
-                        <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
-                        <HoverCard>
-                          <HoverCardTrigger asChild>
-                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </HoverCardTrigger>
-                          <HoverCardContent className="w-80 text-left">
-                            <p className="text-sm font-medium mb-2">Why are some prizes unfilled?</p>
-                            <ul className="text-xs text-muted-foreground space-y-1.5">
-                              <li><strong>No eligible players:</strong> The category criteria (age, rating, gender, location, etc.) don't match any imported players.</li>
-                              <li><strong>One-prize policy:</strong> All eligible players already won a higher-value prize. Each player can only win one prize.</li>
-                              <li><strong>Too strict criteria:</strong> The category rules are too narrow for the player pool.</li>
-                            </ul>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Check the Allocation Debug Report for detailed diagnostics.
-                            </p>
-                          </HoverCardContent>
-                        </HoverCard>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {filledCount} of {totalPrizes} prizes have winners. {unfilledCount} prize(s) will be marked as "No eligible winner". You can still commit.
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              }
-
-              // All clear - no conflicts, no unfilled
-              return (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold">All Clear!</h3>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      All {totalPrizes > 0 ? totalPrizes : summaryCounts.activePrizes} prizes have eligible winners.
-                    </p>
-                  </CardContent>
-                </Card>
-              );
+              return null;
             })()}
 
             <Card>
