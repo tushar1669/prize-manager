@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -174,6 +174,17 @@ export default function ConflictReview() {
     enabled: !!id
   });
 
+  const prizeFlagsById = useMemo(() => {
+    const map = new Map<string, { has_trophy: boolean; has_medal: boolean }>();
+    for (const prize of prizesList || []) {
+      map.set(prize.id, {
+        has_trophy: prize.has_trophy,
+        has_medal: prize.has_medal,
+      });
+    }
+    return map;
+  }, [prizesList]);
+
   // Use shared hook for team prize results
   const {
     hasTeamPrizes,
@@ -261,17 +272,27 @@ export default function ConflictReview() {
       
       // Handle coverage data from preview
       if (data.coverage) {
-        setCoverageData(data.coverage);
+        const normalizedCoverage = data.coverage.map((entry) => {
+          const prizeId = entry.prize_id ?? entry.prizeId;
+          const prizeFlags = prizeId ? prizeFlagsById.get(prizeId) : undefined;
+          return {
+            ...entry,
+            has_trophy: entry.has_trophy ?? prizeFlags?.has_trophy,
+            has_medal: entry.has_medal ?? prizeFlags?.has_medal,
+          };
+        });
+
+        setCoverageData(normalizedCoverage);
         setPreviewCompleted(true);
-        console.log('[review] Preview completed, coverage:', data.coverage);
+        console.log('[review] Preview completed, coverage:', normalizedCoverage);
         
-        const totalUnfilled = data.coverage.filter(c => c.is_unfilled).length;
-        const blockedByPolicy = data.coverage.filter(c => c.reason_code === 'BLOCKED_BY_ONE_PRIZE_POLICY').length;
-        const noEligible = data.coverage.filter(c =>
+        const totalUnfilled = normalizedCoverage.filter(c => c.is_unfilled).length;
+        const blockedByPolicy = normalizedCoverage.filter(c => c.reason_code === 'BLOCKED_BY_ONE_PRIZE_POLICY').length;
+        const noEligible = normalizedCoverage.filter(c =>
           c.reason_code === 'NO_ELIGIBLE_PLAYERS' ||
           (c.reason_code && c.reason_code.startsWith('TOO_STRICT_CRITERIA_'))
         ).length;
-        const critical = data.coverage.filter(c =>
+        const critical = normalizedCoverage.filter(c =>
           c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE'
         ).length;
 
