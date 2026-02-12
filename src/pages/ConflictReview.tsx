@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -87,6 +88,7 @@ export default function ConflictReview() {
   const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [coverageData, setCoverageData] = useState<AllocationCoverageEntry[]>([]);
   const [previewCompleted, setPreviewCompleted] = useState(false);
+  const [winnersExpanded, setWinnersExpanded] = useState(false);
 
   useEffect(() => {
     manualDecisionsRef.current = manualDecisions;
@@ -609,215 +611,218 @@ export default function ConflictReview() {
         {allocateMutation.isPending ? (
           <Card><CardContent className="py-12 text-center"><RefreshCw className="h-12 w-12 animate-spin mx-auto mb-4" /></CardContent></Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              {(() => {
-                // Compute unfilled and critical counts from coverage data
-                const unfilledCount = coverageData.filter(c => c.is_unfilled).length;
-                const criticalCount = coverageData.filter(c =>
-                  c.is_unfilled &&
-                  (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
-                ).length;
-                const filledCount = coverageData.filter(c => !c.is_unfilled).length;
-                const totalPrizes = coverageData.length;
+          <div className="space-y-6">
+            {(() => {
+              // Compute unfilled and critical counts from coverage data
+              const unfilledCount = coverageData.filter(c => c.is_unfilled).length;
+              const criticalCount = coverageData.filter(c =>
+                c.is_unfilled &&
+                (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
+              ).length;
+              const filledCount = coverageData.filter(c => !c.is_unfilled).length;
+              const totalPrizes = coverageData.length;
 
-                if (conflicts.length > 0) {
-                  // Show conflicts list
-                  return (
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
-                        {conflicts.some(c => c.suggested) && (
-                          <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
-                            Resolve All
-                          </Button>
-                        )}
-                      </div>
-                      <ScrollArea className="h-[600px]">
-                        <div className="space-y-3">
-                          {conflicts.map(conflict => {
-                            const prize = conflict.impacted_prizes[0] ? getPrize(conflict.impacted_prizes[0]) : null;
-                            const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
-                            
-                            return (
-                              <Card key={conflict.id} className="cursor-pointer transition-colors hover:bg-muted/50 hover:border-primary/50" onClick={() => setSelectedConflict(conflict)}>
-                                <CardHeader>
-                                  <CardTitle className="text-base flex items-center gap-2">
-                                    <Badge variant="destructive">
-                                      {conflict.type === 'tie' ? 'Tie – identical prize priority' : conflict.type}
-                                    </Badge>
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                  {player && (
-                                    <p className="text-sm">
-                                      <strong>Player:</strong> {getPlayerDisplayName(player)} (Rating: {player.rating || 'N/A'})
-                                    </p>
-                                  )}
-                                  {prize && (
-                                    <p className="text-sm">
-                                      <strong>Prize:</strong> {prize.category_name} - Place #{prize.place} (₹{prize.cash_amount})
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-muted-foreground">
-                                    {conflict.type === 'tie' 
-                                      ? `Player is equally eligible for ${conflict.impacted_prizes.length} prizes with identical brochure order, value tier, cash, main-ness and place. Choose one.`
-                                      : conflict.reasons.join(', ')
-                                    }
-                                  </p>
-                                  <div className="flex gap-2 mt-3">
-                                    {conflict.suggested && <Button size="sm" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); void handleAccept(conflict.id); }}>Accept</Button>}
-                                    <Button size="sm" variant="outline" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  );
-                }
-
-                // Show status card based on critical/unfilled counts
-                if (criticalCount > 0) {
-                  return (
-                    <Card className="border-amber-500/50 bg-amber-500/10">
-                      <CardContent className="py-12 text-center">
-                        <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Fix critical issues before committing</h3>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          {criticalCount} prize(s) have critical errors (inactive category or internal error). 
-                          Review the debug report and fix these issues before you can commit.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  );
-                }
-
-                if (unfilledCount > 0) {
-                  return (
-                    <Card className="border-primary/30 bg-primary/5">
-                      <CardContent className="py-12 text-center">
-                        <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-                        <div className="flex items-center justify-center gap-2">
-                          <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
-                          <HoverCard>
-                            <HoverCardTrigger asChild>
-                              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                            </HoverCardTrigger>
-                            <HoverCardContent className="w-80 text-left">
-                              <p className="text-sm font-medium mb-2">Why are some prizes unfilled?</p>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li><strong>No eligible players:</strong> The category criteria (age, rating, gender, location, etc.) don't match any imported players.</li>
-                                <li><strong>One-prize policy:</strong> All eligible players already won a higher-value prize. Each player can only win one prize.</li>
-                                <li><strong>Too strict criteria:</strong> The category rules are too narrow for the player pool.</li>
-                              </ul>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                Check the Allocation Debug Report for detailed diagnostics.
-                              </p>
-                            </HoverCardContent>
-                          </HoverCard>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          {filledCount} of {totalPrizes} prizes have winners. {unfilledCount} prize(s) will be marked as "No eligible winner". You can still commit.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  );
-                }
-
-                // All clear - no conflicts, no unfilled
+              if (conflicts.length > 0) {
+                // Show conflicts list
                 return (
-                  <Card>
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
+                      {conflicts.some(c => c.suggested) && (
+                        <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
+                          Resolve All
+                        </Button>
+                      )}
+                    </div>
+                    <ScrollArea className="h-[600px]">
+                      <div className="space-y-3">
+                        {conflicts.map(conflict => {
+                          const prize = conflict.impacted_prizes[0] ? getPrize(conflict.impacted_prizes[0]) : null;
+                          const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
+                          
+                          return (
+                            <Card key={conflict.id} className="cursor-pointer transition-colors hover:bg-muted/50 hover:border-primary/50" onClick={() => setSelectedConflict(conflict)}>
+                              <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                  <Badge variant="destructive">
+                                    {conflict.type === 'tie' ? 'Tie – identical prize priority' : conflict.type}
+                                  </Badge>
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-2">
+                                {player && (
+                                  <p className="text-sm">
+                                    <strong>Player:</strong> {getPlayerDisplayName(player)} (Rating: {player.rating || 'N/A'})
+                                  </p>
+                                )}
+                                {prize && (
+                                  <p className="text-sm">
+                                    <strong>Prize:</strong> {prize.category_name} - Place #{prize.place} (₹{prize.cash_amount})
+                                  </p>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                  {conflict.type === 'tie' 
+                                    ? `Player is equally eligible for ${conflict.impacted_prizes.length} prizes with identical brochure order, value tier, cash, main-ness and place. Choose one.`
+                                    : conflict.reasons.join(', ')
+                                  }
+                                </p>
+                                <div className="flex gap-2 mt-3">
+                                  {conflict.suggested && <Button size="sm" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); void handleAccept(conflict.id); }}>Accept</Button>}
+                                  <Button size="sm" variant="outline" disabled={allocateMutation.isPending} onClick={(e) => { e.stopPropagation(); setSelectedConflict(conflict); setOverrideDrawerOpen(true); }}>Override</Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                );
+              }
+
+              // Show status card based on critical/unfilled counts
+              if (criticalCount > 0) {
+                return (
+                  <Card className="border-amber-500/50 bg-amber-500/10">
                     <CardContent className="py-12 text-center">
-                      <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold">All Clear!</h3>
+                      <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Fix critical issues before committing</h3>
                       <p className="text-sm text-muted-foreground mt-2">
-                        All {totalPrizes > 0 ? totalPrizes : summaryCounts.activePrizes} prizes have eligible winners.
+                        {criticalCount} prize(s) have critical errors (inactive category or internal error). 
+                        Review the debug report and fix these issues before you can commit.
                       </p>
                     </CardContent>
                   </Card>
                 );
-              })()}
-            </div>
-            <div className="space-y-4">
-              {/* Summary info is shown in the inline Alert above - no duplicate sidebar card */}
+              }
 
-              <Card>
-                <CardHeader><CardTitle>Winners ({winners.length})</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                  {winners.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground">No winners allocated yet.</div>
-                  ) : (
-                    <ScrollArea className="h-[400px]">
-                      <div className="space-y-3 p-4">
-                        {winners.map(winner => {
-                          const prize = getPrize(winner.prizeId);
-                          const player = getPlayer(winner.playerId);
-                          return (
-                            <div key={`${winner.prizeId}-${winner.playerId}`} className="rounded-lg border border-border bg-background p-3">
-                              <div className="text-sm font-semibold">
-                                {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${winner.prizeId}`}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {player ? getPlayerDisplayName(player) : `Player ${winner.playerId}`}
-                              </div>
-                              {winner.reasons.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {winner.reasons.map(reason => (
-                                    <Badge
-                                      key={`${winner.prizeId}-${winner.playerId}-${reason}`}
-                                      variant={reason === 'manual_override' || reason === 'suggested_resolution' ? 'default' : 'outline'}
-                                    >
-                                      {formatReasonCode(reason)}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+              if (unfilledCount > 0) {
+                return (
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardContent className="py-12 text-center">
+                      <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
+                      <div className="flex items-center justify-center gap-2">
+                        <h3 className="text-lg font-semibold">Ready with unfilled prizes</h3>
+                        <HoverCard>
+                          <HoverCardTrigger asChild>
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </HoverCardTrigger>
+                          <HoverCardContent className="w-80 text-left">
+                            <p className="text-sm font-medium mb-2">Why are some prizes unfilled?</p>
+                            <ul className="text-xs text-muted-foreground space-y-1.5">
+                              <li><strong>No eligible players:</strong> The category criteria (age, rating, gender, location, etc.) don't match any imported players.</li>
+                              <li><strong>One-prize policy:</strong> All eligible players already won a higher-value prize. Each player can only win one prize.</li>
+                              <li><strong>Too strict criteria:</strong> The category rules are too narrow for the player pool.</li>
+                            </ul>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Check the Allocation Debug Report for detailed diagnostics.
+                            </p>
+                          </HoverCardContent>
+                        </HoverCard>
                       </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {filledCount} of {totalPrizes} prizes have winners. {unfilledCount} prize(s) will be marked as "No eligible winner". You can still commit.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              }
 
-              {summaryCounts.unfilled > 0 && (
+              // All clear - no conflicts, no unfilled
+              return (
                 <Card>
-                  <CardHeader><CardTitle>Unfilled Prizes ({summaryCounts.unfilled})</CardTitle></CardHeader>
-                  <CardContent className="p-0">
-                    <ScrollArea className="h-[250px]">
-                      <div className="space-y-3 p-4">
-                        {unfilled.map(entry => {
-                          const prize = getPrize(entry.prizeId);
-                          return (
-                            <div key={entry.prizeId} className="rounded-lg border border-dashed border-muted-foreground/50 bg-muted/40 p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="text-sm font-semibold">
-                                  {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${entry.prizeId}`}
-                                </div>
-                                <IneligibilityTooltip reasonCodes={entry.reasonCodes} />
-                              </div>
-                              {entry.reasonCodes.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {entry.reasonCodes.map(code => (
-                                    <Badge key={`${entry.prizeId}-${code}`} variant="outline">
-                                      {formatReasonCode(code)}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </ScrollArea>
+                  <CardContent className="py-12 text-center">
+                    <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold">All Clear!</h3>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      All {totalPrizes > 0 ? totalPrizes : summaryCounts.activePrizes} prizes have eligible winners.
+                    </p>
                   </CardContent>
                 </Card>
-              )}
-            </div>
+              );
+            })()}
+
+            <Card>
+              <Collapsible open={winnersExpanded} onOpenChange={setWinnersExpanded}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer">
+                    <CardTitle>Winners ({winners.length})</CardTitle>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="p-0">
+                    {winners.length === 0 ? (
+                      <div className="p-4 text-sm text-muted-foreground">No winners allocated yet.</div>
+                    ) : (
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-3 p-4">
+                          {winners.map(winner => {
+                            const prize = getPrize(winner.prizeId);
+                            const player = getPlayer(winner.playerId);
+                            return (
+                              <div key={`${winner.prizeId}-${winner.playerId}`} className="rounded-lg border border-border bg-background p-3">
+                                <div className="text-sm font-semibold">
+                                  {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${winner.prizeId}`}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {player ? getPlayerDisplayName(player) : `Player ${winner.playerId}`}
+                                </div>
+                                {winner.reasons.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {winner.reasons.map(reason => (
+                                      <Badge
+                                        key={`${winner.prizeId}-${winner.playerId}-${reason}`}
+                                        variant={reason === 'manual_override' || reason === 'suggested_resolution' ? 'default' : 'outline'}
+                                      >
+                                        {formatReasonCode(reason)}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+
+            {summaryCounts.unfilled > 0 && (
+              <Card>
+                <CardHeader><CardTitle>Unfilled Prizes ({summaryCounts.unfilled})</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[250px]">
+                    <div className="space-y-3 p-4">
+                      {unfilled.map(entry => {
+                        const prize = getPrize(entry.prizeId);
+                        return (
+                          <div key={entry.prizeId} className="rounded-lg border border-dashed border-muted-foreground/50 bg-muted/40 p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-semibold">
+                                {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${entry.prizeId}`}
+                              </div>
+                              <IneligibilityTooltip reasonCodes={entry.reasonCodes} />
+                            </div>
+                            {entry.reasonCodes.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {entry.reasonCodes.map(code => (
+                                  <Badge key={`${entry.prizeId}-${code}`} variant="outline">
+                                    {formatReasonCode(code)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
