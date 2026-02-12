@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -185,6 +185,19 @@ export default function ConflictReview() {
     return map;
   }, [prizesList]);
 
+  const enrichCoverageEntries = useCallback((coverage: AllocationCoverageEntry[]) => {
+    return coverage.map((entry) => {
+      const prizeId = entry.prize_id ?? entry.prizeId;
+      const prizeFlags = prizeId ? prizeFlagsById.get(prizeId) : undefined;
+
+      return {
+        ...entry,
+        has_trophy: entry.has_trophy == null ? prizeFlags?.has_trophy : entry.has_trophy,
+        has_medal: entry.has_medal == null ? prizeFlags?.has_medal : entry.has_medal,
+      };
+    });
+  }, [prizeFlagsById]);
+
   // Use shared hook for team prize results
   const {
     hasTeamPrizes,
@@ -272,15 +285,7 @@ export default function ConflictReview() {
       
       // Handle coverage data from preview
       if (data.coverage) {
-        const normalizedCoverage = data.coverage.map((entry) => {
-          const prizeId = entry.prize_id ?? entry.prizeId;
-          const prizeFlags = prizeId ? prizeFlagsById.get(prizeId) : undefined;
-          return {
-            ...entry,
-            has_trophy: entry.has_trophy ?? prizeFlags?.has_trophy,
-            has_medal: entry.has_medal ?? prizeFlags?.has_medal,
-          };
-        });
+        const normalizedCoverage = enrichCoverageEntries(data.coverage);
 
         setCoverageData(normalizedCoverage);
         setPreviewCompleted(true);
