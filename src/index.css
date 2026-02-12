@@ -81,11 +81,8 @@ All colors MUST be HSL.
     size: A4;
   }
 
-  /* Preserve colors in print */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
+  :root {
+    color-scheme: light !important;
   }
 
   html,
@@ -93,11 +90,27 @@ All colors MUST be HSL.
     margin: 0;
     padding: 0;
     min-height: auto !important;
+    background: #fff !important;
+    color: #000 !important;
   }
 
   body {
     font-size: 11pt;
     line-height: 1.4;
+  }
+
+  .pm-print-surface {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 30%;
+    --border: 0 0% 75%;
+    background: #fff !important;
+    color: #000 !important;
   }
 
   a {
