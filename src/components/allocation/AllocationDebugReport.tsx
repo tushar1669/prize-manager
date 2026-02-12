@@ -19,12 +19,10 @@ import {
 import {
   ChevronDown,
   ChevronRight,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
   Info,
   Layers,
-  AlertCircle,
   Download,
   FileSearch,
   Trophy,
@@ -271,8 +269,18 @@ function CategorySection({
 
 // Unfilled prize row
 function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
+  const isBlockedByOnePrize =
+    entry.is_blocked_by_one_prize ||
+    (entry.candidates_before_one_prize > 0 && entry.candidates_after_one_prize === 0);
+  const hasNoEligibleCandidates = entry.candidates_before_one_prize === 0;
+  const containerClassName = isBlockedByOnePrize
+    ? "bg-amber-500/10 border-amber-300"
+    : "bg-destructive/5 border-destructive/20";
+
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg bg-destructive/5">
+    <div
+      className={`flex items-center justify-between p-3 border rounded-lg ${containerClassName}`}
+    >
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium">{entry.category_name}</span>
@@ -294,6 +302,18 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
         )}
       </div>
       <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end gap-1">
+          {isBlockedByOnePrize && (
+            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-100">
+              Blocked by one-prize
+            </Badge>
+          )}
+          {hasNoEligibleCandidates && (
+            <Badge variant="destructive" className="text-xs">
+              No eligible candidates
+            </Badge>
+          )}
+        </div>
         <div className="text-right text-xs">
           <div>
             Before:{" "}
@@ -334,60 +354,6 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
   );
 }
 
-// Suspicious entry row
-function SuspiciousEntryRow({ entry }: { entry: AllocationCoverageEntry }) {
-  const isBlocedByOnePrize = entry.is_blocked_by_one_prize;
-
-  return (
-    <div
-      className={`flex items-center justify-between p-3 border rounded-lg ${
-        isBlocedByOnePrize
-          ? "bg-amber-500/10 border-amber-300"
-          : "bg-destructive/5"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        {isBlocedByOnePrize ? (
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-        ) : (
-          <XCircle className="h-4 w-4 text-destructive" />
-        )}
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{entry.category_name}</span>
-            <span className="text-muted-foreground">·</span>
-            <span>{entry.prize_label}</span>
-          </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            {isBlocedByOnePrize
-              ? `${entry.candidates_before_one_prize} player(s) eligible, but all already won prizes`
-              : `No players match the criteria`}
-          </div>
-          {/* Diagnosis summary for 0-candidate cases */}
-          {entry.diagnosis_summary &&
-            entry.candidates_before_one_prize === 0 && (
-              <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
-                <span className="font-medium">Diagnosis:</span>{" "}
-                {entry.diagnosis_summary}
-              </div>
-            )}
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Badge
-          variant={isBlocedByOnePrize ? "secondary" : "destructive"}
-          className="text-xs"
-        >
-          {getReasonLabel(entry.reason_code)}
-        </Badge>
-        {entry.raw_fail_codes.length > 0 && (
-          <IneligibilityTooltip reasonCodes={entry.raw_fail_codes} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function AllocationDebugReport({
   coverage,
   totalPlayers,
@@ -402,6 +368,8 @@ export function AllocationDebugReport({
     new Set(),
   );
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showBlockedByOnePrize, setShowBlockedByOnePrize] = useState(true);
+  const [showNoEligibleCandidates, setShowNoEligibleCandidates] = useState(true);
 
   const handleDownloadCoverage = () => {
     const success = exportCoverageToXlsx(
@@ -501,18 +469,24 @@ export function AllocationDebugReport({
     [coverage],
   );
 
-  // Identify suspicious entries
-  const suspiciousEntries = useMemo(
-    () =>
-      coverage.filter(
-        (e) =>
-          // Blocked by one-prize policy
-          e.is_blocked_by_one_prize ||
-          // Zero candidates for "easy" categories (likely data issue)
-          (e.is_unfilled && e.candidates_before_one_prize === 0),
-      ),
-    [coverage],
-  );
+  const filteredUnfilledEntries = useMemo(() => {
+    if (!showBlockedByOnePrize && !showNoEligibleCandidates) {
+      return [];
+    }
+
+    return unfilledEntries.filter((entry) => {
+      const isBlockedByOnePrize =
+        entry.is_blocked_by_one_prize ||
+        (entry.candidates_before_one_prize > 0 &&
+          entry.candidates_after_one_prize === 0);
+      const hasNoEligibleCandidates = entry.candidates_before_one_prize === 0;
+
+      return (
+        (showBlockedByOnePrize && isBlockedByOnePrize) ||
+        (showNoEligibleCandidates && hasNoEligibleCandidates)
+      );
+    });
+  }, [unfilledEntries, showBlockedByOnePrize, showNoEligibleCandidates]);
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories((prev) => {
@@ -563,11 +537,6 @@ export function AllocationDebugReport({
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Layers className="h-5 w-5" />
                   Allocation Debug Report
-                  {suspiciousEntries.length > 0 && (
-                    <Badge variant="destructive" className="ml-2">
-                      {suspiciousEntries.length} suspicious
-                    </Badge>
-                  )}
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{filledCount} filled</Badge>
@@ -637,13 +606,6 @@ export function AllocationDebugReport({
                   <XCircle className="h-4 w-4" />
                   Unfilled ({unfilledEntries.length})
                 </TabsTrigger>
-                <TabsTrigger
-                  value="suspicious"
-                  className="flex items-center gap-1"
-                >
-                  <AlertTriangle className="h-4 w-4" />
-                  Suspicious ({suspiciousEntries.length})
-                </TabsTrigger>
               </TabsList>
 
               {/* By Category View */}
@@ -678,7 +640,38 @@ export function AllocationDebugReport({
 
               {/* Unfilled Prizes View */}
               <TabsContent value="unfilled">
-                {unfilledEntries.length === 0 ? (
+                <div className="mb-3 flex flex-wrap items-center gap-4 rounded-lg border p-3">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={showBlockedByOnePrize}
+                      onChange={(e) => setShowBlockedByOnePrize(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Blocked by one-prize
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={showNoEligibleCandidates}
+                      onChange={(e) =>
+                        setShowNoEligibleCandidates(e.target.checked)
+                      }
+                      className="h-4 w-4"
+                    />
+                    No eligible candidates
+                  </label>
+                </div>
+
+                {!showBlockedByOnePrize && !showNoEligibleCandidates ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Info className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold">No filters selected</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Enable at least one filter to view unfilled entries.
+                    </p>
+                  </div>
+                ) : unfilledEntries.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
                     <h3 className="text-lg font-semibold">
@@ -688,50 +681,22 @@ export function AllocationDebugReport({
                       Every prize has been allocated to an eligible player.
                     </p>
                   </div>
+                ) : filteredUnfilledEntries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Info className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold">No matches found</h3>
+                    <p className="text-sm text-muted-foreground">
+                      No unfilled entries match the selected filters.
+                    </p>
+                  </div>
                 ) : (
                   <ScrollArea className="h-[500px] pr-4">
                     <div className="space-y-2">
-                      {unfilledEntries.map((entry) => (
+                      {filteredUnfilledEntries.map((entry) => (
                         <UnfilledPrizeRow key={entry.prize_id} entry={entry} />
                       ))}
                     </div>
                   </ScrollArea>
-                )}
-              </TabsContent>
-
-              {/* Suspicious Coverage View */}
-              <TabsContent value="suspicious">
-                {suspiciousEntries.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-                    <h3 className="text-lg font-semibold">
-                      No suspicious entries
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      All allocations look reasonable.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Alert className="mb-4 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
-                      <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertTitle>Suspicious entries found</AlertTitle>
-                      <AlertDescription className="text-sm">
-                        These entries may indicate data issues or overly strict
-                        criteria. Review them carefully.
-                      </AlertDescription>
-                    </Alert>
-                    <ScrollArea className="h-[450px] pr-4">
-                      <div className="space-y-2">
-                        {suspiciousEntries.map((entry) => (
-                          <SuspiciousEntryRow
-                            key={entry.prize_id}
-                            entry={entry}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </>
                 )}
               </TabsContent>
             </Tabs>
