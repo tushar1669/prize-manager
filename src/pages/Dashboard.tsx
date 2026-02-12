@@ -22,7 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 import type { Database } from "@/integrations/supabase/types";
 
 type TournamentRow = Database["public"]["Tables"]["tournaments"]["Row"];
@@ -54,23 +53,6 @@ export default function Dashboard() {
       );
     }
   }, [isMaster, pendingCount, navigate]);
-
-  // Only show bootstrap link if no master exists AND current user is in allowlist
-  const canShowBootstrap = isEmailAllowedMaster(user?.email);
-  
-  const { data: masterExists } = useQuery({
-    queryKey: ['master-exists'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('user_roles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'master');
-      
-      if (error) throw error;
-      return (count ?? 0) > 0;
-    },
-    enabled: canShowBootstrap, // Only check if user could possibly bootstrap
-  });
 
   // CRITICAL: Non-masters only see their own tournaments (include_all=false)
   // Master status requires BOTH role=master AND email in allowlist (enforced in useUserRole)
@@ -285,18 +267,6 @@ export default function Dashboard() {
           <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
               Your account is awaiting master verification before you can create tournaments.
-            </p>
-          </div>
-        )}
-
-        {/* Bootstrap link - only shown to allowlisted users when no master exists */}
-        {canShowBootstrap && !masterExists && (
-          <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              No master organizer has been assigned yet.{' '}
-              <Button variant="link" className="p-0 h-auto text-blue-600 dark:text-blue-400" onClick={() => navigate('/auth/bootstrap')}>
-                Claim master role
-              </Button>
             </p>
           </div>
         )}

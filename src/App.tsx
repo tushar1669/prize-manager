@@ -26,10 +26,8 @@ const FinalPrizeView = lazy(() => import("./pages/FinalPrizeView"));
 const PublishSuccess = lazy(() => import("./pages/PublishSuccess"));
 const PublicResults = lazy(() => import("./pages/PublicResults"));
 const PublicTournamentDetails = lazy(() => import("./pages/PublicTournamentDetails"));
-const Bootstrap = lazy(() => import("./pages/Bootstrap"));
 const Settings = lazy(() => import("./pages/Settings"));
 const MasterDashboard = lazy(() => import("./pages/MasterDashboard"));
-const SpecialLanding = lazy(() => import("./pages/SpecialLanding"));
 const Account = lazy(() => import("./pages/Account"));
 const CategoryOrderReview = lazy(() => import("./pages/CategoryOrderReview"));
 const PublicWinnersPage = lazy(() => import("./pages/PublicWinnersPage"));
@@ -77,7 +75,6 @@ const App = () => {
                 {/* Auth routes */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/auth/bootstrap" element={<ProtectedRoute><Bootstrap /></ProtectedRoute>} />
                 
                 {/* Pending approval route - protected but allowed for unverified */}
                 <Route path="/pending-approval" element={<ProtectedRoute><PendingApproval /></ProtectedRoute>} />
@@ -94,9 +91,6 @@ const App = () => {
                 <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
                 <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/master-dashboard" element={<ProtectedRoute requireMaster><MasterDashboard /></ProtectedRoute>} />
-                {/* Legacy route - redirect to new master-dashboard for backwards compatibility */}
-                <Route path="/master/:secret" element={<Navigate to="/master-dashboard" replace />} />
-                <Route path="/root/:secret" element={<ProtectedRoute><SpecialLanding /></ProtectedRoute>} />
                 <Route path="/admin/tournaments" element={<ProtectedRoute requireMaster><AdminTournaments /></ProtectedRoute>} />
 
                 {/* Fallback */}
