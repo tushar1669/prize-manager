@@ -655,18 +655,20 @@ export default function Finalize() {
                       Team Prizes
                     </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="v1" className="m-0">
-                    <CategoryCardsView groups={finalPrizeGrouped.groups} />
-                  </TabsContent>
-                  <TabsContent value="v3" className="m-0">
-                    <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} />
-                  </TabsContent>
-                  <TabsContent value="v4" className="m-0">
-                    <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} />
-                  </TabsContent>
-                  <TabsContent value="v5" className="m-0">
-                    <TeamPrizesTabView tournamentId={id as string} />
-                  </TabsContent>
+                  <div className="pm-print-surface">
+                    <TabsContent value="v1" className="m-0">
+                      <CategoryCardsView groups={finalPrizeGrouped.groups} />
+                    </TabsContent>
+                    <TabsContent value="v3" className="m-0">
+                      <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} />
+                    </TabsContent>
+                    <TabsContent value="v4" className="m-0">
+                      <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} />
+                    </TabsContent>
+                    <TabsContent value="v5" className="m-0">
+                      <TeamPrizesTabView tournamentId={id as string} />
+                    </TabsContent>
+                  </div>
                 </Tabs>
               )}
             </CardContent>

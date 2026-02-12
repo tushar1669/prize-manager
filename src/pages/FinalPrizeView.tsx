@@ -104,7 +104,7 @@ export default function FinalPrizeView() {
               )}
             </div>
             {showContent && (
-              <>
+              <div className="pm-print-surface">
                 <TabsContent value="v1" className={`m-0 ${normalized !== 'v1' ? 'print:hidden' : ''}`}>
                   <CategoryCardsView groups={grouped.groups} />
                 </TabsContent>
@@ -117,7 +117,7 @@ export default function FinalPrizeView() {
                 <TabsContent value="v5" className={`m-0 ${normalized !== 'v5' ? 'print:hidden' : ''}`}>
                   <TeamPrizesTabView tournamentId={id as string} />
                 </TabsContent>
-              </>
+              </div>
             )}
           </Tabs>
         </div>
