@@ -4,6 +4,7 @@
  */
 
 import { downloadWorkbookXlsx } from './excel';
+import { buildExportFilenameSlug } from './exportSlug';
 import type { RcaRow } from '@/types/rca';
 import { getReasonLabel, type UnfilledReasonCode } from '@/types/allocation';
 
@@ -47,11 +48,7 @@ export function exportRcaToXlsx(
 
   // Generate filename with timestamp
   const today = new Date().toISOString().slice(0, 10);
-  const safeSlug = (tournamentSlug || 'tournament')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
+  const safeSlug = buildExportFilenameSlug(tournamentSlug);
 
   const filename = `allocation_rca_${safeSlug}_${today}.xlsx`;
 

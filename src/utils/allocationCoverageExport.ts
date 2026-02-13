@@ -1,5 +1,6 @@
 // Allocation coverage XLSX export utility
 import { downloadWorkbookXlsx } from './excel';
+import { buildExportFilenameSlug } from './exportSlug';
 import type { AllocationCoverageEntry } from '@/types/allocation';
 import { getReasonLabel } from '@/types/allocation';
 
@@ -38,11 +39,7 @@ export function exportCoverageToXlsx(
 
   // Generate filename with timestamp
   const today = new Date().toISOString().slice(0, 10);
-  const safeSlug = (tournamentNameOrSlug || 'tournament')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
+  const safeSlug = buildExportFilenameSlug(tournamentNameOrSlug);
   
   const filename = `allocation_coverage_${safeSlug}_${today}.xlsx`;
 
