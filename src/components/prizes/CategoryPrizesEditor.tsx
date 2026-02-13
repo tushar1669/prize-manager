@@ -79,8 +79,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   useEffect(() => {
     const saved = getDraft<PrizeRow[]>(draftKey, 1);
     if (saved) setRestore(saved);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category.id]);
+  }, [draftKey]);
 
   // initialize/refresh from props (also when prizes list changes on refetch)
   useEffect(() => {

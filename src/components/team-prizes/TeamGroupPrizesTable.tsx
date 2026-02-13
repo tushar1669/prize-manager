@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Trash2, Save, Trophy, Medal, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,15 +38,31 @@ export default function TeamGroupPrizesTable({
     [draft]
   );
 
+  const initialPrizesRef = useRef(initialPrizes);
+  const savingRef = useRef(saving);
+  const hasDirtyRowsRef = useRef(hasDirtyRows);
+
+  useEffect(() => {
+    initialPrizesRef.current = initialPrizes;
+  }, [initialPrizes]);
+
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
+  useEffect(() => {
+    hasDirtyRowsRef.current = hasDirtyRows;
+  }, [hasDirtyRows]);
+
   // Hydrate draft from server ONLY when server data changes AND we have no local edits AND not saving
   useEffect(() => {
-    if (saving || hasDirtyRows) {
+    if (savingRef.current || hasDirtyRowsRef.current) {
       // Skip hydration to preserve local edits
       return;
     }
-    const base = initialPrizes.map((p) => ({ ...p, _status: 'clean' as const }));
+    const base = initialPrizesRef.current.map((p) => ({ ...p, _status: 'clean' as const }));
     setDraft(base);
-  }, [serverVersionKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverVersionKey]);
 
   const visibleRows = useMemo(
     () => draft.filter((p) => p._status !== 'deleted').sort((a, b) => a.place - b.place),
