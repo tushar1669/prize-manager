@@ -264,8 +264,7 @@ export default function CategoryOrderReview() {
   useEffect(() => {
     const saved = getDraft<{ ids: string[]; active: Record<string, boolean> }>(orderDraftKey, 1);
     if (saved) setOrderRestore(saved);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [orderDraftKey]);
 
   // Track dirty state (by *array order* + active flags), not order_idx (which changes only after save)
   // Skip updates during drag to prevent re-renders that interfere with @dnd-kit

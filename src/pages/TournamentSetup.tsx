@@ -261,38 +261,49 @@ export default function TournamentSetup() {
     }
   }, [ruleConfig, tournament?.start_date]);
 
+  const lastHandledTournamentIdRef = useRef<string | null>(null);
+
   // Reset form only when tournament ID changes, not on every refetch
   useEffect(() => {
-    if (tournament && !detailsForm.formState.isDirty) {
-      detailsForm.reset({
-        title: tournament.title,
-        start_date: tournament.start_date,
-        end_date: tournament.end_date,
-        venue: tournament.venue || '',
-        city: tournament.city || '',
-        event_code: tournament.event_code || '',
-        notes: tournament.notes || '',
-        brochure_url: tournament.brochure_url || '',
-        chessresults_url: tournament.chessresults_url || '',
-        public_results_url: tournament.public_results_url || '',
-        time_control_base_minutes: tournament.time_control_base_minutes ?? undefined,
-        time_control_increment_seconds: tournament.time_control_increment_seconds ?? undefined,
-        chief_arbiter: tournament.chief_arbiter || '',
-        tournament_director: tournament.tournament_director || '',
-        entry_fee_amount: tournament.entry_fee_amount ?? undefined,
-        cash_prize_total: tournament.cash_prize_total ?? undefined
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournament?.id]);
+    if (!tournament) return;
+    if (lastHandledTournamentIdRef.current === tournament.id) return;
+
+    // Preserve prior behavior: if details are already dirty when id changes, do not reset.
+    lastHandledTournamentIdRef.current = tournament.id;
+
+    if (detailsForm.formState.isDirty) return;
+
+    detailsForm.reset({
+      title: tournament.title,
+      start_date: tournament.start_date,
+      end_date: tournament.end_date,
+      venue: tournament.venue || '',
+      city: tournament.city || '',
+      event_code: tournament.event_code || '',
+      notes: tournament.notes || '',
+      brochure_url: tournament.brochure_url || '',
+      chessresults_url: tournament.chessresults_url || '',
+      public_results_url: tournament.public_results_url || '',
+      time_control_base_minutes: tournament.time_control_base_minutes ?? undefined,
+      time_control_increment_seconds: tournament.time_control_increment_seconds ?? undefined,
+      chief_arbiter: tournament.chief_arbiter || '',
+      tournament_director: tournament.tournament_director || '',
+      entry_fee_amount: tournament.entry_fee_amount ?? undefined,
+      cash_prize_total: tournament.cash_prize_total ?? undefined
+    });
+  }, [detailsForm, tournament]);
+
+  const detailsDirtyRef = useRef(detailsForm.formState.isDirty);
+  useEffect(() => {
+    detailsDirtyRef.current = detailsForm.formState.isDirty;
+  }, [detailsForm.formState.isDirty]);
 
   // Check for Details form draft on tab switch
   useEffect(() => {
-    if (activeTab !== 'details' || detailsForm.formState.isDirty) return;
+    if (activeTab !== 'details' || detailsDirtyRef.current) return;
     const draft = getDraft<TournamentDetailsForm>(detailsDraftKey, 1);
     if (draft) setDetailsRestore(draft);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, tournament?.id]);
+  }, [activeTab, detailsDraftKey]);
 
   // Autosave Details form while dirty
   useAutosaveEffect({
