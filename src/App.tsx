@@ -13,8 +13,11 @@ import { isFeatureEnabled } from "@/utils/featureFlags";
 // Eager load critical public pages
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
-import PublicHome from "./pages/PublicHome";
+import RootRedirect from "./components/RootRedirect";
 import NotFound from "./pages/NotFound";
+
+// Lazy load public home (not needed on "/")
+const PublicHome = lazy(() => import("./pages/PublicHome"));
 
 // Lazy load protected/less-critical pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -66,7 +69,8 @@ const App = () => {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Public routes (no auth required) */}
-                <Route path="/" element={<PublicHome />} />
+                <Route path="/" element={<RootRedirect />} />
+                <Route path="/public" element={<PublicHome />} />
                 <Route path="/p/:slug" element={<PublicTournamentDetails />} />
                 <Route path="/p/:slug/results" element={<PublicResults />} />
                 <Route path="/p/:slug/details" element={<PublicTournamentDetailsRedirect />} />
