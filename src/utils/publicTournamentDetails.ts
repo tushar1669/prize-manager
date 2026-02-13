@@ -43,8 +43,20 @@ type SupabaseQueryResult<T> = {
   status?: number;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientLike = any;
+type SupabasePublishedTournamentQuery<T> = {
+  or(filters: string): SupabaseMaybeSingleQuery<T>;
+  eq(column: string, value: string): SupabaseMaybeSingleQuery<T>;
+};
+
+type SupabaseMaybeSingleQuery<T> = {
+  maybeSingle(): Promise<SupabaseQueryResult<T>>;
+};
+
+type SupabaseClientLike = {
+  from(table: "published_tournaments"): {
+    select(fields: string): SupabasePublishedTournamentQuery<TournamentDetails>;
+  };
+};
 
 type SupabaseQueryError = Error & {
   status?: number;

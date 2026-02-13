@@ -13,7 +13,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { ALLOC_VERBOSE_LOGS } from "@/utils/featureFlags";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
 import { getPlayerDisplayName } from "@/utils/playerName";
@@ -54,6 +56,20 @@ interface Unfilled {
 type ManualDecisionReason = "manual_override" | "suggested_resolution";
 
 type ManualDecisionsMap = Record<string, { playerId: string; reason: ManualDecisionReason }>;
+
+type RuleConfigQueryRow = Pick<
+  Database["public"]["Tables"]["rule_config"]["Row"],
+  | "strict_age"
+  | "allow_unrated_in_rating"
+  | "allow_missing_dob_for_age"
+  | "max_age_inclusive"
+  | "prefer_main_on_equal_value"
+  | "main_vs_side_priority_mode"
+  | "age_band_policy"
+  | "tournament_id"
+  | "created_at"
+  | "updated_at"
+>;
 
 // Removed: now using shared formatReasonCode from @/utils/reasonCodeLabels
 
@@ -155,8 +171,11 @@ export default function ConflictReview() {
   const { data: ruleConfig } = useQuery({
     queryKey: ['rule-config', id],
     queryFn: async () => {
-      // Cast to any to handle main_vs_side_priority_mode which may not exist in all DB schemas
-      const { data, error } = await supabase.from('rule_config').select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at').eq('tournament_id', id).maybeSingle() as { data: unknown; error: unknown };
+      const { data, error }: { data: RuleConfigQueryRow | null; error: PostgrestError | null } = await supabase
+        .from('rule_config')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at')
+        .eq('tournament_id', id)
+        .maybeSingle();
       if (error) throw error;
       // Provide defaults if rule_config doesn't exist yet
       return data || {
