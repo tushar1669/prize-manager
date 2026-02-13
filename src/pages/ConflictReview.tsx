@@ -638,22 +638,21 @@ export default function ConflictReview() {
 
         {id && <ImportQualityNotes tournamentId={id} />}
 
-        {previewCompleted && coverageData.length > 0 && (
-          <AllocationDebugReport
-            coverage={coverageData}
-            totalPlayers={summaryCounts.players}
-            totalPrizes={summaryCounts.activePrizes}
-            tournamentSlug={tournamentData?.slug || tournamentData?.title || id}
-            tournamentTitle={tournamentData?.title}
-            winners={winners}
-            players={playersList?.map(p => ({ 
-              id: p.id, 
-              name: p.name, 
-              rank: (p as { rank?: number | null }).rank ?? null, 
-              rating: p.rating 
-            })) || []}
-          />
-        )}
+        <AllocationDebugReport
+          coverage={coverageData}
+          totalPlayers={summaryCounts.players}
+          totalPrizes={summaryCounts.activePrizes}
+          tournamentSlug={tournamentData?.slug || tournamentData?.title || id}
+          tournamentTitle={tournamentData?.title}
+          winners={winners}
+          players={playersList?.map(p => ({ 
+            id: p.id, 
+            name: p.name, 
+            rank: (p as { rank?: number | null }).rank ?? null, 
+            rating: p.rating 
+          })) || []}
+          exportsEnabled={hasComputedAllocation}
+        />
 
         {/* Team / Institution Prize Results - shown when team prizes configured and preview completed */}
         {hasTeamPrizes && previewCompleted && (
