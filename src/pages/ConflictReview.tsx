@@ -523,6 +523,29 @@ export default function ConflictReview() {
   ).length;
   const coverageFilledCount = coverageData.filter(c => !c.is_unfilled).length;
   const hasComputedAllocation = previewCompleted && (coverageData.length > 0 || summaryCounts.winners > 0 || summaryCounts.conflicts > 0 || summaryCounts.unfilled > 0);
+  const summaryFilledCount = coverageData.length > 0 ? coverageFilledCount : summaryCounts.winners;
+
+  const statusVariant: 'neutral' | 'error' | 'warning' | 'success' = !hasComputedAllocation
+    ? 'neutral'
+    : summaryCounts.conflicts > 0 || coverageCriticalCount > 0
+      ? 'error'
+      : summaryCounts.unfilled > 0
+        ? 'warning'
+        : 'success';
+
+  const statusStyles = {
+    neutral: 'border-border/70 bg-muted/40 text-foreground',
+    error: 'border-red-500/40 bg-red-500/10 text-red-200',
+    warning: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200',
+    success: 'border-[#E59D1D]/40 bg-[#E59D1D]/10 text-[#F0CB54]',
+  };
+
+  const statusMessage = {
+    neutral: 'Run Preview Allocation to compute winners and detect issues.',
+    error: `Allocation has ${summaryCounts.conflicts} conflicts / ${coverageCriticalCount} critical issues. Review and resolve before committing.`,
+    warning: `${summaryFilledCount} of ${summaryCounts.activePrizes} prizes have eligible winners. ${summaryCounts.unfilled} may remain unfilled.`,
+    success: `All ${summaryCounts.activePrizes} prizes have eligible winners.`,
+  }[statusVariant];
 
   return (
     <div className="min-h-screen bg-background">
@@ -596,36 +619,19 @@ export default function ConflictReview() {
           className="mb-6"
         />
 
-        <Alert className="mb-6 border-primary/30 bg-primary/10">
+        <Alert className="mb-6 border-border/80 bg-card shadow-sm">
           <AlertCircle className="h-4 w-4 text-primary" />
           <AlertTitle className="text-foreground">Allocation Summary</AlertTitle>
           <AlertDescription>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-foreground">
-              <div><span className="font-medium">Players:</span> {summaryCounts.players}</div>
-              <div><span className="font-medium">Active prizes:</span> {summaryCounts.activePrizes}</div>
-              <div><span className="font-medium">Winners:</span> {summaryCounts.winners}</div>
-              <div><span className="font-medium">Conflicts:</span> {summaryCounts.conflicts}</div>
-              <div><span className="font-medium">Unfilled:</span> {summaryCounts.unfilled}</div>
+            <div className="grid gap-3 text-sm text-foreground sm:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Players</span><span className="text-base font-semibold">{summaryCounts.players}</span></div>
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Active prizes</span><span className="text-base font-semibold">{summaryCounts.activePrizes}</span></div>
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Winners</span><span className="text-base font-semibold">{summaryCounts.winners}</span></div>
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Conflicts</span><span className="text-base font-semibold">{summaryCounts.conflicts}</span></div>
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Unfilled</span><span className="text-base font-semibold">{summaryCounts.unfilled}</span></div>
             </div>
-            <div className="mt-4 rounded-md border bg-background/70 p-3 text-sm">
-              {!hasComputedAllocation ? (
-                <p className="text-muted-foreground">Run Preview Allocation to compute winners and detect issues.</p>
-              ) : summaryCounts.conflicts > 0 ? (
-                <p className="text-destructive">{summaryCounts.conflicts} conflict(s) need review before finalizing.</p>
-              ) : coverageCriticalCount > 0 ? (
-                <p className="text-amber-700 dark:text-amber-400">
-                  {coverageCriticalCount} critical issue(s) found. Fix these before committing.
-                </p>
-              ) : summaryCounts.unfilled > 0 ? (
-                <p className="text-foreground">
-                  {coverageFilledCount} of {coverageData.length > 0 ? coverageData.length : summaryCounts.activePrizes} prizes have winners.
-                  {" "}{summaryCounts.unfilled} prize(s) are unfilled.
-                </p>
-              ) : (
-                <p className="text-primary">
-                  All {coverageData.length > 0 ? coverageData.length : summaryCounts.activePrizes} prizes have eligible winners.
-                </p>
-              )}
+            <div className={`mt-4 rounded-md border p-4 text-base leading-6 ${statusStyles[statusVariant]}`}>
+              <p>{statusMessage}</p>
             </div>
           </AlertDescription>
         </Alert>
