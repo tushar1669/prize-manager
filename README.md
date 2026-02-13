@@ -28,6 +28,7 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - **Exports:** Excel-only (`.xls`/`.xlsx`) for player import, coverage, RCA, and print/PDF workflows
 
 ## Documentation
+- [FAQ (Screens, Buttons, Meanings, Failure Modes)](./docs/FAQ.md)
 - [Getting Started (Dev)](./docs/GETTING_STARTED_DEV.md)
 - [Deploy and Publish Runbook](./docs/DEPLOY_AND_PUBLISH.md)
 - [Key User Flows](./docs/KEY_USER_FLOWS.md)
@@ -43,8 +44,10 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Algorithm Rules Reference](./docs/ALGORITHM_RULES.md)
 - [Rules & Settings Reference](./docs/RULES_AND_SETTINGS_REFERENCE.md)
 - [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
+- [Engine Technical Notes](./docs/ENGINE_TECHNICAL.md)
 
 ## Docs index (A–Z product docs)
+- [FAQ (Screens, Buttons, Meanings, Failure Modes)](./docs/FAQ.md)
 - [Getting Started (Dev)](./docs/GETTING_STARTED_DEV.md)
 - [Deploy and Publish Runbook](./docs/DEPLOY_AND_PUBLISH.md)
 - [Key User Flows](./docs/KEY_USER_FLOWS.md)
@@ -55,6 +58,7 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Algorithm (Plain English)](./docs/ALGORITHM_PLAIN_ENGLISH.md)
 - [Rules & Settings Reference](./docs/RULES_AND_SETTINGS_REFERENCE.md)
 - [Architecture & Data Model](./docs/ARCHITECTURE_AND_DATA_MODEL.md)
+- [Engine Technical Notes](./docs/ENGINE_TECHNICAL.md)
 - [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
 - [QA Report (Snapshot / Archive)](./QA_REPORT.md)
