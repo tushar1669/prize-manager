@@ -1,3 +1,5 @@
+> **Archive RCA:** Historical incident analysis snapshot. Use current runbooks for active operations.
+
 # RCA: Team prize "Add Prize" rows not saving
 
 ## Symptom

@@ -1,3 +1,5 @@
+> **Archive RCA:** Historical incident analysis snapshot. Use current runbooks for active operations.
+
 # RCA: Main Prize disappeared in Individual mode
 
 ## Symptom

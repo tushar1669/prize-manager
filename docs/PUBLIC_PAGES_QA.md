@@ -61,3 +61,5 @@ Quick regression tests for public-facing tournament pages.
 ```
 
 **Last updated:** 2024-12-26
+
+See also: [Deploy and Publish Runbook](./DEPLOY_AND_PUBLISH.md) for pre/post publish checks.
