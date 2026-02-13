@@ -48,6 +48,7 @@ interface AllocationDebugReportProps {
   tournamentTitle?: string;
   winners?: WinnerEntry[];
   players?: PlayerInfo[];
+  exportsEnabled?: boolean;
 }
 
 // Badge variant based on reason code
@@ -377,6 +378,7 @@ export function AllocationDebugReport({
   tournamentTitle,
   winners,
   players,
+  exportsEnabled = true,
 }: AllocationDebugReportProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -427,7 +429,8 @@ export function AllocationDebugReport({
     }
   };
 
-  const canDownloadRca = Boolean(coverage.length > 0 && winners && players);
+  const canDownloadCoverage = exportsEnabled && coverage.length > 0;
+  const canDownloadRca = Boolean(exportsEnabled && coverage.length > 0 && winners && players);
 
   // Build category summaries
   const categorySummaries = useMemo(() => {
@@ -523,19 +526,6 @@ export function AllocationDebugReport({
     setExpandedCategories(new Set());
   };
 
-  // No coverage data available
-  if (coverage.length === 0) {
-    return (
-      <Alert className="mb-6 border-muted">
-        <Info className="h-4 w-4" />
-        <AlertTitle>Debug coverage not available</AlertTitle>
-        <AlertDescription>
-          Run "Preview Allocation" to see detailed coverage data.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
   const filledCount = coverage.filter((e) => !e.is_unfilled).length;
   const unfilledCount = coverage.filter((e) => e.is_unfilled).length;
 
@@ -570,10 +560,12 @@ export function AllocationDebugReport({
               <Button
                 variant="outline"
                 size="sm"
+                disabled={!canDownloadCoverage}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDownloadCoverage();
                 }}
+                title={!canDownloadCoverage ? 'Run Preview Allocation to generate exports.' : undefined}
               >
                 <Download className="h-4 w-4 mr-1" />
                 Coverage (.xlsx)
@@ -589,22 +581,43 @@ export function AllocationDebugReport({
                         handleDownloadRca();
                       }}
                       disabled={!canDownloadRca}
+                      title={!canDownloadRca ? 'Run Preview Allocation to generate exports.' : undefined}
                     >
                       <FileSearch className="h-4 w-4 mr-1" />
                       RCA (.xlsx)
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Engine vs final winners (for audit / RCA)</p>
+                    <p>
+                      {canDownloadRca
+                        ? 'Engine vs final winners (for audit / RCA)'
+                        : 'Run Preview Allocation to generate exports.'}
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
           </div>
+          {!exportsEnabled && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Run Preview Allocation to generate exports.
+            </p>
+          )}
         </CardHeader>
 
         <CollapsibleContent>
           <CardContent>
+            {coverage.length === 0 && (
+              <Alert className="mb-6 border-muted">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Debug coverage not available</AlertTitle>
+                <AlertDescription>
+                  Run "Preview Allocation" to see detailed coverage data.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {coverage.length > 0 && (
             <Tabs defaultValue="by-category">
               <TabsList className="mb-4">
                 <TabsTrigger
@@ -715,6 +728,7 @@ export function AllocationDebugReport({
                 )}
               </TabsContent>
             </Tabs>
+            )}
           </CardContent>
         </CollapsibleContent>
       </Card>
