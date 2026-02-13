@@ -118,16 +118,29 @@ function CategorySection({
 
       {isExpanded && (
         <div className="border-t overflow-x-auto">
-          <table className="w-full min-w-[700px] table-fixed text-sm">
+          <table className="w-max min-w-[720px] table-auto text-sm">
+            <colgroup>
+              <col className="w-20" />
+              <col className="w-28" />
+              <col className="w-[260px]" />
+              <col className="w-20" />
+              {showAdvanced && (
+                <>
+                  <col className="w-24" />
+                  <col className="w-24" />
+                </>
+              )}
+              <col className="w-24" />
+            </colgroup>
             <thead className="bg-muted/30">
               <tr>
-                <th className="w-20 text-left py-2 px-3 font-medium">Place</th>
-                <th className="w-28 text-left py-2 px-3 font-medium">Prize</th>
+                <th className="text-left py-2 px-3 font-medium">Place</th>
+                <th className="text-left py-2 px-3 font-medium">Prize</th>
                 <th className="text-left py-2 px-3 font-medium">Winner</th>
-                <th className="w-20 text-center py-2 px-3 font-medium">Rank</th>
+                <th className="text-center py-2 px-3 font-medium">Rank</th>
                 {showAdvanced && (
                   <>
-                    <th className="w-24 text-center py-2 px-3 font-medium">
+                    <th className="text-center py-2 px-3 font-medium">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -143,7 +156,7 @@ function CategorySection({
                         </Tooltip>
                       </TooltipProvider>
                     </th>
-                    <th className="w-24 text-center py-2 px-3 font-medium">
+                    <th className="text-center py-2 px-3 font-medium">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -161,7 +174,7 @@ function CategorySection({
                     </th>
                   </>
                 )}
-                <th className="w-24 text-center py-2 px-3 font-medium">Status</th>
+                <th className="text-center py-2 px-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +221,9 @@ function CategorySection({
                     </td>
                     <td className="py-2 px-3">
                       {entry.winner_name ? (
-                        <span className="font-medium">{entry.winner_name}</span>
+                        <span className="block max-w-[260px] truncate font-medium">
+                          {entry.winner_name}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
