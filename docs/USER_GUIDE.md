@@ -114,3 +114,5 @@ Team prizes (Best School, Best Academy, Best City, etc.) are configured separate
 - Requires a clean Swiss-Manager Excel export; corrupted spreadsheets are not auto-repaired.
 - Some categories may legitimately end with **No eligible winner** when criteria are too strict or fields are missing. This is expected and still commit-safe for non-critical prizes.
 - Only Excel (.xls or .xlsx) files are supported anywhere in the flow.
+
+Related: [Glossary](./GLOSSARY.md).

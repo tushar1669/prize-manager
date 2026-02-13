@@ -1,5 +1,7 @@
 # Operations, Release & Testing (repo-grounded)
 
+See also: [Deploy and Publish Runbook](./DEPLOY_AND_PUBLISH.md) for deployment sequence + organizer publish flow.
+
 ## Release gate checklist (required)
 - **Build:** `npm run build` (package.json → scripts.build).
 - **Lint:** `npm run lint` (package.json → scripts.lint).

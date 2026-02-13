@@ -28,6 +28,11 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - **Exports:** Excel-only (`.xls`/`.xlsx`) for player import, coverage, RCA, and print/PDF workflows
 
 ## Documentation
+- [Getting Started (Dev)](./docs/GETTING_STARTED_DEV.md)
+- [Deploy and Publish Runbook](./docs/DEPLOY_AND_PUBLISH.md)
+- [Key User Flows](./docs/KEY_USER_FLOWS.md)
+- [Exports: Coverage vs RCA](./docs/EXPORTS_COVERAGE_VS_RCA.md)
+- [Glossary](./docs/GLOSSARY.md)
 - [User Guide](./docs/USER_GUIDE.md)
 - [Tournament Settings Reference](./docs/TOURNAMENT_SETTINGS.md) — Allocation toggles with defaults, effects, and gotchas (including Main-first vs Place-first)
 - [Technical Overview](./docs/TECH_OVERVIEW.md)
@@ -40,6 +45,11 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
 
 ## Docs index (A–Z product docs)
+- [Getting Started (Dev)](./docs/GETTING_STARTED_DEV.md)
+- [Deploy and Publish Runbook](./docs/DEPLOY_AND_PUBLISH.md)
+- [Key User Flows](./docs/KEY_USER_FLOWS.md)
+- [Exports: Coverage vs RCA](./docs/EXPORTS_COVERAGE_VS_RCA.md)
+- [Glossary](./docs/GLOSSARY.md)
 - [Product Working Notes](./docs/PRODUCT_WORKING.md)
 - [Algorithm Rules](./docs/ALGORITHM_RULES.md)
 - [Algorithm (Plain English)](./docs/ALGORITHM_PLAIN_ENGLISH.md)
@@ -47,6 +57,8 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Architecture & Data Model](./docs/ARCHITECTURE_AND_DATA_MODEL.md)
 - [Operations, Release & Testing](./docs/OPERATIONS_RELEASE_TESTING.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
+- [QA Report (Snapshot / Archive)](./QA_REPORT.md)
+- [RCA Incident Docs (Archive)](./docs/rca/README.md)
 
 ## Security & Roles
 - [Security & Access Control](./docs/SECURITY_ACCESS_CONTROL.md) – roles, master allowlist, verification lifecycle, route guards

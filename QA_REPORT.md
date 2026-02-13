@@ -1,3 +1,5 @@
+> **Archive Snapshot:** This QA report is historical point-in-time evidence and is not the operational source of truth.
+
 # QA Report: Prize-Manager Release Audit
 
 **Report Generated:** 2026-02-09
