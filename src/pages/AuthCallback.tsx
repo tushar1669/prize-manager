@@ -73,10 +73,7 @@ export default function AuthCallback() {
         };
         setDebugInfo(debug);
 
-        console.log('[auth-callback] Params detected:', {
-          ...debug,
-          fullUrl: window.location.href
-        });
+        console.log('[auth-callback] Params detected:', debug);
 
         // Case 1: Error in URL params (e.g., expired link)
         if (errorParam) {

@@ -9,6 +9,17 @@ import { supabase } from "@/integrations/supabase/client";
 const LOCAL_PARSE_TIMEOUT_MS = 3000;
 const PROHIBITED_EXTENSION = ['.', 'c', 's', 'v'].join('');
 
+const isImportParserDebugEnabled = (): boolean => {
+  if (import.meta.env.DEV) return true;
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem("DEBUG_IMPORT") === "1";
+};
+
+const logImportParserDebug = (...args: Parameters<typeof console.log>) => {
+  if (!isImportParserDebugEnabled()) return;
+  console.log(...args);
+};
+
 export type ParseResult = {
   data: Record<string, unknown>[];
   headers: string[];
@@ -76,7 +87,7 @@ export function useExcelParser() {
       try {
         fileHash = await computeSHA256Hex(buffer);
         if (fileHash) {
-          console.log(`[import.hash] sha256=${fileHash}`);
+          logImportParserDebug(`[import.hash] sha256=${fileHash}`);
         }
       } catch (hashErr) {
         console.warn("[import.hash] compute failed", hashErr);
@@ -84,7 +95,7 @@ export function useExcelParser() {
       }
     }
 
-    console.log("[import.local] start");
+    logImportParserDebug("[import.local] start");
     const startedAt = performance.now();
 
     try {
@@ -112,8 +123,8 @@ export function useExcelParser() {
         headerRowIndex = detected.headerRowIndex;
         headers = detected.headers;
 
-        console.log(`[detect] headerRow=${headerRowIndex + 1} sheet=${sheetName}`);
-        console.log("[parseExcel] V2 Header detection:", {
+        logImportParserDebug(`[detect] headerRow=${headerRowIndex + 1} sheet=${sheetName}`);
+        logImportParserDebug("[parseExcel] V2 Header detection:", {
           sheet: sheetName,
           row: headerRowIndex,
           confidence: detected.confidence,
@@ -134,8 +145,8 @@ export function useExcelParser() {
         headerRowIndex = 0;
         headers = normalizeHeaders(asRows[0]);
 
-        console.log(`[detect] headerRow=1 sheet=${sheetName} (legacy)`);
-        console.log("[parseExcel] V1 Legacy mode (row 1):", headers);
+        logImportParserDebug(`[detect] headerRow=1 sheet=${sheetName} (legacy)`);
+        logImportParserDebug("[parseExcel] V1 Legacy mode (row 1):", headers);
       }
 
       if (!headers.length) {
@@ -158,7 +169,7 @@ export function useExcelParser() {
       }
 
       const durationMs = Math.round(performance.now() - startedAt);
-      console.log(`[import.local] ok rows=${data.length} duration_ms=${durationMs}`);
+      logImportParserDebug(`[import.local] ok rows=${data.length} duration_ms=${durationMs}`);
 
       return {
         data,
@@ -230,13 +241,13 @@ export function useExcelParser() {
       return Promise.reject(new Error("Unsupported file type. Please upload Excel (.xls or .xlsx)."));
     }
 
-    console.log(`[import.size] bytes=${file.size}`);
+    logImportParserDebug(`[import.size] bytes=${file.size}`);
 
     const thresholdBytes = IMPORT_SIZE_THRESHOLD_MB * 1024 * 1024;
     const prefersServer = SERVER_IMPORT_ENABLED && (options.forceServer || file.size > thresholdBytes);
 
     if (prefersServer) {
-      console.log("[import.source] chosen=server");
+      logImportParserDebug("[import.source] chosen=server");
       try {
         return await parseViaServer(file, {
           tournamentId: options.tournamentId
@@ -253,26 +264,26 @@ export function useExcelParser() {
         try {
           hash = await computeSHA256Hex(buffer);
           if (hash) {
-            console.log(`[import.hash] sha256=${hash}`);
+            logImportParserDebug(`[import.hash] sha256=${hash}`);
           }
         } catch (hashErr) {
           console.warn("[import.hash] compute failed", hashErr);
           hash = null;
         }
 
-        console.log("[import.source] chosen=local");
+        logImportParserDebug("[import.source] chosen=local");
         const localResult = await parseLocally(file, buffer, { hash });
         return { ...localResult, fallback: "server-error" };
       }
     }
 
-    console.log("[import.source] chosen=local");
+    logImportParserDebug("[import.source] chosen=local");
     const buffer = await file.arrayBuffer();
     let hash: string | null = null;
     try {
       hash = await computeSHA256Hex(buffer);
       if (hash) {
-        console.log(`[import.hash] sha256=${hash}`);
+        logImportParserDebug(`[import.hash] sha256=${hash}`);
       }
     } catch (hashErr) {
       console.warn("[import.hash] compute failed", hashErr);
