@@ -12,6 +12,12 @@ import {
 } from "@/lib/coupons/constants";
 
 const COUPON_SQL_FIX_URL = "https://supabase.com/dashboard/project/_/sql/new";
+const COUPON_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const COUPON_CODE_LENGTH = 8;
+
+function generateCouponCode(length = COUPON_CODE_LENGTH): string {
+  return Array.from({ length }, () => COUPON_CODE_ALPHABET[Math.floor(Math.random() * COUPON_CODE_ALPHABET.length)]).join("");
+}
 
 function isCouponsAccessBlocked(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -47,6 +53,14 @@ function getCouponErrorMessage(error: unknown): string {
   }
 
   return candidate.message ?? "Failed to save coupon";
+}
+
+function isDuplicateCodeError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string };
+  if (candidate.code !== "23505") return false;
+  const lower = [candidate.message, candidate.details, candidate.hint].join(" ").toLowerCase();
+  return lower.includes("code");
 }
 
 export function useCouponsAdmin() {
@@ -94,7 +108,15 @@ export function useCouponsAdmin() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from("coupons").insert(payload);
-        if (error) throw error;
+        if (!error) return;
+
+        if (!isDuplicateCodeError(error)) {
+          throw error;
+        }
+
+        const retryPayload = { ...payload, code: generateCouponCode() };
+        const { error: retryError } = await supabase.from("coupons").insert(retryPayload);
+        if (retryError) throw retryError;
       }
     },
     onSuccess: async () => {
@@ -125,8 +147,13 @@ export function useCouponsAdmin() {
 
   const openCreate = () => {
     setEditingCoupon(null);
-    setForm(emptyCouponForm);
+    setForm({ ...emptyCouponForm, code: generateCouponCode() });
     setDialogOpen(true);
+  };
+
+  const regenerateCreateCode = () => {
+    if (editingCoupon) return;
+    setForm((f) => ({ ...f, code: generateCouponCode() }));
   };
 
   const openEdit = (c: Coupon) => {
@@ -182,6 +209,7 @@ export function useCouponsAdmin() {
     saveMutation,
     toggleMutation,
     openCreate,
+    regenerateCreateCode,
     openEdit,
     handleSave,
   };

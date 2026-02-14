@@ -50,6 +50,7 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
         form={couponsAdmin.form}
         setForm={couponsAdmin.setForm}
         editingCoupon={couponsAdmin.editingCoupon}
+        onRegenerateCode={couponsAdmin.regenerateCreateCode}
         onSave={couponsAdmin.handleSave}
         isSaving={couponsAdmin.saveMutation.isPending}
       />
