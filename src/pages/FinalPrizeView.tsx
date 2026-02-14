@@ -8,6 +8,7 @@ import { BackBar } from '@/components/BackBar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useFinalPrizeData } from '@/hooks/useFinalPrizeData';
+import { useTournamentAccess } from '@/hooks/useTournamentAccess';
 import { FinalPrizeSummaryHeader } from '@/components/final-prize/FinalPrizeSummaryHeader';
 import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
@@ -43,6 +44,7 @@ function buildDateRange(start?: string | null, end?: string | null) {
 export default function FinalPrizeView() {
   const { id, view } = useParams();
   const { data, isLoading, error, grouped } = useFinalPrizeData(id);
+  const { hasFullAccess, previewMainLimit } = useTournamentAccess(id);
   const normalized = normalizeView(view);
   const dateRange = useMemo(
     () => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date),
@@ -69,6 +71,7 @@ export default function FinalPrizeView() {
           dateRange={dateRange}
           winners={data.winners}
           totals={data.totals}
+          hasFullAccess={hasFullAccess}
         />
       )}
       <main className="pb-16 print:pb-0">
@@ -106,13 +109,13 @@ export default function FinalPrizeView() {
             {showContent && (
               <div className="pm-print-surface">
                 <TabsContent value="v1" className={`m-0 ${normalized !== 'v1' ? 'print:hidden' : ''}`}>
-                  <CategoryCardsView groups={grouped.groups} />
+                  <CategoryCardsView groups={grouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                 </TabsContent>
                 <TabsContent value="v3" className={`m-0 ${normalized !== 'v3' ? 'print:hidden' : ''}`}>
-                  <PosterGridView winners={data.winners} tournamentId={id as string} />
+                  <PosterGridView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
                 </TabsContent>
                 <TabsContent value="v4" className={`m-0 ${normalized !== 'v4' ? 'print:hidden' : ''}`}>
-                  <ArbiterSheetView winners={data.winners} tournamentId={id as string} />
+                  <ArbiterSheetView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
                 </TabsContent>
                 <TabsContent value="v5" className={`m-0 ${normalized !== 'v5' ? 'print:hidden' : ''}`}>
                   <TeamPrizesTabView tournamentId={id as string} />

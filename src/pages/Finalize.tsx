@@ -6,7 +6,7 @@ import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBr
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowRight, Download, Printer } from "lucide-react";
+import { Loader2, ArrowRight, Download, Printer, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +27,7 @@ import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
 import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
 import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
+import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 
 interface Winner {
   prizeId: string;
@@ -252,8 +253,8 @@ export default function Finalize() {
     enabled: !!id && winners.length > 0
   });
 
-  // Final Prize Views data (powers the embedded tabs)
   const { data: finalPrizeData, grouped: finalPrizeGrouped, isLoading: finalPrizeLoading } = useFinalPrizeData(id);
+  const { hasFullAccess, previewMainLimit, isFreeSmall } = useTournamentAccess(id);
 
   // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
   const exportRows = useMemo(
@@ -532,6 +533,15 @@ export default function Finalize() {
             </CardContent>
           </Card>
 
+          {/* Free tier note */}
+          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-950/30 print:hidden">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+            <div>
+              <p className="font-medium text-blue-800 dark:text-blue-200">Free for tournaments up to 100 players.</p>
+              <p className="mt-0.5 text-blue-700/80 dark:text-blue-300/70">Import your players first. If your tournament has 100 or fewer players, Pro features are enabled automatically.</p>
+            </div>
+          </div>
+
           <div className="print:hidden">
             {id && <ImportQualityNotes tournamentId={id} />}
           </div>
@@ -613,13 +623,19 @@ export default function Finalize() {
           {/* Final Prize Views — embedded as tabs */}
           <Card className="print:border-0 print:shadow-none">
             <CardHeader className="flex flex-row items-center justify-between print:hidden">
-              <CardTitle>Final Prize Views</CardTitle>
+              <div className="flex flex-col gap-1">
+                <CardTitle>Final Prize Views</CardTitle>
+                {!hasFullAccess && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">Preview mode — some views are locked</p>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTabExportXlsx}
-                  disabled={isTeamTab || !finalPrizeData?.winners?.length}
+                  disabled={isTeamTab || !finalPrizeData?.winners?.length || !hasFullAccess}
+                  title={!hasFullAccess ? 'Upgrade to Pro to export' : undefined}
                   className="rounded-full"
                 >
                   <Download className="mr-2 h-4 w-4" /> Export XLSX
@@ -627,7 +643,8 @@ export default function Finalize() {
                 <Button
                   size="sm"
                   onClick={handleTabPrint}
-                  disabled={isTeamTab && !finalPrizeData?.winners?.length}
+                  disabled={(isTeamTab && !finalPrizeData?.winners?.length) || !hasFullAccess}
+                  title={!hasFullAccess ? 'Upgrade to Pro to print' : undefined}
                   className="rounded-full"
                 >
                   <Printer className="mr-2 h-4 w-4" /> Print
@@ -657,13 +674,13 @@ export default function Finalize() {
                   </TabsList>
                   <div className="pm-print-surface">
                     <TabsContent value="v1" className="m-0">
-                      <CategoryCardsView groups={finalPrizeGrouped.groups} />
+                      <CategoryCardsView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                     </TabsContent>
                     <TabsContent value="v3" className="m-0">
-                      <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} />
+                      <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} hasFullAccess={hasFullAccess} />
                     </TabsContent>
                     <TabsContent value="v4" className="m-0">
-                      <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} />
+                      <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
                     </TabsContent>
                     <TabsContent value="v5" className="m-0">
                       <TeamPrizesTabView tournamentId={id as string} />

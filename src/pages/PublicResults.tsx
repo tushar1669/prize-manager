@@ -17,6 +17,22 @@ type PublishedTournamentBasic = {
   brochure_url: string | null;
 };
 
+interface PublicResultRow {
+  prize_id: string;
+  player_name: string;
+  rank: number;
+  rating: number | null;
+  state: string | null;
+  category_name: string;
+  is_main: boolean;
+  place: number;
+  cash_amount: number;
+  has_trophy: boolean;
+  has_medal: boolean;
+  has_full_access?: boolean;
+  other_categories_locked?: boolean;
+}
+
 export default function PublicResults() {
   const { slug } = useParams();
 
@@ -58,12 +74,16 @@ export default function PublicResults() {
     queryFn: async () => {
       if (!tournament?.id) return { rows: [], hasFullAccess: false, otherCategoriesLocked: false };
 
-      const { data, error } = await supabase
-        .rpc('get_public_tournament_results', { tournament_id: tournament.id });
+      const { data, error } = await (supabase.rpc as Function)(
+        'get_public_tournament_results',
+        { tournament_id: tournament.id }
+      ) as { data: PublicResultRow[] | null; error: Error | null };
 
       if (error) throw error;
 
-      const rows = (data || []).map((row) => ({
+      const typedData = (data || []) as PublicResultRow[];
+
+      const rows = typedData.map((row) => ({
         prize_id: row.prize_id,
         playerName: row.player_name || 'Unknown',
         rank: row.rank || 0,
@@ -79,8 +99,8 @@ export default function PublicResults() {
 
       return {
         rows,
-        hasFullAccess: data?.[0]?.has_full_access ?? false,
-        otherCategoriesLocked: data?.[0]?.other_categories_locked ?? false,
+        hasFullAccess: typedData[0]?.has_full_access ?? false,
+        otherCategoriesLocked: typedData[0]?.other_categories_locked ?? false,
       };
     },
     enabled: !!tournament?.id,
@@ -185,6 +205,14 @@ export default function PublicResults() {
                       </TableBody>
                     </Table>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {results?.otherCategoriesLocked && (
+              <Card className="mt-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                <CardContent className="pt-4 text-center text-sm text-amber-800 dark:text-amber-200">
+                  Some categories are hidden. Full results are available for Pro tournaments.
                 </CardContent>
               </Card>
             )}
