@@ -10,6 +10,7 @@ import {
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "publicTeamPrizes";
+const MISSING_ACCESS_RPC_MESSAGE = 'Database migrations not deployed (missing get_tournament_access_state)';
 
 const corsHeaders = CORS_HEADERS;
 
@@ -62,6 +63,15 @@ const GROUP_BY_COLUMN_MAP: Record<string, keyof Player> = {
 };
 
 type TeamPlayer = TeamPrizePlayer;
+
+function isMissingAccessStateRpc(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+  return message.includes('get_tournament_access_state') && message.toLowerCase().includes('does not exist');
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -149,6 +159,12 @@ Deno.serve(async (req: Request) => {
       .maybeSingle() as { data: { has_full_access: boolean } | null; error: unknown };
 
     if (accessStateError) {
+      if (isMissingAccessStateRpc(accessStateError)) {
+        return new Response(
+          JSON.stringify({ code: 'backend_migration_missing', message: MISSING_ACCESS_RPC_MESSAGE }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw new Error(`Failed to resolve tournament access: ${(accessStateError as Error).message}`);
     }
 
