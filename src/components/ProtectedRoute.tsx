@@ -1,6 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { toast } from "sonner";
+import { useRef } from "react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,6 +21,7 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
   const { user, loading: authLoading } = useAuth();
   const { isMaster, isVerified, loading: roleLoading, role } = useUserRole();
   const location = useLocation();
+  const hasNotifiedAccessDeniedRef = useRef(false);
 
   const isLoading = authLoading || roleLoading;
 
@@ -51,6 +54,10 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
 
   // Master-only routes: non-masters get redirected
   if (requireMaster && !isMaster) {
+    if (!hasNotifiedAccessDeniedRef.current) {
+      hasNotifiedAccessDeniedRef.current = true;
+      toast.error("Master access required. Redirected to dashboard.");
+    }
     return <Navigate to="/dashboard" replace />;
   }
 

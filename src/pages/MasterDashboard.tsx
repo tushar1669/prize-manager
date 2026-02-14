@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
@@ -13,7 +14,11 @@ import { toast } from "sonner";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
 // Access controlled by ProtectedRoute requireMaster prop
-export default function MasterDashboard() {
+interface MasterDashboardProps {
+  embeddedInAdmin?: boolean;
+}
+
+export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashboardProps) {
   const { isMaster, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
 
@@ -82,7 +87,7 @@ export default function MasterDashboard() {
   if (roleLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppNav />
+        {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -99,13 +104,18 @@ export default function MasterDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppNav />
+      {!embeddedInAdmin && <AppNav />}
       
-      <div className="container mx-auto px-6 py-8 max-w-6xl">
+      <div className={embeddedInAdmin ? "px-0 py-0 max-w-6xl" : "container mx-auto px-6 py-8 max-w-6xl"}>
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Master Dashboard</h1>
             <p className="text-muted-foreground">Manage user verification and approvals</p>
+            {embeddedInAdmin && (
+              <Link to="/dashboard" className="text-sm text-primary hover:underline">
+                Back to Dashboard
+              </Link>
+            )}
           </div>
           {pendingCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1">

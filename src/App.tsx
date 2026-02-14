@@ -36,7 +36,10 @@ const CategoryOrderReview = lazy(() => import("./pages/CategoryOrderReview"));
 const PublicWinnersPage = lazy(() => import("./pages/PublicWinnersPage"));
 const AdminTournaments = lazy(() => import("./pages/AdminTournaments"));
 const AdminMartech = lazy(() => import("./pages/AdminMartech"));
+const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
+const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout").then((module) => ({ default: module.AdminLayout })));
 
 const queryClient = new QueryClient();
 
@@ -95,9 +98,14 @@ const App = () => {
                 <Route path="/t/:id/final/:view" element={<ProtectedRoute><FinalPrizeView /></ProtectedRoute>} />
                 <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
                 <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                <Route path="/master-dashboard" element={<ProtectedRoute requireMaster><MasterDashboard /></ProtectedRoute>} />
-                <Route path="/admin/tournaments" element={<ProtectedRoute requireMaster><AdminTournaments /></ProtectedRoute>} />
-                <Route path="/admin/martech" element={<ProtectedRoute requireMaster><AdminMartech /></ProtectedRoute>} />
+                <Route path="/master-dashboard" element={<Navigate to="/admin/users" replace />} />
+                <Route path="/admin" element={<ProtectedRoute requireMaster><AdminLayout /></ProtectedRoute>}>
+                  <Route index element={<AdminHome />} />
+                  <Route path="users" element={<MasterDashboard embeddedInAdmin />} />
+                  <Route path="martech" element={<AdminMartech embeddedInAdmin />} />
+                  <Route path="tournaments" element={<AdminTournaments embeddedInAdmin />} />
+                  <Route path="coupons" element={<AdminCoupons />} />
+                </Route>
 
                 {/* Fallback */}
                 <Route path="*" element={<NotFound />} />
