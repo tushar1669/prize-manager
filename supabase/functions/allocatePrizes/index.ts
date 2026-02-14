@@ -1136,25 +1136,75 @@ Deno.serve(async (req) => {
       console.log(`[alloc] DRY-RUN mode: skipping DB writes`);
     }
 
-    const previewCoverage = coverageData.filter(
-      (entry) => entry.is_main && entry.prize_place <= previewMainLimit,
-    );
-    const previewPrizeIds = new Set(previewCoverage.map((entry) => entry.prize_id));
+    const previewCategoryMeta: Array<{
+      category_id: string;
+      category_name: string;
+      winners_count: number;
+      preview_winners_count: number;
+      hidden_count: number;
+    }> = [];
+
+    const previewPrizeIds = new Set<string>();
+
+    if (!canViewFullResults && dryRun) {
+      const byCategory = new Map<string, CoverageItem[]>();
+      for (const entry of coverageData) {
+        const categoryId = entry.category_id ?? entry.category_name;
+        if (!byCategory.has(categoryId)) {
+          byCategory.set(categoryId, []);
+        }
+        byCategory.get(categoryId)?.push(entry);
+      }
+
+      for (const [categoryId, entries] of byCategory.entries()) {
+        const sortedEntries = entries
+          .slice()
+          .sort((a, b) => a.prize_place - b.prize_place);
+        const filledPrizeIds = sortedEntries
+          .filter((entry) => !entry.is_unfilled)
+          .map((entry) => entry.prize_id);
+
+        const winnersCount = filledPrizeIds.length;
+        const previewWinnersCount = winnersCount <= 5
+          ? Math.min(winnersCount, 1)
+          : Math.ceil(winnersCount * 0.5);
+
+        for (const prizeId of filledPrizeIds.slice(0, previewWinnersCount)) {
+          previewPrizeIds.add(prizeId);
+        }
+
+        previewCategoryMeta.push({
+          category_id: categoryId,
+          category_name: entries[0]?.category_name ?? categoryId,
+          winners_count: winnersCount,
+          preview_winners_count: previewWinnersCount,
+          hidden_count: Math.max(0, winnersCount - previewWinnersCount),
+        });
+      }
+    }
 
     const winnersForResponse = (!canViewFullResults && dryRun)
       ? winners.filter((winner) => previewPrizeIds.has(winner.prizeId))
       : winners;
 
-    const conflictsForResponse = (!canViewFullResults && dryRun)
-      ? conflicts.filter((conflict) => conflict.impacted_prizes.some((prizeId) => previewPrizeIds.has(prizeId)))
-      : conflicts;
+    const conflictsForResponse = conflicts;
 
-    const unfilledForResponse = (!canViewFullResults && dryRun)
-      ? unfilled.filter((entry) => previewPrizeIds.has(entry.prizeId))
-      : unfilled;
+    const unfilledForResponse = unfilled;
 
     const coverageForResponse = (!canViewFullResults && dryRun)
-      ? previewCoverage
+      ? coverageData.map((entry) => {
+        if (entry.is_unfilled || previewPrizeIds.has(entry.prize_id)) {
+          return entry;
+        }
+
+        return {
+          ...entry,
+          winner_player_id: null,
+          winner_rank: null,
+          winner_rating: null,
+          winner_name: null,
+        };
+      })
       : coverageData;
 
     return new Response(
@@ -1167,11 +1217,18 @@ Deno.serve(async (req) => {
           playerCount: playerRows.length,
           activeCategoryCount: activeCategories.length,
           activePrizeCount: activePrizes.length,
-          winnersCount: winnersForResponse.length,
-          conflictCount: conflictsForResponse.length,
-          unfilledCount: unfilledForResponse.length,
+          winnersCount: winners.length,
+          conflictCount: conflicts.length,
+          unfilledCount: unfilled.length,
+          hiddenWinnersCount: Math.max(0, winners.length - winnersForResponse.length),
+          previewMainLimit,
           dryRun
-        }
+        },
+        preview: !canViewFullResults && dryRun
+          ? {
+              category_winner_visibility: previewCategoryMeta,
+            }
+          : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

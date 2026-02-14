@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, RefreshCw, ArrowRight, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -92,6 +92,7 @@ export default function ConflictReview() {
     winnersCount?: number;
     conflictCount?: number;
     unfilledCount?: number;
+    hiddenWinnersCount?: number;
   } | null>(null);
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
   const [overrideDrawerOpen, setOverrideDrawerOpen] = useState(false);
@@ -276,6 +277,15 @@ export default function ConflictReview() {
         conflicts: Conflict[];
         unfilled?: Unfilled[];
         coverage?: AllocationCoverageEntry[];
+        preview?: {
+          category_winner_visibility?: Array<{
+            category_id: string;
+            category_name: string;
+            winners_count: number;
+            preview_winners_count: number;
+            hidden_count: number;
+          }>;
+        } | null;
         meta?: {
           playerCount?: number;
           activePrizeCount?: number;
@@ -283,6 +293,7 @@ export default function ConflictReview() {
           winnersCount?: number;
           conflictCount?: number;
           unfilledCount?: number;
+          hiddenWinnersCount?: number;
           dryRun?: boolean;
         };
       };
@@ -545,12 +556,15 @@ export default function ConflictReview() {
     [canViewFullResults, previewMainLimit, coverageData, winners, conflicts, unfilled],
   );
 
+  const hiddenWinnerCount = previewMeta?.hiddenWinnersCount ?? visibleResults.hiddenWinnerCount;
+
   const summaryCounts = {
     players: previewMeta?.playerCount ?? playersList?.length ?? 0,
     activePrizes: previewMeta?.activePrizeCount ?? prizesList?.length ?? 0,
-    winners: visibleResults.winners.length,
-    conflicts: visibleResults.conflicts.length,
-    unfilled: visibleResults.unfilled.length,
+    winners: previewMeta?.winnersCount ?? winners.length,
+    visibleWinners: visibleResults.winners.length,
+    conflicts: previewMeta?.conflictCount ?? conflicts.length,
+    unfilled: previewMeta?.unfilledCount ?? unfilled.length,
   };
 
   const coverageCriticalCount = visibleResults.coverage.filter(c =>
@@ -560,6 +574,41 @@ export default function ConflictReview() {
   const coverageFilledCount = visibleResults.coverage.filter(c => !c.is_unfilled).length;
   const hasComputedAllocation = previewCompleted && (visibleResults.coverage.length > 0 || summaryCounts.winners > 0 || summaryCounts.conflicts > 0 || summaryCounts.unfilled > 0);
   const summaryFilledCount = visibleResults.coverage.length > 0 ? coverageFilledCount : summaryCounts.winners;
+
+  const winnersByPrizeId = useMemo(() => {
+    const map = new Map<string, Winner>();
+    for (const winner of visibleResults.winners) {
+      map.set(winner.prizeId, winner);
+    }
+    return map;
+  }, [visibleResults.winners]);
+
+  const groupedCategoryWinners = useMemo(() => {
+    const grouped = new Map<string, { id: string; name: string; isMain: boolean; entries: AllocationCoverageEntry[] }>();
+
+    for (const entry of visibleResults.coverage) {
+      const categoryId = entry.category_id ?? entry.category_name;
+      if (!grouped.has(categoryId)) {
+        grouped.set(categoryId, {
+          id: categoryId,
+          name: entry.category_name,
+          isMain: entry.is_main,
+          entries: [],
+        });
+      }
+      grouped.get(categoryId)?.entries.push(entry);
+    }
+
+    return Array.from(grouped.values())
+      .map((category) => ({
+        ...category,
+        entries: category.entries.slice().sort((a, b) => a.prize_place - b.prize_place),
+      }))
+      .sort((a, b) => {
+        if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [visibleResults.coverage]);
 
   const statusVariant: 'neutral' | 'error' | 'warning' | 'success' = !hasComputedAllocation
     ? 'neutral'
@@ -582,6 +631,8 @@ export default function ConflictReview() {
     warning: `${summaryFilledCount} of ${summaryCounts.activePrizes} prizes have eligible winners. ${summaryCounts.unfilled} may remain unfilled.`,
     success: `All ${summaryCounts.activePrizes} prizes have eligible winners.`,
   }[statusVariant];
+
+  const upgradePath = id ? `/t/${id}/upgrade?return_to=${encodeURIComponent(`/t/${id}/review`)}` : '/dashboard';
 
   return (
     <div className="min-h-screen bg-background">
@@ -662,15 +713,40 @@ export default function ConflictReview() {
             <div className="grid gap-3 text-sm text-foreground sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Players</span><span className="text-base font-semibold">{summaryCounts.players}</span></div>
               <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Active prizes</span><span className="text-base font-semibold">{summaryCounts.activePrizes}</span></div>
-              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Winners</span><span className="text-base font-semibold">{summaryCounts.winners}</span></div>
+              <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Winners (total)</span><span className="text-base font-semibold">{summaryCounts.winners}</span></div>
               <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Conflicts</span><span className="text-base font-semibold">{summaryCounts.conflicts}</span></div>
               <div className="rounded-md border border-border/60 bg-background/60 p-3"><span className="block text-xs text-muted-foreground">Unfilled</span><span className="text-base font-semibold">{summaryCounts.unfilled}</span></div>
             </div>
             <div className={`mt-4 rounded-md border p-4 text-base leading-6 ${statusStyles[statusVariant]}`}>
               <p>{statusMessage}</p>
             </div>
+            {!canViewFullResults && hiddenWinnerCount > 0 && (
+              <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+                <p>
+                  Some winners are hidden until Pro. Showing {summaryCounts.visibleWinners} of {summaryCounts.winners} winners.
+                </p>
+              </div>
+            )}
           </AlertDescription>
         </Alert>
+
+        {!canViewFullResults && (
+          <Card className="mb-6 border-amber-500/40 bg-amber-500/5">
+            <CardHeader>
+              <CardTitle className="text-lg">Unlock full winner details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                You can review all categories and totals now. Upgrade to Pro to reveal all winner names and enable exports.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
+                <Button variant="outline" onClick={() => navigate(upgradePath)}>Apply Coupon</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Payments coming soon. You can use coupon flow today.</p>
+            </CardContent>
+          </Card>
+        )}
 
         {id && <ImportQualityNotes tournamentId={id} />}
 
@@ -777,45 +853,57 @@ export default function ConflictReview() {
                         aria-hidden="true"
                         className="inline-block h-2 w-2 rounded-full bg-[#E59D1D]/80"
                       />
-                      Winners ({visibleResults.winners.length})
+                      Winners by Category ({summaryCounts.visibleWinners}/{summaryCounts.winners})
                     </CardTitle>
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <CardContent className="p-0">
-                    {visibleResults.winners.length === 0 ? (
-                      <div className="p-4 text-sm text-muted-foreground">No winners allocated yet.</div>
+                  <CardContent className="p-4">
+                    {groupedCategoryWinners.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No winners allocated yet.</div>
                     ) : (
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-3 p-4">
-                          {visibleResults.winners.map(winner => {
-                            const prize = getPrize(winner.prizeId);
-                            const player = getPlayer(winner.playerId);
-                            return (
-                              <div key={`${winner.prizeId}-${winner.playerId}`} className="rounded-lg border border-border bg-background p-3">
-                                <div className="text-sm font-semibold">
-                                  {prize ? `${prize.category_name} — Place #${prize.place}` : `Prize ${winner.prizeId}`}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {player ? getPlayerDisplayName(player) : `Player ${winner.playerId}`}
-                                </div>
-                                {winner.reasons.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {winner.reasons.map(reason => (
-                                      <Badge
-                                        key={`${winner.prizeId}-${winner.playerId}-${reason}`}
-                                        variant={reason === 'manual_override' || reason === 'suggested_resolution' ? 'default' : 'outline'}
-                                      >
-                                        {formatReasonCode(reason)}
-                                      </Badge>
-                                    ))}
+                      <div className="space-y-4">
+                        {groupedCategoryWinners.map((category) => (
+                          <div key={category.id} className="rounded-lg border border-border/80 p-3">
+                            <div className="mb-3 flex items-center justify-between">
+                              <div className="text-sm font-semibold">{category.name}</div>
+                              <Badge variant="outline">{category.entries.filter((e) => !e.is_unfilled).length} prizes</Badge>
+                            </div>
+                            <div className="space-y-2">
+                              {category.entries.map((entry) => {
+                                if (entry.is_unfilled) {
+                                  return (
+                                    <div key={entry.prize_id} className="rounded-md border border-dashed border-muted-foreground/50 p-2 text-sm text-muted-foreground">
+                                      Place #{entry.prize_place} — Unfilled
+                                    </div>
+                                  );
+                                }
+
+                                const winner = winnersByPrizeId.get(entry.prize_id);
+                                const player = winner ? getPlayer(winner.playerId) : null;
+
+                                if (!winner) {
+                                  return (
+                                    <div key={entry.prize_id} className="rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-2 text-sm text-amber-100">
+                                      <div className="flex items-center gap-2 font-medium">
+                                        <Lock className="h-4 w-4" />
+                                        Place #{entry.prize_place} — Winner hidden until Pro
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={entry.prize_id} className="rounded-md border border-border bg-background p-2">
+                                    <div className="text-sm font-semibold">Place #{entry.prize_place}</div>
+                                    <div className="text-sm text-muted-foreground">{player ? getPlayerDisplayName(player) : `Player ${winner.playerId}`}</div>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </CardContent>
                 </CollapsibleContent>
