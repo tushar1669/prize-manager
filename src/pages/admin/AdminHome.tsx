@@ -3,9 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const quickLinks = [
   { to: "/admin/users", title: "Users & Approvals", description: "Review new organizer requests and manage verification." },
-  { to: "/admin/martech", title: "Martech", description: "Manage campaigns, coupon analytics, and promotion tools." },
+  { to: "/admin/martech", title: "Martech", description: "Upcoming marketing and analytics tools (non-coupon)." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
-  { to: "/admin/coupons", title: "Coupons", description: "View coupon tooling and backend availability status." },
+  { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
 ];
 
 export default function AdminHome() {
