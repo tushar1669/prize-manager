@@ -19,11 +19,11 @@ interface ProtectedRouteProps {
  */
 export function ProtectedRoute({ children, requireMaster = false }: ProtectedRouteProps) {
   const { user, loading: authLoading } = useAuth();
-  const { isMaster, isVerified, loading: roleLoading, role } = useUserRole();
+  const { authzStatus, is_master, is_verified, role } = useUserRole();
   const location = useLocation();
   const hasNotifiedAccessDeniedRef = useRef(false);
 
-  const isLoading = authLoading || roleLoading;
+  const isLoading = authLoading || authzStatus === 'loading';
 
   if (isLoading) {
     return (
@@ -42,18 +42,18 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
   const isOnPendingApproval = location.pathname === '/pending-approval';
   
   // Masters bypass all checks
-  if (isMaster) {
+  if (authzStatus === 'ready' && is_master) {
     return <>{children}</>;
   }
 
   // Unverified organizers get redirected to pending-approval
   // (unless they're already on that page)
-  if (role === 'organizer' && !isVerified && !isOnPendingApproval) {
+  if (authzStatus === 'ready' && role === 'organizer' && !is_verified && !isOnPendingApproval) {
     return <Navigate to="/pending-approval" replace />;
   }
 
   // Master-only routes: non-masters get redirected
-  if (requireMaster && !isMaster) {
+  if (requireMaster && authzStatus === 'ready' && !is_master) {
     if (!hasNotifiedAccessDeniedRef.current) {
       hasNotifiedAccessDeniedRef.current = true;
       toast.error("Master access required. Redirected to dashboard.");
