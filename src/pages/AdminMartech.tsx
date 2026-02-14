@@ -17,7 +17,11 @@ import { CouponFormDialog } from "@/components/martech/CouponFormDialog";
 import { CouponTable } from "@/components/martech/CouponTable";
 import { CouponAnalytics } from "@/components/martech/CouponAnalytics";
 
-export default function AdminMartech() {
+interface AdminMartechProps {
+  embeddedInAdmin?: boolean;
+}
+
+export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechProps) {
   const { user } = useAuth();
   const { isMaster, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
@@ -163,7 +167,7 @@ export default function AdminMartech() {
   if (!isMaster) {
     return (
       <div className="min-h-screen bg-background">
-        <AppNav />
+        {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-12 text-center">
           <h1 className="text-2xl font-bold text-foreground mb-4">Access Denied</h1>
           <p className="text-muted-foreground">Master access required.</p>
@@ -177,9 +181,9 @@ export default function AdminMartech() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppNav />
+      {!embeddedInAdmin && <AppNav />}
 
-      <div className="container mx-auto px-6 py-8 max-w-6xl">
+      <div className={embeddedInAdmin ? "px-0 py-0 max-w-6xl" : "container mx-auto px-6 py-8 max-w-6xl"}>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Admin: Martech</h1>
           <p className="text-muted-foreground">Coupons, analytics, and marketing tools</p>

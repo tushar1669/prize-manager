@@ -47,7 +47,7 @@ export default function Dashboard() {
       toast.info(
         `${pendingCount} organizer${pendingCount > 1 ? 's' : ''} awaiting approval`,
         { 
-          action: { label: "Review", onClick: () => navigate("/master-dashboard") },
+          action: { label: "Review", onClick: () => navigate("/admin/users") },
           duration: 6000 
         }
       );
@@ -235,7 +235,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             {isMaster && (
               <>
-                <Button variant="outline" onClick={() => navigate("/master-dashboard")} className="gap-2 relative">
+                <Button variant="outline" onClick={() => navigate("/admin/users")} className="gap-2 relative">
                   <UserCheck className="h-4 w-4" />
                   Approvals
                   {pendingCount > 0 && (
@@ -247,7 +247,7 @@ export default function Dashboard() {
                     </Badge>
                   )}
                 </Button>
-                <Button variant="outline" onClick={() => navigate("/admin/tournaments")} className="gap-2">
+                <Button variant="outline" onClick={() => navigate("/admin")} className="gap-2">
                   <Shield className="h-4 w-4" />
                   Admin
                 </Button>

@@ -94,7 +94,11 @@ function formatDateRange(start: string | null, end: string | null) {
   return e ? `${s} – ${e}` : s;
 }
 
-export default function AdminTournaments() {
+interface AdminTournamentsProps {
+  embeddedInAdmin?: boolean;
+}
+
+export default function AdminTournaments({ embeddedInAdmin = false }: AdminTournamentsProps) {
   const { user } = useAuth();
   const { isMaster, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
@@ -297,7 +301,7 @@ export default function AdminTournaments() {
   if (!isMaster) {
     return (
       <div className="min-h-screen bg-background">
-        <AppNav />
+        {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-12 text-center">
           <h1 className="text-2xl font-bold text-foreground mb-4">Access Denied</h1>
           <p className="text-muted-foreground">You must be a master organizer to access this page.</p>
@@ -312,7 +316,7 @@ export default function AdminTournaments() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppNav />
+        {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-8 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -323,7 +327,7 @@ export default function AdminTournaments() {
   if (error) {
     return (
       <div className="min-h-screen bg-background">
-        <AppNav />
+        {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-8 text-center">
           <p className="text-destructive">Error loading tournaments. Please try again.</p>
         </div>
@@ -357,9 +361,9 @@ export default function AdminTournaments() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppNav />
+      {!embeddedInAdmin && <AppNav />}
 
-      <div className="container mx-auto px-6 py-8">
+      <div className={embeddedInAdmin ? "px-0 py-0" : "container mx-auto px-6 py-8"}>
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Admin: Tournaments</h1>
