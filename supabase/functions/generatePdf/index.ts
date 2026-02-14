@@ -227,6 +227,26 @@ Deno.serve(async (req) => {
       );
     }
 
+
+    const { data: accessState, error: accessStateError } = await supabaseClient
+      .rpc('get_tournament_access_state', { tournament_id: tournamentId })
+      .maybeSingle();
+
+    if (accessStateError) {
+      throw new Error(`Failed to resolve tournament access: ${accessStateError.message}`);
+    }
+
+    if (!accessState?.has_full_access) {
+      return new Response(
+        JSON.stringify({
+          error: 'upgrade_required_for_export',
+          hint: 'PDF/print export is unavailable for tournaments above 100 players without active Pro entitlement.',
+          access: accessState,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`[generatePdf] Generating PDF for tournament ${tournamentId}, version ${version}`);
 
     // 1) Fetch tournament details

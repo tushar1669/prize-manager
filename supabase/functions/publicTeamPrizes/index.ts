@@ -144,6 +144,28 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[publicTeamPrizes] Loading for published tournament: ${tournamentId}`);
 
+    const { data: accessState, error: accessStateError } = await supabase
+      .rpc('get_tournament_access_state', { tournament_id: tournamentId })
+      .maybeSingle();
+
+    if (accessStateError) {
+      throw new Error(`Failed to resolve tournament access: ${accessStateError.message}`);
+    }
+
+    if (!accessState?.has_full_access) {
+      return new Response(
+        JSON.stringify({
+          groups: [],
+          players_loaded: 0,
+          max_rank: 0,
+          hasTeamPrizes: false,
+          otherCategoriesLocked: true,
+          access: accessState,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Load institution prize groups
     const { data: groups, error: groupsError } = await supabase
       .from('institution_prize_groups')
