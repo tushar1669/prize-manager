@@ -186,6 +186,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
       <Card>
         <CardHeader>
           <CardTitle>Per-Coupon Breakdown</CardTitle>
+          <p className="text-sm text-muted-foreground">Includes coupons with zero redemptions.</p>
         </CardHeader>
         <CardContent>
           {perCoupon.length > 0 ? (
