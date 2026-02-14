@@ -30,7 +30,7 @@ type DashboardTournament = TournamentRow | TournamentView;
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { role, loading: roleLoading, isMaster, isVerified } = useUserRole();
+  const { authzStatus, role, is_master, is_verified } = useUserRole();
   const { pendingCount } = usePendingApprovals();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -42,7 +42,7 @@ export default function Dashboard() {
 
   // Show toast notification for masters when there are pending approvals
   useEffect(() => {
-    if (isMaster && pendingCount > 0 && !hasShownPendingToast.current) {
+    if (is_master && pendingCount > 0 && !hasShownPendingToast.current) {
       hasShownPendingToast.current = true;
       toast.info(
         `${pendingCount} organizer${pendingCount > 1 ? 's' : ''} awaiting approval`,
@@ -52,15 +52,15 @@ export default function Dashboard() {
         }
       );
     }
-  }, [isMaster, pendingCount, navigate]);
+  }, [is_master, pendingCount, navigate]);
 
   // CRITICAL: Non-masters only see their own tournaments (include_all=false)
   // Master status requires BOTH role=master AND email in allowlist (enforced in useUserRole)
   const { data: tournaments, isLoading, error } = useQuery({
-    queryKey: ['tournaments', user?.id, isMaster],
+    queryKey: ['tournaments', user?.id, is_master],
     queryFn: async () => {
       // Only masters (role + allowlist) can see all tournaments
-      const includeAll = isMaster;
+      const includeAll = is_master;
       console.log('[dashboard] fetching via RPC include_all=', includeAll);
 
       try {
@@ -103,7 +103,7 @@ export default function Dashboard() {
         throw err;
       }
     },
-    enabled: !!user && !roleLoading
+    enabled: !!user && authzStatus === 'ready'
   });
 
   // Create tournament mutation
@@ -128,7 +128,7 @@ export default function Dashboard() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, role] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, is_master] });
       console.log('[dashboard] query invalidated after mutation');
       navigate(`/t/${data.id}/setup?tab=details`);
     },
@@ -152,7 +152,7 @@ export default function Dashboard() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, role] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, is_master] });
       console.log('[dashboard] query invalidated after mutation');
       toast.success('Tournament deleted');
     },
@@ -233,7 +233,7 @@ export default function Dashboard() {
             <p className="text-muted-foreground">Manage your chess tournament prize allocations</p>
           </div>
           <div className="flex items-center gap-3">
-            {isMaster && (
+            {is_master && (
               <>
                 <Button variant="outline" onClick={() => navigate("/admin/users")} className="gap-2 relative">
                   <UserCheck className="h-4 w-4" />
@@ -253,7 +253,7 @@ export default function Dashboard() {
                 </Button>
               </>
             )}
-            {(isMaster || isVerified) && (
+            {(is_master || is_verified) && (
               <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
                 <Plus className="h-4 w-4" />
                 {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
@@ -263,7 +263,7 @@ export default function Dashboard() {
         </div>
 
         {/* Creator gate banner */}
-        {!isMaster && !isVerified && (
+        {authzStatus === 'ready' && role === 'organizer' && !is_verified && (
           <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
               Your account is awaiting master verification before you can create tournaments.
@@ -326,7 +326,7 @@ export default function Dashboard() {
                         >
                           Resume
                         </Button>
-                        {isMaster && tournament.status === 'draft' && (
+                        {is_master && tournament.status === 'draft' && (
                           <Button
                             variant="ghost"
                             size="sm"
