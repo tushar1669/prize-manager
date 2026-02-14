@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Coupon, CouponFormData, CouponRedemption } from "@/components/martech/types";
 import { emptyCouponForm } from "@/components/martech/types";
+import { buildCouponPayload, normalizeDiscountTypeForUi } from "@/lib/coupons/constants";
 
 const COUPON_SQL_FIX_URL = "https://supabase.com/dashboard/project/_/sql/new";
 
@@ -15,6 +16,25 @@ function isCouponsAccessBlocked(error: unknown) {
   if (candidate.code === "42501" || candidate.status === 403) return true;
   const joined = [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(" ").toLowerCase();
   return joined.includes("42501") || joined.includes("permission denied") || joined.includes("forbidden") || joined.includes("row-level security");
+}
+
+function extractConstraintName(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { constraint?: string; message?: string; details?: string };
+  if (candidate.constraint) return candidate.constraint;
+  const combined = `${candidate.message ?? ""} ${candidate.details ?? ""}`;
+  const match = combined.match(/constraint\s+"([^"]+)"/i);
+  return match?.[1] ?? null;
+}
+
+function getCouponErrorMessage(error: unknown): string {
+  if (!error || typeof error !== "object") return "Failed to save coupon";
+  const candidate = error as { code?: string; message?: string };
+  if (candidate.code === "23514") {
+    const constraintName = extractConstraintName(error) ?? "unknown_constraint";
+    return `Invalid coupon value rejected by database constraint: ${constraintName}. Please update discount type/applies_to.`;
+  }
+  return candidate.message ?? "Failed to save coupon";
 }
 
 export function useCouponsAdmin() {
@@ -55,27 +75,13 @@ export function useCouponsAdmin() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: CouponFormData & { id?: string }) => {
-      const payload: Record<string, unknown> = {
-        code: data.code.trim().toUpperCase(),
-        discount_type: data.discount_type,
-        discount_value: Number(data.discount_value) || 0,
-        starts_at: data.starts_at || null,
-        ends_at: data.ends_at || null,
-        max_redemptions: data.max_redemptions ? Number(data.max_redemptions) : null,
-        max_redemptions_per_user: data.max_redemptions_per_user
-          ? Number(data.max_redemptions_per_user)
-          : null,
-        is_active: data.is_active,
-        issued_to_email: data.issued_to_email?.trim() || null,
-      };
+      const payload = buildCouponPayload(data, data.id ? null : user?.id);
 
       if (data.id) {
         const { error } = await supabase.from("coupons").update(payload).eq("id", data.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("coupons")
-          .insert({ ...payload, created_by: user?.id });
+        const { error } = await supabase.from("coupons").insert(payload);
         if (error) throw error;
       }
     },
@@ -87,7 +93,7 @@ export function useCouponsAdmin() {
       setForm(emptyCouponForm);
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Failed to save coupon");
+      toast.error(getCouponErrorMessage(err));
     },
   });
 
@@ -115,7 +121,7 @@ export function useCouponsAdmin() {
     setEditingCoupon(c);
     setForm({
       code: c.code,
-      discount_type: c.discount_type,
+      discount_type: normalizeDiscountTypeForUi(c.discount_type),
       discount_value: String(c.discount_value),
       starts_at: c.starts_at ? c.starts_at.slice(0, 16) : "",
       ends_at: c.ends_at ? c.ends_at.slice(0, 16) : "",
@@ -123,6 +129,7 @@ export function useCouponsAdmin() {
       max_redemptions_per_user: c.max_redemptions_per_user != null ? String(c.max_redemptions_per_user) : "",
       is_active: c.is_active,
       issued_to_email: c.issued_to_email ?? "",
+      applies_to: c.applies_to === "tournament_pro" ? c.applies_to : "tournament_pro",
     });
     setDialogOpen(true);
   };

@@ -1,9 +1,17 @@
-export type DiscountType = "percent" | "amount" | "fixed_price";
+import {
+  DEFAULT_APPLIES_TO,
+  DEFAULT_DISCOUNT_TYPE,
+  formatDiscount,
+  type AppliesTo,
+  type DiscountType,
+} from "@/lib/coupons/constants";
+
+export type { DiscountType, AppliesTo };
 
 export type Coupon = {
   id: string;
   code: string;
-  discount_type: DiscountType;
+  discount_type: string;
   discount_value: number;
   starts_at: string | null;
   ends_at: string | null;
@@ -15,6 +23,7 @@ export type Coupon = {
   updated_at: string;
   issued_to_email: string | null;
   issued_to_user_id: string | null;
+  applies_to?: string | null;
 };
 
 export type CouponRedemption = {
@@ -39,11 +48,12 @@ export type CouponFormData = {
   max_redemptions_per_user: string;
   is_active: boolean;
   issued_to_email: string;
+  applies_to: AppliesTo;
 };
 
 export const emptyCouponForm: CouponFormData = {
   code: "",
-  discount_type: "percent",
+  discount_type: DEFAULT_DISCOUNT_TYPE,
   discount_value: "",
   starts_at: "",
   ends_at: "",
@@ -51,10 +61,7 @@ export const emptyCouponForm: CouponFormData = {
   max_redemptions_per_user: "1",
   is_active: true,
   issued_to_email: "",
+  applies_to: DEFAULT_APPLIES_TO,
 };
 
-export function formatDiscount(type: DiscountType | string, value: number) {
-  if (type === "percent") return `${value}%`;
-  if (type === "fixed_price") return `₹${value} final`;
-  return `₹${value} off`;
-}
+export { formatDiscount };
