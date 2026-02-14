@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X, Save } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -102,6 +102,7 @@ export default function TournamentSetup() {
     sourceId: string | null;
   }>({ open: false, sourceId: null });
   const [savingAll, setSavingAll] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const editorRefs = useRef(new Map<string, React.RefObject<CategoryPrizesEditorHandle>>());
   
   // Category delete dialog state
@@ -528,6 +529,27 @@ export default function TournamentSetup() {
       .sort((a, b) => (b.order_idx ?? 0) - (a.order_idx ?? 0)); // DESC = newest first
     return mainCategory ? [mainCategory, ...otherCategories] : otherCategories;
   }, [categories]);
+
+  useEffect(() => {
+    if (!sortedCategories.length) return;
+    setCollapsedCategories((prev) => {
+      const next: Record<string, boolean> = {};
+      sortedCategories.forEach((category) => {
+        next[category.id] = prev[category.id] ?? false;
+      });
+      return next;
+    });
+  }, [sortedCategories]);
+
+  const handleCollapseAllCategories = useCallback((collapsed: boolean) => {
+    setCollapsedCategories(() => {
+      const next: Record<string, boolean> = {};
+      sortedCategories.forEach((category) => {
+        next[category.id] = collapsed;
+      });
+      return next;
+    });
+  }, [sortedCategories]);
 
   // Hydrate main prizes from DB when categories load
   useEffect(() => {
@@ -1701,6 +1723,24 @@ export default function TournamentSetup() {
                         <CardDescription>Age, rating, and special categories</CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!sortedCategories.length}
+                          onClick={() => handleCollapseAllCategories(true)}
+                        >
+                          <ChevronsDownUp className="h-4 w-4 mr-2" />
+                          Collapse all
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!sortedCategories.length}
+                          onClick={() => handleCollapseAllCategories(false)}
+                        >
+                          <ChevronsUpDown className="h-4 w-4 mr-2" />
+                          Expand all
+                        </Button>
                         {isOrganizer && (
                           <>
                             <Button 
@@ -1816,6 +1856,13 @@ export default function TournamentSetup() {
                             <CategoryPrizesEditor
                               ref={getEditorRef(cat.id)}
                               category={{ ...cat, criteria_json: asCriteriaJson(cat.criteria_json) }}
+                              collapsed={!!collapsedCategories[cat.id]}
+                              onToggleCollapse={(categoryId) => {
+                                setCollapsedCategories((prev) => ({
+                                  ...prev,
+                                  [categoryId]: !prev[categoryId],
+                                }));
+                              }}
                               onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
                               onSave={(categoryId, delta) => 
                                 saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
