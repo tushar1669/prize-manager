@@ -44,7 +44,7 @@ function buildDateRange(start?: string | null, end?: string | null) {
 export default function FinalPrizeView() {
   const { id, view } = useParams();
   const { data, isLoading, error, grouped } = useFinalPrizeData(id);
-  const { hasFullAccess, previewMainLimit } = useTournamentAccess(id);
+  const { hasFullAccess, previewMainLimit, errorCode: accessErrorCode } = useTournamentAccess(id);
   const normalized = normalizeView(view);
   const dateRange = useMemo(
     () => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date),
@@ -72,6 +72,7 @@ export default function FinalPrizeView() {
           winners={data.winners}
           totals={data.totals}
           hasFullAccess={hasFullAccess}
+          accessErrorCode={accessErrorCode}
         />
       )}
       <main className="pb-16 print:pb-0">
