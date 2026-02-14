@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { Trash2, Plus, Save, Trophy, Medal, Check, X, Copy, CopyPlus } from 'lucide-react';
+import { Trash2, Plus, Save, Trophy, Medal, Check, X, Copy, CopyPlus, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,6 +54,8 @@ export type CategoryPrizesEditorRef = React.RefObject<CategoryPrizesEditorHandle
 
 interface Props {
   category: CategoryRow;
+  collapsed?: boolean;
+  onToggleCollapse?: (categoryId: string) => void;
   onSave: (categoryId: string, delta: PrizeDelta) => Promise<void>;
   onToggleCategory: (categoryId: string, isActive: boolean) => void;
   onEditRules?: (category: CategoryRow) => void;
@@ -63,7 +65,7 @@ interface Props {
 }
 
 const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
-  ({ category, onSave, onToggleCategory, onEditRules, onDeleteCategory, onDuplicateCategory, isOrganizer }, ref) => {
+  ({ category, collapsed = false, onToggleCollapse, onSave, onToggleCategory, onEditRules, onDeleteCategory, onDuplicateCategory, isOrganizer }, ref) => {
   const [draft, setDraft] = useState<PrizeRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<PrizeRow[]>([]);
@@ -245,6 +247,33 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     return (places.length ? Math.max(...places) : 0) + 1;
   }, [draft]);
 
+  const categoryRuleSummary = useMemo(() => {
+    if (category.is_main) return 'Main Open';
+    const criteria = (category.criteria_json || {}) as Record<string, unknown>;
+    const parts: string[] = [];
+
+    if (typeof criteria.max_age === 'number' && typeof criteria.min_age !== 'number') parts.push(`U${criteria.max_age}`);
+    else if (typeof criteria.min_age === 'number' && typeof criteria.max_age === 'number') parts.push(`Age ${criteria.min_age}-${criteria.max_age}`);
+    else if (typeof criteria.min_age === 'number') parts.push(`${criteria.min_age}+`);
+
+    if (criteria.unrated_only === true) parts.push('Unrated');
+    else if (typeof criteria.max_rating === 'number' && typeof criteria.min_rating === 'number') parts.push(`${criteria.min_rating}-${criteria.max_rating}`);
+    else if (typeof criteria.max_rating === 'number') parts.push(`≤${criteria.max_rating}`);
+    else if (typeof criteria.min_rating === 'number') parts.push(`${criteria.min_rating}+`);
+
+    const gender = typeof criteria.gender === 'string' ? criteria.gender.toUpperCase() : null;
+    if (gender === 'F') parts.push('Female');
+    if (gender === 'M' || gender === 'M_OR_UNKNOWN') parts.push('Male');
+
+    return parts.length > 0 ? parts.join(' | ') : 'Open';
+  }, [category.criteria_json, category.is_main]);
+
+  const categoryPrizeSummary = useMemo(() => {
+    const activeRows = visibleRows.filter((row) => row.is_active);
+    const total = activeRows.reduce((sum, row) => sum + (Number(row.cash_amount) || 0), 0);
+    return `${activeRows.length} prizes • ₹${total.toLocaleString('en-IN')}`;
+  }, [visibleRows]);
+
   const handleAddRow = () => {
     const row: PrizeRow = {
       _tempId: crypto.randomUUID(),
@@ -371,8 +400,8 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   return (
     <Card className="mb-6" data-testid="category-card">
       <CardHeader className="flex flex-col gap-2">
-        <div className="flex flex-row items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Checkbox
               checked={category.is_active}
               disabled={category.is_main}
@@ -383,7 +412,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
               }
               aria-label={`Include ${category.name}`}
             />
-            <CardTitle className="text-lg flex items-center gap-2">
+            <CardTitle className="text-lg flex items-center gap-2 min-w-0">
               {category.name}
               {category.is_main && (
                 <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-primary/10 text-primary border border-primary/20">
@@ -396,6 +425,20 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                 </span>
               )}
             </CardTitle>
+            <div className="text-sm text-muted-foreground truncate max-w-[26rem]">
+              {categoryRuleSummary} • {categoryPrizeSummary}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggleCollapse?.(category.id)}
+              aria-label={collapsed ? `Expand ${category.name}` : `Collapse ${category.name}`}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
             {!category.is_main && onEditRules && isOrganizer && (
               <Button
                 variant="outline"
@@ -431,19 +474,21 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
             )}
           </div>
         </div>
-        {/* Criteria summary chips - interactive when Edit Rules is available */}
-        <CategoryCriteriaChips
-          isMain={category.is_main}
-          criteria={category.criteria_json}
-          categoryType={category.category_type}
-          className="ml-8"
-          onEditRules={
-            !category.is_main && onEditRules && isOrganizer
-              ? () => onEditRules(category)
-              : undefined
-          }
-        />
+        {!collapsed && (
+          <CategoryCriteriaChips
+            isMain={category.is_main}
+            criteria={category.criteria_json}
+            categoryType={category.category_type}
+            className="ml-8"
+            onEditRules={
+              !category.is_main && onEditRules && isOrganizer
+                ? () => onEditRules(category)
+                : undefined
+            }
+          />
+        )}
       </CardHeader>
+      {!collapsed && (
       <CardContent className="space-y-4">
         <ErrorPanel error={error} onDismiss={() => clearError()} />
         {restore && (
@@ -542,10 +587,23 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                       </td>
                       <td className="py-2 pr-4">
                         <Input
-                          type="number"
-                          min={0}
-                          value={row.cash_amount ?? 0}
-                          onChange={(e) => markDirty(rowIndex, { cash_amount: parseInt(e.target.value || '0', 10) })}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={Number(row.cash_amount) > 0 ? String(row.cash_amount) : ''}
+                          onWheel={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }}
+                          onFocus={(e) => {
+                            if (!row.cash_amount || Number(row.cash_amount) === 0) {
+                              e.currentTarget.select();
+                            }
+                          }}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            markDirty(rowIndex, { cash_amount: digitsOnly ? parseInt(digitsOnly, 10) : 0 });
+                          }}
                           className={cn("w-40", row._error === 'Empty prize' && "border-amber-500")}
                         />
                       </td>
@@ -599,6 +657,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
           </div>
         </div>
       </CardContent>
+      )}
     </Card>
   );
 });
