@@ -223,6 +223,7 @@ export type Database = {
           id: string
           metadata: Json | null
           redeemed_at: string
+          tournament_id: string | null
           user_id: string
         }
         Insert: {
@@ -231,6 +232,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           redeemed_at?: string
+          tournament_id?: string | null
           user_id: string
         }
         Update: {
@@ -239,6 +241,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           redeemed_at?: string
+          tournament_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -247,6 +250,20 @@ export type Database = {
             columns: ["coupon_id"]
             isOneToOne: false
             referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
         ]
@@ -261,6 +278,8 @@ export type Database = {
           ends_at: string | null
           id: string
           is_active: boolean
+          issued_to_email: string | null
+          issued_to_user_id: string | null
           max_redemptions: number | null
           max_redemptions_per_user: number | null
           starts_at: string | null
@@ -275,6 +294,8 @@ export type Database = {
           ends_at?: string | null
           id?: string
           is_active?: boolean
+          issued_to_email?: string | null
+          issued_to_user_id?: string | null
           max_redemptions?: number | null
           max_redemptions_per_user?: number | null
           starts_at?: string | null
@@ -289,6 +310,8 @@ export type Database = {
           ends_at?: string | null
           id?: string
           is_active?: boolean
+          issued_to_email?: string | null
+          issued_to_user_id?: string | null
           max_redemptions?: number | null
           max_redemptions_per_user?: number | null
           starts_at?: string | null
