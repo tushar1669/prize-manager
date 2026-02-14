@@ -71,10 +71,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
   const filteredCouponIds = new Set(filteredCoupons.map((c) => c.id));
 
   const perCoupon = useMemo(() => {
-    const map = new Map<
-      string,
-      { count: number; amount: number; redeemers: Set<string> }
-    >();
+    const map = new Map<string, { count: number; amount: number; redeemers: Set<string> }>();
 
     for (const r of filteredRedemptions) {
       if (!filteredCouponIds.has(r.coupon_id)) continue;
@@ -85,8 +82,8 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
       map.set(r.coupon_id, entry);
     }
 
-    return Array.from(map.entries()).map(([couponId, stats]) => {
-      const coupon = couponMap.get(couponId);
+    return filteredCoupons.map((coupon) => {
+      const stats = map.get(coupon.id) ?? { count: 0, amount: 0, redeemers: new Set<string>() };
       const issuedToId = coupon?.issued_to_user_id;
 
       // Count redeemers that match issued_to
@@ -109,7 +106,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
         sharedRedeemers,
       };
     });
-  }, [filteredRedemptions, filteredCouponIds, couponMap]);
+  }, [filteredCoupons, filteredRedemptions, filteredCouponIds, couponMap]);
 
   return (
     <div className="space-y-6">
@@ -249,9 +246,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
               </TableBody>
             </Table>
           ) : (
-            <div className="py-8 text-center text-muted-foreground">
-              No redemptions match the current filters.
-            </div>
+            <div className="py-8 text-center text-muted-foreground">No coupons match the current filters.</div>
           )}
         </CardContent>
       </Card>

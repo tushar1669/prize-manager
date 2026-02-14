@@ -6,7 +6,7 @@ Documents the role-based access control system, master allowlist, and verificati
 
 ## What It Protects
 
-- Master-only pages (`/master-dashboard`, `/admin/tournaments`)
+- Master-only pages (`/master-dashboard`, `/admin/users`, `/admin/martech`, `/admin/coupons`, `/admin/tournaments`)
 - Unverified organizer isolation (pending approval flow)
 - Role escalation attacks (no client-side role assignment)
 
@@ -70,6 +70,9 @@ The `ProtectedRoute` component guards authenticated routes:
 
 **Master-only routes:**
 - `/master-dashboard` – organizer approvals
+- `/admin/users` – organizer approvals in admin layout
+- `/admin/martech` – non-coupon martech placeholder
+- `/admin/coupons` – coupon code management and analytics
 - `/admin/tournaments` – view all tournaments
 
 **Where enforced:**
@@ -113,3 +116,4 @@ The `ProtectedRoute` component guards authenticated routes:
    - Log in as verified organizer (not in allowlist)
    - Navigate to `/master-dashboard` → should redirect to `/dashboard`
    - Navigate to `/admin/tournaments` → should redirect to `/dashboard`
+   - Navigate to `/admin/martech` or `/admin/coupons` → should redirect to `/dashboard`
