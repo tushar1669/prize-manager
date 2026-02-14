@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Coupon, CouponFormData } from "./types";
+import type { Coupon, CouponFormData, DiscountType } from "./types";
 
 interface CouponFormDialogProps {
   open: boolean;
@@ -79,15 +79,16 @@ export function CouponFormDialog({
               <Select
                 value={form.discount_type}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, discount_type: v as "percentage" | "fixed" }))
+                  setForm((f) => ({ ...f, discount_type: v as DiscountType }))
                 }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="percentage">Percentage (%)</SelectItem>
-                  <SelectItem value="fixed">Fixed (₹)</SelectItem>
+                  <SelectItem value="percent">Percent (%)</SelectItem>
+                  <SelectItem value="amount">Amount (₹ off)</SelectItem>
+                  <SelectItem value="fixed_price">Fixed Price (₹ final)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -97,7 +98,7 @@ export function CouponFormDialog({
                 id="discount-value"
                 type="number"
                 min="0"
-                placeholder={form.discount_type === "percentage" ? "20" : "500"}
+                placeholder={form.discount_type === "percent" ? "20" : "500"}
                 value={form.discount_value}
                 onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))}
               />

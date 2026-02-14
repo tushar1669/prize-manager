@@ -1,7 +1,9 @@
+export type DiscountType = "percent" | "amount" | "fixed_price";
+
 export type Coupon = {
   id: string;
   code: string;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: number;
   starts_at: string | null;
   ends_at: string | null;
@@ -18,16 +20,18 @@ export type Coupon = {
 export type CouponRedemption = {
   id: string;
   coupon_id: string;
-  user_id: string;
+  redeemed_by_user_id: string;
+  tournament_id: string;
+  amount_before: number;
   discount_amount: number;
+  amount_after: number;
   redeemed_at: string;
-  metadata: Record<string, unknown>;
-  tournament_id: string | null;
+  meta: Record<string, unknown>;
 };
 
 export type CouponFormData = {
   code: string;
-  discount_type: "percentage" | "fixed";
+  discount_type: DiscountType;
   discount_value: string;
   starts_at: string;
   ends_at: string;
@@ -39,7 +43,7 @@ export type CouponFormData = {
 
 export const emptyCouponForm: CouponFormData = {
   code: "",
-  discount_type: "percentage",
+  discount_type: "percent",
   discount_value: "",
   starts_at: "",
   ends_at: "",
@@ -49,6 +53,8 @@ export const emptyCouponForm: CouponFormData = {
   issued_to_email: "",
 };
 
-export function formatDiscount(type: string, value: number) {
-  return type === "percentage" ? `${value}%` : `₹${value}`;
+export function formatDiscount(type: DiscountType | string, value: number) {
+  if (type === "percent") return `${value}%`;
+  if (type === "fixed_price") return `₹${value} final`;
+  return `₹${value} off`;
 }
