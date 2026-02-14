@@ -6,7 +6,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Coupon, CouponFormData, CouponRedemption } from "@/components/martech/types";
 import { emptyCouponForm } from "@/components/martech/types";
-import { buildCouponPayload, normalizeDiscountTypeForUi } from "@/lib/coupons/constants";
+import {
+  buildCouponPayload,
+  normalizeDiscountTypeForUi,
+  toDateTimeLocalInput,
+} from "@/lib/coupons/constants";
 
 const COUPON_SQL_FIX_URL = "https://supabase.com/dashboard/project/_/sql/new";
 
@@ -29,11 +33,20 @@ function extractConstraintName(error: unknown): string | null {
 
 function getCouponErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") return "Failed to save coupon";
-  const candidate = error as { code?: string; message?: string };
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string };
+
+  if (candidate.code === "23505") {
+    const lower = [candidate.message, candidate.details, candidate.hint].join(" ").toLowerCase();
+    if (lower.includes("code")) {
+      return "Code already exists";
+    }
+  }
+
   if (candidate.code === "23514") {
     const constraintName = extractConstraintName(error) ?? "unknown_constraint";
-    return `Invalid coupon value rejected by database constraint: ${constraintName}. Please update discount type/applies_to.`;
+    return `Invalid coupon settings (constraint: ${constraintName})`;
   }
+
   return candidate.message ?? "Failed to save coupon";
 }
 
@@ -85,8 +98,8 @@ export function useCouponsAdmin() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
       toast.success(editingCoupon ? "Coupon updated" : "Coupon created");
       setDialogOpen(false);
       setEditingCoupon(null);
@@ -123,8 +136,8 @@ export function useCouponsAdmin() {
       code: c.code,
       discount_type: normalizeDiscountTypeForUi(c.discount_type),
       discount_value: String(c.discount_value),
-      starts_at: c.starts_at ? c.starts_at.slice(0, 16) : "",
-      ends_at: c.ends_at ? c.ends_at.slice(0, 16) : "",
+      starts_at: toDateTimeLocalInput(c.starts_at),
+      ends_at: toDateTimeLocalInput(c.ends_at),
       max_redemptions: c.max_redemptions != null ? String(c.max_redemptions) : "",
       max_redemptions_per_user: c.max_redemptions_per_user != null ? String(c.max_redemptions_per_user) : "",
       is_active: c.is_active,

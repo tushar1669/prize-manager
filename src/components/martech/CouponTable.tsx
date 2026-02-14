@@ -9,7 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, Ticket } from "lucide-react";
+import { Copy, Pencil, Ticket } from "lucide-react";
+import { toast } from "sonner";
 import type { Coupon, CouponRedemption } from "./types";
 import { formatDiscount } from "./types";
 
@@ -30,6 +31,15 @@ export function CouponTable({
   onToggleActive,
   isToggling,
 }: CouponTableProps) {
+  const copyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success("Coupon code copied");
+    } catch {
+      toast.error("Failed to copy coupon code");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="py-8 flex justify-center">
@@ -70,21 +80,16 @@ export function CouponTable({
           return (
             <TableRow key={c.id} className={isExpired ? "opacity-60" : ""}>
               <TableCell>
-                <code className="font-mono text-sm bg-muted px-2 py-0.5 rounded">
-                  {c.code}
-                </code>
+                <code className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{c.code}</code>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">
-                  {formatDiscount(c.discount_type, c.discount_value)}
-                </Badge>
+                <Badge variant="secondary">{formatDiscount(c.discount_type, c.discount_value)}</Badge>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground max-w-[160px] truncate">
                 {c.issued_to_email || "—"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {c.starts_at ? new Date(c.starts_at).toLocaleDateString() : "—"}{" "}
-                →{" "}
+                {c.starts_at ? new Date(c.starts_at).toLocaleDateString() : "—"} →{" "}
                 {c.ends_at ? (
                   <span className={isExpired ? "text-destructive font-medium" : ""}>
                     {new Date(c.ends_at).toLocaleDateString()}
@@ -96,8 +101,7 @@ export function CouponTable({
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {c.max_redemptions != null ? `${redeemCount}/${c.max_redemptions}` : "∞"}
-                {c.max_redemptions_per_user != null &&
-                  ` (${c.max_redemptions_per_user}/user)`}
+                {c.max_redemptions_per_user != null && ` (${c.max_redemptions_per_user}/user)`}
               </TableCell>
               <TableCell>
                 <Badge variant="outline">{redeemCount}</Badge>
@@ -110,9 +114,14 @@ export function CouponTable({
                 />
               </TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(c)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => copyCode(c.code)} title="Copy code">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(c)} title="Edit coupon">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           );

@@ -1,5 +1,5 @@
-export const DISCOUNT_TYPE_OPTIONS = ["percent", "amount"] as const;
-export const DB_DISCOUNT_TYPES = ["percentage", "fixed"] as const;
+export const DISCOUNT_TYPE_OPTIONS = ["percent", "amount", "fixed_price"] as const;
+export const DB_DISCOUNT_TYPES = ["percent", "amount", "fixed_price"] as const;
 export const APPLIES_TO_OPTIONS = ["tournament_pro"] as const;
 
 export type DiscountType = (typeof DISCOUNT_TYPE_OPTIONS)[number];
@@ -15,22 +15,45 @@ export function isValidAppliesTo(value: string): value is AppliesTo {
 
 export function normalizeDiscountTypeForUi(value: string): DiscountType {
   if (value === "percent" || value === "percentage") return "percent";
-  return "amount";
+  if (value === "fixed" || value === "amount") return "amount";
+  return "fixed_price";
 }
 
 export function toDbDiscountType(value: DiscountType): DbDiscountType {
-  return value === "percent" ? "percentage" : "fixed";
+  return value;
 }
 
 export function getDiscountTypeLabel(value: string): string {
   const normalized = normalizeDiscountTypeForUi(value);
-  return normalized === "percent" ? "Percent" : "Amount";
+  if (normalized === "percent") return "Percent";
+  if (normalized === "amount") return "Amount";
+  return "Fixed Price";
 }
 
 export function formatDiscount(type: string, value: number) {
   const normalized = normalizeDiscountTypeForUi(type);
-  const formattedValue = normalized === "percent" ? `${value}%` : `₹${value} off`;
+  const formattedValue =
+    normalized === "percent"
+      ? `${value}%`
+      : normalized === "amount"
+        ? `₹${value} off`
+        : `₹${value}`;
   return `${getDiscountTypeLabel(type)} (${type}): ${formattedValue}`;
+}
+
+export function toDateTimeLocalInput(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+export function toIsoFromDateTimeLocalInput(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 export type CouponPayloadInput = {
@@ -59,8 +82,8 @@ export function buildCouponPayload(data: CouponPayloadInput, createdBy?: string 
     code: data.code.trim().toUpperCase(),
     discount_type: toDbDiscountType(data.discount_type),
     discount_value: Number(data.discount_value) || 0,
-    starts_at: data.starts_at || null,
-    ends_at: data.ends_at || null,
+    starts_at: toIsoFromDateTimeLocalInput(data.starts_at),
+    ends_at: toIsoFromDateTimeLocalInput(data.ends_at),
     max_redemptions: data.max_redemptions ? Number(data.max_redemptions) : null,
     max_redemptions_per_user: data.max_redemptions_per_user
       ? Number(data.max_redemptions_per_user)

@@ -56,6 +56,9 @@ export function CouponFormDialog({
               placeholder="WELCOME20"
               value={form.code}
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              onBlur={(e) =>
+                setForm((f) => ({ ...f, code: e.target.value.trim().toUpperCase() }))
+              }
               className="font-mono uppercase"
             />
           </div>
@@ -91,7 +94,9 @@ export function CouponFormDialog({
                     <SelectItem key={option} value={option}>
                       {option === "percent"
                         ? `${getDiscountTypeLabel(option)} (%)`
-                        : `${getDiscountTypeLabel(option)} (₹ off)`}
+                        : option === "amount"
+                          ? `${getDiscountTypeLabel(option)} (₹ off)`
+                          : `${getDiscountTypeLabel(option)} (final price)`}
                     </SelectItem>
                   ))}
                 </SelectContent>
