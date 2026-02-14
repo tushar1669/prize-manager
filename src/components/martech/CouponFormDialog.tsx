@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DISCOUNT_TYPE_OPTIONS, getDiscountTypeLabel } from "@/lib/coupons/constants";
 import type { Coupon, CouponFormData, DiscountType } from "./types";
 
 interface CouponFormDialogProps {
@@ -86,9 +87,13 @@ export function CouponFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="percent">Percent (%)</SelectItem>
-                  <SelectItem value="amount">Amount (₹ off)</SelectItem>
-                  <SelectItem value="fixed_price">Fixed Price (₹ final)</SelectItem>
+                  {DISCOUNT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option === "percent"
+                        ? `${getDiscountTypeLabel(option)} (%)`
+                        : `${getDiscountTypeLabel(option)} (₹ off)`}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
