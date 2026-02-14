@@ -85,7 +85,7 @@ export default function TournamentUpgrade() {
       toast.success("Coupon applied. Pro access unlocked for this tournament.");
       await queryClient.invalidateQueries({ queryKey: ["tournament-access", id] });
       await queryClient.refetchQueries({ queryKey: ["tournament-access", id] });
-      navigate(`/t/${id}/finalize`, { replace: true, state: { upgraded: true } });
+      navigate(returnTo, { replace: true, state: { upgraded: true } });
     },
     onError: (error) => {
       toast.error(getCouponErrorMessage(error));
@@ -94,11 +94,20 @@ export default function TournamentUpgrade() {
 
   const couponHighlighted = useMemo(() => searchParams.get("coupon") === "1", [searchParams]);
 
+  const returnTo = useMemo(() => {
+    const raw = searchParams.get("return_to");
+    if (!id) return "/dashboard";
+    if (!raw) return `/t/${id}/finalize`;
+    if (raw.startsWith(`/t/${id}/`)) return raw;
+    return `/t/${id}/finalize`;
+  }, [id, searchParams]);
+
+
   return (
     <div className="min-h-screen bg-background">
       <AppNav />
       <div className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
-        <BackBar to={id ? `/t/${id}/finalize` : "/dashboard"} label="Back to Finalize" />
+        <BackBar to={id ? returnTo : "/dashboard"} label="Back" />
 
         <Card>
           <CardHeader>
@@ -121,8 +130,8 @@ export default function TournamentUpgrade() {
           <Card className="border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
             <CardContent className="pt-6">
               <p className="text-sm text-emerald-700 dark:text-emerald-300">This tournament already has Pro access.</p>
-              <Button className="mt-3" onClick={() => navigate(`/t/${id}/finalize`)}>
-                Return to Finalize
+              <Button className="mt-3" onClick={() => navigate(returnTo)}>
+                Return
               </Button>
             </CardContent>
           </Card>

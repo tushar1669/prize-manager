@@ -92,10 +92,12 @@ describe('applyReviewPreviewLimit', () => {
       ],
     });
 
-    expect(result.coverage.map((entry) => entry.prize_id)).toEqual(['p1']);
-    expect(result.winners.map((winner) => winner.prizeId)).toEqual(['p1']);
-    expect(result.conflicts).toHaveLength(1);
-    expect(result.unfilled.map((entry) => entry.prizeId)).toEqual(['p1']);
+    expect(result.coverage.map((entry) => entry.prize_id)).toEqual(['p1', 'p2', 'p3']);
+    expect(result.winners.map((winner) => winner.prizeId)).toEqual(['p1', 'p3']);
+    expect(result.conflicts).toHaveLength(2);
+    expect(result.unfilled.map((entry) => entry.prizeId)).toEqual(['p1', 'p2']);
+    expect(result.hiddenWinnerCount).toBe(1);
+    expect(result.categoryPreview).toHaveLength(2);
   });
 
   it('returns full data when full access is enabled', () => {
