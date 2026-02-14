@@ -2,13 +2,10 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { safeSelectPlayersByIds } from "@/utils/safeSelectPlayers";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trophy, Medal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getLatestAllocations } from "@/utils/getLatestAllocations";
 import { BrochureLink } from "@/components/public/BrochureLink";
-import { getPlayerDisplayName } from "@/utils/playerName";
 import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { PublicHeader } from "@/components/public/PublicHeader";
@@ -59,101 +56,32 @@ export default function PublicResults() {
   const { data: results, isLoading: resultsLoading } = useQuery({
     queryKey: ['public-results', tournament?.id],
     queryFn: async () => {
-      if (!tournament?.id) return { rows: [], version: null };
+      if (!tournament?.id) return { rows: [], hasFullAccess: false, otherCategoriesLocked: false };
 
-      // Fetch allocations with player and prize data
-      const { allocations, version } = await getLatestAllocations(tournament.id);
+      const { data, error } = await supabase
+        .rpc('get_public_tournament_results', { tournament_id: tournament.id });
 
-      if (!allocations || allocations.length === 0) return { rows: [], version };
+      if (error) throw error;
 
-      // Fetch players
-      const playerIds = allocations.map(a => a.player_id);
-      const { data: players, count, usedColumns } = await safeSelectPlayersByIds(
-        playerIds,
-        ['id', 'name', 'full_name', 'rank', 'rating', 'state']
-      );
+      const rows = (data || []).map((row) => ({
+        prize_id: row.prize_id,
+        playerName: row.player_name || 'Unknown',
+        rank: row.rank || 0,
+        rating: row.rating,
+        state: row.state,
+        categoryName: row.category_name || 'Unknown',
+        isMain: !!row.is_main,
+        place: row.place || 0,
+        cashAmount: row.cash_amount || 0,
+        hasTrophy: !!row.has_trophy,
+        hasMedal: !!row.has_medal,
+      }));
 
-      if (players.length === 0 && playerIds.length > 0) {
-        console.warn('[public-results] No players found for allocations', { playerIds });
-      }
-
-      console.log('[public-results] Loaded players', { count, usedColumns });
-
-      // Fetch prizes with categories
-      const prizeIds = allocations.map(a => a.prize_id);
-      const { data: prizes, error: prizeError } = await supabase
-        .from('prizes')
-        .select('id, place, cash_amount, has_trophy, has_medal, category_id')
-        .in('id', prizeIds);
-      
-      if (prizeError) throw prizeError;
-
-      const categoryIds = prizes?.map(p => p.category_id) || [];
-      const { data: categories, error: catError } = await supabase
-        .from('categories')
-        .select('id, name, is_main')
-        .in('id', categoryIds);
-      
-      if (catError) throw catError;
-
-      // Combine all data and deduplicate by prize_id
-      const combined = allocations.map(alloc => {
-        const player = players?.find(p => p.id === alloc.player_id);
-        const prize = prizes?.find(p => p.id === alloc.prize_id);
-        const category = categories?.find(c => c.id === prize?.category_id);
-
-        return {
-          prize_id: alloc.prize_id,
-          playerName: getPlayerDisplayName(player),
-          rank: player?.rank || 0,
-          rating: player?.rating,
-          state: player?.state,
-          categoryName: category?.name || 'Unknown',
-          isMain: category?.is_main || false,
-          place: prize?.place || 0,
-          cashAmount: prize?.cash_amount || 0,
-          hasTrophy: prize?.has_trophy || false,
-          hasMedal: prize?.has_medal || false,
-        };
-      });
-
-      type ResultRow = {
-        prize_id: string;
-        playerName: string;
-        rank: number;
-        rating?: number | null;
-        state?: string | null;
-        categoryName: string;
-        isMain: boolean;
-        place: number;
-        cashAmount: number;
-        hasTrophy: boolean;
-        hasMedal: boolean;
+      return {
+        rows,
+        hasFullAccess: data?.[0]?.has_full_access ?? false,
+        otherCategoriesLocked: data?.[0]?.other_categories_locked ?? false,
       };
-
-      // Deduplicate by prize_id
-      const uniqueByPrize = (rows: ResultRow[]) => {
-        const seen = new Set<string>();
-        return rows.filter(r => {
-          const key = String(r.prize_id);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-      };
-
-      const deduplicated = uniqueByPrize(combined);
-      
-      console.log('[publish] counts', { total: combined.length, deduplicated: deduplicated.length });
-
-      // Sort: main first, then by place
-      const rows = deduplicated.sort((a, b) => {
-        if (a.isMain && !b.isMain) return -1;
-        if (!a.isMain && b.isMain) return 1;
-        return a.place - b.place;
-      });
-
-      return { rows, version };
     },
     enabled: !!tournament?.id,
     staleTime: 60_000,
