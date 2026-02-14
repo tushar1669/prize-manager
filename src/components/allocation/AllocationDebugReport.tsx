@@ -39,6 +39,7 @@ import { getReasonLabel } from "@/types/allocation";
 import { exportCoverageToXlsx } from "@/utils/allocationCoverageExport";
 import { exportRcaToXlsx } from "@/utils/allocationRcaExport";
 import { buildRcaRows, type WinnerEntry, type PlayerInfo } from "@/types/rca";
+import { canDownloadAllocationExports } from "@/utils/reviewAccess";
 
 interface AllocationDebugReportProps {
   coverage: AllocationCoverageEntry[];
@@ -49,6 +50,7 @@ interface AllocationDebugReportProps {
   winners?: WinnerEntry[];
   players?: PlayerInfo[];
   exportsEnabled?: boolean;
+  canViewFullResults?: boolean;
 }
 
 // Badge variant based on reason code
@@ -379,6 +381,7 @@ export function AllocationDebugReport({
   winners,
   players,
   exportsEnabled = true,
+  canViewFullResults = true,
 }: AllocationDebugReportProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -429,8 +432,14 @@ export function AllocationDebugReport({
     }
   };
 
-  const canDownloadCoverage = exportsEnabled && coverage.length > 0;
-  const canDownloadRca = Boolean(exportsEnabled && coverage.length > 0 && winners && players);
+  const exportState = canDownloadAllocationExports({
+    exportsEnabled,
+    canViewFullResults,
+    hasCoverage: coverage.length > 0,
+    hasRcaData: Boolean(winners && players),
+  });
+  const canDownloadCoverage = exportState.canDownloadCoverage;
+  const canDownloadRca = exportState.canDownloadRca;
 
   // Build category summaries
   const categorySummaries = useMemo(() => {
@@ -565,7 +574,7 @@ export function AllocationDebugReport({
                   e.stopPropagation();
                   handleDownloadCoverage();
                 }}
-                title={!canDownloadCoverage ? 'Run Preview Allocation to generate exports.' : undefined}
+                title={!canDownloadCoverage ? (canViewFullResults ? 'Run Preview Allocation to generate exports.' : 'Upgrade to Pro to export full reports.') : undefined}
               >
                 <Download className="h-4 w-4 mr-1" />
                 Coverage (.xlsx)
@@ -581,7 +590,7 @@ export function AllocationDebugReport({
                         handleDownloadRca();
                       }}
                       disabled={!canDownloadRca}
-                      title={!canDownloadRca ? 'Run Preview Allocation to generate exports.' : undefined}
+                      title={!canDownloadRca ? (canViewFullResults ? 'Run Preview Allocation to generate exports.' : 'Upgrade to Pro to export full reports.') : undefined}
                     >
                       <FileSearch className="h-4 w-4 mr-1" />
                       RCA (.xlsx)
@@ -591,7 +600,9 @@ export function AllocationDebugReport({
                     <p>
                       {canDownloadRca
                         ? 'Engine vs final winners (for audit / RCA)'
-                        : 'Run Preview Allocation to generate exports.'}
+                        : canViewFullResults
+                          ? 'Run Preview Allocation to generate exports.'
+                          : 'Upgrade to Pro to export full reports.'}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -601,6 +612,11 @@ export function AllocationDebugReport({
           {!exportsEnabled && (
             <p className="mt-2 text-xs text-muted-foreground">
               Run Preview Allocation to generate exports.
+            </p>
+          )}
+          {!canViewFullResults && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Coverage and RCA downloads are available with Pro access.
             </p>
           )}
         </CardHeader>
