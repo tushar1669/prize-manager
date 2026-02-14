@@ -18,17 +18,17 @@ function getCouponErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   switch (raw) {
     case "coupon_not_found":
-      return "Invalid coupon code.";
+      return "Invalid/expired coupon";
     case "coupon_inactive":
-      return "This coupon is inactive.";
+      return "Invalid/expired coupon";
     case "coupon_expired":
-      return "This coupon has expired.";
+      return "Invalid/expired coupon";
     case "coupon_not_started":
-      return "This coupon is not active yet.";
+      return "Invalid/expired coupon";
     case "max_redemptions_reached":
-      return "This coupon has reached its maximum redemptions.";
+      return "Coupon limit reached";
     case "max_redemptions_per_user_reached":
-      return "You have already used this coupon.";
+      return "You already used this coupon";
     case "coupon_not_issued_to_user":
       return "This coupon is not assigned to your account.";
     case "not_authorized_for_tournament":

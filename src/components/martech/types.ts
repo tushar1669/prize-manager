@@ -57,7 +57,7 @@ export const emptyCouponForm: CouponFormData = {
   discount_value: "",
   starts_at: null,
   ends_at: null,
-  max_redemptions: "",
+  max_redemptions: "3",
   max_redemptions_per_user: "1",
   is_active: true,
   issued_to_email: "",
