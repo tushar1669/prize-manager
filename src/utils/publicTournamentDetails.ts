@@ -52,9 +52,10 @@ type SupabaseMaybeSingleQuery<T> = {
   maybeSingle(): Promise<SupabaseQueryResult<T>>;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClientLike = {
   from(table: "published_tournaments"): {
-    select(fields: string): SupabasePublishedTournamentQuery<TournamentDetails>;
+    select(fields: string): any;
   };
 };
 

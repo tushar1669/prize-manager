@@ -216,6 +216,86 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          discount_amount: number
+          id: string
+          metadata: Json | null
+          redeemed_at: string
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          discount_amount?: number
+          id?: string
+          metadata?: Json | null
+          redeemed_at?: string
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          discount_amount?: number
+          id?: string
+          metadata?: Json | null
+          redeemed_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          max_redemptions: number | null
+          max_redemptions_per_user: number | null
+          starts_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          max_redemptions_per_user?: number | null
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          max_redemptions_per_user?: number | null
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       import_logs: {
         Row: {
           accepted_rows: number

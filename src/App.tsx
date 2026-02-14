@@ -35,6 +35,7 @@ const Account = lazy(() => import("./pages/Account"));
 const CategoryOrderReview = lazy(() => import("./pages/CategoryOrderReview"));
 const PublicWinnersPage = lazy(() => import("./pages/PublicWinnersPage"));
 const AdminTournaments = lazy(() => import("./pages/AdminTournaments"));
+const AdminMartech = lazy(() => import("./pages/AdminMartech"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 
 const queryClient = new QueryClient();
@@ -96,6 +97,7 @@ const App = () => {
                 <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/master-dashboard" element={<ProtectedRoute requireMaster><MasterDashboard /></ProtectedRoute>} />
                 <Route path="/admin/tournaments" element={<ProtectedRoute requireMaster><AdminTournaments /></ProtectedRoute>} />
+                <Route path="/admin/martech" element={<ProtectedRoute requireMaster><AdminMartech /></ProtectedRoute>} />
 
                 {/* Fallback */}
                 <Route path="*" element={<NotFound />} />
