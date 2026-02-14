@@ -67,7 +67,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
   );
 
   // Per-coupon breakdown with issued_to vs shared analysis
-  const filteredCouponIds = new Set(filteredCoupons.map((c) => c.id));
+  const filteredCouponIds = useMemo(() => new Set(filteredCoupons.map((c) => c.id)), [filteredCoupons]);
 
   const perCoupon = useMemo(() => {
     const map = new Map<string, { count: number; amount: number; redeemers: Set<string> }>();
@@ -99,6 +99,8 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
       return {
         coupon,
         count: stats.count,
+        maxRedemptions: coupon.max_redemptions ?? 3,
+        remainingRedemptions: Math.max((coupon.max_redemptions ?? 3) - stats.count, 0),
         amount: stats.amount,
         uniqueRedeemers: stats.redeemers.size,
         matchedRedeemers,
@@ -106,6 +108,18 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
       };
     });
   }, [filteredCoupons, filteredRedemptions, filteredCouponIds]);
+
+  const topRedeemers = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const redemption of filteredRedemptions) {
+      counts.set(redemption.redeemed_by_user_id, (counts.get(redemption.redeemed_by_user_id) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([redeemerId, count]) => ({ redeemerId, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [filteredRedemptions]);
 
   return (
     <div className="space-y-6">
@@ -199,6 +213,8 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
                   <TableHead>Discount</TableHead>
                   <TableHead>Issued To</TableHead>
                   <TableHead>Redemptions</TableHead>
+                  <TableHead>Max</TableHead>
+                  <TableHead>Remaining</TableHead>
                   <TableHead>Unique Users</TableHead>
                   <TableHead>Issued-To Match</TableHead>
                   <TableHead>Shared Use</TableHead>
@@ -226,6 +242,8 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
                       {row.coupon?.issued_to_email || "—"}
                     </TableCell>
                     <TableCell>{row.count}</TableCell>
+                    <TableCell>{row.maxRedemptions}</TableCell>
+                    <TableCell>{row.remainingRedemptions}</TableCell>
                     <TableCell>{row.uniqueRedeemers}</TableCell>
                     <TableCell>
                       {row.coupon?.issued_to_user_id ? (
@@ -250,6 +268,27 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
             </Table>
           ) : (
             <div className="py-8 text-center text-muted-foreground">No coupons match the current filters.</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Redeemers</CardTitle>
+          <p className="text-sm text-muted-foreground">Top users by redemption count in the current filter range.</p>
+        </CardHeader>
+        <CardContent>
+          {topRedeemers.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No redemptions in this range.</div>
+          ) : (
+            <div className="space-y-2">
+              {topRedeemers.map((item) => (
+                <div key={item.redeemerId} className="flex items-center justify-between text-sm">
+                  <code className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{item.redeemerId}</code>
+                  <span className="text-muted-foreground">{item.count} redemption(s)</span>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
