@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ interface CouponFormDialogProps {
   form: CouponFormData;
   setForm: React.Dispatch<React.SetStateAction<CouponFormData>>;
   editingCoupon: Coupon | null;
+  onRegenerateCode: () => void;
   onSave: () => void;
   isSaving: boolean;
 }
@@ -37,6 +39,7 @@ export function CouponFormDialog({
   form,
   setForm,
   editingCoupon,
+  onRegenerateCode,
   onSave,
   isSaving,
 }: CouponFormDialogProps) {
@@ -55,16 +58,23 @@ export function CouponFormDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="coupon-code">Code</Label>
-            <Input
-              id="coupon-code"
-              placeholder="WELCOME20"
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              onBlur={(e) =>
-                setForm((f) => ({ ...f, code: e.target.value.trim().toUpperCase() }))
-              }
-              className="font-mono uppercase"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="coupon-code"
+                placeholder="WELCOME20"
+                value={form.code}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                onBlur={(e) =>
+                  setForm((f) => ({ ...f, code: e.target.value.trim().toUpperCase() }))
+                }
+                className="font-mono uppercase"
+              />
+              {!editingCoupon ? (
+                <Button type="button" variant="outline" size="icon" onClick={onRegenerateCode} title="Regenerate code">
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-2">
