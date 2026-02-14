@@ -42,8 +42,8 @@ export type CouponFormData = {
   code: string;
   discount_type: DiscountType;
   discount_value: string;
-  starts_at: string;
-  ends_at: string;
+  starts_at: Date | null;
+  ends_at: Date | null;
   max_redemptions: string;
   max_redemptions_per_user: string;
   is_active: boolean;
@@ -55,8 +55,8 @@ export const emptyCouponForm: CouponFormData = {
   code: "",
   discount_type: DEFAULT_DISCOUNT_TYPE,
   discount_value: "",
-  starts_at: "",
-  ends_at: "",
+  starts_at: null,
+  ends_at: null,
   max_redemptions: "",
   max_redemptions_per_user: "1",
   is_active: true,

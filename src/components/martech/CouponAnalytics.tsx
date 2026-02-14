@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,18 +31,18 @@ type StatusFilter = "all" | "active" | "inactive" | "expired";
 
 export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
 
   const filteredRedemptions = useMemo(() => {
     if (!redemptions) return [];
     let result = redemptions;
     if (dateFrom) {
-      const from = new Date(dateFrom);
-      result = result.filter((r) => new Date(r.redeemed_at) >= from);
+      result = result.filter((r) => new Date(r.redeemed_at) >= dateFrom);
     }
     if (dateTo) {
-      const to = new Date(dateTo + "T23:59:59");
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
       result = result.filter((r) => new Date(r.redeemed_at) <= to);
     }
     return result;
@@ -67,7 +67,6 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
   );
 
   // Per-coupon breakdown with issued_to vs shared analysis
-  const couponMap = new Map((coupons ?? []).map((c) => [c.id, c]));
   const filteredCouponIds = new Set(filteredCoupons.map((c) => c.id));
 
   const perCoupon = useMemo(() => {
@@ -106,7 +105,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
         sharedRedeemers,
       };
     });
-  }, [filteredCoupons, filteredRedemptions, filteredCouponIds, couponMap]);
+  }, [filteredCoupons, filteredRedemptions, filteredCouponIds]);
 
   return (
     <div className="space-y-6">
@@ -132,12 +131,15 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>From Date</Label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              <DateTimePicker
+                label="From Date"
+                value={dateFrom}
+                onChange={setDateFrom}
+                includeTime={false}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>To Date</Label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <DateTimePicker label="To Date" value={dateTo} onChange={setDateTo} includeTime={false} />
             </div>
           </div>
         </CardContent>
