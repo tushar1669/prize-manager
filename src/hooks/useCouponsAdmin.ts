@@ -9,7 +9,6 @@ import { emptyCouponForm } from "@/components/martech/types";
 import {
   buildCouponPayload,
   normalizeDiscountTypeForUi,
-  toDateTimeLocalInput,
 } from "@/lib/coupons/constants";
 
 const COUPON_SQL_FIX_URL = "https://supabase.com/dashboard/project/_/sql/new";
@@ -136,8 +135,8 @@ export function useCouponsAdmin() {
       code: c.code,
       discount_type: normalizeDiscountTypeForUi(c.discount_type),
       discount_value: String(c.discount_value),
-      starts_at: toDateTimeLocalInput(c.starts_at),
-      ends_at: toDateTimeLocalInput(c.ends_at),
+      starts_at: c.starts_at ? new Date(c.starts_at) : null,
+      ends_at: c.ends_at ? new Date(c.ends_at) : null,
       max_redemptions: c.max_redemptions != null ? String(c.max_redemptions) : "",
       max_redemptions_per_user: c.max_redemptions_per_user != null ? String(c.max_redemptions_per_user) : "",
       is_active: c.is_active,
@@ -154,6 +153,10 @@ export function useCouponsAdmin() {
     }
     if (!form.discount_value || Number(form.discount_value) <= 0) {
       toast.error("Discount value must be positive");
+      return;
+    }
+    if (form.starts_at && form.ends_at && form.starts_at.getTime() > form.ends_at.getTime()) {
+      toast.error("Ends At must be later than or equal to Starts At");
       return;
     }
     saveMutation.mutate({ ...form, id: editingCoupon?.id });

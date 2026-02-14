@@ -56,12 +56,19 @@ export function toIsoFromDateTimeLocalInput(value: string): string | null {
   return date.toISOString();
 }
 
+export function toIsoFromDate(value: Date | string | null): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 export type CouponPayloadInput = {
   code: string;
   discount_type: DiscountType;
   discount_value: string;
-  starts_at: string;
-  ends_at: string;
+  starts_at: Date | string | null;
+  ends_at: Date | string | null;
   max_redemptions: string;
   max_redemptions_per_user: string;
   is_active: boolean;
@@ -82,8 +89,8 @@ export function buildCouponPayload(data: CouponPayloadInput, createdBy?: string 
     code: data.code.trim().toUpperCase(),
     discount_type: toDbDiscountType(data.discount_type),
     discount_value: Number(data.discount_value) || 0,
-    starts_at: toIsoFromDateTimeLocalInput(data.starts_at),
-    ends_at: toIsoFromDateTimeLocalInput(data.ends_at),
+    starts_at: typeof data.starts_at === "string" ? toIsoFromDateTimeLocalInput(data.starts_at) : toIsoFromDate(data.starts_at),
+    ends_at: typeof data.ends_at === "string" ? toIsoFromDateTimeLocalInput(data.ends_at) : toIsoFromDate(data.ends_at),
     max_redemptions: data.max_redemptions ? Number(data.max_redemptions) : null,
     max_redemptions_per_user: data.max_redemptions_per_user
       ? Number(data.max_redemptions_per_user)

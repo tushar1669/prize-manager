@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,9 @@ export function CouponFormDialog({
   onSave,
   isSaving,
 }: CouponFormDialogProps) {
+  const hasDateRangeError =
+    form.starts_at != null && form.ends_at != null && form.starts_at.getTime() > form.ends_at.getTime();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -116,25 +120,20 @@ export function CouponFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="starts-at">Starts At</Label>
-              <Input
-                id="starts-at"
-                type="datetime-local"
-                value={form.starts_at}
-                onChange={(e) => setForm((f) => ({ ...f, starts_at: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ends-at">Ends At</Label>
-              <Input
-                id="ends-at"
-                type="datetime-local"
-                value={form.ends_at}
-                onChange={(e) => setForm((f) => ({ ...f, ends_at: e.target.value }))}
-              />
-            </div>
+            <DateTimePicker
+              label="Starts At"
+              value={form.starts_at}
+              onChange={(value) => setForm((f) => ({ ...f, starts_at: value }))}
+            />
+            <DateTimePicker
+              label="Ends At"
+              value={form.ends_at}
+              onChange={(value) => setForm((f) => ({ ...f, ends_at: value }))}
+            />
           </div>
+          {hasDateRangeError ? (
+            <p className="text-sm text-destructive">Ends At must be later than or equal to Starts At.</p>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -175,7 +174,7 @@ export function CouponFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={isSaving}>
+          <Button onClick={onSave} disabled={isSaving || hasDateRangeError}>
             {isSaving ? "Saving…" : editingCoupon ? "Update" : "Create"}
           </Button>
         </DialogFooter>
