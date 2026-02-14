@@ -60,7 +60,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
   }, [coupons, statusFilter]);
 
   const totalRedemptions = filteredRedemptions.length;
-  const uniqueRedeemers = new Set(filteredRedemptions.map((r) => r.user_id)).size;
+  const uniqueRedeemers = new Set(filteredRedemptions.map((r) => r.redeemed_by_user_id)).size;
   const totalDiscountAmount = filteredRedemptions.reduce(
     (sum, r) => sum + Number(r.discount_amount),
     0
@@ -81,7 +81,7 @@ export function CouponAnalytics({ coupons, redemptions }: CouponAnalyticsProps) 
       const entry = map.get(r.coupon_id) ?? { count: 0, amount: 0, redeemers: new Set() };
       entry.count++;
       entry.amount += Number(r.discount_amount);
-      entry.redeemers.add(r.user_id);
+      entry.redeemers.add(r.redeemed_by_user_id);
       map.set(r.coupon_id, entry);
     }
 

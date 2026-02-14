@@ -63,7 +63,8 @@ export function CouponTable({
       </TableHeader>
       <TableBody>
         {coupons.map((c) => {
-          const redeemCount = redemptions?.filter((r) => r.coupon_id === c.id).length ?? 0;
+          const couponRedemptions = redemptions?.filter((r) => r.coupon_id === c.id) ?? [];
+          const redeemCount = couponRedemptions.length;
           const isExpired = c.ends_at ? new Date(c.ends_at) < new Date() : false;
 
           return (
