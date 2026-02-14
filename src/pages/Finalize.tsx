@@ -254,7 +254,7 @@ export default function Finalize() {
   });
 
   const { data: finalPrizeData, grouped: finalPrizeGrouped, isLoading: finalPrizeLoading } = useFinalPrizeData(id);
-  const { hasFullAccess, previewMainLimit, isFreeSmall } = useTournamentAccess(id);
+  const { hasFullAccess, previewMainLimit, isFreeSmall, errorCode: accessErrorCode } = useTournamentAccess(id);
 
   // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
   const exportRows = useMemo(
@@ -625,7 +625,10 @@ export default function Finalize() {
             <CardHeader className="flex flex-row items-center justify-between print:hidden">
               <div className="flex flex-col gap-1">
                 <CardTitle>Final Prize Views</CardTitle>
-                {!hasFullAccess && (
+                {accessErrorCode === 'backend_migration_missing' && (
+                  <p className="text-xs text-destructive">Backend not deployed yet (DB migrations missing).</p>
+                )}
+                {!hasFullAccess && accessErrorCode !== 'backend_migration_missing' && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">Preview mode — some views are locked</p>
                 )}
               </div>
