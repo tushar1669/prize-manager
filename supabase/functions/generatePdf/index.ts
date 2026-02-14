@@ -230,10 +230,10 @@ Deno.serve(async (req) => {
 
     const { data: accessState, error: accessStateError } = await supabaseClient
       .rpc('get_tournament_access_state', { tournament_id: tournamentId })
-      .maybeSingle();
+      .maybeSingle() as { data: { has_full_access: boolean } | null; error: unknown };
 
     if (accessStateError) {
-      throw new Error(`Failed to resolve tournament access: ${accessStateError.message}`);
+      throw new Error(`Failed to resolve tournament access: ${(accessStateError as Error).message}`);
     }
 
     if (!accessState?.has_full_access) {

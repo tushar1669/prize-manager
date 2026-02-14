@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Medal, Trophy } from 'lucide-react';
+import { Medal, Trophy, Lock } from 'lucide-react';
 import { FinalPrizeWinnerRow, useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -7,12 +7,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 interface ArbiterSheetViewProps {
   winners?: FinalPrizeWinnerRow[];
   tournamentId?: string;
+  hasFullAccess?: boolean;
 }
 
-export function ArbiterSheetView({ winners: providedWinners, tournamentId }: ArbiterSheetViewProps) {
+export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFullAccess = true }: ArbiterSheetViewProps) {
   const queryTournamentId = providedWinners?.length ? undefined : tournamentId;
   const { data, isLoading } = useFinalPrizeData(queryTournamentId);
   const winners = useMemo(() => providedWinners ?? data?.winners ?? [], [providedWinners, data?.winners]);
+
+  if (!hasFullAccess) {
+    return (
+      <div className="mx-auto mt-8 max-w-6xl px-6 pb-12">
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-muted/40 py-16">
+          <Lock className="h-12 w-12 text-muted-foreground/50" />
+          <h3 className="text-lg font-semibold text-foreground">Arbiter Sheet — Pro Only</h3>
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            Upgrade to Pro to access the Arbiter Sheet view for tournaments with more than 100 players.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:w-full print:max-w-none print:px-0 print:pb-4">

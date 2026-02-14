@@ -4,7 +4,7 @@ import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
 import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
 import { buildFinalPrizeExportRows } from '@/utils/finalPrizeExport';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
-import { Printer, Download } from 'lucide-react';
+import { Printer, Download, Lock, Info } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
@@ -19,9 +19,10 @@ interface FinalPrizeSummaryHeaderProps {
     mainCount: number;
     categoryCount: number;
   };
+  hasFullAccess?: boolean;
 }
 
-export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals }: FinalPrizeSummaryHeaderProps) {
+export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals, hasFullAccess = true }: FinalPrizeSummaryHeaderProps) {
   const exportRows = useMemo(
     () => buildFinalPrizeExportRows(winners),
     [winners]
@@ -80,18 +81,34 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
               </Badge>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportXlsx}
-              className="rounded-full border-primary text-primary hover:bg-primary/10"
-            >
-              <Download className="mr-2 h-4 w-4" /> Export XLSX
-            </Button>
-            <Button size="sm" onClick={handlePrint} className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover">
-              <Printer className="mr-2 h-4 w-4" /> Print
-            </Button>
+          <div className="flex flex-col gap-2">
+            {!hasFullAccess && (
+              <div className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                <Lock className="h-3.5 w-3.5" />
+                Preview mode — Upgrade to Pro for full access
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportXlsx}
+                disabled={!hasFullAccess}
+                title={!hasFullAccess ? 'Upgrade to Pro to export' : undefined}
+                className="rounded-full border-primary text-primary hover:bg-primary/10"
+              >
+                <Download className="mr-2 h-4 w-4" /> Export XLSX
+              </Button>
+              <Button
+                size="sm"
+                onClick={handlePrint}
+                disabled={!hasFullAccess}
+                title={!hasFullAccess ? 'Upgrade to Pro to print' : undefined}
+                className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+              >
+                <Printer className="mr-2 h-4 w-4" /> Print
+              </Button>
+            </div>
           </div>
         </div>
       </header>

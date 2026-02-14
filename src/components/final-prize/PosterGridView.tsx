@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
-import { Trophy, Medal } from 'lucide-react';
+import { Trophy, Medal, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -10,11 +10,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
   tournamentId: string;
+  hasFullAccess?: boolean;
 }
 
 type PosterGridPrintMode = 'compact' | 'one-per-page';
 
-export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
+export function PosterGridView({ winners, tournamentId, hasFullAccess = true }: PosterGridViewProps) {
   const publicUrl = `/t/${tournamentId}/public`;
   const [printMode, setPrintMode] = useState<PosterGridPrintMode>('compact');
   const shareLink = useMemo(() => {
@@ -45,6 +46,20 @@ export function PosterGridView({ winners, tournamentId }: PosterGridViewProps) {
   }, [winners]);
 
   const gridLayout = 'sm:grid-cols-2 lg:grid-cols-3';
+
+  if (!hasFullAccess) {
+    return (
+      <div className="mx-auto mt-8 max-w-7xl px-6 pb-12">
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-muted/40 py-16">
+          <Lock className="h-12 w-12 text-muted-foreground/50" />
+          <h3 className="text-lg font-semibold text-foreground">Poster Grid — Pro Only</h3>
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            Upgrade to Pro to access the Poster Grid print view for tournaments with more than 100 players.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
