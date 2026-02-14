@@ -25,6 +25,7 @@ const TournamentSetup = lazy(() => import("./pages/TournamentSetup"));
 const PlayerImport = lazy(() => import("./pages/PlayerImport"));
 const ConflictReview = lazy(() => import("./pages/ConflictReview"));
 const Finalize = lazy(() => import("./pages/Finalize"));
+const TournamentUpgrade = lazy(() => import("./pages/TournamentUpgrade"));
 const FinalPrizeView = lazy(() => import("./pages/FinalPrizeView"));
 const PublishSuccess = lazy(() => import("./pages/PublishSuccess"));
 const PublicResults = lazy(() => import("./pages/PublicResults"));
@@ -95,6 +96,7 @@ const App = () => {
                 <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
                 <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />
                 <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
+                <Route path="/t/:id/upgrade" element={<ProtectedRoute><TournamentUpgrade /></ProtectedRoute>} />
                 <Route path="/t/:id/final/:view" element={<ProtectedRoute><FinalPrizeView /></ProtectedRoute>} />
                 <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
                 <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

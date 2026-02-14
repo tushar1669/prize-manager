@@ -655,6 +655,26 @@ export default function Finalize() {
               </div>
             </CardHeader>
             <CardContent className="print:p-0">
+              {!hasFullAccess && accessErrorCode !== 'backend_migration_missing' && (
+                <div className="mb-4 rounded-lg border-2 border-primary/40 bg-primary/10 p-4 print:hidden">
+                  <p className="text-sm font-semibold text-foreground">Unlock all finalize views</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Upgrade now or apply a coupon to unlock Poster Grid, Arbiter Sheet, and export/print actions.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Button className="sm:w-auto" onClick={() => navigate(`/t/${id}/upgrade`)}>
+                      Upgrade to Pro
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="sm:w-auto"
+                      onClick={() => navigate(`/t/${id}/upgrade?coupon=1`)}
+                    >
+                      Apply Coupon
+                    </Button>
+                  </div>
+                </div>
+              )}
               {finalPrizeLoading ? (
                 <div className="flex h-48 items-center justify-center text-muted-foreground">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Preparing prize data…
