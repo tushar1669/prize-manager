@@ -14,6 +14,11 @@ interface AllocatePrizesRequest {
   tieBreakStrategy?: TieBreakStrategy;
 }
 
+type AccessStateRow = {
+  has_full_access: boolean;
+  preview_main_limit: number;
+};
+
 const GENDER_DEBUG_TOURNAMENT_ID = '74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15';
 
 type TieBreakField = 'rating' | 'name';
@@ -420,6 +425,17 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { data: accessStateData, error: accessStateError } = await supabaseClient
+      .rpc('get_tournament_access_state', { tournament_id: tournamentId })
+      .maybeSingle() as { data: AccessStateRow | null; error: { message: string } | null };
+
+    if (accessStateError) {
+      throw new Error(`Failed to load tournament access state: ${accessStateError.message}`);
+    }
+
+    const canViewFullResults = accessStateData?.has_full_access ?? false;
+    const previewMainLimit = accessStateData?.preview_main_limit ?? 8;
 
     const DEBUG = (Deno.env.get("ALLOCATE_PRIZES_DEBUG") ?? "") === "1";
     const genderDebugEnabled = DEBUG && tournamentId === GENDER_DEBUG_TOURNAMENT_ID;
@@ -1120,19 +1136,40 @@ Deno.serve(async (req) => {
       console.log(`[alloc] DRY-RUN mode: skipping DB writes`);
     }
 
+    const previewCoverage = coverageData.filter(
+      (entry) => entry.is_main && entry.prize_place <= previewMainLimit,
+    );
+    const previewPrizeIds = new Set(previewCoverage.map((entry) => entry.prize_id));
+
+    const winnersForResponse = (!canViewFullResults && dryRun)
+      ? winners.filter((winner) => previewPrizeIds.has(winner.prizeId))
+      : winners;
+
+    const conflictsForResponse = (!canViewFullResults && dryRun)
+      ? conflicts.filter((conflict) => conflict.impacted_prizes.some((prizeId) => previewPrizeIds.has(prizeId)))
+      : conflicts;
+
+    const unfilledForResponse = (!canViewFullResults && dryRun)
+      ? unfilled.filter((entry) => previewPrizeIds.has(entry.prizeId))
+      : unfilled;
+
+    const coverageForResponse = (!canViewFullResults && dryRun)
+      ? previewCoverage
+      : coverageData;
+
     return new Response(
       JSON.stringify({
-        winners,
-        conflicts,
-        unfilled,
-        coverage: coverageData, // Always return coverage for debug report
+        winners: winnersForResponse,
+        conflicts: conflictsForResponse,
+        unfilled: unfilledForResponse,
+        coverage: coverageForResponse,
         meta: {
           playerCount: playerRows.length,
           activeCategoryCount: activeCategories.length,
           activePrizeCount: activePrizes.length,
-          winnersCount: winners.length,
-          conflictCount: conflicts.length,
-          unfilledCount: unfilled.length,
+          winnersCount: winnersForResponse.length,
+          conflictCount: conflictsForResponse.length,
+          unfilledCount: unfilledForResponse.length,
           dryRun
         }
       }),

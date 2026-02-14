@@ -31,6 +31,8 @@ import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useTeamPrizeResults } from "@/components/team-prizes/useTeamPrizeResults";
 import { formatReasonCode } from "@/utils/reasonCodeLabels";
 import type { AllocationCoverageEntry } from "@/types/allocation";
+import { useTournamentAccess } from "@/hooks/useTournamentAccess";
+import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
 
 interface Winner {
   prizeId: string;
@@ -104,6 +106,8 @@ export default function ConflictReview() {
   const [coverageData, setCoverageData] = useState<AllocationCoverageEntry[]>([]);
   const [previewCompleted, setPreviewCompleted] = useState(false);
   const [winnersExpanded, setWinnersExpanded] = useState(false);
+  const { hasFullAccess, previewMainLimit } = useTournamentAccess(id);
+  const canViewFullResults = hasFullAccess;
 
   useEffect(() => {
     manualDecisionsRef.current = manualDecisions;
@@ -528,21 +532,34 @@ export default function ConflictReview() {
   const getPlayer = (playerId: string) => playersList?.find(p => p.id === playerId);
   const getPrize = (prizeId: string) => prizesList?.find(p => p.id === prizeId);
 
+  const visibleResults = useMemo(
+    () =>
+      applyReviewPreviewLimit({
+        canViewFullResults,
+        previewMainLimit,
+        coverage: coverageData,
+        winners,
+        conflicts,
+        unfilled,
+      }),
+    [canViewFullResults, previewMainLimit, coverageData, winners, conflicts, unfilled],
+  );
+
   const summaryCounts = {
     players: previewMeta?.playerCount ?? playersList?.length ?? 0,
     activePrizes: previewMeta?.activePrizeCount ?? prizesList?.length ?? 0,
-    winners: previewMeta?.winnersCount ?? winners.length,
-    conflicts: previewMeta?.conflictCount ?? conflicts.length,
-    unfilled: previewMeta?.unfilledCount ?? unfilled.length,
+    winners: visibleResults.winners.length,
+    conflicts: visibleResults.conflicts.length,
+    unfilled: visibleResults.unfilled.length,
   };
 
-  const coverageCriticalCount = coverageData.filter(c =>
+  const coverageCriticalCount = visibleResults.coverage.filter(c =>
     c.is_unfilled &&
     (c.reason_code === 'INTERNAL_ERROR' || c.reason_code === 'CATEGORY_INACTIVE')
   ).length;
-  const coverageFilledCount = coverageData.filter(c => !c.is_unfilled).length;
-  const hasComputedAllocation = previewCompleted && (coverageData.length > 0 || summaryCounts.winners > 0 || summaryCounts.conflicts > 0 || summaryCounts.unfilled > 0);
-  const summaryFilledCount = coverageData.length > 0 ? coverageFilledCount : summaryCounts.winners;
+  const coverageFilledCount = visibleResults.coverage.filter(c => !c.is_unfilled).length;
+  const hasComputedAllocation = previewCompleted && (visibleResults.coverage.length > 0 || summaryCounts.winners > 0 || summaryCounts.conflicts > 0 || summaryCounts.unfilled > 0);
+  const summaryFilledCount = visibleResults.coverage.length > 0 ? coverageFilledCount : summaryCounts.winners;
 
   const statusVariant: 'neutral' | 'error' | 'warning' | 'success' = !hasComputedAllocation
     ? 'neutral'
@@ -658,12 +675,12 @@ export default function ConflictReview() {
         {id && <ImportQualityNotes tournamentId={id} />}
 
         <AllocationDebugReport
-          coverage={coverageData}
+          coverage={visibleResults.coverage}
           totalPlayers={summaryCounts.players}
           totalPrizes={summaryCounts.activePrizes}
           tournamentSlug={tournamentData?.slug || tournamentData?.title || id}
           tournamentTitle={tournamentData?.title}
-          winners={winners}
+          winners={visibleResults.winners}
           players={playersList?.map(p => ({ 
             id: p.id, 
             name: p.name, 
@@ -671,6 +688,7 @@ export default function ConflictReview() {
             rating: p.rating 
           })) || []}
           exportsEnabled={hasComputedAllocation}
+          canViewFullResults={canViewFullResults}
         />
 
         {/* Team / Institution Prize Results - shown when team prizes configured and preview completed */}
@@ -689,13 +707,13 @@ export default function ConflictReview() {
         ) : (
           <div className="space-y-6">
             {(() => {
-              if (conflicts.length > 0) {
+              if (visibleResults.conflicts.length > 0) {
                 // Show conflicts list
                 return (
                   <div>
                     <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-semibold">Conflicts ({conflicts.length})</h2>
-                      {conflicts.some(c => c.suggested) && (
+                      <h2 className="text-lg font-semibold">Conflicts ({visibleResults.conflicts.length})</h2>
+                      {visibleResults.conflicts.some(c => c.suggested) && (
                         <Button size="sm" disabled={allocateMutation.isPending} onClick={() => { void handleAcceptAll(); }}>
                           Resolve All
                         </Button>
@@ -703,7 +721,7 @@ export default function ConflictReview() {
                     </div>
                     <ScrollArea className="h-[600px]">
                       <div className="space-y-3">
-                        {conflicts.map(conflict => {
+                        {visibleResults.conflicts.map(conflict => {
                           const prize = conflict.impacted_prizes[0] ? getPrize(conflict.impacted_prizes[0]) : null;
                           const player = conflict.impacted_players[0] ? getPlayer(conflict.impacted_players[0]) : null;
                           
@@ -759,18 +777,18 @@ export default function ConflictReview() {
                         aria-hidden="true"
                         className="inline-block h-2 w-2 rounded-full bg-[#E59D1D]/80"
                       />
-                      Winners ({winners.length})
+                      Winners ({visibleResults.winners.length})
                     </CardTitle>
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="p-0">
-                    {winners.length === 0 ? (
+                    {visibleResults.winners.length === 0 ? (
                       <div className="p-4 text-sm text-muted-foreground">No winners allocated yet.</div>
                     ) : (
                       <ScrollArea className="h-[400px]">
                         <div className="space-y-3 p-4">
-                          {winners.map(winner => {
+                          {visibleResults.winners.map(winner => {
                             const prize = getPrize(winner.prizeId);
                             const player = getPlayer(winner.playerId);
                             return (
@@ -804,13 +822,13 @@ export default function ConflictReview() {
               </Collapsible>
             </Card>
 
-            {summaryCounts.unfilled > 0 && (
+            {visibleResults.unfilled.length > 0 && (
               <Card>
-                <CardHeader><CardTitle>Unfilled Prizes ({summaryCounts.unfilled})</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Unfilled Prizes ({visibleResults.unfilled.length})</CardTitle></CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[250px]">
                     <div className="space-y-3 p-4">
-                      {unfilled.map(entry => {
+                      {visibleResults.unfilled.map(entry => {
                         const prize = getPrize(entry.prizeId);
                         return (
                           <div key={entry.prizeId} className="rounded-lg border border-dashed border-muted-foreground/50 bg-muted/40 p-3">
