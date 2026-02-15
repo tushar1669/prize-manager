@@ -14,6 +14,7 @@ import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 
 const PRO_PRICE_INR = 100;
+type RedeemCouponResponse = { amount_after: number; discount_amount: number; reason: string };
 
 function getCouponErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "");
@@ -73,10 +74,18 @@ export default function TournamentUpgrade() {
       } as never);
 
       if (error) throw new Error(error.message);
-      if (!data) throw new Error("Coupon response missing");
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row) throw new Error("Coupon response missing");
-      return row as { amount_after: number; discount_amount: number; reason: string };
+      const row = Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+      if (!row || typeof row !== "object") throw new Error("Coupon response missing");
+
+      const amountAfter = typeof row.amount_after === "number" ? row.amount_after : 0;
+      const discountAmount = typeof row.discount_amount === "number" ? row.discount_amount : 0;
+      const reason = typeof row.reason === "string" ? row.reason : "";
+
+      return {
+        amount_after: amountAfter,
+        discount_amount: discountAmount,
+        reason,
+      } satisfies RedeemCouponResponse;
     },
     onSuccess: async (result) => {
       if (result.amount_after > 0) {
