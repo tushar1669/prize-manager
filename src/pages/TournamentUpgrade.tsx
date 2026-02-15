@@ -73,6 +73,7 @@ export default function TournamentUpgrade() {
       } as never);
 
       if (error) throw new Error(error.message);
+      if (!data) throw new Error("Coupon response missing");
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) throw new Error("Coupon response missing");
       return row as { amount_after: number; discount_amount: number; reason: string };
