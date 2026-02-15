@@ -566,6 +566,10 @@ export default function ConflictReview() {
     conflicts: previewMeta?.conflictCount ?? conflicts.length,
     unfilled: previewMeta?.unfilledCount ?? unfilled.length,
   };
+  const visibleWinnerNamesCount = Math.max(
+    0,
+    (previewMeta?.winnersCount ?? summaryCounts.winners) - hiddenWinnerCount,
+  );
 
   const coverageCriticalCount = visibleResults.coverage.filter(c =>
     c.is_unfilled &&
@@ -723,7 +727,7 @@ export default function ConflictReview() {
             {!canViewFullResults && hiddenWinnerCount > 0 && (
               <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
                 <p>
-                  Some winners are hidden until Pro. Showing {summaryCounts.visibleWinners} of {summaryCounts.winners} winners.
+                  Some winners are hidden until Pro. Showing {visibleWinnerNamesCount} of {summaryCounts.winners} winner names.
                 </p>
               </div>
             )}
@@ -731,19 +735,19 @@ export default function ConflictReview() {
         </Alert>
 
         {!canViewFullResults && (
-          <Card className="mb-6 border-amber-500/40 bg-amber-500/5">
+          <Card className="mb-6 border-2 border-amber-400 bg-amber-100">
             <CardHeader>
-              <CardTitle className="text-lg">Unlock full winner details</CardTitle>
+              <CardTitle className="text-lg font-bold text-amber-950">Unlock full winner details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-amber-950">
                 You can review all categories and totals now. Upgrade to Pro to reveal all winner names and enable exports.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Button onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
-                <Button variant="outline" onClick={() => navigate(upgradePath)}>Apply Coupon</Button>
+                <Button className="font-semibold" size="lg" onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
+                <Button className="border-amber-700 text-amber-950 hover:bg-amber-200" variant="outline" onClick={() => navigate(upgradePath)}>Apply Coupon</Button>
               </div>
-              <p className="text-xs text-muted-foreground">Payments coming soon. You can use coupon flow today.</p>
+              <p className="text-xs text-amber-900">Payments coming soon. You can use coupon flow today.</p>
             </CardContent>
           </Card>
         )}
@@ -853,8 +857,13 @@ export default function ConflictReview() {
                         aria-hidden="true"
                         className="inline-block h-2 w-2 rounded-full bg-[#E59D1D]/80"
                       />
-                      Winners by Category ({summaryCounts.visibleWinners}/{summaryCounts.winners})
+                      Winners by Category ({summaryCounts.winners}/{summaryCounts.winners})
                     </CardTitle>
+                    {!canViewFullResults && hiddenWinnerCount > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        {visibleWinnerNamesCount} names visible • {hiddenWinnerCount} hidden until Pro
+                      </div>
+                    )}
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
