@@ -28,6 +28,7 @@ import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
 import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
 import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
+import { getUpgradeUrl } from "@/utils/upgradeUrl";
 
 interface Winner {
   prizeId: string;
@@ -255,6 +256,8 @@ export default function Finalize() {
 
   const { data: finalPrizeData, grouped: finalPrizeGrouped, isLoading: finalPrizeLoading } = useFinalPrizeData(id);
   const { hasFullAccess, previewMainLimit, isFreeSmall, errorCode: accessErrorCode } = useTournamentAccess(id);
+  const finalizeUpgradeUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`) : '/dashboard'), [id]);
+  const finalizeCouponUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`, { coupon: true }) : '/dashboard'), [id]);
 
   // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
   const exportRows = useMemo(
@@ -662,13 +665,13 @@ export default function Finalize() {
                     Upgrade now or apply a coupon to unlock Poster Grid, Arbiter Sheet, and export/print actions.
                   </p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    <Button className="sm:w-auto" onClick={() => navigate(`/t/${id}/upgrade`)}>
+                    <Button className="sm:w-auto" onClick={() => navigate(finalizeUpgradeUrl)}>
                       Upgrade to Pro
                     </Button>
                     <Button
                       variant="outline"
                       className="sm:w-auto"
-                      onClick={() => navigate(`/t/${id}/upgrade?coupon=1`)}
+                      onClick={() => navigate(finalizeCouponUrl)}
                     >
                       Apply Coupon
                     </Button>

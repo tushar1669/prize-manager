@@ -3,12 +3,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { isFeatureEnabled } from "@/utils/featureFlags";
+import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 
 // Eager load critical public pages
 import Auth from "./pages/Auth";
@@ -25,7 +26,7 @@ const TournamentSetup = lazy(() => import("./pages/TournamentSetup"));
 const PlayerImport = lazy(() => import("./pages/PlayerImport"));
 const ConflictReview = lazy(() => import("./pages/ConflictReview"));
 const Finalize = lazy(() => import("./pages/Finalize"));
-const TournamentUpgrade = lazy(() => import("./pages/TournamentUpgrade"));
+const TournamentPayment = lazy(() => import("./pages/TournamentUpgrade"));
 const FinalPrizeView = lazy(() => import("./pages/FinalPrizeView"));
 const PublishSuccess = lazy(() => import("./pages/PublishSuccess"));
 const PublicResults = lazy(() => import("./pages/PublicResults"));
@@ -53,6 +54,25 @@ const PageLoader = () => (
 const PublicTournamentDetailsRedirect = () => {
   const { slug } = useParams();
   return <Navigate to={`/p/${slug ?? ""}`} replace />;
+};
+
+const LegacyUpgradeRedirect = () => {
+  const { id } = useParams();
+  const location = useLocation();
+
+  if (!id) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const safeReturnTo = getSafeReturnToPath(id, params.get("return_to"), `/t/${id}/finalize`);
+  const nextParams = new URLSearchParams({ return_to: safeReturnTo });
+
+  if (params.get("coupon") === "1") {
+    nextParams.set("coupon", "1");
+  }
+
+  return <Navigate to={`/t/${id}/payment?${nextParams.toString()}`} replace />;
 };
 
 const App = () => {
@@ -96,7 +116,8 @@ const App = () => {
                 <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />
                 <Route path="/t/:id/review" element={<ProtectedRoute><ConflictReview /></ProtectedRoute>} />
                 <Route path="/t/:id/finalize" element={<ProtectedRoute><Finalize /></ProtectedRoute>} />
-                <Route path="/t/:id/upgrade" element={<ProtectedRoute><TournamentUpgrade /></ProtectedRoute>} />
+                <Route path="/t/:id/payment" element={<ProtectedRoute><TournamentPayment /></ProtectedRoute>} />
+                <Route path="/t/:id/upgrade" element={<ProtectedRoute><LegacyUpgradeRedirect /></ProtectedRoute>} />
                 <Route path="/t/:id/final/:view" element={<ProtectedRoute><FinalPrizeView /></ProtectedRoute>} />
                 <Route path="/t/:id/publish" element={<ProtectedRoute><PublishSuccess /></ProtectedRoute>} />
                 <Route path="/t/:id/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

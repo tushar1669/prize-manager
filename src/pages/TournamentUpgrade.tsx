@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
+import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 
 const PRO_PRICE_INR = 100;
 
@@ -95,11 +96,8 @@ export default function TournamentUpgrade() {
   const couponHighlighted = useMemo(() => searchParams.get("coupon") === "1", [searchParams]);
 
   const returnTo = useMemo(() => {
-    const raw = searchParams.get("return_to");
     if (!id) return "/dashboard";
-    if (!raw) return `/t/${id}/finalize`;
-    if (raw.startsWith(`/t/${id}/`)) return raw;
-    return `/t/${id}/finalize`;
+    return getSafeReturnToPath(id, searchParams.get("return_to"), `/t/${id}/finalize`);
   }, [id, searchParams]);
 
 

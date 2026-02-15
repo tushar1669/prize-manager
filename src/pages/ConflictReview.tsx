@@ -33,6 +33,7 @@ import { formatReasonCode } from "@/utils/reasonCodeLabels";
 import type { AllocationCoverageEntry } from "@/types/allocation";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
+import { getUpgradeUrl } from "@/utils/upgradeUrl";
 
 interface Winner {
   prizeId: string;
@@ -636,7 +637,8 @@ export default function ConflictReview() {
     success: `All ${summaryCounts.activePrizes} prizes have eligible winners.`,
   }[statusVariant];
 
-  const upgradePath = id ? `/t/${id}/upgrade?return_to=${encodeURIComponent(`/t/${id}/review`)}` : '/dashboard';
+  const upgradePath = id ? getUpgradeUrl(id, `/t/${id}/review`) : '/dashboard';
+  const couponPath = id ? getUpgradeUrl(id, `/t/${id}/review`, { coupon: true }) : '/dashboard';
 
   return (
     <div className="min-h-screen bg-background">
@@ -745,7 +747,7 @@ export default function ConflictReview() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button className="font-semibold" size="lg" onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
-                <Button className="border-amber-700 text-amber-950 hover:bg-amber-200" variant="outline" onClick={() => navigate(upgradePath)}>Apply Coupon</Button>
+                <Button className="border-amber-700 text-amber-950 hover:bg-amber-200" variant="outline" onClick={() => navigate(couponPath)}>Apply Coupon</Button>
               </div>
               <p className="text-xs text-amber-900">Payments coming soon. You can use coupon flow today.</p>
             </CardContent>
