@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { Coupon, CouponFormData, CouponRedemption } from "@/components/martech/types";
 import { emptyCouponForm } from "@/components/martech/types";
+import type { Tables } from "@/integrations/supabase/types";
 import {
   buildCouponPayload,
   normalizeDiscountTypeForUi,
@@ -14,6 +15,31 @@ import {
 const COUPON_SQL_FIX_URL = "https://supabase.com/dashboard/project/_/sql/new";
 const COUPON_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const COUPON_CODE_LENGTH = 8;
+type CouponRedemptionRow = Tables<"coupon_redemptions"> & { metadata?: unknown };
+
+function normalizeMeta(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function normalizeRedemptionRow(row: CouponRedemptionRow): CouponRedemption {
+  return {
+    id: row.id,
+    coupon_id: row.coupon_id,
+    redeemed_by_user_id: row.redeemed_by_user_id ?? row.user_id,
+    tournament_id: row.tournament_id ?? "",
+    amount_before: toNumber(row.amount_before),
+    discount_amount: toNumber(row.discount_amount),
+    amount_after: toNumber(row.amount_after),
+    redeemed_at: row.redeemed_at,
+    meta: normalizeMeta(row.meta ?? row.metadata),
+  };
+}
 
 function generateCouponCode(length = COUPON_CODE_LENGTH): string {
   return Array.from({ length }, () => COUPON_CODE_ALPHABET[Math.floor(Math.random() * COUPON_CODE_ALPHABET.length)]).join("");
@@ -94,17 +120,7 @@ export function useCouponsAdmin() {
         .order("redeemed_at", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []).map((row) => ({
-        id: row.id,
-        coupon_id: row.coupon_id,
-        redeemed_by_user_id: (row as any).redeemed_by_user_id ?? (row as any).user_id,
-        tournament_id: (row as any).tournament_id ?? null,
-        amount_before: (row as any).amount_before ?? 0,
-        discount_amount: (row as any).discount_amount ?? 0,
-        amount_after: (row as any).amount_after ?? 0,
-        redeemed_at: (row as any).redeemed_at,
-        meta: (row as any).meta ?? (row as any).metadata ?? {},
-      })) as CouponRedemption[];
+      return (data ?? []).map((row) => normalizeRedemptionRow(row as CouponRedemptionRow));
     },
     enabled: !!user && isMaster,
   });
