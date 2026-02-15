@@ -94,7 +94,17 @@ export function useCouponsAdmin() {
         .order("redeemed_at", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as CouponRedemption[];
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        coupon_id: row.coupon_id,
+        redeemed_by_user_id: (row as any).redeemed_by_user_id ?? (row as any).user_id,
+        tournament_id: (row as any).tournament_id ?? null,
+        amount_before: (row as any).amount_before ?? 0,
+        discount_amount: (row as any).discount_amount ?? 0,
+        amount_after: (row as any).amount_after ?? 0,
+        redeemed_at: (row as any).redeemed_at,
+        meta: (row as any).meta ?? (row as any).metadata ?? {},
+      })) as CouponRedemption[];
     },
     enabled: !!user && isMaster,
   });

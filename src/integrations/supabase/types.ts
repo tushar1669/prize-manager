@@ -218,29 +218,44 @@ export type Database = {
       }
       coupon_redemptions: {
         Row: {
+          amount_after: number | null
+          amount_before: number | null
           coupon_id: string
           discount_amount: number
           id: string
-          metadata: Json | null
+          issued_to_email: string | null
+          issued_to_user_id: string | null
+          meta: Json
           redeemed_at: string
+          redeemed_by_user_id: string | null
           tournament_id: string | null
           user_id: string
         }
         Insert: {
+          amount_after?: number | null
+          amount_before?: number | null
           coupon_id: string
           discount_amount?: number
           id?: string
-          metadata?: Json | null
+          issued_to_email?: string | null
+          issued_to_user_id?: string | null
+          meta?: Json
           redeemed_at?: string
+          redeemed_by_user_id?: string | null
           tournament_id?: string | null
           user_id: string
         }
         Update: {
+          amount_after?: number | null
+          amount_before?: number | null
           coupon_id?: string
           discount_amount?: number
           id?: string
-          metadata?: Json | null
+          issued_to_email?: string | null
+          issued_to_user_id?: string | null
+          meta?: Json
           redeemed_at?: string
+          redeemed_by_user_id?: string | null
           tournament_id?: string | null
           user_id?: string
         }
@@ -270,6 +285,7 @@ export type Database = {
       }
       coupons: {
         Row: {
+          applies_to: string
           code: string
           created_at: string
           created_by: string | null
@@ -286,6 +302,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          applies_to?: string
           code: string
           created_at?: string
           created_by?: string | null
@@ -302,6 +319,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          applies_to?: string
           code?: string
           created_at?: string
           created_by?: string | null
@@ -776,6 +794,61 @@ export type Database = {
           },
         ]
       }
+      tournament_entitlements: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          owner_id: string
+          source: string
+          source_ref: string
+          starts_at: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          owner_id: string
+          source: string
+          source_ref: string
+          starts_at: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          owner_id?: string
+          source?: string
+          source_ref?: string
+          starts_at?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_entitlements_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entitlements_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entitlements_tournament_owner_fkey"
+            columns: ["tournament_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id", "owner_id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           brochure_url: string | null
@@ -930,7 +1003,80 @@ export type Database = {
       }
     }
     Functions: {
+      admin_create_coupon: {
+        Args: {
+          _applies_to: string
+          _code: string
+          _discount_type: string
+          _discount_value: number
+          _ends_at: string
+          _is_active: boolean
+          _issued_to_email: string
+          _issued_to_user_id: string
+          _max_redemptions: number
+          _max_redemptions_per_user: number
+          _starts_at: string
+        }
+        Returns: string
+      }
+      admin_list_coupons: {
+        Args: never
+        Returns: {
+          applies_to: string
+          code: string
+          created_at: string
+          created_by: string
+          discount_type: string
+          discount_value: number
+          ends_at: string
+          id: string
+          is_active: boolean
+          issued_to_email: string
+          issued_to_user_id: string
+          max_redemptions: number
+          max_redemptions_per_user: number
+          starts_at: string
+          updated_at: string
+        }[]
+      }
+      apply_coupon_for_tournament: {
+        Args: { amount_before: number; code: string; tournament_id: string }
+        Returns: {
+          amount_after: number
+          discount_amount: number
+          is_valid: boolean
+          reason: string
+        }[]
+      }
       bootstrap_master: { Args: never; Returns: Json }
+      get_public_tournament_results: {
+        Args: { tournament_id: string }
+        Returns: {
+          cash_amount: number
+          category_name: string
+          has_full_access: boolean
+          has_medal: boolean
+          has_trophy: boolean
+          is_main: boolean
+          other_categories_locked: boolean
+          place: number
+          player_name: string
+          preview_main_limit: number
+          prize_id: string
+          rank: number
+          rating: number
+          state: string
+        }[]
+      }
+      get_tournament_access_state: {
+        Args: { tournament_id: string }
+        Returns: {
+          has_full_access: boolean
+          is_free_small_tournament: boolean
+          players_count: number
+          preview_main_limit: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -997,6 +1143,14 @@ export type Database = {
           request_id: string
           slug: string
           version: number
+        }[]
+      }
+      redeem_coupon_for_tournament: {
+        Args: { amount_before: number; code: string; tournament_id: string }
+        Returns: {
+          amount_after: number
+          discount_amount: number
+          reason: string
         }[]
       }
     }
