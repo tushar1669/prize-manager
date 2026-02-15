@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const quickLinks = [
   { to: "/admin/users", title: "Users & Approvals", description: "Review new organizer requests and manage verification." },
-  { to: "/admin/martech", title: "Martech", description: "Upcoming marketing and analytics tools (non-coupon)." },
+  { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
   { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
 ];

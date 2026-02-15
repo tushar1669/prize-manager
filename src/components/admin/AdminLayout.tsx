@@ -10,6 +10,8 @@ const adminLinks = [
   { to: "/admin/coupons", label: "Coupons" },
 ];
 
+const buildStamp = `${__BUILD_COMMIT__} · ${__BUILD_TIME__}`;
+
 export function AdminLayout() {
   return (
     <div className="min-h-screen bg-background">
@@ -52,6 +54,10 @@ export function AdminLayout() {
           <main>
             <Outlet />
           </main>
+        </div>
+
+        <div className="mt-6 border-t border-border pt-3 text-xs text-muted-foreground">
+          Build stamp: {buildStamp}
         </div>
       </div>
     </div>
