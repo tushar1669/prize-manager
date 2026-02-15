@@ -1511,6 +1511,26 @@ export default function PlayerImport() {
     }
   });
 
+  // Auth & role for organizer guard
+  const { user } = useAuth();
+  const { isMaster } = useUserRole();
+
+  // Fetch tournament to check ownership
+  const { data: tournament } = useQuery({
+    queryKey: ['tournament', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('owner_id, slug')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Tournament not found');
+      return data;
+    },
+    enabled: !!id,
+  });
+
   const startImportFlow = useCallback(() => {
     if (importPlayersMutation.isPending || isRunningDedup) {
       return;
@@ -1543,6 +1563,15 @@ export default function PlayerImport() {
       return;
     }
 
+    if (replaceExisting && isMaster && tournament && user && tournament.owner_id !== user.id) {
+      const confirmed = window.confirm(
+        'You are replacing players for another organizer. This will overwrite data.'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     importPlayersMutation.mutate({
       players: playersToImport,
       dedupe: dedupePlan
@@ -1561,7 +1590,10 @@ export default function PlayerImport() {
     mappedPlayers,
     navigate,
     replaceExisting,
+    isMaster,
+    tournament,
     unresolvedCount,
+    user,
   ]);
 
   const handleConfirmDuplicates = useCallback(() => {
@@ -1605,26 +1637,6 @@ export default function PlayerImport() {
       setShowDobImputationDetails(false);
     }
   }, [mappedPlayers.length]);
-
-  // Auth & role for organizer guard
-  const { user } = useAuth();
-  const { isMaster } = useUserRole();
-
-  // Fetch tournament to check ownership
-  const { data: tournament } = useQuery({
-    queryKey: ['tournament', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tournaments')
-        .select('owner_id, slug')
-        .eq('id', id)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) throw new Error('Tournament not found');
-      return data;
-    },
-    enabled: !!id,
-  });
 
   // Fetch categories to check for female/girl categories
   const { data: categories } = useQuery({
