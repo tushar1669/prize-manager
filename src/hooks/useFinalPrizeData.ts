@@ -16,6 +16,8 @@ export interface FinalPrizeWinnerRow {
   isMain: boolean;
   hasTrophy: boolean;
   hasMedal: boolean;
+  hasGift: boolean;
+  giftItems: Array<{ name?: string; qty?: number }>;
   playerId: string;
   playerName: string;
   rank?: number | null;
@@ -91,7 +93,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
 
   const { data: prizes, error: prizeError } = await supabase
     .from('prizes')
-    .select('id, place, cash_amount, has_trophy, has_medal, category_id')
+    .select('id, place, cash_amount, has_trophy, has_medal, gift_items, category_id')
     .in('id', prizeIds);
 
   if (prizeError) {
@@ -143,6 +145,8 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
         isMain: !!category.is_main,
         hasTrophy: !!prize.has_trophy,
         hasMedal: !!prize.has_medal,
+        hasGift: Array.isArray(prize.gift_items) && prize.gift_items.length > 0,
+        giftItems: Array.isArray(prize.gift_items) ? prize.gift_items : [],
         playerId: player.id,
         playerName: getPlayerDisplayName(player),
         rank: player.rank,

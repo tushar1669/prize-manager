@@ -10,6 +10,7 @@ type Prize = {
   cash_amount: number | null;
   has_trophy?: boolean;
   has_medal?: boolean;
+  gift_items?: Array<{ name?: string; qty?: number }>;
   is_active?: boolean;
 };
 
@@ -80,6 +81,7 @@ describe('Prize Priority Hierarchy', () => {
         cash_amount: prize.cash_amount ?? 0,
         has_trophy: prize.has_trophy ?? false,
         has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
         is_active: true
       } as Prize
     });
@@ -153,6 +155,7 @@ describe('Prize Priority Hierarchy', () => {
         cash_amount: prize.cash_amount ?? 0,
         has_trophy: prize.has_trophy ?? false,
         has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
         is_active: true
       } as Prize
     });
@@ -191,6 +194,7 @@ describe('Prize Priority Hierarchy', () => {
         cash_amount: prize.cash_amount ?? 0,
         has_trophy: prize.has_trophy ?? false,
         has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
         is_active: true
       } as Prize
     });
@@ -296,6 +300,7 @@ describe('Prize Priority Hierarchy', () => {
         cash_amount: prize.cash_amount ?? 0,
         has_trophy: prize.has_trophy ?? false,
         has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
         is_active: true
       } as Prize
     });
@@ -405,6 +410,96 @@ describe('Prize Priority Hierarchy', () => {
     });
   });
 
+
+  describe('non-cash bundle comparator matrix', () => {
+    const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
+      cat: {
+        id: cat.id ?? 'cat-1',
+        name: cat.name ?? 'Test',
+        is_main: cat.is_main ?? false,
+        order_idx: cat.order_idx ?? 0,
+        criteria_json: cat.criteria_json ?? {},
+        prizes: []
+      } as Category,
+      p: {
+        id: prize.id ?? 'prize-1',
+        place: prize.place ?? 1,
+        cash_amount: prize.cash_amount ?? 0,
+        has_trophy: prize.has_trophy ?? false,
+        has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
+        is_active: true
+      } as Prize
+    });
+
+    const modes: Array<AllocatorModule.NonCashPriorityMode> = ['TGM', 'TMG', 'GTM', 'GMT', 'MTG', 'MGT'];
+
+    const bundlePrizes = [
+      { id: 'none', gift_items: [], has_trophy: false, has_medal: false },
+      { id: 't', gift_items: [], has_trophy: true, has_medal: false },
+      { id: 'g', gift_items: [{ name: 'Gift', qty: 1 }], has_trophy: false, has_medal: false },
+      { id: 'm', gift_items: [], has_trophy: false, has_medal: true },
+      { id: 'tg', gift_items: [{ name: 'Gift', qty: 1 }], has_trophy: true, has_medal: false },
+      { id: 'tm', gift_items: [], has_trophy: true, has_medal: true },
+      { id: 'gm', gift_items: [{ name: 'Gift', qty: 1 }], has_trophy: false, has_medal: true },
+      { id: 'tgm', gift_items: [{ name: 'Gift', qty: 1 }], has_trophy: true, has_medal: true },
+    ] as const;
+
+    const bit = (prize: (typeof bundlePrizes)[number], c: 'T' | 'G' | 'M') => {
+      if (c === 'T') return prize.has_trophy ? 1 : 0;
+      if (c === 'G') return prize.gift_items.length > 0 ? 1 : 0;
+      return prize.has_medal ? 1 : 0;
+    };
+
+    for (const mode of modes) {
+      it(`orders all bundle combos for mode ${mode}`, () => {
+        const comparator = allocator.makePrizeComparator({
+          main_vs_side_priority_mode: 'place_first',
+          non_cash_priority_mode: mode,
+        });
+
+        const entries = bundlePrizes.map((prize) => makeEntry({ is_main: false }, { ...prize, cash_amount: 500 }));
+        entries.sort(comparator);
+
+        const expected = [...bundlePrizes]
+          .sort((a, b) => {
+            for (const component of mode.split('') as Array<'T' | 'G' | 'M'>) {
+              const diff = bit(b, component) - bit(a, component);
+              if (diff !== 0) return diff;
+            }
+            return a.id.localeCompare(b.id);
+          })
+          .map((prize) => prize.id);
+
+        expect(entries.map((e) => e.p.id)).toEqual(expected);
+      });
+    }
+
+    it('cash dominance: higher cash always wins even with weaker bundle', () => {
+      const comparator = allocator.makePrizeComparator({
+        main_vs_side_priority_mode: 'place_first',
+        non_cash_priority_mode: 'MGT',
+      });
+
+      const highCashNoBundle = makeEntry({}, { id: 'cash-high', cash_amount: 1000, gift_items: [] });
+      const lowCashAllBundle = makeEntry({}, { id: 'cash-low', cash_amount: 999, has_trophy: true, has_medal: true, gift_items: [{ name: 'Gift', qty: 1 }] });
+
+      expect(comparator(highCashNoBundle, lowCashAllBundle)).toBeLessThan(0);
+    });
+
+    it('tie-breakers remain unchanged after bundle tie', () => {
+      const comparator = allocator.makePrizeComparator({
+        main_vs_side_priority_mode: 'main_first',
+        non_cash_priority_mode: 'TGM',
+      });
+
+      const main = makeEntry({ is_main: true, order_idx: 9 }, { id: 'main', cash_amount: 500, has_trophy: true, has_medal: true, gift_items: [{ name: 'Gift', qty: 1 }], place: 2 });
+      const side = makeEntry({ is_main: false, order_idx: 0 }, { id: 'side', cash_amount: 500, has_trophy: true, has_medal: true, gift_items: [{ name: 'Gift', qty: 1 }], place: 1 });
+
+      expect(comparator(main, side)).toBeLessThan(0);
+    });
+  });
+
   describe('Acceptance cases: main vs side priority modes', () => {
     const makeEntry = (cat: Partial<Category>, prize: Partial<Prize>) => ({
       cat: {
@@ -421,6 +516,7 @@ describe('Prize Priority Hierarchy', () => {
         cash_amount: prize.cash_amount ?? 0,
         has_trophy: prize.has_trophy ?? false,
         has_medal: prize.has_medal ?? false,
+        gift_items: prize.gift_items ?? [],
         is_active: true
       } as Prize
     });

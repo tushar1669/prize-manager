@@ -28,6 +28,8 @@ export interface RcaRow {
   prize_label: string;
   prize_type: 'cash' | 'trophy' | 'medal' | 'other';
   amount: number | null;
+  has_gift?: boolean;
+  gift_items?: Array<{ name?: string; qty?: number }>;
   
   // Engine winner (from Preview allocation)
   engine_winner_player_id: string | null;
@@ -142,6 +144,8 @@ export function buildRcaRows(
       prize_label: entry.prize_label,
       prize_type: entry.prize_type,
       amount: entry.amount,
+      has_gift: entry.has_gift,
+      gift_items: entry.gift_items,
       
       engine_winner_player_id: entry.winner_player_id,
       engine_winner_name: entry.winner_name,

@@ -74,6 +74,8 @@ interface CoverageItem {
   priority_explanation: string;
   has_trophy: boolean;
   has_medal: boolean;
+  has_gift?: boolean;
+  gift_items?: Array<{ name?: string; qty?: number }>;
 }
 
 // Helper to derive prize type for display (uses cash as primary if present)
@@ -88,14 +90,16 @@ function derivePrizeType(p: PrizeRow): 'cash' | 'trophy' | 'medal' | 'other' {
 function buildPriorityExplanation(
   cat: CategoryRow,
   p: PrizeRow,
-  mainVsSidePriorityMode: MainVsSidePriorityMode = 'place_first'
+  mainVsSidePriorityMode: MainVsSidePriorityMode = 'place_first',
+  nonCashPriorityMode: NonCashPriorityMode = 'TGM'
 ): string {
   const preferMainFirst = mainVsSidePriorityMode === 'main_first';
   const parts: string[] = [];
   const cash = p.cash_amount ?? 0;
   
   parts.push(`cash=₹${cash}`);
-  parts.push(`type=${p.has_trophy ? 'trophy' : p.has_medal ? 'medal' : 'none'}`);
+  parts.push(`bundle=[T:${p.has_trophy ? 1 : 0},G:${hasGiftItems(p) ? 1 : 0},M:${p.has_medal ? 1 : 0}]`);
+  parts.push(`bundle_mode=${nonCashPriorityMode}`);
   if (preferMainFirst) {
     parts.push(`main=${cat.is_main ? 'yes' : 'no'} (priority)`);
   }
@@ -262,8 +266,42 @@ type PrizeRow = {
   cash_amount: number | null;
   has_trophy: boolean;
   has_medal: boolean;
+  gift_items?: Array<{ name?: string; qty?: number }>;
   is_active?: boolean;
 };
+
+export type NonCashPriorityMode = 'TGM' | 'TMG' | 'GTM' | 'GMT' | 'MTG' | 'MGT';
+
+const NON_CASH_PRIORITY_MODES: NonCashPriorityMode[] = ['TGM', 'TMG', 'GTM', 'GMT', 'MTG', 'MGT'];
+
+function normalizeNonCashPriorityMode(value: unknown): NonCashPriorityMode {
+  if (typeof value === 'string' && NON_CASH_PRIORITY_MODES.includes(value as NonCashPriorityMode)) {
+    return value as NonCashPriorityMode;
+  }
+  return 'TGM';
+}
+
+function hasGiftItems(prize: PrizeRow): boolean {
+  return Array.isArray(prize.gift_items) && prize.gift_items.length > 0;
+}
+
+type NonCashComponent = 'T' | 'G' | 'M';
+
+function getNonCashComponentBit(prize: PrizeRow, component: NonCashComponent): 0 | 1 {
+  if (component === 'T') return prize.has_trophy ? 1 : 0;
+  if (component === 'G') return hasGiftItems(prize) ? 1 : 0;
+  return prize.has_medal ? 1 : 0;
+}
+
+export function compareNonCashLexDesc(a: PrizeRow, b: PrizeRow, mode: NonCashPriorityMode): number {
+  const components = mode.split('') as NonCashComponent[];
+  for (const component of components) {
+    const aBit = getNonCashComponentBit(a, component);
+    const bBit = getNonCashComponentBit(b, component);
+    if (aBit !== bBit) return bBit - aBit;
+  }
+  return 0;
+}
 
 // Type for criteria_json to avoid unknown type errors
 type CriteriaJson = {
@@ -483,7 +521,7 @@ Deno.serve(async (req) => {
       .from('categories')
       .select(`
         id, name, is_main, order_idx, is_active, criteria_json,
-        prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
+        prizes (id, place, cash_amount, has_trophy, has_medal, gift_items, is_active)
       `)
       .eq('tournament_id', tournamentId)
       .order('order_idx', { ascending: true });
@@ -564,6 +602,7 @@ Deno.serve(async (req) => {
       max_age_inclusive: true,
       prefer_main_on_equal_value: true,
       main_vs_side_priority_mode: 'main_first' as MainVsSidePriorityMode,
+      non_cash_priority_mode: 'TGM' as NonCashPriorityMode,
       tie_break_strategy: 'rating_then_name' as TieBreakStrategy,
       verbose_logs: envVerbose,
       // NEW: Age band policy - 'non_overlapping' (default) or 'overlapping'
@@ -596,6 +635,10 @@ Deno.serve(async (req) => {
       ruleConfig?.main_vs_side_priority_mode ??
       (rules.prefer_main_on_equal_value === false ? 'place_first' : 'main_first')) as MainVsSidePriorityMode);
     rules.main_vs_side_priority_mode = mainVsSidePriorityMode;
+    const nonCashPriorityMode = normalizeNonCashPriorityMode(
+      ruleOverride?.non_cash_priority_mode ?? ruleConfig?.non_cash_priority_mode ?? rules.non_cash_priority_mode
+    );
+    rules.non_cash_priority_mode = nonCashPriorityMode;
 
     // Determine age band policy
     const ageBandPolicy = (rules.age_band_policy ?? 'non_overlapping') as 'non_overlapping' | 'overlapping';
@@ -715,7 +758,8 @@ Deno.serve(async (req) => {
 
     // Use main_vs_side_priority_mode from rules to determine priority behavior
     const prizeComparator = makePrizeComparator({
-      main_vs_side_priority_mode: rules.main_vs_side_priority_mode ?? 'main_first'
+      main_vs_side_priority_mode: rules.main_vs_side_priority_mode ?? 'main_first',
+      non_cash_priority_mode: rules.non_cash_priority_mode ?? 'TGM',
     });
     prizeQueue.sort(prizeComparator);
 
@@ -918,9 +962,11 @@ Deno.serve(async (req) => {
           diagnosis_summary: diagnosisSummary,
           
           // Prize priority hierarchy
-          priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode),
+          priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode, rules.non_cash_priority_mode),
           has_trophy: !!p.has_trophy,
-          has_medal: !!p.has_medal
+          has_medal: !!p.has_medal,
+          has_gift: hasGiftItems(p),
+          gift_items: p.gift_items ?? []
         });
         
         unfilled.push({ prizeId: p.id, reasonCodes: reasonList });
@@ -1052,9 +1098,11 @@ Deno.serve(async (req) => {
         diagnosis_summary: null,
         
         // Prize priority hierarchy
-        priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode),
+        priority_explanation: buildPriorityExplanation(cat, p, rules.main_vs_side_priority_mode, rules.non_cash_priority_mode),
         has_trophy: !!p.has_trophy,
-        has_medal: !!p.has_medal
+        has_medal: !!p.has_medal,
+        has_gift: hasGiftItems(p),
+        gift_items: p.gift_items ?? []
       });
 
       console.log(`[alloc.win] prize=${p.id} player=${winner.player.id} rank=${winner.player.rank} tie_break=${tieBreak} reasons=${reasonList.join(',')}`);
@@ -1429,6 +1477,7 @@ type AllocationRules = {
   verbose_logs?: boolean;
   multi_prize_policy?: MultiPrizePolicy;
   main_vs_side_priority_mode?: MainVsSidePriorityMode;
+  non_cash_priority_mode?: NonCashPriorityMode;
   tie_break_strategy?: TieBreakStrategy;
   tieBreakStrategy?: TieBreakStrategy;
   prefer_main_on_equal_value?: boolean;
@@ -1780,7 +1829,8 @@ export const prizeKey = (cat: CategoryRow, p: PrizeRow) => {
  * (when cash/type are equal), or whether a better place in Side beats a worse
  * place in Main.
  */
-export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsSidePriorityMode } = {}) => {
+export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsSidePriorityMode; non_cash_priority_mode?: NonCashPriorityMode } = {}) => {
+  const nonCashPriorityMode = normalizeNonCashPriorityMode(opts.non_cash_priority_mode);
   const preferMainFirst = opts.main_vs_side_priority_mode !== 'place_first';
   
   return (a: { cat: CategoryRow; p: PrizeRow }, b: { cat: CategoryRow; p: PrizeRow }): number => {
@@ -1789,8 +1839,9 @@ export const makePrizeComparator = (opts: { main_vs_side_priority_mode?: MainVsS
     // 1. Cash amount: higher wins
     if (ak.cash !== bk.cash) return bk.cash - ak.cash;
 
-    // 2. Prize type: trophy > medal > none
-    if (ak.prizeTypeScore !== bk.prizeTypeScore) return bk.prizeTypeScore - ak.prizeTypeScore;
+    // 2. Non-cash bundle: lexicographic DESC by configured mode (e.g. TGM)
+    const nonCashCmp = compareNonCashLexDesc(a.p, b.p, nonCashPriorityMode);
+    if (nonCashCmp !== 0) return nonCashCmp;
 
     // 3. Conditional: If preferMainFirst AND comparing Main vs Side, Main wins here
     //    This ONLY applies when one is Main and one is Side (mixed comparison)

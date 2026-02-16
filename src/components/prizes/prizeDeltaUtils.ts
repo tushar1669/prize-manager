@@ -5,6 +5,7 @@ type BasePrizePayload = {
   cash_amount: number;
   has_trophy: boolean;
   has_medal: boolean;
+  gift_items: Array<{ name: string; qty: number }>;
   is_active: boolean;
 };
 
@@ -24,6 +25,7 @@ const sanitizeBase = (row: PrizeLike): BasePrizePayload => ({
   cash_amount: Number(row.cash_amount) || 0,
   has_trophy: !!row.has_trophy,
   has_medal: !!row.has_medal,
+  gift_items: Array.isArray((row as { gift_items?: unknown }).gift_items) ? ((row as { gift_items: Array<{ name: string; qty: number }> }).gift_items) : [],
   is_active: row.is_active ?? true,
 });
 

@@ -625,6 +625,7 @@ export type Database = {
           created_at: string | null
           has_medal: boolean | null
           has_trophy: boolean | null
+          gift_items: Json
           id: string
           is_active: boolean
           place: number
@@ -635,6 +636,7 @@ export type Database = {
           created_at?: string | null
           has_medal?: boolean | null
           has_trophy?: boolean | null
+          gift_items?: Json
           id?: string
           is_active?: boolean
           place: number
@@ -645,6 +647,7 @@ export type Database = {
           created_at?: string | null
           has_medal?: boolean | null
           has_trophy?: boolean | null
+          gift_items?: Json
           id?: string
           is_active?: boolean
           place?: number
@@ -737,6 +740,7 @@ export type Database = {
           main_vs_side_priority_mode: string
           max_age_inclusive: boolean | null
           multi_prize_policy: string | null
+          non_cash_priority_mode: string
           prefer_category_rank_on_tie: boolean | null
           prefer_main_on_equal_value: boolean | null
           strict_age: boolean | null
@@ -754,6 +758,7 @@ export type Database = {
           main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
+          non_cash_priority_mode?: string
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null
@@ -771,6 +776,7 @@ export type Database = {
           main_vs_side_priority_mode?: string
           max_age_inclusive?: boolean | null
           multi_prize_policy?: string | null
+          non_cash_priority_mode?: string
           prefer_category_rank_on_tie?: boolean | null
           prefer_main_on_equal_value?: boolean | null
           strict_age?: boolean | null

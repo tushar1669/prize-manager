@@ -38,6 +38,8 @@ export function exportRcaToXlsx(
     'Prize Label': row.prize_label ?? '',
     'Prize Type': capitalize(row.prize_type ?? 'other'),
     Amount: row.amount ?? 0,
+    'Has Gift': row.has_gift ? 'Yes' : 'No',
+    'Gift Items': formatGiftItems(row.gift_items),
     'Root Cause': row.reason_code ? getReasonLabel(row.reason_code) : '',
     Diagnosis: row.diagnosis_summary ?? row.reason_details ?? '',
     Eligible: row.candidates_before_one_prize ?? 0,
@@ -55,6 +57,19 @@ export function exportRcaToXlsx(
   console.log('[rca-export] Exporting', rows.length, 'rows to', filename);
 
   return downloadWorkbookXlsx(filename, { RCA: rows });
+}
+
+function formatGiftItems(items?: Array<{ name?: string; qty?: number }>): string {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return items
+    .map((item) => {
+      const name = String(item?.name ?? '').trim();
+      if (!name) return '';
+      const qty = Number(item?.qty) || 1;
+      return `${name} x${qty}`;
+    })
+    .filter(Boolean)
+    .join('; ');
 }
 
 function capitalize(str: string): string {

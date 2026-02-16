@@ -4,6 +4,19 @@ import { buildExportFilenameSlug } from './exportSlug';
 import type { AllocationCoverageEntry } from '@/types/allocation';
 import { getReasonLabel } from '@/types/allocation';
 
+function formatGiftItems(items?: Array<{ name?: string; qty?: number }>): string {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return items
+    .map((item) => {
+      const name = String(item?.name ?? '').trim();
+      if (!name) return '';
+      const qty = Number(item?.qty) || 1;
+      return `${name} x${qty}`;
+    })
+    .filter(Boolean)
+    .join('; ');
+}
+
 /**
  * Export allocation coverage data to XLSX file
  * Uses the same XLSX helper as player exports
@@ -27,6 +40,8 @@ export function exportCoverageToXlsx(
     Amount: entry.amount ?? 0,
     'Has Trophy': entry.has_trophy ? 'Yes' : 'No',
     'Has Medal': entry.has_medal ? 'Yes' : 'No',
+    'Has Gift': entry.has_gift ? 'Yes' : 'No',
+    'Gift Items': formatGiftItems(entry.gift_items),
     Status: entry.is_unfilled ? 'Unfilled' : 'Filled',
     'Winner Name': entry.winner_name ?? '',
     'Winner Rank': entry.winner_rank ?? '',

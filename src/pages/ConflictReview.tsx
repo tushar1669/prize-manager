@@ -153,11 +153,11 @@ export default function ConflictReview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
+        .select('id, name, prizes(id, place, cash_amount, has_trophy, has_medal, gift_items, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
-      type PrizeRow = { id: string; place: number; cash_amount: number | null; has_trophy: boolean; has_medal: boolean; is_active?: boolean };
+      type PrizeRow = { id: string; place: number; cash_amount: number | null; has_trophy: boolean; has_medal: boolean; gift_items?: Array<{ name?: string; qty?: number }>; is_active?: boolean };
       const prizes = (data || []).flatMap(cat => 
         ((cat.prizes || []) as PrizeRow[]).map((p) => ({
           id: p.id,
@@ -179,7 +179,7 @@ export default function ConflictReview() {
     queryFn: async () => {
       const { data, error }: { data: RuleConfigQueryRow | null; error: PostgrestError | null } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, tournament_id, created_at, updated_at')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, non_cash_priority_mode, age_band_policy, tournament_id, created_at, updated_at')
         .eq('tournament_id', id)
         .maybeSingle();
       if (error) throw error;
@@ -191,6 +191,7 @@ export default function ConflictReview() {
         max_age_inclusive: true,
         prefer_main_on_equal_value: true,
         main_vs_side_priority_mode: 'main_first',
+        non_cash_priority_mode: 'TGM',
         age_band_policy: 'non_overlapping',
         tournament_id: id,
       };
@@ -199,11 +200,13 @@ export default function ConflictReview() {
   });
 
   const prizeFlagsById = useMemo(() => {
-    const map = new Map<string, { has_trophy: boolean; has_medal: boolean }>();
+    const map = new Map<string, { has_trophy: boolean; has_medal: boolean; has_gift: boolean; gift_items: Array<{ name?: string; qty?: number }> }>();
     for (const prize of prizesList || []) {
       map.set(prize.id, {
         has_trophy: prize.has_trophy,
         has_medal: prize.has_medal,
+        has_gift: Array.isArray(prize.gift_items) && prize.gift_items.length > 0,
+        gift_items: Array.isArray(prize.gift_items) ? prize.gift_items : [],
       });
     }
     return map;
@@ -218,6 +221,8 @@ export default function ConflictReview() {
         ...entry,
         has_trophy: entry.has_trophy == null ? prizeFlags?.has_trophy : entry.has_trophy,
         has_medal: entry.has_medal == null ? prizeFlags?.has_medal : entry.has_medal,
+        has_gift: entry.has_gift == null ? prizeFlags?.has_gift : entry.has_gift,
+        gift_items: entry.gift_items == null ? prizeFlags?.gift_items : entry.gift_items,
       };
     });
   }, [prizeFlagsById]);

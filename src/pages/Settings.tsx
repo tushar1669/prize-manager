@@ -11,6 +11,8 @@ import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +34,7 @@ export default function Settings() {
       allow_missing_dob_for_age: false,
       max_age_inclusive: true,
       main_vs_side_priority_mode: 'main_first' as const,
+      non_cash_priority_mode: 'TGM' as const,
       age_band_policy: 'non_overlapping' as const,
       multi_prize_policy: 'single' as const,
       age_cutoff_policy: 'JAN1_TOURNAMENT_YEAR' as const,
@@ -58,6 +61,25 @@ export default function Settings() {
     enabled: !!id
   });
 
+
+
+  const { data: hasActiveGiftPrizes = false } = useQuery({
+    queryKey: ['settings-has-gifts', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('prizes(is_active, gift_items)')
+        .eq('tournament_id', id);
+
+      if (error) throw error;
+      return (data || []).some((category) =>
+        (category.prizes || []).some((prize: { is_active?: boolean; gift_items?: unknown[] }) =>
+          prize.is_active !== false && Array.isArray(prize.gift_items) && prize.gift_items.length > 0
+        )
+      );
+    },
+    enabled: !!id,
+  });
   type RuleConfigData = {
     strict_age?: boolean;
     allow_unrated_in_rating?: boolean;
@@ -65,6 +87,7 @@ export default function Settings() {
     max_age_inclusive?: boolean;
     prefer_main_on_equal_value?: boolean;
     main_vs_side_priority_mode?: 'main_first' | 'place_first';
+    non_cash_priority_mode?: 'TGM' | 'TMG' | 'GTM' | 'GMT' | 'MTG' | 'MGT';
     age_band_policy?: 'non_overlapping' | 'overlapping';
     multi_prize_policy?: 'single' | 'main_plus_one_side' | 'unlimited';
     age_cutoff_policy?: 'JAN1_TOURNAMENT_YEAR' | 'TOURNAMENT_START_DATE' | 'CUSTOM_DATE';
@@ -78,7 +101,7 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rule_config')
-        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, age_band_policy, multi_prize_policy, age_cutoff_policy, age_cutoff_date, tournament_id')
+        .select('strict_age, allow_unrated_in_rating, allow_missing_dob_for_age, max_age_inclusive, prefer_main_on_equal_value, main_vs_side_priority_mode, non_cash_priority_mode, age_band_policy, multi_prize_policy, age_cutoff_policy, age_cutoff_date, tournament_id')
         .eq('tournament_id', id)
         .maybeSingle();
       
@@ -103,6 +126,7 @@ export default function Settings() {
           allow_missing_dob_for_age: ruleData.allow_missing_dob_for_age,
           max_age_inclusive: ruleData.max_age_inclusive,
           main_vs_side_priority_mode: mainVsSidePriorityMode,
+          non_cash_priority_mode: ruleData.non_cash_priority_mode || 'TGM',
           age_band_policy: ruleData.age_band_policy || 'non_overlapping',
           multi_prize_policy: ruleData.multi_prize_policy || 'single',
           age_cutoff_policy: ruleData.age_cutoff_policy || 'JAN1_TOURNAMENT_YEAR',
@@ -126,6 +150,7 @@ export default function Settings() {
           ...values,
           age_cutoff_date: values.age_cutoff_date || null,
           main_vs_side_priority_mode: values.main_vs_side_priority_mode,
+          non_cash_priority_mode: values.non_cash_priority_mode,
           prefer_main_on_equal_value: values.main_vs_side_priority_mode === 'main_first',
           updated_at: new Date().toISOString()
         }, {
@@ -341,6 +366,48 @@ export default function Settings() {
                 )}
 
 
+
+                {hasActiveGiftPrizes && (
+                  <div className="space-y-4">
+                    <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Gifts detected. If your intent differs, adjust ordering here.
+                      </AlertDescription>
+                    </Alert>
+
+                    <FormField
+                      control={form.control}
+                      name="non_cash_priority_mode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-foreground font-medium">
+                            Non-cash prize priority
+                          </FormLabel>
+                          <FormDescription className="text-sm text-muted-foreground mt-1 mb-2">
+                            Used when cash amounts are equal. Components are compared lexicographically in this order.
+                          </FormDescription>
+                          <FormControl>
+                            <Select value={field.value || 'TGM'} onValueChange={field.onChange}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select non-cash priority" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="TGM">Trophy {'>'} Gift {'>'} Medal (TGM)</SelectItem>
+                                <SelectItem value="TMG">Trophy {'>'} Medal {'>'} Gift (TMG)</SelectItem>
+                                <SelectItem value="GTM">Gift {'>'} Trophy {'>'} Medal (GTM)</SelectItem>
+                                <SelectItem value="GMT">Gift {'>'} Medal {'>'} Trophy (GMT)</SelectItem>
+                                <SelectItem value="MTG">Medal {'>'} Trophy {'>'} Gift (MTG)</SelectItem>
+                                <SelectItem value="MGT">Medal {'>'} Gift {'>'} Trophy (MGT)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
                 <FormField
                   control={form.control}
                   name="main_vs_side_priority_mode"
@@ -519,6 +586,12 @@ export default function Settings() {
                         : 'Jan 1 of tournament year'}
                     </strong>
                   </li>
+                  {hasActiveGiftPrizes && (
+                    <li>
+                      Non-cash Priority:{' '}
+                      <strong>{form.watch('non_cash_priority_mode')}</strong>
+                    </li>
+                  )}
                   <li>
                     Main vs Place Priority:{' '}
                     <strong>

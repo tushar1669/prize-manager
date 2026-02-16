@@ -265,6 +265,8 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
     const prizeComparator = allocator.makePrizeComparator({
       main_vs_side_priority_mode: (rules as { main_vs_side_priority_mode?: AllocatorModule.MainVsSidePriorityMode })
         .main_vs_side_priority_mode,
+      non_cash_priority_mode: (rules as { non_cash_priority_mode?: AllocatorModule.NonCashPriorityMode })
+        .non_cash_priority_mode,
     });
     prizeQueue.sort(prizeComparator);
 
@@ -315,6 +317,42 @@ describe('allocatePrizes (in-memory synthetic tournaments)', () => {
 
     return { winners, unfilled, eligibilityLog };
   };
+
+
+  it('end-to-end allocation prefers Trophy+Medal over Trophy at equal cash', () => {
+    const categories = [
+      {
+        id: 'main',
+        name: 'Main',
+        is_main: true,
+        order_idx: 0,
+        criteria_json: {},
+        prizes: [{ id: 'main-t', place: 1, cash_amount: 5000, has_trophy: true, has_medal: false, gift_items: [] }],
+      },
+      {
+        id: 'u15',
+        name: 'U15',
+        is_main: false,
+        order_idx: 1,
+        criteria_json: { max_age: 15 },
+        prizes: [{ id: 'u15-tm', place: 1, cash_amount: 5000, has_trophy: true, has_medal: true, gift_items: [] }],
+      },
+    ];
+
+    const players = [
+      { id: 'p1', name: 'Top Kid', rank: 1, rating: 1900, dob: '2012-01-01', gender: 'M' },
+      { id: 'p2', name: 'Next Kid', rank: 2, rating: 1800, dob: '2013-01-01', gender: 'M' },
+    ];
+
+    const { winners } = runAllocation(categories, players, {
+      ...defaultRules,
+      main_vs_side_priority_mode: 'place_first',
+      non_cash_priority_mode: 'TGM',
+    }, new Date('2025-01-01'));
+
+    expect(winners[0]).toEqual({ prizeId: 'u15-tm', playerId: 'p1' });
+    expect(winners[1]).toEqual({ prizeId: 'main-t', playerId: 'p2' });
+  });
 
   it('respects age, gender, and location filters while picking top ranks', () => {
     const categories = [

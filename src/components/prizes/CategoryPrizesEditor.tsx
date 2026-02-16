@@ -13,12 +13,18 @@ import { makeKey, getDraft, clearDraft, formatAge } from '@/utils/autosave';
 import { useAutosaveEffect } from '@/hooks/useAutosaveEffect';
 import { CategoryCriteriaChips } from './CategoryCriteriaChips';
 
+export interface GiftItem {
+  name: string;
+  qty: number;
+}
+
 export interface PrizeRow {
   id?: string;
   place: number;
   cash_amount: number;
   has_trophy: boolean;
   has_medal: boolean;
+  gift_items: GiftItem[];
   is_active: boolean;
   _tempId?: string;
   _status?: 'new' | 'dirty' | 'clean' | 'deleted';
@@ -94,6 +100,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
         cash_amount: r.cash_amount,
         has_trophy: r.has_trophy,
         has_medal: r.has_medal,
+        gift_items: Array.isArray(r.gift_items) ? r.gift_items : [],
         is_active: r.is_active,
       })));
     const incoming = normalize(base);
@@ -173,8 +180,9 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       const cashAmount = Number(row.cash_amount) || 0;
       const hasTrophy = !!row.has_trophy;
       const hasMedal = !!row.has_medal;
+      const hasGift = Array.isArray(row.gift_items) && row.gift_items.length > 0;
       
-      if (cashAmount === 0 && !hasTrophy && !hasMedal) {
+      if (cashAmount === 0 && !hasTrophy && !hasMedal && !hasGift) {
         emptyRows.push(row.place);
         // Mark empty rows with error
         setDraft(prev => prev.map(p => 
@@ -186,7 +194,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     }
 
     if (emptyRows.length > 0) {
-      return `Empty prize(s) at place ${emptyRows.join(', ')}: Add cash, trophy, or medal – or delete the row.`;
+      return `Empty prize(s) at place ${emptyRows.join(', ')}: Add cash, trophy, medal, or gift – or delete the row.`;
     }
 
     return null;
@@ -202,6 +210,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
         cash_amount: Number(p.cash_amount) || 0,
         has_trophy: !!p.has_trophy,
         has_medal: !!p.has_medal,
+        gift_items: Array.isArray(p.gift_items) ? p.gift_items : [],
         is_active: !!p.is_active,
       };
 
@@ -282,6 +291,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       cash_amount: 0,
       has_trophy: false,
       has_medal: false,
+      gift_items: [],
       is_active: true,
     };
     console.log('[prizes-cat] add', { categoryId: category.id, tempId: row._tempId });
@@ -298,6 +308,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       cash_amount: sourceRow.cash_amount ?? 0,
       has_trophy: sourceRow.has_trophy ?? false,
       has_medal: sourceRow.has_medal ?? false,
+      gift_items: sourceRow.gift_items ?? [],
       is_active: sourceRow.is_active ?? true,
     };
     console.log('[prizes-cat] duplicate row', { categoryId: category.id, sourcePlace: sourceRow.place, newPlace: newRow.place });
@@ -551,6 +562,8 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                   <th className="text-left py-2 pr-4 w-40">Cash (₹)</th>
                   <th className="text-left py-2 pr-4 w-24">Trophy</th>
                   <th className="text-left py-2 pr-4 w-24">Medal</th>
+                  <th className="text-left py-2 pr-4 w-48">Gift Name</th>
+                  <th className="text-left py-2 pr-4 w-24">Gift Qty</th>
                   <th className="text-right py-2 pl-4 w-16"> </th>
                 </tr>
               </thead>
@@ -579,7 +592,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                           {row._error && (
                             <p className="text-xs text-destructive">
                               {row._error === 'Empty prize' 
-                                ? 'Add cash, trophy, or medal' 
+                                ? 'Add cash, trophy, medal, or gift' 
                                 : row._error}
                             </p>
                           )}
@@ -626,6 +639,37 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                           />
                           <Medal className="h-4 w-4 opacity-70" />
                         </div>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <Input
+                          type="text"
+                          value={row.gift_items?.[0]?.name ?? ''}
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const qty = Number(row.gift_items?.[0]?.qty) || 1;
+                            markDirty(rowIndex, {
+                              gift_items: name.trim() ? [{ name, qty }] : [],
+                            });
+                          }}
+                          placeholder="Gift item"
+                          className="w-48"
+                        />
+                      </td>
+                      <td className="py-2 pr-4">
+                        <Input
+                          type="number"
+                          min={1}
+                          value={row.gift_items?.[0]?.qty ?? ''}
+                          onChange={(e) => {
+                            const existingName = row.gift_items?.[0]?.name?.trim() ?? '';
+                            const qty = Math.max(1, Number.parseInt(e.target.value || '1', 10) || 1);
+                            markDirty(rowIndex, {
+                              gift_items: existingName ? [{ name: existingName, qty }] : [],
+                            });
+                          }}
+                          placeholder="1"
+                          className="w-24"
+                        />
                       </td>
                       <td className="py-2 pl-4">
                         <div className="flex items-center gap-1">
