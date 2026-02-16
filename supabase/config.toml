@@ -13,7 +13,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.parseWorkbook]
-verify_jwt = false
+verify_jwt = true
 
 [functions.pmPing]
 verify_jwt = false
