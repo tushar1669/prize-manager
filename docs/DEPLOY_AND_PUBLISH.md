@@ -30,7 +30,13 @@ Functions in scope (`supabase/functions/*`):
 - `pmPing`
 - `publicTeamPrizes`
 
-JWT expectations are configured in `supabase/config.toml` and must remain aligned with deployment.
+Deploy `parseWorkbook` with explicit project targeting:
+
+```bash
+supabase functions deploy parseWorkbook --project-ref <ref>
+```
+
+JWT expectations are configured in `supabase/config.toml` and must remain aligned with deployment. Ensure `supabase/config.toml` is included in the deploy artifact/context so `verify_jwt` settings are applied.
 
 ## 4. Deploy/publish frontend
 Frontend deploy mechanism is **UNKNOWN** in repo (no single hosting script). Verify with your hosting platform process.
