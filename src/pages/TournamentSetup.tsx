@@ -91,8 +91,8 @@ export default function TournamentSetup() {
   const [savedCriteria, setSavedCriteria] = useState<{ criteria: CriteriaJson; category_type: string } | null>(null);
   const [categoryTypeSelection, setCategoryTypeSelection] = useState<string>('standard');
   // Start with empty arrays - will be populated during hydration
-  const [prizes, setPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
-  const [initialPrizes, setInitialPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean}>>([]);
+  const [prizes, setPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean; gift_items: Array<{ name: string; qty: number }> }>>([]);
+  const [initialPrizes, setInitialPrizes] = useState<Array<{place: number; cash_amount: number; has_trophy: boolean; has_medal: boolean; gift_items: Array<{ name: string; qty: number }> }>>([]);
   const [copyFromCategoryId, setCopyFromCategoryId] = useState<string | null>(null);
   const [includeCriteriaOnCopy, setIncludeCriteriaOnCopy] = useState(true);
   // Prize mode toggle: 'individual' (default) vs 'team' (institution prizes)
@@ -478,7 +478,7 @@ export default function TournamentSetup() {
         .from('categories')
         .select(`
           *,
-          prizes (id, place, cash_amount, has_trophy, has_medal, is_active)
+          prizes (id, place, cash_amount, has_trophy, has_medal, gift_items, is_active)
         `)
         .eq('tournament_id', id)
         .order('order_idx');
@@ -594,7 +594,8 @@ export default function TournamentSetup() {
         place: p.place,
         cash_amount: p.cash_amount,
         has_trophy: p.has_trophy,
-        has_medal: p.has_medal
+        has_medal: p.has_medal,
+        gift_items: Array.isArray(p.gift_items) ? p.gift_items : []
       }));
       
       console.log('[setup] hydrated setup from Supabase', { 
@@ -614,7 +615,7 @@ export default function TournamentSetup() {
     } else {
       // No main category exists - seed default single-row placeholder
       console.log('[setup] seeding default prizes for new tournament', { tournamentId: id });
-      const defaultPrizes = [{ place: 1, cash_amount: 0, has_trophy: false, has_medal: false }];
+      const defaultPrizes = [{ place: 1, cash_amount: 0, has_trophy: false, has_medal: false, gift_items: [] }];
       setPrizes(defaultPrizes);
       setInitialPrizes(defaultPrizes);
       setHasHydratedPrizes(true);
@@ -797,7 +798,8 @@ export default function TournamentSetup() {
         place: p.place,
         cash_amount: p.cash_amount,
         has_trophy: p.has_trophy,
-        has_medal: p.has_medal
+        has_medal: p.has_medal,
+        gift_items: Array.isArray(p.gift_items) ? p.gift_items : []
       }));
 
       const { error, data } = await supabase
@@ -1108,7 +1110,7 @@ export default function TournamentSetup() {
   const copyPrizesForCategory = async (sourceCategoryId: string, targetCategoryId: string) => {
     const { data: srcPrizes, error } = await supabase
       .from('prizes')
-      .select('place, cash_amount, has_trophy, has_medal')
+      .select('place, cash_amount, has_trophy, has_medal, gift_items')
       .eq('category_id', sourceCategoryId);
 
     if (error) throw error;
@@ -1120,6 +1122,7 @@ export default function TournamentSetup() {
       cash_amount: p.cash_amount,
       has_trophy: p.has_trophy,
       has_medal: p.has_medal,
+      gift_items: Array.isArray(p.gift_items) ? p.gift_items : [],
     }));
 
     const { error: insertError } = await supabase.from('prizes').insert(rows);
@@ -1218,7 +1221,7 @@ export default function TournamentSetup() {
   };
 
   const handleAddPrize = () => {
-    setPrizes([...prizes, { place: prizes.length + 1, cash_amount: 0, has_trophy: false, has_medal: false }]);
+    setPrizes([...prizes, { place: prizes.length + 1, cash_amount: 0, has_trophy: false, has_medal: false, gift_items: [] }]);
   };
 
   const handleRemovePrize = (index: number) => {

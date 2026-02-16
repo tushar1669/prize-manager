@@ -56,6 +56,7 @@ interface PrizeRecord {
   cash_amount: number | null;
   has_trophy: boolean | null;
   has_medal: boolean | null;
+  gift_items: Array<{ name?: string; qty?: number }> | null;
   is_active: boolean | null;
 }
 
@@ -137,7 +138,7 @@ export default function Finalize() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, order_idx, criteria_json, prizes(id, place, cash_amount, has_trophy, has_medal, is_active)')
+        .select('id, name, order_idx, criteria_json, prizes(id, place, cash_amount, has_trophy, has_medal, gift_items, is_active)')
         .eq('tournament_id', id);
       if (error) throw error;
       
@@ -148,6 +149,7 @@ export default function Finalize() {
           cash_amount: p.cash_amount,
           has_trophy: p.has_trophy,
           has_medal: p.has_medal,
+          gift_items: p.gift_items,
           category_id: cat.id,
           category_name: cat.name,
           category_order: typeof cat.order_idx === 'number' ? cat.order_idx : 999,

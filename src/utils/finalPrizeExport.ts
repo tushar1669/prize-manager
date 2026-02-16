@@ -10,9 +10,24 @@ export type FinalPrizeExportRow = {
   Amount: number;
   Trophy: 'Yes' | 'No';
   Medal: 'Yes' | 'No';
+  'Has Gift': 'Yes' | 'No';
+  'Gift Items': string;
   'Club/Institution': string;
   State: string;
 };
+
+function formatGiftItems(items: Array<{ name?: string; qty?: number }> | undefined): string {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return items
+    .map((item) => {
+      const name = String(item?.name ?? '').trim();
+      if (!name) return '';
+      const qty = Number(item?.qty) || 1;
+      return `${name} x${qty}`;
+    })
+    .filter(Boolean)
+    .join('; ');
+}
 
 export function buildFinalPrizeExportRows(winners: FinalPrizeWinnerRow[]): FinalPrizeExportRow[] {
   return winners.map((winner, index) => ({
@@ -24,6 +39,8 @@ export function buildFinalPrizeExportRows(winners: FinalPrizeWinnerRow[]): Final
     Amount: winner.amount ?? 0,
     Trophy: winner.hasTrophy ? 'Yes' : 'No',
     Medal: winner.hasMedal ? 'Yes' : 'No',
+    'Has Gift': winner.hasGift ? 'Yes' : 'No',
+    'Gift Items': formatGiftItems(winner.giftItems),
     'Club/Institution': winner.club ?? '',
     State: winner.state ?? '',
   }));

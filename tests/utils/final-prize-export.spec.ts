@@ -15,6 +15,8 @@ describe('buildFinalPrizeExportRows', () => {
         isMain: true,
         hasTrophy: true,
         hasMedal: false,
+        hasGift: true,
+        giftItems: [{ name: 'Chess Clock', qty: 1 }],
         playerId: 'player-1',
         playerName: 'Aditi Sharma 🏆 TROPHY',
         rank: 12,
@@ -29,5 +31,7 @@ describe('buildFinalPrizeExportRows', () => {
     expect(row['Player Name']).not.toMatch(/TROPHY|🏆|🥇/i);
     expect(row.Trophy).toBe('Yes');
     expect(row.Medal).toBe('No');
+    expect(row['Has Gift']).toBe('Yes');
+    expect(row['Gift Items']).toContain('Chess Clock x1');
   });
 });

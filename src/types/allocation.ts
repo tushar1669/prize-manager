@@ -67,6 +67,8 @@ export interface AllocationCoverageEntry {
   priority_explanation?: string;
   has_trophy?: boolean;
   has_medal?: boolean;
+  has_gift?: boolean;
+  gift_items?: Array<{ name?: string; qty?: number }>;
 }
 
 /**
