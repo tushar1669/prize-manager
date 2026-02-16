@@ -1565,9 +1565,16 @@ export default function PlayerImport() {
 
     if (replaceExisting && isMaster && tournament && user && tournament.owner_id !== user.id) {
       const confirmed = window.confirm(
-        'You are replacing players for another organizer. This will overwrite data.'
+        'You are replacing players for another organizer. This will overwrite all existing players for this tournament. Continue?'
       );
       if (!confirmed) {
+        return;
+      }
+
+      const explicitlyWarned = window.confirm(
+        'Final confirmation: as a master user, you are about to run Replace on a tournament you do not own. This cannot be undone. Proceed with replace import?'
+      );
+      if (!explicitlyWarned) {
         return;
       }
     }
