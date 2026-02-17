@@ -21,7 +21,8 @@
     "test:alloc": "playwright test e2e/allocator-null-safety.spec.ts --trace=on",
     "test:ux": "playwright test e2e/ux-improvements.spec.ts --trace=on",
     "qa": "npm run build && npm run test:swiss && npm run test:alloc && npm run test:ux",
-    "playwright:install": "npx playwright install --with-deps"
+    "playwright:install": "npx playwright install --with-deps",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=20 <21"

@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
 import { tournamentDetailsSchema, TournamentDetailsForm, categorySchema, CategoryForm } from "@/lib/validations";
 import { classifyTimeControl } from "@/utils/timeControl";
-import { cn } from "@/lib/utils";
+import { cn, coerceGiftItems } from "@/lib/utils";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -595,7 +595,7 @@ export default function TournamentSetup() {
         cash_amount: p.cash_amount,
         has_trophy: p.has_trophy,
         has_medal: p.has_medal,
-        gift_items: Array.isArray(p.gift_items) ? p.gift_items : []
+        gift_items: coerceGiftItems(p.gift_items)
       }));
       
       console.log('[setup] hydrated setup from Supabase', { 
@@ -799,7 +799,7 @@ export default function TournamentSetup() {
         cash_amount: p.cash_amount,
         has_trophy: p.has_trophy,
         has_medal: p.has_medal,
-        gift_items: Array.isArray(p.gift_items) ? p.gift_items : []
+        gift_items: coerceGiftItems(p.gift_items)
       }));
 
       const { error, data } = await supabase
@@ -1122,7 +1122,7 @@ export default function TournamentSetup() {
       cash_amount: p.cash_amount,
       has_trophy: p.has_trophy,
       has_medal: p.has_medal,
-      gift_items: Array.isArray(p.gift_items) ? p.gift_items : [],
+      gift_items: coerceGiftItems(p.gift_items),
     }));
 
     const { error: insertError } = await supabase.from('prizes').insert(rows);

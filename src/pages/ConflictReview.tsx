@@ -34,6 +34,7 @@ import type { AllocationCoverageEntry } from "@/types/allocation";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
+import { coerceGiftItems } from "@/lib/utils";
 
 interface Winner {
   prizeId: string;
@@ -157,7 +158,7 @@ export default function ConflictReview() {
         .eq('tournament_id', id);
       if (error) throw error;
       
-      type PrizeRow = { id: string; place: number; cash_amount: number | null; has_trophy: boolean; has_medal: boolean; gift_items?: Array<{ name?: string; qty?: number }>; is_active?: boolean };
+      type PrizeRow = { id: string; place: number; cash_amount: number | null; has_trophy: boolean; has_medal: boolean; gift_items?: unknown; is_active?: boolean };
       const prizes = (data || []).flatMap(cat => 
         ((cat.prizes || []) as PrizeRow[]).map((p) => ({
           id: p.id,
@@ -165,6 +166,7 @@ export default function ConflictReview() {
           cash_amount: p.cash_amount,
           has_trophy: p.has_trophy,
           has_medal: p.has_medal,
+          gift_items: coerceGiftItems(p.gift_items),
           category_name: cat.name
         }))
       );
@@ -200,13 +202,13 @@ export default function ConflictReview() {
   });
 
   const prizeFlagsById = useMemo(() => {
-    const map = new Map<string, { has_trophy: boolean; has_medal: boolean; has_gift: boolean; gift_items: Array<{ name?: string; qty?: number }> }>();
+    const map = new Map<string, { has_trophy: boolean; has_medal: boolean; has_gift: boolean; gift_items: Array<{ name: string; qty: number }> }>();
     for (const prize of prizesList || []) {
       map.set(prize.id, {
         has_trophy: prize.has_trophy,
         has_medal: prize.has_medal,
-        has_gift: Array.isArray(prize.gift_items) && prize.gift_items.length > 0,
-        gift_items: Array.isArray(prize.gift_items) ? prize.gift_items : [],
+        has_gift: prize.gift_items.length > 0,
+        gift_items: prize.gift_items,
       });
     }
     return map;
