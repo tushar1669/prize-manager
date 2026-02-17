@@ -5,6 +5,7 @@ import { safeSelectPlayersByIds } from '@/utils/safeSelectPlayers';
 import { byMainOrderPlace } from '@/utils/sortWinners';
 import { getLatestAllocations } from '@/utils/getLatestAllocations';
 import { getPlayerDisplayName } from '@/utils/playerName';
+import { coerceGiftItems } from '@/lib/utils';
 
 export interface FinalPrizeWinnerRow {
   prizeId: string;
@@ -135,6 +136,8 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
       const category = prize?.category_id ? categoryLookup.get(prize.category_id) : undefined;
       if (!prize || !player || !category) return null;
 
+      const giftItems = coerceGiftItems(prize.gift_items);
+
       return {
         prizeId: prize.id,
         place: prize.place || 0,
@@ -145,8 +148,8 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
         isMain: !!category.is_main,
         hasTrophy: !!prize.has_trophy,
         hasMedal: !!prize.has_medal,
-        hasGift: Array.isArray(prize.gift_items) && prize.gift_items.length > 0,
-        giftItems: Array.isArray(prize.gift_items) ? prize.gift_items : [],
+        hasGift: giftItems.length > 0,
+        giftItems,
         playerId: player.id,
         playerName: getPlayerDisplayName(player),
         rank: player.rank,

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
+import { coerceGiftItems } from "@/lib/utils";
 
 export default function Settings() {
   const { id } = useParams();
@@ -73,8 +74,8 @@ export default function Settings() {
 
       if (error) throw error;
       return (data || []).some((category) =>
-        (category.prizes || []).some((prize: { is_active?: boolean; gift_items?: unknown[] }) =>
-          prize.is_active !== false && Array.isArray(prize.gift_items) && prize.gift_items.length > 0
+        (category.prizes || []).some((prize: { is_active?: boolean; gift_items?: unknown }) =>
+          prize.is_active !== false && coerceGiftItems(prize.gift_items).length > 0
         )
       );
     },
