@@ -10,7 +10,7 @@ Do not keep alternate config variants for edge function auth in this repository.
 
 ## `parseWorkbook` must keep `verify_jwt = true`
 
-`parseWorkbook` handles organizer import payloads and runs with elevated privileges in the edge environment. If JWT verification is disabled, unauthenticated callers could hit a privileged endpoint directly.
+`parseWorkbook` accepts organizer upload payloads and runs privileged server-side checks (including tournament authorization and storage writes). Keeping `verify_jwt = true` ensures the Supabase gateway rejects unauthenticated browser/API callers before privileged logic can run.
 
 For this reason, `supabase/config.toml` must continue to include:
 
@@ -19,59 +19,24 @@ For this reason, `supabase/config.toml` must continue to include:
 verify_jwt = true
 ```
 
-Only explicitly public endpoints (`pmPing` and `publicTeamPrizes`) should have `verify_jwt = false`. All other functions remain `verify_jwt = true`.
+Only explicitly public endpoints (`pmPing` and `publicTeamPrizes`) should use `verify_jwt = false`. All other functions remain `verify_jwt = true`.
 
-## Deploy instructions (no local CLI required)
+## Browser CORS requirements for `parseWorkbook`
 
-### Option A: Dashboard toggle (if available)
+`parseWorkbook` is called from the browser app (`https://prize-manager.com`), so preflight and JSON responses must include CORS headers for the request to be accepted by the browser.
 
-1. In Supabase Dashboard, open your project.
-2. Go to **Edge Functions** → **parseWorkbook**.
-3. Find the **Verify JWT** / **Enforce JWT** toggle in function settings.
-4. Ensure it is **enabled**.
-5. Save/redeploy if prompted.
+At minimum, the CORS allow-headers set must cover:
 
-### Option B: One-time CLI deploy from any machine
+- `authorization`
+- `apikey`
+- `content-type`
 
-If the dashboard toggle is unavailable, run Supabase CLI once from any machine:
+When these headers are missing (or not present on error responses), browsers can block requests before the response body is visible to the client.
 
-```bash
-supabase login
-supabase link --project-ref <project-ref>
-supabase functions deploy parseWorkbook
-```
+## Validate in browser DevTools + Supabase logs (no CLI)
 
-This applies the repository's `supabase/config.toml` function JWT settings.
-
-## 2-step smoke test (gateway + logs)
-
-### Run smoke checks
-
-Node script (preferred):
-
-```bash
-PARSE_WORKBOOK_URL="https://<project-ref>.supabase.co/functions/v1/parseWorkbook" \
-node scripts/smoke/parseWorkbook-auth.mjs
-```
-
-Optional authenticated step:
-
-```bash
-PARSE_WORKBOOK_URL="https://<project-ref>.supabase.co/functions/v1/parseWorkbook" \
-SUPABASE_USER_JWT="<valid-user-jwt>" \
-node scripts/smoke/parseWorkbook-auth.mjs
-```
-
-Curl alternative:
-
-```bash
-scripts/smoke/parseWorkbook-auth.sh \
-  --url https://<project-ref>.supabase.co/functions/v1/parseWorkbook \
-  --jwt "$SUPABASE_USER_JWT"
-```
-
-### Validate in dashboard logs
-
-1. Open **Edge Functions** → **parseWorkbook** → **Logs**.
-2. Execute unauthenticated request (step 1): expect `401` and no handler logs from function execution.
-3. Execute authenticated request with valid JWT (step 2): expect non-`401` and corresponding function logs.
+1. Open `https://prize-manager.com`, trigger a workbook import, and inspect the Network tab for the `parseWorkbook` request.
+2. Confirm the preflight (`OPTIONS`) succeeds and the response includes CORS headers.
+3. Confirm the main request response (200/4xx/5xx) also includes CORS headers and JSON body.
+4. In Supabase Dashboard, open **Edge Functions** → **parseWorkbook** → **Logs**.
+5. Verify request outcomes in logs match browser-observed status codes (authorized runs, forbidden tournament access, and parse failures).
