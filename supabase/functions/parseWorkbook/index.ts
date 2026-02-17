@@ -717,6 +717,7 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 }
 
 Deno.serve(async (req) => {
+  console.log("[parseWorkbook] method=", req.method);
   // CORS preflight and health-check handlers MUST run before auth checks.
   if (hasPingQueryParam(req)) {
     console.log(`[${FUNCTION_NAME}] ping via query param`);
@@ -724,12 +725,13 @@ Deno.serve(async (req) => {
   }
 
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
   const responseHeaders = jsonHeaders();
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
+    console.log("[parseWorkbook] forbidden");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: responseHeaders
@@ -740,6 +742,7 @@ Deno.serve(async (req) => {
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const { data: authData, error: authError } = await supabase.auth.getUser(token);
   if (authError || !authData?.user) {
+    console.log("[parseWorkbook] forbidden");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: responseHeaders
@@ -762,6 +765,7 @@ Deno.serve(async (req) => {
       responseHeaders
     );
     if (accessResponse) {
+      console.log("[parseWorkbook] forbidden");
       return accessResponse;
     }
 
@@ -857,6 +861,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[import.srv] ok rows=${rowCount} sheet=${sheetName} headerRow=${headerRowIndex + 1} duration_ms=${durationMs}`);
+    console.log("[parseWorkbook] ok");
 
     if (tournamentId) {
       try {
