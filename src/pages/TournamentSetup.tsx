@@ -1858,7 +1858,14 @@ export default function TournamentSetup() {
                           <div key={cat.id} data-category-id={cat.id}>
                             <CategoryPrizesEditor
                               ref={getEditorRef(cat.id)}
-                              category={{ ...cat, criteria_json: asCriteriaJson(cat.criteria_json) }}
+                              category={{
+                                ...cat,
+                                criteria_json: asCriteriaJson(cat.criteria_json),
+                                prizes: (cat.prizes || []).map(p => ({
+                                  ...p,
+                                  gift_items: coerceGiftItems(p.gift_items),
+                                })),
+                              }}
                               collapsed={!!collapsedCategories[cat.id]}
                               onToggleCollapse={(categoryId) => {
                                 setCollapsedCategories((prev) => ({
