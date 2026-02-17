@@ -1,37 +1,29 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5?target=deno";
-import { CORS_HEADERS, hasPingQueryParam, pingResponse } from "../_shared/health.ts";
+import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "parseWorkbook";
 
-const { ["Access-Control-Allow-Origin"]: _unused, ...BASE_CORS_HEADERS } = CORS_HEADERS;
-const corsHeaders = {
-  ...BASE_CORS_HEADERS,
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-tournament-id, x-file-name, x-sha256",
-};
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const ALLOWED_ORIGINS = new Set(
-  (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-);
 
-function resolveAllowedOrigin(origin: string | null): string | null {
-  if (!origin) return null;
-  return ALLOWED_ORIGINS.has(origin) ? origin : null;
+function jsonHeaders(): Record<string, string> {
+  return { ...corsHeaders, "Content-Type": "application/json" };
 }
 
-function buildCorsHeaders(origin: string | null): Record<string, string> {
-  if (!origin) {
-    return {};
+function statusForErrorMessage(message: string): number {
+  if (
+    message === "No file found in multipart payload" ||
+    message === "Empty payload received" ||
+    message === "No sheets found in workbook" ||
+    message === "Detected sheet missing"
+  ) {
+    return 400;
   }
-  return { ...corsHeaders, "Access-Control-Allow-Origin": origin };
+  return 500;
 }
 
 async function ensureTournamentAccess(
@@ -64,7 +56,7 @@ async function ensureTournamentAccess(
   if (!tournamentAccess || (tournamentAccess.owner_id !== userId && !isMaster)) {
     return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Not authorized for tournament" }), {
       status: 403,
-      headers: { ...responseHeaders, "Content-Type": "application/json" }
+      headers: responseHeaders
     });
   }
 
@@ -725,40 +717,22 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 }
 
 Deno.serve(async (req) => {
-  const origin = req.headers.get("origin");
-  
-  // CORS preflight and health-check handlers MUST run BEFORE origin allowlist
-  // to allow Master Dashboard health checks from any Lovable preview origin.
-  // These are safe because they don't access any data.
-  
-  // Health check: ?ping=1 (parseWorkbook uses binary body, so only query param ping)
-  // Responds with permissive CORS to allow browser-based health checks
+  // CORS preflight and health-check handlers MUST run before auth checks.
   if (hasPingQueryParam(req)) {
     console.log(`[${FUNCTION_NAME}] ping via query param`);
-    return pingResponse(FUNCTION_NAME, BUILD_VERSION, CORS_HEADERS);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeaders);
   }
-  
-  // OPTIONS preflight with permissive CORS for health checks
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
-
-  // For actual parsing requests, enforce origin allowlist
-  const allowedOrigin = resolveAllowedOrigin(origin);
-  if (origin && !allowedOrigin) {
-    return new Response(JSON.stringify({ error: "FORBIDDEN", message: "Origin not allowed" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-
-  const corsHeadersForRequest = buildCorsHeaders(allowedOrigin);
+  const responseHeaders = jsonHeaders();
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
+      headers: responseHeaders
     });
   }
 
@@ -768,7 +742,7 @@ Deno.serve(async (req) => {
   if (authError || !authData?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
+      headers: responseHeaders
     });
   }
 
@@ -785,7 +759,7 @@ Deno.serve(async (req) => {
       supabase,
       authData.user.id,
       tournamentId,
-      corsHeadersForRequest
+      responseHeaders
     );
     if (accessResponse) {
       return accessResponse;
@@ -914,14 +888,15 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify(responseBody), {
       status: 200,
-      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
+      headers: responseHeaders
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "parse failed";
+    const status = statusForErrorMessage(message);
     console.error(`[import.srv] error message=${message}`);
     return new Response(JSON.stringify({ error: message }), {
-      status: 503,
-      headers: { ...corsHeadersForRequest, "Content-Type": "application/json" }
+      status,
+      headers: responseHeaders
     });
   }
 });
