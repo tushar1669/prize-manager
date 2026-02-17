@@ -132,6 +132,7 @@ describe('TournamentSetup main category safeguards', () => {
                 cash_amount: 100,
                 has_trophy: false,
                 has_medal: false,
+                gift_items: [],
                 is_active: true,
               },
             ],

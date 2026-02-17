@@ -77,10 +77,11 @@ export default function TournamentUpgrade() {
       if (!data) throw new Error("Coupon response missing");
       const row = Array.isArray(data) ? (data[0] ?? null) : data;
       if (!row || typeof row !== "object") throw new Error("Coupon response missing");
+      const rec = row as Record<string, unknown>;
 
-      const amountAfter = typeof row.amount_after === "number" ? row.amount_after : 0;
-      const discountAmount = typeof row.discount_amount === "number" ? row.discount_amount : 0;
-      const reason = typeof row.reason === "string" ? row.reason : "";
+      const amountAfter = typeof rec.amount_after === "number" ? rec.amount_after : 0;
+      const discountAmount = typeof rec.discount_amount === "number" ? rec.discount_amount : 0;
+      const reason = typeof rec.reason === "string" ? rec.reason : "";
 
       return {
         amount_after: amountAfter,
