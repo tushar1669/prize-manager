@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import type { WorkBook } from "npm:xlsx@0.18.5";
+import type { WorkBook } from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
 import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -9,7 +9,8 @@ const FUNCTION_NAME = "parseWorkbook";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-let xlsxModulePromise: Promise<typeof import("npm:xlsx@0.18.5")> | null = null;
+const XLSX_MODULE_URL = "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
+let xlsxModulePromise: Promise<typeof import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs")> | null = null;
 const DEBUG_IMPORT = ["1", "true", "yes", "on"].includes(
   (Deno.env.get("DEBUG_IMPORT") ?? "").toLowerCase()
 );
@@ -26,7 +27,7 @@ function logImport(label: "method" | "ok" | "forbidden" | "error", detail?: stri
 async function loadXlsx() {
   if (!xlsxModulePromise) {
     logImport("method", "load_xlsx");
-    xlsxModulePromise = import("npm:xlsx@0.18.5");
+    xlsxModulePromise = import(XLSX_MODULE_URL);
   }
 
   return await xlsxModulePromise;
@@ -668,7 +669,10 @@ function scoreRow(row: unknown[]): number {
   return score;
 }
 
-function detectHeaders(XLSX: typeof import("npm:xlsx@0.18.5"), workbook: WorkBook): { sheetName: string; headerRowIndex: number; headers: string[] } {
+function detectHeaders(
+  XLSX: typeof import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"),
+  workbook: WorkBook
+): { sheetName: string; headerRowIndex: number; headers: string[] } {
   const candidates: Array<{ sheetName: string; rowIndex: number; score: number; headers: string[] }> = [];
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -808,7 +812,9 @@ Deno.serve(async (req) => {
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     const fileHash = await sha256Hex(bufferSlice);
 
+    console.log("[parseWorkbook] stage=load_parser");
     const XLSX = await loadXlsx();
+    console.log("[parseWorkbook] stage=parse_workbook");
     const workbook = XLSX.read(bufferSlice, { type: "array" });
     if (!workbook.SheetNames?.length) {
       throw new Error("No sheets found in workbook");
