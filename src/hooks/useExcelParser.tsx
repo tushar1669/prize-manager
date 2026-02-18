@@ -246,6 +246,8 @@ export function useExcelParser() {
     const thresholdBytes = IMPORT_SIZE_THRESHOLD_MB * 1024 * 1024;
     const prefersServer = SERVER_IMPORT_ENABLED && (options.forceServer || file.size > thresholdBytes);
 
+    logImportParserDebug(`[import] parser=${prefersServer ? "server" : "local"}`);
+
     if (prefersServer) {
       logImportParserDebug("[import.source] chosen=server");
       try {
