@@ -24,7 +24,7 @@ export function AppNav() {
   const handleLogout = async () => {
     await signOut();
     toast.success("Logged out successfully");
-    navigate("/auth");
+    navigate("/");
   };
 
   return (

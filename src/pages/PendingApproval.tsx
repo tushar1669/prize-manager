@@ -40,7 +40,7 @@ export default function PendingApproval() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/auth', { replace: true });
+    navigate('/', { replace: true });
   };
 
   if (loading) {
