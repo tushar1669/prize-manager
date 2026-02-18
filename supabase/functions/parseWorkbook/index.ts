@@ -10,10 +10,22 @@ const FUNCTION_NAME = "parseWorkbook";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 let xlsxModulePromise: Promise<typeof import("npm:xlsx@0.18.5")> | null = null;
+const DEBUG_IMPORT = ["1", "true", "yes", "on"].includes(
+  (Deno.env.get("DEBUG_IMPORT") ?? "").toLowerCase()
+);
+
+function logImport(label: "method" | "ok" | "forbidden" | "error", detail?: string): void {
+  if (!DEBUG_IMPORT) return;
+  if (detail) {
+    console.log(`[parseWorkbook] ${label} ${detail}`);
+    return;
+  }
+  console.log(`[parseWorkbook] ${label}`);
+}
 
 async function loadXlsx() {
   if (!xlsxModulePromise) {
-    console.log("[parseWorkbook] loading xlsx parser module");
+    logImport("method", "load_xlsx");
     xlsxModulePromise = import("npm:xlsx@0.18.5");
   }
 
@@ -25,11 +37,25 @@ function jsonHeaders(): Record<string, string> {
 }
 
 function statusForErrorMessage(message: string): number {
+  const badRequestMessages = new Set([
+    "No file found in multipart payload",
+    "Empty payload received",
+    "No sheets found in workbook",
+    "Detected sheet missing",
+    "No valid header row found. Please ensure the file contains Rank and Name columns."
+  ]);
+
+  if (badRequestMessages.has(message)) {
+    return 400;
+  }
+
   if (
-    message === "No file found in multipart payload" ||
-    message === "Empty payload received" ||
-    message === "No sheets found in workbook" ||
-    message === "Detected sheet missing"
+    message.includes("Invalid") ||
+    message.includes("invalid") ||
+    message.includes("missing") ||
+    message.includes("Missing") ||
+    message.includes("No valid") ||
+    message.includes("Empty")
   ) {
     return 400;
   }
@@ -727,21 +753,20 @@ async function parseBody(req: Request): Promise<{ bytes: Uint8Array; fileName: s
 }
 
 Deno.serve(async (req) => {
-  console.log("[parseWorkbook] method=", req.method);
+  const responseHeaders = jsonHeaders();
+  logImport("method", req.method);
   // CORS preflight and health-check handlers MUST run before auth checks.
   if (hasPingQueryParam(req)) {
-    console.log(`[${FUNCTION_NAME}] ping via query param`);
-    return pingResponse(FUNCTION_NAME, BUILD_VERSION, corsHeaders);
+    return pingResponse(FUNCTION_NAME, BUILD_VERSION, responseHeaders);
   }
 
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders });
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: responseHeaders });
   }
-  const responseHeaders = jsonHeaders();
 
   const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
-    console.log("[parseWorkbook] forbidden");
+    logImport("forbidden", "missing_bearer");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: responseHeaders
@@ -752,7 +777,7 @@ Deno.serve(async (req) => {
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const { data: authData, error: authError } = await supabase.auth.getUser(token);
   if (authError || !authData?.user) {
-    console.log("[parseWorkbook] forbidden");
+    logImport("forbidden", "invalid_jwt");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: responseHeaders
@@ -760,7 +785,6 @@ Deno.serve(async (req) => {
   }
 
   const tournamentId = req.headers.get("x-tournament-id") ?? "";
-  const providedHash = req.headers.get("x-sha256") ?? "";
   // Debug tournament IDs for gender detection logging
   const genderDebugTournamentIds = new Set([
     "74e1bd2b-0b3b-4cd6-abfc-30a6a7c2bf15", // Road to GCL
@@ -775,22 +799,16 @@ Deno.serve(async (req) => {
       responseHeaders
     );
     if (accessResponse) {
-      console.log("[parseWorkbook] forbidden");
+      logImport("forbidden", "tournament_access");
       return accessResponse;
     }
 
     const start = performance.now();
     const { bytes, fileName, contentType } = await parseBody(req);
     const bufferSlice = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    console.log(`[import.srv] start bytes=${bytes.byteLength}`);
-
     const fileHash = await sha256Hex(bufferSlice);
-    if (providedHash && providedHash !== fileHash) {
-      console.warn(`[import.srv] hash mismatch header=${providedHash} computed=${fileHash}`);
-    }
 
     const XLSX = await loadXlsx();
-    console.log("[parseWorkbook] parsing workbook");
     const workbook = XLSX.read(bufferSlice, { type: "array" });
     if (!workbook.SheetNames?.length) {
       throw new Error("No sheets found in workbook");
@@ -828,7 +846,7 @@ Deno.serve(async (req) => {
       : null;
 
     // Log gender config for debug tournaments
-    if (shouldGenderDebug) {
+    if (shouldGenderDebug && DEBUG_IMPORT) {
       console.log(`[import.gender-config] ${JSON.stringify(genderConfig)}`);
     }
 
@@ -868,12 +886,11 @@ Deno.serve(async (req) => {
     const durationMs = Math.round(performance.now() - start);
     const rowCount = dataRows.length;
 
-    if (genderDebugCounts) {
+    if (genderDebugCounts && DEBUG_IMPORT) {
       console.log(`[import.gender-debug] rows=${rowCount} signals=${JSON.stringify(genderDebugCounts)}`);
     }
 
-    console.log(`[import.srv] ok rows=${rowCount} sheet=${sheetName} headerRow=${headerRowIndex + 1} duration_ms=${durationMs}`);
-    console.log("[parseWorkbook] ok");
+    logImport("ok", `rows=${rowCount}`);
 
     if (tournamentId) {
       try {
@@ -886,7 +903,7 @@ Deno.serve(async (req) => {
       } catch (storageError) {
         const err = storageError as Error;
         if (!err.message?.includes("already exists")) {
-          console.warn(`[import.srv] storage error=${err.message}`);
+          logImport("error", "storage_upload_failed");
         }
       }
     }
@@ -910,7 +927,8 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "parse failed";
     const status = statusForErrorMessage(message);
-    console.error(`[import.srv] error message=${message}`);
+    const errorCode = status === 400 ? "bad_request" : "internal_error";
+    logImport("error", errorCode);
     return new Response(JSON.stringify({ error: message }), {
       status,
       headers: responseHeaders
