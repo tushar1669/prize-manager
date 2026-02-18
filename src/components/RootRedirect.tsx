@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 /**
  * Root "/" redirect: sends authenticated users to /dashboard,
- * unauthenticated users to /auth.
+ * unauthenticated users to /public.
  * Prevents the empty "No published tournaments" page from showing
  * in the Lovable preview or fresh deploys.
  */
@@ -18,5 +18,5 @@ export default function RootRedirect() {
     );
   }
 
-  return <Navigate to={user ? "/dashboard" : "/auth"} replace />;
+  return <Navigate to={user ? "/dashboard" : "/public"} replace />;
 }
