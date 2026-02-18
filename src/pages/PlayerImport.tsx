@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useDirty } from "@/contexts/DirtyContext.shared";
@@ -2749,6 +2750,7 @@ export default function PlayerImport() {
   const hasUnresolvedConflicts = conflicts.length > 0 && unresolvedCount > 0;
   const allConflictsResolved = conflicts.length === 0 || unresolvedCount === 0;
   const canProceed = parseStatus === 'ok' && mappedPlayers.length > 0 && validationErrorCount === 0 && allConflictsResolved;
+  const showImportDebug = isImportDebugEnabled();
   const imgSrc = `${import.meta.env.BASE_URL}help/swiss-manager/print-all-columns.png`;
 
   return (
@@ -2762,6 +2764,13 @@ export default function PlayerImport() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Import Players</h1>
           <p className="text-muted-foreground">Upload Excel (.xlsx or .xls) file with player data. Required: rank, name. Optional: rating, dob, gender, state, city, club, disability, special_notes, fide_id.</p>
+          {showImportDebug && lastParseMode && (
+            <div className="mt-2">
+              <Badge variant="outline" className="text-xs">
+                parser={lastParseMode}
+              </Badge>
+            </div>
+          )}
         </div>
 
         {id && isOrganizer && <ImportLogsPanel tournamentId={id} />}
