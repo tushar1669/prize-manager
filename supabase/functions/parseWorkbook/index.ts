@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5?target=deno";
+import type { WorkBook } from "npm:xlsx@0.18.5";
 import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -9,6 +9,16 @@ const FUNCTION_NAME = "parseWorkbook";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+let xlsxModulePromise: Promise<typeof import("npm:xlsx@0.18.5")> | null = null;
+
+async function loadXlsx() {
+  if (!xlsxModulePromise) {
+    console.log("[parseWorkbook] loading xlsx parser module");
+    xlsxModulePromise = import("npm:xlsx@0.18.5");
+  }
+
+  return await xlsxModulePromise;
+}
 
 function jsonHeaders(): Record<string, string> {
   return { ...corsHeaders, "Content-Type": "application/json" };
@@ -632,7 +642,7 @@ function scoreRow(row: unknown[]): number {
   return score;
 }
 
-function detectHeaders(workbook: XLSX.WorkBook): { sheetName: string; headerRowIndex: number; headers: string[] } {
+function detectHeaders(XLSX: typeof import("npm:xlsx@0.18.5"), workbook: WorkBook): { sheetName: string; headerRowIndex: number; headers: string[] } {
   const candidates: Array<{ sheetName: string; rowIndex: number; score: number; headers: string[] }> = [];
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -779,12 +789,14 @@ Deno.serve(async (req) => {
       console.warn(`[import.srv] hash mismatch header=${providedHash} computed=${fileHash}`);
     }
 
+    const XLSX = await loadXlsx();
+    console.log("[parseWorkbook] parsing workbook");
     const workbook = XLSX.read(bufferSlice, { type: "array" });
     if (!workbook.SheetNames?.length) {
       throw new Error("No sheets found in workbook");
     }
 
-    const { sheetName, headerRowIndex, headers } = detectHeaders(workbook);
+    const { sheetName, headerRowIndex, headers } = detectHeaders(XLSX, workbook);
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) {
       throw new Error("Detected sheet missing");
