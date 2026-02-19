@@ -6,6 +6,7 @@ const quickLinks = [
   { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
   { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
+  { to: "/admin/audit", title: "Audit Logs", description: "View error events, runtime diagnostics, and user-facing error references." },
 ];
 
 export default function AdminHome() {

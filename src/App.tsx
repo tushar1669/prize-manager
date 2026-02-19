@@ -41,6 +41,7 @@ const AdminTournaments = lazy(() => import("./pages/AdminTournaments"));
 const AdminMartech = lazy(() => import("./pages/AdminMartech"));
 const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
+const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout").then((module) => ({ default: module.AdminLayout })));
 
@@ -130,6 +131,7 @@ const App = () => {
                   <Route path="martech" element={<AdminMartech embeddedInAdmin />} />
                   <Route path="tournaments" element={<AdminTournaments embeddedInAdmin />} />
                   <Route path="coupons" element={<AdminCoupons />} />
+                  <Route path="audit" element={<AdminAuditLogs embeddedInAdmin />} />
                 </Route>
 
                 {/* Fallback */}

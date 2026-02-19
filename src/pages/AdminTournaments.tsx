@@ -50,6 +50,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
+import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
+import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import { classifyTimeControl, type TimeControlCategory } from "@/utils/timeControl";
 
 type FilterStatus = "all" | "active" | "draft" | "archived" | "deleted";
@@ -162,8 +164,9 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
       console.log(`[admin] Updated tournament ${variables.id}`, variables.updates);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to update tournament";
-      toast.error("Failed to update tournament: " + message);
+      const normalized = normalizeError(error);
+      toast.error(toastMessage(normalized));
+      logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error instanceof Error ? error.message : "Failed to update", friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
     },
   });
 
@@ -190,8 +193,9 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
       console.log(`[admin] Hard deleted tournament ${id}`);
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to delete tournament";
-      toast.error("Failed to delete tournament: " + message);
+      const normalized = normalizeError(error);
+      toast.error(toastMessage(normalized));
+      logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error instanceof Error ? error.message : "Failed to delete", friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
     },
   });
 
