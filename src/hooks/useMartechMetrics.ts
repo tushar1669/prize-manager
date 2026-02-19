@@ -79,7 +79,41 @@ type FunnelStep = {
   note?: string;
 };
 
-type DashboardMetrics = {
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  phone: string | null;
+  city: string | null;
+  org_name: string | null;
+  fide_arbiter_id: string | null;
+  website: string | null;
+  profile_completed_at: string | null;
+  profile_reward_claimed: boolean;
+};
+
+type PaymentRow = {
+  id: string;
+  status: string;
+  created_at: string;
+};
+
+type ReferralCodeRow = {
+  id: string;
+  created_at: string;
+};
+
+type ReferralRow = {
+  id: string;
+  created_at: string;
+};
+
+type ReferralRewardRow = {
+  id: string;
+  trigger_user_id: string;
+  created_at: string;
+};
+
+export type DashboardMetrics = {
   kpis: {
     totalOrganizers: number;
     verifiedOrganizers: number;
@@ -100,6 +134,9 @@ type DashboardMetrics = {
   revenueProxy: {
     bySource: RevenueBySource[];
   };
+  paymentFunnel: FunnelStep[];
+  profileFunnel: FunnelStep[];
+  referralFunnel: FunnelStep[];
 };
 
 const EMPTY_METRICS: DashboardMetrics = {
@@ -131,6 +168,23 @@ const EMPTY_METRICS: DashboardMetrics = {
   revenueProxy: {
     bySource: [],
   },
+  paymentFunnel: [
+    { label: "Payments submitted", value: 0 },
+    { label: "Approved", value: 0 },
+    { label: "Rejected", value: 0 },
+  ],
+  profileFunnel: [
+    { label: "Total organizers", value: 0 },
+    { label: "Started profile", value: 0 },
+    { label: "Completed profile", value: 0 },
+    { label: "Reward claimed", value: 0 },
+  ],
+  referralFunnel: [
+    { label: "Codes issued", value: 0 },
+    { label: "Referrals made", value: 0 },
+    { label: "Referred upgrades", value: 0 },
+    { label: "Rewards issued", value: 0 },
+  ],
 };
 
 export function withinDateRange(value: string | null | undefined, range: DateRange): boolean {
@@ -178,21 +232,20 @@ function computeActiveEntitlements(entitlements: TournamentEntitlement[], now: D
   return entitlements.filter((entitlement) => {
     const startsAt = entitlement.starts_at ? new Date(entitlement.starts_at) : null;
     const endsAt = entitlement.ends_at ? new Date(entitlement.ends_at) : null;
-
-    if (startsAt && endsAt) {
-      return startsAt <= now && now <= endsAt;
-    }
-
-    if (!startsAt && endsAt) {
-      return now <= endsAt;
-    }
-
-    if (startsAt && !endsAt) {
-      return startsAt <= now;
-    }
-
+    if (startsAt && endsAt) return startsAt <= now && now <= endsAt;
+    if (!startsAt && endsAt) return now <= endsAt;
+    if (startsAt && !endsAt) return startsAt <= now;
     return true;
   }).length;
+}
+
+const PROFILE_FIELDS_LIST = ["display_name", "phone", "city", "org_name", "fide_arbiter_id", "website"] as const;
+
+function hasAnyProfileField(p: ProfileRow): boolean {
+  return PROFILE_FIELDS_LIST.some((f) => {
+    const v = p[f];
+    return v != null && String(v).trim() !== "";
+  });
 }
 
 export function buildMartechMetrics(input: {
@@ -203,6 +256,11 @@ export function buildMartechMetrics(input: {
   allocations: Allocation[];
   players: Player[];
   entitlements: TournamentEntitlement[];
+  payments?: PaymentRow[];
+  profiles?: ProfileRow[];
+  referralCodes?: ReferralCodeRow[];
+  referrals?: ReferralRow[];
+  referralRewards?: ReferralRewardRow[];
 }): DashboardMetrics {
   const now = new Date();
   const verifiedOrganizers = input.organizers.filter((o) => o.is_verified).length;
@@ -262,6 +320,34 @@ export function buildMartechMetrics(input: {
     });
   }
 
+  // Payment funnel
+  const payments = input.payments ?? [];
+  const paymentFunnel: FunnelStep[] = [
+    { label: "Payments submitted", value: payments.length },
+    { label: "Approved", value: payments.filter((p) => p.status === "approved").length },
+    { label: "Rejected", value: payments.filter((p) => p.status === "rejected").length },
+  ];
+
+  // Profile funnel
+  const profiles = input.profiles ?? [];
+  const profileFunnel: FunnelStep[] = [
+    { label: "Total organizers", value: input.organizers.length },
+    { label: "Started profile", value: profiles.filter((p) => hasAnyProfileField(p)).length },
+    { label: "Completed profile", value: profiles.filter((p) => !!p.profile_completed_at).length },
+    { label: "Reward claimed", value: profiles.filter((p) => p.profile_reward_claimed).length },
+  ];
+
+  // Referral funnel
+  const referralCodes = input.referralCodes ?? [];
+  const referrals = input.referrals ?? [];
+  const referralRewards = input.referralRewards ?? [];
+  const referralFunnel: FunnelStep[] = [
+    { label: "Codes issued", value: referralCodes.length },
+    { label: "Referrals made", value: referrals.length },
+    { label: "Referred upgrades", value: new Set(referralRewards.map((r) => r.trigger_user_id)).size },
+    { label: "Rewards issued", value: referralRewards.length },
+  ];
+
   return {
     kpis: {
       totalOrganizers: input.organizers.length,
@@ -293,6 +379,9 @@ export function buildMartechMetrics(input: {
         .map(([source, count]) => ({ source, count }))
         .sort((a, b) => b.count - a.count),
     },
+    paymentFunnel,
+    profileFunnel,
+    referralFunnel,
   };
 }
 
@@ -333,16 +422,43 @@ export function useMartechMetrics(range: DateRange) {
         .from("tournament_entitlements")
         .select("id,source,starts_at,ends_at,created_at");
 
-      const [organizersRes, tournamentsRes, publishedRes, importsRes, allocationsRes, playersRes, entitlementsRes] =
-        await Promise.all([
-          organizersQuery,
-          tournamentsQuery,
-          publishedQuery,
-          importsQuery,
-          allocationsQuery,
-          playersQuery,
-          entitlementsQuery,
-        ]);
+      const paymentsQuery = unsafeSupabase
+        .from("tournament_payments")
+        .select("id,status,created_at");
+
+      const profilesQuery = supabase
+        .from("profiles")
+        .select("id,display_name,phone,city,org_name,fide_arbiter_id,website,profile_completed_at,profile_reward_claimed");
+
+      const referralCodesQuery = unsafeSupabase
+        .from("referral_codes")
+        .select("id,created_at");
+
+      const referralsQuery = unsafeSupabase
+        .from("referrals")
+        .select("id,created_at");
+
+      const referralRewardsQuery = unsafeSupabase
+        .from("referral_rewards")
+        .select("id,trigger_user_id,created_at");
+
+      const [
+        organizersRes, tournamentsRes, publishedRes, importsRes, allocationsRes, playersRes, entitlementsRes,
+        paymentsRes, profilesRes, referralCodesRes, referralsRes, referralRewardsRes,
+      ] = await Promise.all([
+        organizersQuery,
+        tournamentsQuery,
+        publishedQuery,
+        importsQuery,
+        allocationsQuery,
+        playersQuery,
+        entitlementsQuery,
+        paymentsQuery,
+        profilesQuery,
+        referralCodesQuery,
+        referralsQuery,
+        referralRewardsQuery,
+      ]);
 
       const errors = [
         organizersRes.error,
@@ -354,10 +470,9 @@ export function useMartechMetrics(range: DateRange) {
         entitlementsRes.error,
       ].filter(Boolean);
 
-      if (errors.length > 0) {
-        throw errors[0];
-      }
+      if (errors.length > 0) throw errors[0];
 
+      // Non-critical: silently handle errors for new tables
       const organizers = (organizersRes.data ?? []) as OrganizerRole[];
       const tournaments = (tournamentsRes.data ?? []) as Tournament[];
       const publishedTournaments = (publishedRes.data ?? []) as PublishedTournament[];
@@ -365,6 +480,11 @@ export function useMartechMetrics(range: DateRange) {
       const allocations = (allocationsRes.data ?? []) as Allocation[];
       const players = (playersRes.data ?? []) as Player[];
       const entitlements = (entitlementsRes.data ?? []) as TournamentEntitlement[];
+      const payments = (paymentsRes.error ? [] : (paymentsRes.data ?? [])) as PaymentRow[];
+      const profiles = (profilesRes.error ? [] : (profilesRes.data ?? [])) as ProfileRow[];
+      const referralCodes = (referralCodesRes.error ? [] : (referralCodesRes.data ?? [])) as ReferralCodeRow[];
+      const referrals = (referralsRes.error ? [] : (referralsRes.data ?? [])) as ReferralRow[];
+      const referralRewards = (referralRewardsRes.error ? [] : (referralRewardsRes.data ?? [])) as ReferralRewardRow[];
 
       return buildMartechMetrics({
         organizers: organizers.filter((row) => withinDateRange(row.created_at, range)),
@@ -379,6 +499,11 @@ export function useMartechMetrics(range: DateRange) {
           if (row.ends_at) return withinDateRange(row.ends_at, range);
           return !range.from && !range.to;
         }),
+        payments: payments.filter((row) => withinDateRange(row.created_at, range)),
+        profiles, // No date filter for profiles (they're accumulated)
+        referralCodes: referralCodes.filter((row) => withinDateRange(row.created_at, range)),
+        referrals: referrals.filter((row) => withinDateRange(row.created_at, range)),
+        referralRewards: referralRewards.filter((row) => withinDateRange(row.created_at, range)),
       });
     },
     enabled: !!user && isMaster,

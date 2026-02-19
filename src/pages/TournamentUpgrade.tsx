@@ -74,6 +74,11 @@ export default function TournamentUpgrade() {
   const { data: latestPayment, isLoading: paymentLoading } = useQuery({
     queryKey: ["tournament-payment-status", id, user?.id],
     enabled: !!id && !!user?.id,
+    refetchInterval: (query) => {
+      // Auto-poll while pending so UI updates when master approves
+      const status = (query.state.data as { status?: string } | null)?.status;
+      return status === "pending" ? 10000 : false;
+    },
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tournament_payments")
@@ -150,6 +155,7 @@ export default function TournamentUpgrade() {
       toast.success("Payment submitted. Awaiting admin approval.");
       setUtrValue("");
       queryClient.invalidateQueries({ queryKey: ["tournament-payment-status", id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["tournament-access", id] });
     },
     onError: (error) => {
       const msg = error instanceof Error ? error.message : String(error);
