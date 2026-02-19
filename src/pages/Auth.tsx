@@ -43,12 +43,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (user) {
-      // Apply pending referral code after authentication
-      const pendingRef = localStorage.getItem(REFERRAL_STORAGE_KEY);
-      if (pendingRef) {
-        localStorage.removeItem(REFERRAL_STORAGE_KEY);
-        applyReferralCode(pendingRef);
-      }
+      // Referral apply is now handled globally by useApplyPendingReferral hook
       navigate("/dashboard");
     }
   }, [user, navigate]);
