@@ -709,19 +709,43 @@ export type Database = {
       }
       profiles: {
         Row: {
+          city: string | null
           created_at: string | null
+          display_name: string | null
           email: string
+          fide_arbiter_id: string | null
           id: string
+          org_name: string | null
+          phone: string | null
+          profile_completed_at: string | null
+          profile_reward_claimed: boolean
+          website: string | null
         }
         Insert: {
+          city?: string | null
           created_at?: string | null
+          display_name?: string | null
           email: string
+          fide_arbiter_id?: string | null
           id: string
+          org_name?: string | null
+          phone?: string | null
+          profile_completed_at?: string | null
+          profile_reward_claimed?: boolean
+          website?: string | null
         }
         Update: {
+          city?: string | null
           created_at?: string | null
+          display_name?: string | null
           email?: string
+          fide_arbiter_id?: string | null
           id?: string
+          org_name?: string | null
+          phone?: string | null
+          profile_completed_at?: string | null
+          profile_reward_claimed?: boolean
+          website?: string | null
         }
         Relationships: []
       }
@@ -1076,6 +1100,30 @@ export type Database = {
       }
     }
     Views: {
+      profile_completion: {
+        Row: {
+          filled_count: number | null
+          profile_completed_at: string | null
+          profile_reward_claimed: boolean | null
+          total_count: number | null
+          user_id: string | null
+        }
+        Insert: {
+          filled_count?: never
+          profile_completed_at?: string | null
+          profile_reward_claimed?: boolean | null
+          total_count?: never
+          user_id?: string | null
+        }
+        Update: {
+          filled_count?: never
+          profile_completed_at?: string | null
+          profile_reward_claimed?: boolean | null
+          total_count?: never
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       published_tournaments: {
         Row: {
           brochure_url: string | null
