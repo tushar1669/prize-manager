@@ -797,6 +797,100 @@ export type Database = {
           },
         ]
       }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_rewards: {
+        Row: {
+          beneficiary_id: string
+          coupon_id: string | null
+          created_at: string
+          id: string
+          level: number
+          reward_type: string
+          trigger_tournament_id: string
+          trigger_user_id: string
+        }
+        Insert: {
+          beneficiary_id: string
+          coupon_id?: string | null
+          created_at?: string
+          id?: string
+          level: number
+          reward_type?: string
+          trigger_tournament_id: string
+          trigger_user_id: string
+        }
+        Update: {
+          beneficiary_id?: string
+          coupon_id?: string | null
+          created_at?: string
+          id?: string
+          level?: number
+          reward_type?: string
+          trigger_tournament_id?: string
+          trigger_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_rewards_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          created_at: string
+          id: string
+          referral_code_id: string
+          referred_id: string
+          referrer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          referral_code_id: string
+          referred_id: string
+          referrer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          referral_code_id?: string
+          referred_id?: string
+          referrer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referral_code_id_fkey"
+            columns: ["referral_code_id"]
+            isOneToOne: false
+            referencedRelation: "referral_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rule_config: {
         Row: {
           age_band_policy: string | null
@@ -1201,7 +1295,10 @@ export type Database = {
           reason: string
         }[]
       }
+      apply_referral_code: { Args: { referral_code: string }; Returns: Json }
       bootstrap_master: { Args: never; Returns: Json }
+      claim_profile_completion_reward: { Args: never; Returns: Json }
+      get_or_create_my_referral_code: { Args: never; Returns: Json }
       get_public_tournament_results: {
         Args: { tournament_id: string }
         Returns: {
@@ -1249,6 +1346,10 @@ export type Database = {
         }[]
       }
       is_master: { Args: never; Returns: boolean }
+      issue_referral_rewards: {
+        Args: { p_trigger_tournament_id: string; p_trigger_user_id: string }
+        Returns: Json
+      }
       list_my_tournaments: {
         Args: { include_all?: boolean }
         Returns: {
