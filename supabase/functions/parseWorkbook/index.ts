@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import * as XLSX from "npm:xlsx@0.20.3";
+import * as XLSX from "npm:xlsx@0.18.5";
 import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -659,7 +659,7 @@ function scoreRow(row: unknown[]): number {
 }
 
 function detectHeaders(
-  XLSX: typeof import("npm:xlsx@0.20.3"),
+  XLSX: typeof import("npm:xlsx@0.18.5"),
   workbook: XLSX.WorkBook
 ): { sheetName: string; headerRowIndex: number; headers: string[] } {
   const candidates: Array<{ sheetName: string; rowIndex: number; score: number; headers: string[] }> = [];

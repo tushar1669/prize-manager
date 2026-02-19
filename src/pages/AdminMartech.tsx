@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { AlertCircle, CheckCircle2, Clock3, DatabaseZap, Users, Wallet } from "lucide-react";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useMartechMetrics } from "@/hooks/useMartechMetrics";
+import { useMartechDrilldown, type DrilldownSelection } from "@/hooks/useMartechDrilldown";
+import { MartechDrilldownPanel } from "@/components/admin/MartechDrilldownPanel";
 
 interface AdminMartechProps {
   embeddedInAdmin?: boolean;
@@ -29,7 +31,19 @@ function EmptyText({ text = "No data yet" }: { text?: string }) {
 export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechProps) {
   const [from, setFrom] = useState<Date | null>(null);
   const [to, setTo] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<DrilldownSelection>(null);
+  const [page, setPage] = useState(0);
   const { metrics, isLoading, error } = useMartechMetrics({ from, to });
+  const drilldown = useMartechDrilldown(selected, { from, to }, page);
+
+  const handleBarClick = useCallback((chart: NonNullable<DrilldownSelection>["chart"], key: string) => {
+    if (selected?.chart === chart && selected?.key === key) {
+      setSelected(null);
+    } else {
+      setSelected({ chart, key });
+      setPage(0);
+    }
+  }, [selected]);
 
   const organizerChartData = useMemo(
     () => metrics.organizerFunnel.map((step) => ({ step: step.label, value: step.value })),
@@ -99,6 +113,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Users className="h-4 w-4" /> Organizer funnel</CardTitle>
+              <CardDescription className="text-xs">Click a bar to drill down</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? <EmptyText text="Loading..." /> : null}
@@ -108,7 +123,15 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="step" tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
                   <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                  <Bar dataKey="value" fill="var(--color-value)" radius={6} />
+                  <Bar
+                    dataKey="value"
+                    fill="var(--color-value)"
+                    radius={6}
+                    className="cursor-pointer"
+                    onClick={(data: { step?: string }) => {
+                      if (data?.step) handleBarClick("organizer_funnel", data.step);
+                    }}
+                  />
                 </BarChart>
               </ChartContainer>
               {metrics.organizerFunnel.find((s) => s.note)?.note ? (
@@ -120,6 +143,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><DatabaseZap className="h-4 w-4" /> Tournament funnel</CardTitle>
+              <CardDescription className="text-xs">Click a bar to drill down</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!isLoading && tournamentChartData.every((s) => s.value === 0) ? <EmptyText /> : null}
@@ -128,12 +152,35 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="step" tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
                   <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                  <Bar dataKey="value" fill="var(--color-value)" radius={6} />
+                  <Bar
+                    dataKey="value"
+                    fill="var(--color-value)"
+                    radius={6}
+                    className="cursor-pointer"
+                    onClick={(data: { step?: string }) => {
+                      if (data?.step) handleBarClick("tournament_funnel", data.step);
+                    }}
+                  />
                 </BarChart>
               </ChartContainer>
             </CardContent>
           </Card>
         </section>
+
+        {selected && (selected.chart === "organizer_funnel" || selected.chart === "tournament_funnel") && (
+          <MartechDrilldownPanel
+            selection={selected}
+            rows={drilldown.rows}
+            totalCount={drilldown.totalCount}
+            isLoading={drilldown.isLoading}
+            error={drilldown.error}
+            page={page}
+            pageSize={drilldown.pageSize}
+            limitation={drilldown.limitation}
+            onPageChange={setPage}
+            onClose={() => setSelected(null)}
+          />
+        )}
 
         <section className="grid gap-4 xl:grid-cols-2">
           <Card>
@@ -167,7 +214,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Revenue proxy</CardTitle>
-              <CardDescription>Entitlements grouped by source.</CardDescription>
+              <CardDescription>Entitlements grouped by source. Click a bar to drill down.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {revenueChartData.length === 0 ? <EmptyText /> : null}
@@ -178,7 +225,15 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="source" tickLine={false} axisLine={false} width={80} />
                     <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={6} />
+                    <Bar
+                      dataKey="count"
+                      fill="var(--color-count)"
+                      radius={6}
+                      className="cursor-pointer"
+                      onClick={(data: { source?: string }) => {
+                        if (data?.source) handleBarClick("revenue", data.source);
+                      }}
+                    />
                   </BarChart>
                 </ChartContainer>
               ) : null}
@@ -193,6 +248,21 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
             </CardContent>
           </Card>
         </section>
+
+        {selected?.chart === "revenue" && (
+          <MartechDrilldownPanel
+            selection={selected}
+            rows={drilldown.rows}
+            totalCount={drilldown.totalCount}
+            isLoading={drilldown.isLoading}
+            error={drilldown.error}
+            page={page}
+            pageSize={drilldown.pageSize}
+            limitation={drilldown.limitation}
+            onPageChange={setPage}
+            onClose={() => setSelected(null)}
+          />
+        )}
 
         <Card>
           <CardContent className="pt-6 text-xs text-muted-foreground">
