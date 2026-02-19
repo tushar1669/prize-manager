@@ -149,7 +149,16 @@ export default function Auth() {
         localStorage.setItem(REFERRAL_STORAGE_KEY, trimmedRef);
       }
 
-      const { data, error } = await signUp(email, password);
+      // Build redirect URL with referral code embedded so it works cross-device
+      const redirectUrl = trimmedRef
+        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(trimmedRef)}`
+        : `${window.location.origin}/auth/callback`;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectUrl },
+      });
       if (error) {
         if (error.message.includes('already registered')) {
           const normalized = normalizeError(error);

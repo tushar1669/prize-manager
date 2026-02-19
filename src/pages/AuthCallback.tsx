@@ -229,6 +229,31 @@ export default function AuthCallback() {
       }
     };
 
+    const REFERRAL_STORAGE_KEY = "pm_referral_code";
+
+    /**
+     * Apply referral code after auth is established (idempotent, non-blocking).
+     * Prefers query-param ref over localStorage fallback.
+     */
+    const applyPendingReferral = async () => {
+      try {
+        const refFromUrl = searchParams.get('ref')?.trim().toUpperCase() || '';
+        const refFromStorage = localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || '';
+        const refCode = refFromUrl || refFromStorage;
+
+        if (!refCode) return;
+
+        console.log('[auth-callback] Applying referral code:', refCode);
+        await supabase.rpc('apply_referral_code' as never, { referral_code: refCode } as never);
+
+        // Clean up
+        if (refFromStorage) localStorage.removeItem(REFERRAL_STORAGE_KEY);
+      } catch (err) {
+        // Never block auth flow
+        console.warn('[auth-callback] Referral apply error (non-blocking):', err);
+      }
+    };
+
     /**
      * Redirect user after successful auth based on their role/verification status
      */
@@ -240,6 +265,9 @@ export default function AuthCallback() {
         navigate('/dashboard', { replace: true });
         return;
       }
+
+      // Apply referral code after session is established
+      await applyPendingReferral();
 
       const { data: roleData } = await supabase
         .from('user_roles')
