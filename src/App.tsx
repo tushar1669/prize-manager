@@ -1,4 +1,6 @@
 import { useEffect, lazy, Suspense } from "react";
+import { useApplyPendingReferral } from "@/hooks/useApplyPendingReferral";
+import { useAuth } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -78,6 +80,11 @@ const LegacyUpgradeRedirect = () => {
 };
 
 const App = () => {
+  const { user } = useAuth();
+
+  // Global referral apply — runs once per session regardless of entry point
+  useApplyPendingReferral(user);
+
   useEffect(() => {
     console.log(
       `[flags] HEADER_DETECTION=${isFeatureEnabled('HEADER_DETECTION')} RATING_PRIORITY=${isFeatureEnabled('RATING_PRIORITY')} UNRATED_INFERENCE=${isFeatureEnabled('UNRATED_INFERENCE')}`
