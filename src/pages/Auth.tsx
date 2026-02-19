@@ -154,10 +154,15 @@ export default function Auth() {
         ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(trimmedRef)}`
         : `${window.location.origin}/auth/callback`;
 
+      const signUpOptions: Record<string, unknown> = { emailRedirectTo: redirectUrl };
+      // Store referral in user_metadata so it survives cross-device confirmation
+      if (trimmedRef) {
+        signUpOptions.data = { pending_referral_code: trimmedRef };
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: redirectUrl },
+        options: signUpOptions,
       });
       if (error) {
         if (error.message.includes('already registered')) {
@@ -189,11 +194,16 @@ export default function Auth() {
     }
     setResendLoading(true);
     try {
+      // Carry referral code in resend redirect if available (localStorage or form)
+      const resendRef = referralCode.trim().toUpperCase() || localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || '';
+      const resendRedirect = resendRef
+        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(resendRef)}`
+        : `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: emailToResend,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
+          emailRedirectTo: resendRedirect
         }
       });
       if (error) {

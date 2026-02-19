@@ -231,23 +231,48 @@ export default function AuthCallback() {
 
     const REFERRAL_STORAGE_KEY = "pm_referral_code";
 
+    const debugReferrals = searchParams.get('debug_referrals') === '1' || isDevOrPreview();
+
     /**
      * Apply referral code after auth is established (idempotent, non-blocking).
-     * Prefers query-param ref over localStorage fallback.
+     * Priority: URL param > user_metadata > localStorage.
      */
     const applyPendingReferral = async () => {
       try {
         const refFromUrl = searchParams.get('ref')?.trim().toUpperCase() || '';
         const refFromStorage = localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || '';
-        const refCode = refFromUrl || refFromStorage;
+
+        // Also check user_metadata (durable cross-device fallback)
+        let refFromMeta = '';
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          refFromMeta = (currentUser?.user_metadata?.pending_referral_code as string || '').trim().toUpperCase();
+        } catch { /* ignore */ }
+
+        const refCode = refFromUrl || refFromMeta || refFromStorage;
+        const source = refFromUrl ? 'url' : refFromMeta ? 'user_metadata' : refFromStorage ? 'localStorage' : 'none';
+
+        if (debugReferrals) {
+          console.log('[referral-debug] sources:', { refFromUrl, refFromMeta, refFromStorage, chosen: refCode, source });
+        }
 
         if (!refCode) return;
 
-        console.log('[auth-callback] Applying referral code:', refCode);
-        await supabase.rpc('apply_referral_code' as never, { referral_code: refCode } as never);
+        console.log('[auth-callback] Applying referral code:', refCode, '(source:', source + ')');
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('apply_referral_code' as never, { referral_code: refCode } as never);
 
-        // Clean up
+        if (debugReferrals) {
+          console.log('[referral-debug] RPC result:', rpcResult, 'error:', rpcError);
+        }
+
+        // Clean up all sources
         if (refFromStorage) localStorage.removeItem(REFERRAL_STORAGE_KEY);
+        // Clear user_metadata to prevent repeated calls
+        if (refFromMeta) {
+          try {
+            await supabase.auth.updateUser({ data: { pending_referral_code: null } });
+          } catch { /* non-blocking */ }
+        }
       } catch (err) {
         // Never block auth flow
         console.warn('[auth-callback] Referral apply error (non-blocking):', err);
@@ -298,11 +323,16 @@ export default function AuthCallback() {
 
     setResendLoading(true);
     try {
+      // Carry ref if present in current URL (so resend keeps referral context)
+      const currentRef = searchParams.get('ref')?.trim() || '';
+      const resendRedirect = currentRef
+        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(currentRef)}`
+        : `${window.location.origin}/auth/callback`;
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: resendEmail.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
+          emailRedirectTo: resendRedirect
         }
       });
 
