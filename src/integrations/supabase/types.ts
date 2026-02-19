@@ -900,6 +900,60 @@ export type Database = {
           },
         ]
       }
+      tournament_payments: {
+        Row: {
+          amount_inr: number
+          created_at: string
+          id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          tournament_id: string
+          user_id: string
+          utr: string
+        }
+        Insert: {
+          amount_inr: number
+          created_at?: string
+          id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          tournament_id: string
+          user_id: string
+          utr: string
+        }
+        Update: {
+          amount_inr?: number
+          created_at?: string
+          id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["payment_status"]
+          tournament_id?: string
+          user_id?: string
+          utr?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_payments_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_payments_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           brochure_url: string | null
@@ -1204,9 +1258,18 @@ export type Database = {
           reason: string
         }[]
       }
+      review_tournament_payment: {
+        Args: { p_decision: string; p_note?: string; p_payment_id: string }
+        Returns: Json
+      }
+      submit_tournament_payment_claim: {
+        Args: { p_amount_inr: number; p_tournament_id: string; p_utr: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "master" | "organizer" | "user"
+      payment_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1335,6 +1398,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "organizer", "user"],
+      payment_status: ["pending", "approved", "rejected"],
     },
   },
 } as const
