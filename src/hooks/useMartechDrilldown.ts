@@ -212,7 +212,7 @@ async function fetchProfileDrilldown(key: string, range: DateRange, offset: numb
   type ProfileDrillRow = { id: string; email: string | null; display_name: string | null; phone: string | null; city: string | null; org_name: string | null; fide_arbiter_id: string | null; website: string | null; profile_completed_at: string | null; profile_reward_claimed: boolean };
   const profiles = (data ?? []) as ProfileDrillRow[];
 
-  const FIELDS = ["display_name", "phone", "city", "org_name", "fide_arbiter_id", "website"] as const;
+  const FIELDS = ["display_name", "phone", "city", "org_name", "fide_arbiter_id"] as const;
   const hasAny = (p: ProfileDrillRow) => FIELDS.some((f) => p[f] != null && String(p[f]).trim() !== "");
 
   let filtered: ProfileDrillRow[];
@@ -234,6 +234,35 @@ async function fetchProfileDrilldown(key: string, range: DateRange, offset: numb
   };
 }
 
+/**
+ * Lookup profiles for a set of user IDs (master-only, fails gracefully).
+ */
+async function lookupProfiles(userIds: string[]): Promise<Map<string, { email: string; display_name: string | null }>> {
+  const map = new Map<string, { email: string; display_name: string | null }>();
+  if (userIds.length === 0) return map;
+  const unique = [...new Set(userIds)];
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,email,display_name")
+      .in("id", unique);
+    if (error || !data) return map;
+    for (const p of data as Array<{ id: string; email: string; display_name: string | null }>) {
+      map.set(p.id, p);
+    }
+  } catch {
+    // RLS blocked - fall back to masked IDs
+  }
+  return map;
+}
+
+function humanLabel(userId: string, profiles: Map<string, { email: string; display_name: string | null }>): string {
+  const p = profiles.get(userId);
+  if (p?.display_name) return p.display_name;
+  if (p?.email) return p.email;
+  return `…${userId.slice(-6)}`;
+}
+
 async function fetchReferralDrilldown(key: string, range: DateRange, offset: number) {
   const unsafeSupabase = supabase as unknown as UnsafeFrom;
 
@@ -242,7 +271,16 @@ async function fetchReferralDrilldown(key: string, range: DateRange, offset: num
     if (error) return { rows: [], totalCount: 0, limitation: "Could not fetch referral_codes: " + error.message };
     type Row = { id: string; code: string; user_id: string; created_at: string };
     const filtered = ((data ?? []) as Row[]).filter((r) => withinDateRange(r.created_at, range));
-    return { rows: filtered.slice(offset, offset + PAGE_SIZE), totalCount: filtered.length, limitation: null };
+
+    // Enrich with profile names
+    const userIds = filtered.map((r) => r.user_id);
+    const profiles = await lookupProfiles(userIds);
+    const enriched = filtered.map((r) => ({
+      ...r,
+      owner_name: humanLabel(r.user_id, profiles),
+    }));
+
+    return { rows: enriched.slice(offset, offset + PAGE_SIZE), totalCount: enriched.length, limitation: null };
   }
 
   if (key === "Referrals made") {
@@ -250,19 +288,57 @@ async function fetchReferralDrilldown(key: string, range: DateRange, offset: num
     if (error) return { rows: [], totalCount: 0, limitation: "Could not fetch referrals: " + error.message };
     type Row = { id: string; referrer_id: string; referred_id: string; created_at: string; referral_code_id: string };
     const filtered = ((data ?? []) as Row[]).filter((r) => withinDateRange(r.created_at, range));
-    return { rows: filtered.slice(offset, offset + PAGE_SIZE), totalCount: filtered.length, limitation: null };
+
+    // Enrich with profile names for both referrer and referred
+    const allIds = filtered.flatMap((r) => [r.referrer_id, r.referred_id]);
+    const profiles = await lookupProfiles(allIds);
+
+    // Check upgrade status: any referral_rewards for the referred user?
+    const referredIds = [...new Set(filtered.map((r) => r.referred_id))];
+    let upgradedSet = new Set<string>();
+    if (referredIds.length > 0) {
+      try {
+        const { data: rewards } = await unsafeSupabase.from("referral_rewards").select("trigger_user_id");
+        if (rewards) {
+          const rewardTriggers = new Set((rewards as Array<{ trigger_user_id: string }>).map((r) => r.trigger_user_id));
+          upgradedSet = new Set(referredIds.filter((id) => rewardTriggers.has(id)));
+        }
+      } catch { /* ignore */ }
+    }
+
+    const enriched = filtered.map((r) => ({
+      referrer: humanLabel(r.referrer_id, profiles),
+      referee: humanLabel(r.referred_id, profiles),
+      status: upgradedSet.has(r.referred_id) ? "Upgraded" : "Signed up",
+      created_at: r.created_at,
+      referrer_id: r.referrer_id,
+      referred_id: r.referred_id,
+    }));
+
+    return { rows: enriched.slice(offset, offset + PAGE_SIZE), totalCount: enriched.length, limitation: null };
   }
 
   if (key === "Referred upgrades") {
-    const { data, error } = await unsafeSupabase.from("referral_rewards").select("id,trigger_user_id,trigger_tournament_id,created_at");
+    const { data, error } = await unsafeSupabase.from("referral_rewards").select("id,trigger_user_id,trigger_tournament_id,created_at,beneficiary_id");
     if (error) return { rows: [], totalCount: 0, limitation: "Could not fetch referral_rewards: " + error.message };
-    type Row = { id: string; trigger_user_id: string; trigger_tournament_id: string; created_at: string };
+    type Row = { id: string; trigger_user_id: string; trigger_tournament_id: string; created_at: string; beneficiary_id: string };
     const all = ((data ?? []) as Row[]).filter((r) => withinDateRange(r.created_at, range));
-    // Group by trigger_user_id for "distinct upgrades"
     const seen = new Map<string, Row>();
     all.forEach((r) => { if (!seen.has(r.trigger_user_id)) seen.set(r.trigger_user_id, r); });
     const unique = [...seen.values()];
-    return { rows: unique.slice(offset, offset + PAGE_SIZE), totalCount: unique.length, limitation: null };
+
+    const allIds = unique.flatMap((r) => [r.trigger_user_id, r.beneficiary_id]);
+    const profiles = await lookupProfiles(allIds);
+
+    const enriched = unique.map((r) => ({
+      upgraded_user: humanLabel(r.trigger_user_id, profiles),
+      referrer: humanLabel(r.beneficiary_id, profiles),
+      created_at: r.created_at,
+      trigger_user_id: r.trigger_user_id,
+      beneficiary_id: r.beneficiary_id,
+    }));
+
+    return { rows: enriched.slice(offset, offset + PAGE_SIZE), totalCount: enriched.length, limitation: null };
   }
 
   if (key === "Rewards issued") {
@@ -270,7 +346,22 @@ async function fetchReferralDrilldown(key: string, range: DateRange, offset: num
     if (error) return { rows: [], totalCount: 0, limitation: "Could not fetch referral_rewards: " + error.message };
     type Row = { id: string; beneficiary_id: string; trigger_user_id: string; trigger_tournament_id: string; level: number; reward_type: string; created_at: string; coupon_id: string | null };
     const filtered = ((data ?? []) as Row[]).filter((r) => withinDateRange(r.created_at, range));
-    return { rows: filtered.slice(offset, offset + PAGE_SIZE), totalCount: filtered.length, limitation: null };
+
+    const allIds = filtered.flatMap((r) => [r.beneficiary_id, r.trigger_user_id]);
+    const profiles = await lookupProfiles(allIds);
+
+    const enriched = filtered.map((r) => ({
+      beneficiary: humanLabel(r.beneficiary_id, profiles),
+      trigger_user: humanLabel(r.trigger_user_id, profiles),
+      level: `L${r.level}`,
+      reward_type: r.reward_type,
+      created_at: r.created_at,
+      coupon_id: r.coupon_id,
+      beneficiary_id: r.beneficiary_id,
+      trigger_user_id: r.trigger_user_id,
+    }));
+
+    return { rows: enriched.slice(offset, offset + PAGE_SIZE), totalCount: enriched.length, limitation: null };
   }
 
   return { rows: [], totalCount: 0, limitation: null };
