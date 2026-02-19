@@ -1,12 +1,12 @@
 import { useMemo, useState, useCallback } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { AlertCircle, CheckCircle2, Clock3, DatabaseZap, Users, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, CreditCard, DatabaseZap, Share2, UserCheck, Users, Wallet } from "lucide-react";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useMartechMetrics } from "@/hooks/useMartechMetrics";
-import { useMartechDrilldown, type DrilldownSelection } from "@/hooks/useMartechDrilldown";
+import { useMartechDrilldown, type DrilldownSelection, type DrilldownChart } from "@/hooks/useMartechDrilldown";
 import { MartechDrilldownPanel } from "@/components/admin/MartechDrilldownPanel";
 
 interface AdminMartechProps {
@@ -36,7 +36,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
   const { metrics, isLoading, error } = useMartechMetrics({ from, to });
   const drilldown = useMartechDrilldown(selected, { from, to }, page);
 
-  const handleBarClick = useCallback((chart: NonNullable<DrilldownSelection>["chart"], key: string) => {
+  const handleBarClick = useCallback((chart: DrilldownChart, key: string) => {
     if (selected?.chart === chart && selected?.key === key) {
       setSelected(null);
     } else {
@@ -56,6 +56,36 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
   );
 
   const revenueChartData = metrics.revenueProxy.bySource.map((item) => ({ source: item.source, count: item.count }));
+
+  const paymentChartData = useMemo(
+    () => metrics.paymentFunnel.map((step) => ({ step: step.label, value: step.value })),
+    [metrics.paymentFunnel],
+  );
+
+  const profileChartData = useMemo(
+    () => metrics.profileFunnel.map((step) => ({ step: step.label, value: step.value })),
+    [metrics.profileFunnel],
+  );
+
+  const referralChartData = useMemo(
+    () => metrics.referralFunnel.map((step) => ({ step: step.label, value: step.value })),
+    [metrics.referralFunnel],
+  );
+
+  const drilldownPanel = selected ? (
+    <MartechDrilldownPanel
+      selection={selected}
+      rows={drilldown.rows}
+      totalCount={drilldown.totalCount}
+      isLoading={drilldown.isLoading}
+      error={drilldown.error}
+      page={page}
+      pageSize={drilldown.pageSize}
+      limitation={drilldown.limitation}
+      onPageChange={setPage}
+      onClose={() => setSelected(null)}
+    />
+  ) : null;
 
   return (
     <div className={embeddedInAdmin ? "px-0 py-0" : "container mx-auto px-6 py-8 max-w-7xl"}>
@@ -110,77 +140,55 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
         </section>
 
         <section className="grid gap-4 xl:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Users className="h-4 w-4" /> Organizer funnel</CardTitle>
-              <CardDescription className="text-xs">Click a bar to drill down</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isLoading ? <EmptyText text="Loading..." /> : null}
-              {!isLoading && organizerChartData.every((s) => s.value === 0) ? <EmptyText /> : null}
-              <ChartContainer config={{ value: { label: "Count", color: "hsl(var(--primary))" } }} className="h-[220px] w-full">
-                <BarChart data={organizerChartData} margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="step" tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
-                  <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                  <Bar
-                    dataKey="value"
-                    fill="var(--color-value)"
-                    radius={6}
-                    className="cursor-pointer"
-                    onClick={(data: { step?: string }) => {
-                      if (data?.step) handleBarClick("organizer_funnel", data.step);
-                    }}
-                  />
-                </BarChart>
-              </ChartContainer>
-              {metrics.organizerFunnel.find((s) => s.note)?.note ? (
-                <p className="text-xs text-muted-foreground">{metrics.organizerFunnel.find((s) => s.note)?.note}</p>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><DatabaseZap className="h-4 w-4" /> Tournament funnel</CardTitle>
-              <CardDescription className="text-xs">Click a bar to drill down</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!isLoading && tournamentChartData.every((s) => s.value === 0) ? <EmptyText /> : null}
-              <ChartContainer config={{ value: { label: "Count", color: "hsl(var(--chart-2))" } }} className="h-[220px] w-full">
-                <BarChart data={tournamentChartData} margin={{ left: 12, right: 12 }}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="step" tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
-                  <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                  <Bar
-                    dataKey="value"
-                    fill="var(--color-value)"
-                    radius={6}
-                    className="cursor-pointer"
-                    onClick={(data: { step?: string }) => {
-                      if (data?.step) handleBarClick("tournament_funnel", data.step);
-                    }}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+          <FunnelChart
+            title="Organizer funnel"
+            icon={<Users className="h-4 w-4" />}
+            data={organizerChartData}
+            color="hsl(var(--primary))"
+            isLoading={isLoading}
+            onClick={(key) => handleBarClick("organizer_funnel", key)}
+            note={metrics.organizerFunnel.find((s) => s.note)?.note}
+          />
+          <FunnelChart
+            title="Tournament funnel"
+            icon={<DatabaseZap className="h-4 w-4" />}
+            data={tournamentChartData}
+            color="hsl(var(--chart-2))"
+            isLoading={isLoading}
+            onClick={(key) => handleBarClick("tournament_funnel", key)}
+          />
         </section>
 
-        {selected && (selected.chart === "organizer_funnel" || selected.chart === "tournament_funnel") && (
-          <MartechDrilldownPanel
-            selection={selected}
-            rows={drilldown.rows}
-            totalCount={drilldown.totalCount}
-            isLoading={drilldown.isLoading}
-            error={drilldown.error}
-            page={page}
-            pageSize={drilldown.pageSize}
-            limitation={drilldown.limitation}
-            onPageChange={setPage}
-            onClose={() => setSelected(null)}
+        {(selected?.chart === "organizer_funnel" || selected?.chart === "tournament_funnel") && drilldownPanel}
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <FunnelChart
+            title="Payment funnel"
+            icon={<CreditCard className="h-4 w-4" />}
+            data={paymentChartData}
+            color="hsl(var(--chart-3))"
+            isLoading={isLoading}
+            onClick={(key) => handleBarClick("payment_funnel", key)}
           />
-        )}
+          <FunnelChart
+            title="Profile completion"
+            icon={<UserCheck className="h-4 w-4" />}
+            data={profileChartData}
+            color="hsl(var(--chart-4))"
+            isLoading={isLoading}
+            onClick={(key) => handleBarClick("profile_funnel", key)}
+          />
+          <FunnelChart
+            title="Referral funnel"
+            icon={<Share2 className="h-4 w-4" />}
+            data={referralChartData}
+            color="hsl(var(--chart-5))"
+            isLoading={isLoading}
+            onClick={(key) => handleBarClick("referral_funnel", key)}
+          />
+        </section>
+
+        {(selected?.chart === "payment_funnel" || selected?.chart === "profile_funnel" || selected?.chart === "referral_funnel") && drilldownPanel}
 
         <section className="grid gap-4 xl:grid-cols-2">
           <Card>
@@ -249,20 +257,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
           </Card>
         </section>
 
-        {selected?.chart === "revenue" && (
-          <MartechDrilldownPanel
-            selection={selected}
-            rows={drilldown.rows}
-            totalCount={drilldown.totalCount}
-            isLoading={drilldown.isLoading}
-            error={drilldown.error}
-            page={page}
-            pageSize={drilldown.pageSize}
-            limitation={drilldown.limitation}
-            onPageChange={setPage}
-            onClose={() => setSelected(null)}
-          />
-        )}
+        {selected?.chart === "revenue" && drilldownPanel}
 
         <Card>
           <CardContent className="pt-6 text-xs text-muted-foreground">
@@ -271,5 +266,55 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
         </Card>
       </div>
     </div>
+  );
+}
+
+// ── Reusable funnel chart component ──
+
+function FunnelChart({
+  title,
+  icon,
+  data,
+  color,
+  isLoading,
+  onClick,
+  note,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  data: Array<{ step: string; value: number }>;
+  color: string;
+  isLoading: boolean;
+  onClick: (key: string) => void;
+  note?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">{icon} {title}</CardTitle>
+        <CardDescription className="text-xs">Click a bar to drill down</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? <EmptyText text="Loading..." /> : null}
+        {!isLoading && data.every((s) => s.value === 0) ? <EmptyText /> : null}
+        <ChartContainer config={{ value: { label: "Count", color } }} className="h-[220px] w-full">
+          <BarChart data={data} margin={{ left: 12, right: 12 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="step" tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
+            <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+            <Bar
+              dataKey="value"
+              fill="var(--color-value)"
+              radius={6}
+              className="cursor-pointer"
+              onClick={(barData: { step?: string }) => {
+                if (barData?.step) onClick(barData.step);
+              }}
+            />
+          </BarChart>
+        </ChartContainer>
+        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+      </CardContent>
+    </Card>
   );
 }

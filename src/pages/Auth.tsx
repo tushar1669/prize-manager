@@ -12,12 +12,13 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 
+const REFERRAL_STORAGE_KEY = "pm_referral_code";
+
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, signIn, signUp } = useAuth();
   
-  // Check URL param for initial mode
   const initialMode = searchParams.get('mode');
   const [isLogin, setIsLogin] = useState(initialMode !== 'signup');
   
@@ -32,17 +33,26 @@ export default function Auth() {
   const [resendEmail, setResendEmail] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
 
-  // Detect localhost misconfiguration warning (for production deploys)
+  // Referral code (only for signup)
+  const [referralCode, setReferralCode] = useState(
+    () => searchParams.get("ref") || ""
+  );
+
   const isLocalhost = typeof window !== 'undefined' && 
     (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'));
 
   useEffect(() => {
     if (user) {
+      // Apply pending referral code after authentication
+      const pendingRef = localStorage.getItem(REFERRAL_STORAGE_KEY);
+      if (pendingRef) {
+        localStorage.removeItem(REFERRAL_STORAGE_KEY);
+        applyReferralCode(pendingRef);
+      }
       navigate("/dashboard");
     }
   }, [user, navigate]);
 
-  // Update mode when URL param changes
   useEffect(() => {
     if (initialMode === 'signup') {
       setIsLogin(false);
@@ -50,10 +60,7 @@ export default function Auth() {
   }, [initialMode]);
 
   useEffect(() => {
-    if (forgotPasswordCooldown <= 0) {
-      return;
-    }
-
+    if (forgotPasswordCooldown <= 0) return;
     const timer = window.setInterval(() => {
       setForgotPasswordCooldown((seconds) => {
         if (seconds <= 1) {
@@ -63,21 +70,43 @@ export default function Auth() {
         return seconds - 1;
       });
     }, 1000);
-
     return () => window.clearInterval(timer);
   }, [forgotPasswordCooldown]);
 
-  const handleForgotPassword = async () => {
-    if (forgotPasswordLoading || forgotPasswordCooldown > 0) {
-      return;
+  async function applyReferralCode(code: string) {
+    try {
+      const { data, error } = await supabase.rpc("apply_referral_code" as never, {
+        referral_code: code,
+      } as never);
+      if (error) {
+        // Don't block or scare
+        console.warn("Referral apply error:", error.message);
+        return;
+      }
+      const result = data as unknown as Record<string, unknown>;
+      if (!result) return;
+      const reason = String(result.reason ?? "");
+      if (reason === "applied") {
+        toast.success("Referral applied! Your referrer will earn rewards.");
+      } else if (reason === "already_applied") {
+        toast.info("Referral already applied.");
+      } else if (reason === "invalid_code") {
+        toast("Referral code not found.", { description: "You can continue without one." });
+      } else if (reason === "self_referral_not_allowed") {
+        toast("You can't refer yourself.", { description: "Share your code with others instead!" });
+      }
+    } catch {
+      // Never block signup flow
     }
+  }
 
+  const handleForgotPassword = async () => {
+    if (forgotPasswordLoading || forgotPasswordCooldown > 0) return;
     const emailToReset = email.trim();
     if (!emailToReset) {
       toast.error('Please enter your email address first');
       return;
     }
-
     setForgotPasswordLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, {
@@ -114,9 +143,14 @@ export default function Auth() {
         navigate("/dashboard");
       }
     } else {
+      // Store referral code before signup so it survives email confirmation
+      const trimmedRef = referralCode.trim().toUpperCase();
+      if (trimmedRef) {
+        localStorage.setItem(REFERRAL_STORAGE_KEY, trimmedRef);
+      }
+
       const { data, error } = await signUp(email, password);
       if (error) {
-        // Handle common signup errors with friendly messages
         if (error.message.includes('already registered')) {
           const normalized = normalizeError(error);
           toast.error(toastMessage(normalized));
@@ -130,7 +164,6 @@ export default function Auth() {
         setShowResend(true);
       } else {
         toast.success("Account created! Please check your email to confirm.");
-        // Show resend option after successful signup
         setResendEmail(email);
         setShowResend(true);
       }
@@ -145,7 +178,6 @@ export default function Auth() {
       toast.error('Please enter your email address');
       return;
     }
-
     setResendLoading(true);
     try {
       const { error } = await supabase.auth.resend({
@@ -155,10 +187,8 @@ export default function Auth() {
           emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
-
       if (error) {
-        if (error.message.toLowerCase().includes('not found') || 
-            error.message.toLowerCase().includes('does not exist')) {
+        if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
           toast.error('No account found with this email. Please sign up first.');
         } else if (error.message.toLowerCase().includes('already confirmed')) {
           toast.success('Your email is already confirmed! You can sign in now.');
@@ -170,7 +200,7 @@ export default function Auth() {
       } else {
         toast.success('Confirmation email sent! Check your inbox.');
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to resend confirmation email');
     } finally {
       setResendLoading(false);
@@ -189,18 +219,15 @@ export default function Auth() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Localhost warning on signup only */}
             {!isLogin && isLocalhost && (
               <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
                 <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  You're on localhost. Email confirmation links will redirect here, which may fail in production. 
-                  For production, use the deployed URL.
+                  You're on localhost. Email confirmation links will redirect here, which may fail in production.
                 </p>
               </div>
             )}
 
-            {/* Resend confirmation section - shown after signup or when user requests */}
             {showResend && !isLogin && (
               <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -258,6 +285,21 @@ export default function Auth() {
                 minLength={6}
               />
             </div>
+
+            {/* Referral code - signup only */}
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="referral-code">Referral Code (optional)</Label>
+                <Input
+                  id="referral-code"
+                  type="text"
+                  placeholder="e.g. REF-A1B2C3D4"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            )}
+
             {isLogin && (
               <div className="text-right">
                 <Button 
@@ -279,7 +321,6 @@ export default function Auth() {
               {loading ? (isLogin ? "Signing in..." : "Creating account...") : (isLogin ? "Sign In" : "Create Account")}
             </Button>
             
-            {/* Resend link for signup mode */}
             {!isLogin && !showResend && (
               <div className="text-center">
                 <Button
