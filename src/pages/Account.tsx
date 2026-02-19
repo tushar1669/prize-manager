@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Gift, Copy, Users, Ticket, Link } from "lucide-react";
+import { Loader2, CheckCircle2, Gift, Copy, Users, Ticket, Link, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   completionPercent,
@@ -24,8 +24,7 @@ const FIELD_LABELS: Record<string, { label: string; placeholder: string }> = {
   phone: { label: "Phone Number", placeholder: "+91 98765 43210" },
   city: { label: "City", placeholder: "e.g. Mumbai" },
   org_name: { label: "Organization Name", placeholder: "e.g. Chess Academy India" },
-  fide_arbiter_id: { label: "FIDE Arbiter ID", placeholder: "e.g. 12345678" },
-  website: { label: "Website", placeholder: "https://example.com" },
+  fide_arbiter_id: { label: "FIDE ID", placeholder: "e.g. 12345678" },
 };
 
 function copyToClipboard(text: string, label: string) {
@@ -98,7 +97,7 @@ export default function Account() {
     onError: (err) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === "profile_incomplete") {
-        toast.error("Please complete and save all 6 profile fields first.");
+        toast.error("Please complete and save all 5 profile fields first.");
       } else {
         toast.error("Failed to claim reward. Please try again.");
       }
@@ -121,7 +120,6 @@ export default function Account() {
       setReferralCode(String(result.code ?? ""));
     },
     onError: () => {
-      // Only show toast if user explicitly clicked
       if (referralAutoFetched) return;
       toast.error("Failed to get referral code.");
     },
@@ -136,7 +134,36 @@ export default function Account() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // === Referral Rewards ===
+  // === Referrals (people who used my code) ===
+  const { data: myReferrals } = useQuery({
+    queryKey: ["my-referrals", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const unsafeSupabase = supabase as unknown as {
+        from: (table: string) => {
+          select: (columns: string) => {
+            eq: (col: string, val: string) => {
+              order: (col: string, opts: { ascending: boolean }) => {
+                limit: (n: number) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
+              };
+            };
+          };
+        };
+      };
+      const { data, error } = await unsafeSupabase
+        .from("referrals")
+        .select("id,referred_id,created_at")
+        .eq("referrer_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string }>;
+    },
+  });
+
+  const referredIds = useMemo(() => (myReferrals ?? []).map((r) => r.referred_id), [myReferrals]);
+
+  // === Referral Rewards (for my referrals) ===
   const { data: referralRewards } = useQuery({
     queryKey: ["my-referral-rewards", user?.id],
     enabled: !!user?.id,
@@ -188,6 +215,56 @@ export default function Account() {
 
   const couponCodeMap = new Map((rewardCoupons ?? []).map((c) => [c.id, c]));
 
+  // Try to fetch profiles for referred users (may fail due to RLS)
+  const { data: referredProfiles } = useQuery({
+    queryKey: ["referred-profiles", referredIds.join(",")],
+    enabled: referredIds.length > 0,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id,email,display_name")
+          .in("id", referredIds);
+        if (error) return [];
+        return (data ?? []) as Array<{ id: string; email: string; display_name: string | null }>;
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const profileMap = useMemo(() => {
+    const m = new Map<string, { email: string; display_name: string | null }>();
+    for (const p of referredProfiles ?? []) m.set(p.id, p);
+    return m;
+  }, [referredProfiles]);
+
+  // Build per-referred-user reward info
+  const rewardsByTriggerUser = useMemo(() => {
+    const map = new Map<string, Array<{
+      id: string; level: number; coupon_id: string | null; created_at: string;
+    }>>();
+    for (const r of referralRewards ?? []) {
+      const arr = map.get(r.trigger_user_id) ?? [];
+      arr.push(r);
+      map.set(r.trigger_user_id, arr);
+    }
+    return map;
+  }, [referralRewards]);
+
+  // Summary stats
+  const summaryStats = useMemo(() => {
+    const totalReferred = (myReferrals ?? []).length;
+    const upgradedIds = new Set(rewardsByTriggerUser.keys());
+    const upgradedCount = referredIds.filter((id) => upgradedIds.has(id)).length;
+    const allRewards = referralRewards ?? [];
+    const byLevel = { 1: 0, 2: 0, 3: 0 };
+    for (const r of allRewards) {
+      if (r.level >= 1 && r.level <= 3) byLevel[r.level as 1 | 2 | 3]++;
+    }
+    return { totalReferred, upgradedCount, totalRewards: allRewards.length, byLevel };
+  }, [myReferrals, referredIds, rewardsByTriggerUser, referralRewards]);
+
   // === My Coupons ===
   const { data: myCoupons } = useQuery({
     queryKey: ["my-coupons", user?.id],
@@ -218,6 +295,16 @@ export default function Account() {
     if (c.discount_type === "fixed_price") return `₹${c.discount_value} final`;
     return String(c.discount_value);
   };
+
+  // Referral detail expand state
+  const [expandedReferral, setExpandedReferral] = useState<string | null>(null);
+
+  function getReferredLabel(userId: string): string {
+    const p = profileMap.get(userId);
+    if (p?.display_name) return p.display_name;
+    if (p?.email) return p.email;
+    return `User …${userId.slice(-6)}`;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -377,7 +464,7 @@ export default function Account() {
           </Card>
         )}
 
-        {/* Referral Code */}
+        {/* Referral Code + Usage */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -387,7 +474,8 @@ export default function Account() {
               Share your referral code with others. When they upgrade, you earn discount coupons (100% for direct, 50% for 2nd level, 25% for 3rd).
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
+            {/* Referral code display + copy */}
             {referralCode ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -429,49 +517,121 @@ export default function Account() {
                 </Button>
               )
             )}
-          </CardContent>
-        </Card>
 
-        {/* Referral Rewards */}
-        {(referralRewards ?? []).length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gift className="h-4 w-4" /> My Referral Rewards
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {(referralRewards ?? []).map((reward) => {
-                  const coupon = reward.coupon_id ? couponCodeMap.get(reward.coupon_id) : null;
+            {/* Summary Stats */}
+            {summaryStats.totalReferred > 0 && (
+              <div className="grid grid-cols-3 gap-3 pt-2">
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{summaryStats.totalReferred}</p>
+                  <p className="text-xs text-muted-foreground">Signups</p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{summaryStats.upgradedCount}</p>
+                  <p className="text-xs text-muted-foreground">Upgraded</p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{summaryStats.totalRewards}</p>
+                  <p className="text-xs text-muted-foreground">Rewards</p>
+                </div>
+              </div>
+            )}
+
+            {summaryStats.totalRewards > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {summaryStats.byLevel[1] > 0 && (
+                  <Badge variant="secondary" className="text-xs">L1: {summaryStats.byLevel[1]}</Badge>
+                )}
+                {summaryStats.byLevel[2] > 0 && (
+                  <Badge variant="secondary" className="text-xs">L2: {summaryStats.byLevel[2]}</Badge>
+                )}
+                {summaryStats.byLevel[3] > 0 && (
+                  <Badge variant="secondary" className="text-xs">L3: {summaryStats.byLevel[3]}</Badge>
+                )}
+              </div>
+            )}
+
+            {/* Referral List */}
+            {(myReferrals ?? []).length > 0 ? (
+              <div className="space-y-2 pt-1">
+                <p className="text-sm font-medium text-muted-foreground">Referred Users</p>
+                {(myReferrals ?? []).map((ref) => {
+                  const rewards = rewardsByTriggerUser.get(ref.referred_id);
+                  const hasUpgraded = !!rewards && rewards.length > 0;
+                  const isExpanded = expandedReferral === ref.id;
+
                   return (
-                    <div key={reward.id} className="flex items-center justify-between border-b pb-2 last:border-0">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium">
-                          Level {reward.level} reward
-                          <span className="text-muted-foreground ml-1">
-                            ({reward.level === 1 ? "100%" : reward.level === 2 ? "50%" : "25%"} off)
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(reward.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {coupon && (
-                        <div className="flex items-center gap-1">
-                          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{coupon.code}</code>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => copyToClipboard(coupon.code, "Coupon")}>
-                            <Copy className="h-3 w-3" />
-                          </Button>
+                    <div key={ref.id} className="border rounded-md p-3">
+                      <button
+                        className="flex items-center justify-between w-full text-left"
+                        onClick={() => setExpandedReferral(isExpanded ? null : ref.id)}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-medium truncate">{getReferredLabel(ref.referred_id)}</span>
+                          {hasUpgraded ? (
+                            <Badge variant="default" className="text-xs shrink-0">Upgraded ✅</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs shrink-0">Not upgraded yet</Badge>
+                          )}
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-3 pl-1 space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Joined {new Date(ref.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </p>
+
+                          {hasUpgraded ? (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-medium text-muted-foreground">Rewards earned:</p>
+                              {rewards.map((rw) => {
+                                const coupon = rw.coupon_id ? couponCodeMap.get(rw.coupon_id) : null;
+                                return (
+                                  <div key={rw.id} className="flex items-center gap-2 text-sm">
+                                    <Badge variant="outline" className="text-xs">
+                                      L{rw.level} ({rw.level === 1 ? "100%" : rw.level === 2 ? "50%" : "25%"})
+                                    </Badge>
+                                    {coupon && (
+                                      <div className="flex items-center gap-1">
+                                        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{coupon.code}</code>
+                                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(coupon.code, "Coupon"); }}>
+                                          <Copy className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">Steps for them to upgrade:</p>
+                              <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+                                <li>Create a tournament</li>
+                                <li>Open "Upgrade to Pro"</li>
+                                <li>Pay via UPI + submit UTR, or apply a coupon</li>
+                                <li>Wait for master approval (if UPI)</li>
+                              </ol>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ) : referralCode ? (
+              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-4 text-center">
+                No referrals yet. Share your link to get started!
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {/* My Coupons */}
         {(myCoupons ?? []).length > 0 && (

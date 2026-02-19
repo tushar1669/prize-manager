@@ -12,7 +12,6 @@ const EMPTY: Partial<ProfileData> = {
   city: null,
   org_name: null,
   fide_arbiter_id: null,
-  website: null,
   profile_completed_at: null,
   profile_reward_claimed: false,
 };
@@ -23,7 +22,6 @@ const PARTIAL: Partial<ProfileData> = {
   city: "",
   org_name: null,
   fide_arbiter_id: null,
-  website: null,
 };
 
 const FULL: Partial<ProfileData> = {
@@ -32,7 +30,6 @@ const FULL: Partial<ProfileData> = {
   city: "Mumbai",
   org_name: "Chess Club",
   fide_arbiter_id: "12345678",
-  website: "https://example.com",
 };
 
 describe("profileCompletion", () => {
@@ -44,19 +41,19 @@ describe("profileCompletion", () => {
 
   it("counts only non-empty string fields", () => {
     expect(filledFieldCount(PARTIAL)).toBe(2);
-    expect(completionPercent(PARTIAL)).toBe(33);
+    expect(completionPercent(PARTIAL)).toBe(40);
     expect(isProfileComplete(PARTIAL)).toBe(false);
   });
 
   it("returns 100% for fully filled profile", () => {
-    expect(filledFieldCount(FULL)).toBe(6);
+    expect(filledFieldCount(FULL)).toBe(5);
     expect(completionPercent(FULL)).toBe(100);
     expect(isProfileComplete(FULL)).toBe(true);
   });
 
   it("treats whitespace-only as empty", () => {
     const ws: Partial<ProfileData> = { ...FULL, city: "   " };
-    expect(filledFieldCount(ws)).toBe(5);
+    expect(filledFieldCount(ws)).toBe(4);
     expect(isProfileComplete(ws)).toBe(false);
   });
 });
