@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, ArrowRight, Download, Printer, Info } from "lucide-react";
 import { toast } from "sonner";
+import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
+import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { slugifyWithSuffix } from "@/lib/slug";
@@ -326,17 +328,19 @@ export default function Finalize() {
           ? (error as { context?: { body?: { error?: string; hint?: string } } }).context
           : undefined;
       const errorBody = errorContext?.body;
-      const message =
+      const rawMessage =
         errorBody?.error ||
         (error instanceof Error ? error.message : "Unknown error");
       const hint = errorBody?.hint || "Check console logs and try again.";
       
+      const normalized = normalizeError(error);
       showError({
         title: "Finalization failed",
-        message: message,
-        hint: hint
+        message: normalized.friendlyMessage,
+        hint: `${normalized.suggestedAction} (Ref: ${normalized.referenceId})`
       });
-      toast.error(`Finalization failed: ${message}`);
+      toast.error(toastMessage(normalized));
+      logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: rawMessage, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
     }
   });
 
@@ -431,8 +435,9 @@ export default function Finalize() {
       navigate(`/t/${id}/publish`, { state: { slug } });
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Publish failed';
-      toast.error(`Publish failed: ${message}`);
+      const normalized = normalizeError(error);
+      toast.error(toastMessage(normalized));
+      logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error instanceof Error ? error.message : 'Publish failed', friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
     }
   });
 

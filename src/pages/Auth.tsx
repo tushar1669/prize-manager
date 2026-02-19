@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
+import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -82,13 +84,16 @@ export default function Auth() {
         redirectTo: `${window.location.origin}/reset-password`
       });
       if (error) {
-        toast.error(error.message);
+        const normalized = normalizeError(error);
+        toast.error(toastMessage(normalized));
+        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
       } else {
         toast.success('Password reset email sent! Check your inbox.');
         setForgotPasswordCooldown(60);
       }
     } catch {
-      toast.error('Failed to send password reset email');
+      const normalized = normalizeError("Failed to send password reset email");
+      toast.error(toastMessage(normalized));
     } finally {
       setForgotPasswordLoading(false);
     }
@@ -101,7 +106,9 @@ export default function Auth() {
     if (isLogin) {
       const { error } = await signIn(email, password);
       if (error) {
-        toast.error(error.message);
+        const normalized = normalizeError(error);
+        toast.error(toastMessage(normalized));
+        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
       } else {
         toast.success("Welcome back!");
         navigate("/dashboard");
@@ -111,9 +118,11 @@ export default function Auth() {
       if (error) {
         // Handle common signup errors with friendly messages
         if (error.message.includes('already registered')) {
-          toast.error("This email is already registered. Please sign in instead.");
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
         } else {
-          toast.error(error.message);
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
         }
       } else if (data?.user?.identities?.length === 0) {
         toast.error("This email is already registered. Please sign in or resend confirmation.");
