@@ -14,6 +14,7 @@ import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 // Eager load critical public pages
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
+import ResetPassword from "./pages/ResetPassword";
 import RootRedirect from "./components/RootRedirect";
 import NotFound from "./pages/NotFound";
 
@@ -104,6 +105,7 @@ const App = () => {
                 {/* Auth routes */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 {/* Pending approval route - protected but allowed for unverified */}
                 <Route path="/pending-approval" element={<ProtectedRoute><PendingApproval /></ProtectedRoute>} />

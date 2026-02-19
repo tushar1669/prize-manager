@@ -22,6 +22,8 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordCooldown, setForgotPasswordCooldown] = useState(0);
   
   // Resend confirmation state
   const [showResend, setShowResend] = useState(false);
@@ -44,6 +46,53 @@ export default function Auth() {
       setIsLogin(false);
     }
   }, [initialMode]);
+
+  useEffect(() => {
+    if (forgotPasswordCooldown <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setForgotPasswordCooldown((seconds) => {
+        if (seconds <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [forgotPasswordCooldown]);
+
+  const handleForgotPassword = async () => {
+    if (forgotPasswordLoading || forgotPasswordCooldown > 0) {
+      return;
+    }
+
+    const emailToReset = email.trim();
+    if (!emailToReset) {
+      toast.error('Please enter your email address first');
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success('Password reset email sent! Check your inbox.');
+        setForgotPasswordCooldown(60);
+      }
+    } catch {
+      toast.error('Failed to send password reset email');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,27 +255,14 @@ export default function Auth() {
                   type="button" 
                   variant="link" 
                   className="text-xs text-muted-foreground p-0 h-auto"
-                  onClick={async () => {
-                    const emailToReset = email.trim();
-                    if (!emailToReset) {
-                      toast.error('Please enter your email address first');
-                      return;
-                    }
-                    try {
-                      const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, {
-                        redirectTo: `${window.location.origin}/auth/callback`
-                      });
-                      if (error) {
-                        toast.error(error.message);
-                      } else {
-                        toast.success('Password reset email sent! Check your inbox.');
-                      }
-                    } catch {
-                      toast.error('Failed to send password reset email');
-                    }
-                  }}
+                  onClick={handleForgotPassword}
+                  disabled={forgotPasswordLoading || forgotPasswordCooldown > 0}
                 >
-                  Forgot password?
+                  {forgotPasswordCooldown > 0
+                    ? `Resend in ${forgotPasswordCooldown}s`
+                    : forgotPasswordLoading
+                      ? 'Sending...'
+                      : 'Forgot password?'}
                 </Button>
               </div>
             )}
