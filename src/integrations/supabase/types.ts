@@ -82,6 +82,51 @@ export type Database = {
           },
         ]
       }
+      audit_events: {
+        Row: {
+          context: Json
+          created_at: string
+          event_type: string
+          friendly_message: string | null
+          id: string
+          message: string
+          reference_id: string
+          route: string | null
+          severity: string
+          suggested_action: string | null
+          user_email_hash: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          event_type: string
+          friendly_message?: string | null
+          id?: string
+          message: string
+          reference_id: string
+          route?: string | null
+          severity?: string
+          suggested_action?: string | null
+          user_email_hash?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          event_type?: string
+          friendly_message?: string | null
+          id?: string
+          message?: string
+          reference_id?: string
+          route?: string | null
+          severity?: string
+          suggested_action?: string | null
+          user_email_hash?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -623,9 +668,9 @@ export type Database = {
           cash_amount: number | null
           category_id: string
           created_at: string | null
+          gift_items: Json
           has_medal: boolean | null
           has_trophy: boolean | null
-          gift_items: Json
           id: string
           is_active: boolean
           place: number
@@ -634,9 +679,9 @@ export type Database = {
           cash_amount?: number | null
           category_id: string
           created_at?: string | null
+          gift_items?: Json
           has_medal?: boolean | null
           has_trophy?: boolean | null
-          gift_items?: Json
           id?: string
           is_active?: boolean
           place: number
@@ -645,9 +690,9 @@ export type Database = {
           cash_amount?: number | null
           category_id?: string
           created_at?: string | null
+          gift_items?: Json
           has_medal?: boolean | null
           has_trophy?: boolean | null
-          gift_items?: Json
           id?: string
           is_active?: boolean
           place?: number
