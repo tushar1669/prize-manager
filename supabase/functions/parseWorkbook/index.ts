@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import type { WorkBook } from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
+import * as XLSX from "npm:xlsx@0.20.3";
 import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -9,8 +9,6 @@ const FUNCTION_NAME = "parseWorkbook";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const XLSX_MODULE_URL = "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
-let xlsxModulePromise: Promise<typeof import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs")> | null = null;
 const DEBUG_IMPORT = ["1", "true", "yes", "on"].includes(
   (Deno.env.get("DEBUG_IMPORT") ?? "").toLowerCase()
 );
@@ -22,15 +20,6 @@ function logImport(label: "method" | "ok" | "forbidden" | "error", detail?: stri
     return;
   }
   console.log(`[parseWorkbook] ${label}`);
-}
-
-async function loadXlsx() {
-  if (!xlsxModulePromise) {
-    logImport("method", "load_xlsx");
-    xlsxModulePromise = import(XLSX_MODULE_URL);
-  }
-
-  return await xlsxModulePromise;
 }
 
 function jsonHeaders(): Record<string, string> {
@@ -670,8 +659,8 @@ function scoreRow(row: unknown[]): number {
 }
 
 function detectHeaders(
-  XLSX: typeof import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"),
-  workbook: WorkBook
+  XLSX: typeof import("npm:xlsx@0.20.3"),
+  workbook: XLSX.WorkBook
 ): { sheetName: string; headerRowIndex: number; headers: string[] } {
   const candidates: Array<{ sheetName: string; rowIndex: number; score: number; headers: string[] }> = [];
   for (const sheetName of workbook.SheetNames) {
@@ -813,7 +802,6 @@ Deno.serve(async (req) => {
     const fileHash = await sha256Hex(bufferSlice);
 
     console.log("[parseWorkbook] stage=load_parser");
-    const XLSX = await loadXlsx();
     console.log("[parseWorkbook] stage=parse_workbook");
     const workbook = XLSX.read(bufferSlice, { type: "array" });
     if (!workbook.SheetNames?.length) {
