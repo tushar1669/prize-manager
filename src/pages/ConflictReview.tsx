@@ -756,7 +756,7 @@ export default function ConflictReview() {
                 <Button className="font-semibold" size="lg" onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
                 <Button className="border-amber-700 text-amber-950 hover:bg-amber-200" variant="outline" onClick={() => navigate(couponPath)}>Apply Coupon</Button>
               </div>
-              <p className="text-xs text-amber-900">Payments coming soon. You can use coupon flow today.</p>
+              <p className="text-xs text-amber-900">Pay via UPI or apply a coupon code to unlock Pro features.</p>
             </CardContent>
           </Card>
         )}

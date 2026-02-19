@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Gift, Copy, Users, Ticket } from "lucide-react";
+import { Loader2, CheckCircle2, Gift, Copy, Users, Ticket, Link } from "lucide-react";
 import { toast } from "sonner";
 import {
   completionPercent,
@@ -107,6 +107,7 @@ export default function Account() {
 
   // === Referral Code ===
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralAutoFetched, setReferralAutoFetched] = useState(false);
 
   const getReferralCodeMutation = useMutation({
     mutationFn: async () => {
@@ -120,9 +121,20 @@ export default function Account() {
       setReferralCode(String(result.code ?? ""));
     },
     onError: () => {
+      // Only show toast if user explicitly clicked
+      if (referralAutoFetched) return;
       toast.error("Failed to get referral code.");
     },
   });
+
+  // Auto-fetch referral code on first render
+  useEffect(() => {
+    if (user?.id && !referralCode && !referralAutoFetched) {
+      setReferralAutoFetched(true);
+      getReferralCodeMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // === Referral Rewards ===
   const { data: referralRewards } = useQuery({
@@ -377,31 +389,45 @@ export default function Account() {
           </CardHeader>
           <CardContent>
             {referralCode ? (
-              <div className="flex items-center gap-2">
-                <code className="text-lg font-mono bg-muted px-3 py-1.5 rounded font-bold">
-                  {referralCode}
-                </code>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <code className="text-lg font-mono bg-muted px-3 py-1.5 rounded font-bold">
+                    {referralCode}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(referralCode, "Referral code")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={() => copyToClipboard(referralCode, "Referral code")}
+                  className="gap-1.5"
+                  onClick={() => copyToClipboard(
+                    `${window.location.origin}/auth?mode=signup&ref=${referralCode}`,
+                    "Referral signup link"
+                  )}
                 >
-                  <Copy className="h-4 w-4" />
+                  <Link className="h-3.5 w-3.5" />
+                  Copy referral signup link
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={() => getReferralCodeMutation.mutate()}
-                disabled={getReferralCodeMutation.isPending}
-              >
-                {getReferralCodeMutation.isPending ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Generating...
-                  </span>
-                ) : (
-                  "Get My Referral Code"
-                )}
-              </Button>
+              getReferralCodeMutation.isPending ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading referral code...
+                </div>
+              ) : (
+                <Button
+                  onClick={() => getReferralCodeMutation.mutate()}
+                  disabled={getReferralCodeMutation.isPending}
+                >
+                  Get My Referral Code
+                </Button>
+              )
             )}
           </CardContent>
         </Card>
@@ -468,7 +494,11 @@ export default function Account() {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {discountLabel(coupon)} · {coupon.applies_to}
-                        {coupon.ends_at && ` · expires ${new Date(coupon.ends_at).toLocaleDateString()}`}
+                        {coupon.ends_at && (
+                          <span className="ml-1">
+                            · expires on {new Date(coupon.ends_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <Badge variant={coupon.is_active ? "default" : "secondary"} className="text-xs">
