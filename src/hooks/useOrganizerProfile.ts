@@ -9,7 +9,7 @@ import type { ProfileData } from "@/utils/profileCompletion";
 import { isProfileComplete } from "@/utils/profileCompletion";
 
 const PROFILE_FIELDS_SELECT =
-  "display_name, phone, city, org_name, fide_arbiter_id, website, profile_completed_at, profile_reward_claimed";
+  "display_name, phone, city, org_name, fide_arbiter_id, profile_completed_at, profile_reward_claimed";
 
 export function useOrganizerProfile() {
   const { user } = useAuth();
