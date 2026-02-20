@@ -15,4 +15,15 @@ Concise UI and workflow terms used across import/review/finalize/public pages.
 - **Public tournament page**: Viewer-facing routes (`/public`, `/p/:slug`, `/p/:slug/results`).
 - **Master user**: Elevated role required for protected admin/master routes (`/master-dashboard`, `/admin/tournaments`).
 
+- **Referral code**: Unique shareable code (`REF-XXXX`) generated per organizer via `/account`. Used in signup links to track referrer→referee relationships.
+- **Referrer**: The organizer who shares their referral code to invite new users.
+- **Referee (referred user)**: The organizer who signs up using another organizer's referral link.
+- **Referral reward**: A discount coupon automatically issued to the referrer (and upstream chain) when a referee upgrades to Pro. See [Referrals & Rewards](./REFERRALS_AND_REWARDS.md).
+- **pending_referral_code**: Field stored in Supabase Auth `user_metadata` during signup to ensure cross-device referral capture.
+- **Coupon origin**: Machine-readable tag on `coupons.origin` indicating how the coupon was created (`profile_reward`, `referral_l1`, `referral_l2`, `referral_l3`, or null for admin-created).
+- **Profile reward**: One-time Pro discount coupon (`PROFILE-` prefix) earned by completing all profile fields on `/account`.
+- **Entitlement**: A `tournament_entitlements` record granting Pro access to a specific tournament, with source and validity window.
+- **Targeted coupon**: A coupon issued to a specific user (`issued_to_user_id` / `issued_to_email` set). Contrasts with global coupons usable by anyone.
+- **Global coupon**: A coupon with no `issued_to_user_id` / `issued_to_email`, redeemable by any eligible user.
+
 If a term appears in UI but is not listed here, treat definition as **UNKNOWN** and verify in component text under `src/pages/*` and `src/components/*`.

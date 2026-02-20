@@ -10,6 +10,8 @@ Prize-Manager helps chess arbiters allocate prizes for Swiss-Manager style tourn
 - **Conflict Review & Commit** – Inspect debug coverage, resolve conflicts, and commit final winners.
 - **Public Tournament Pages** – Publish a public listing and winners page for external viewers.
 - **Exports (Coverage & RCA)** – Download Excel coverage and RCA reports for auditing.
+- **Referral Program** – 3-level referral system where organizers earn Pro upgrade discount coupons (L1 100%, L2 50%, L3 25%) when referred users upgrade. See [Referrals & Rewards](./docs/REFERRALS_AND_REWARDS.md).
+- **Profile Completion Reward** – Organizers who complete all profile fields can claim a one-time Pro discount coupon (`PROFILE-` prefix).
 
 Prize allocation always hands out the **best overall prize first** using a global comparator (cash ↓, trophy/medal power ↓, place ↑, main vs sub, brochure order ↑, prize ID) to keep results deterministic. Age eligibility follows a configurable `age_band_policy`: new tournaments default to **non-overlapping** Under-X bands (one age band per child), while migrated tournaments keep **overlapping** Under-X ranges until the director toggles the policy in Edit Rules. Gender filters have three options: blank (**Any**), `F` (**Girls Only**), and `M_OR_UNKNOWN` (**Boys / not-F**; legacy `M` maps here). The UI no longer exposes "Boys Only" and only persists `F`, `M_OR_UNKNOWN`, or blank.
 
@@ -34,6 +36,7 @@ Prize allocation always hands out the **best overall prize first** using a globa
 - [Key User Flows](./docs/KEY_USER_FLOWS.md)
 - [User Guide](./docs/USER_GUIDE.md)
 - [Coupons Lifecycle (Canonical Spec)](./docs/COUPONS_LIFECYCLE.md)
+- [Referrals & Rewards](./docs/REFERRALS_AND_REWARDS.md)
 - [Prize Allocation Algorithm Specification](./docs/allocator/README.md)
 - [Algorithm Rules Reference](./docs/ALGORITHM_RULES.md)
 - [Rules & Settings Reference](./docs/RULES_AND_SETTINGS_REFERENCE.md)
