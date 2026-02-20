@@ -68,32 +68,7 @@ export default function Auth() {
     return () => window.clearInterval(timer);
   }, [forgotPasswordCooldown]);
 
-  async function applyReferralCode(code: string) {
-    try {
-      const { data, error } = await supabase.rpc("apply_referral_code" as never, {
-        referral_code: code,
-      } as never);
-      if (error) {
-        // Don't block or scare
-        console.warn("Referral apply error:", error.message);
-        return;
-      }
-      const result = data as unknown as Record<string, unknown>;
-      if (!result) return;
-      const reason = String(result.reason ?? "");
-      if (reason === "applied") {
-        toast.success("Referral applied! Your referrer will earn rewards.");
-      } else if (reason === "already_applied") {
-        toast.info("Referral already applied.");
-      } else if (reason === "invalid_code") {
-        toast("Referral code not found.", { description: "You can continue without one." });
-      } else if (reason === "self_referral_not_allowed") {
-        toast("You can't refer yourself.", { description: "Share your code with others instead!" });
-      }
-    } catch {
-      // Never block signup flow
-    }
-  }
+  // Referral apply is handled globally by useApplyPendingReferral hook (src/hooks/useApplyPendingReferral.ts)
 
   const handleForgotPassword = async () => {
     if (forgotPasswordLoading || forgotPasswordCooldown > 0) return;
