@@ -24,6 +24,7 @@ export type Coupon = {
   issued_to_email: string | null;
   issued_to_user_id: string | null;
   applies_to?: string | null;
+  origin?: string | null;
 };
 
 export type CouponRedemption = {

@@ -10,6 +10,7 @@ import { AdminCallout } from "@/components/admin/AdminCallout";
 import { useCouponsAdmin } from "@/hooks/useCouponsAdmin";
 
 type CouponFilter = "all" | "global" | "targeted";
+type SourceFilter = "all" | "admin" | "system";
 
 interface CouponCodesPanelProps {
   couponsAdmin: ReturnType<typeof useCouponsAdmin>;
@@ -17,7 +18,11 @@ interface CouponCodesPanelProps {
 
 export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
   const [filter, setFilter] = useState<CouponFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
+
+  const isSystemOrigin = (origin: string | null | undefined) =>
+    origin === "profile_reward" || origin?.startsWith("referral_");
 
   const filteredCoupons = useMemo(() => {
     let list = couponsAdmin.coupons;
@@ -29,6 +34,13 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
       list = list.filter((c) => !!c.issued_to_user_id || !!c.issued_to_email);
     }
 
+    // Filter by source
+    if (sourceFilter === "admin") {
+      list = list.filter((c) => !isSystemOrigin(c.origin));
+    } else if (sourceFilter === "system") {
+      list = list.filter((c) => isSystemOrigin(c.origin));
+    }
+
     // Search by code prefix
     if (search.trim()) {
       const q = search.trim().toUpperCase();
@@ -36,7 +48,7 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
     }
 
     return list;
-  }, [couponsAdmin.coupons, filter, search]);
+  }, [couponsAdmin.coupons, filter, sourceFilter, search]);
 
   const globalCount = couponsAdmin.coupons.filter((c) => !c.issued_to_user_id && !c.issued_to_email).length;
   const targetedCount = couponsAdmin.coupons.length - globalCount;
@@ -78,6 +90,21 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
                   {f === "all" && <Badge variant="secondary" className="ml-1 text-xs h-4 px-1">{couponsAdmin.coupons.length}</Badge>}
                   {f === "global" && <Badge variant="secondary" className="ml-1 text-xs h-4 px-1">{globalCount}</Badge>}
                   {f === "targeted" && <Badge variant="secondary" className="ml-1 text-xs h-4 px-1">{targetedCount}</Badge>}
+                </Button>
+              ))}
+            </div>
+
+            {/* Source filter */}
+            <div className="flex items-center gap-1 border-l pl-2 ml-1">
+              {(["all", "admin", "system"] as const).map((sf) => (
+                <Button
+                  key={sf}
+                  variant={sourceFilter === sf ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs capitalize"
+                  onClick={() => setSourceFilter(sf)}
+                >
+                  {sf === "all" ? "All Sources" : sf === "admin" ? "Admin" : "System"}
                 </Button>
               ))}
             </div>
