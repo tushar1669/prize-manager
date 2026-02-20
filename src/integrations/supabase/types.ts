@@ -343,6 +343,7 @@ export type Database = {
           issued_to_user_id: string | null
           max_redemptions: number | null
           max_redemptions_per_user: number | null
+          origin: string | null
           starts_at: string | null
           updated_at: string
         }
@@ -360,6 +361,7 @@ export type Database = {
           issued_to_user_id?: string | null
           max_redemptions?: number | null
           max_redemptions_per_user?: number | null
+          origin?: string | null
           starts_at?: string | null
           updated_at?: string
         }
@@ -377,6 +379,7 @@ export type Database = {
           issued_to_user_id?: string | null
           max_redemptions?: number | null
           max_redemptions_per_user?: number | null
+          origin?: string | null
           starts_at?: string | null
           updated_at?: string
         }
@@ -864,21 +867,27 @@ export type Database = {
           created_at: string
           id: string
           referral_code_id: string
+          referred_email: string | null
           referred_id: string
+          referred_label: string | null
           referrer_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           referral_code_id: string
+          referred_email?: string | null
           referred_id: string
+          referred_label?: string | null
           referrer_id: string
         }
         Update: {
           created_at?: string
           id?: string
           referral_code_id?: string
+          referred_email?: string | null
           referred_id?: string
+          referred_label?: string | null
           referrer_id?: string
         }
         Relationships: [
@@ -1298,6 +1307,7 @@ export type Database = {
       apply_referral_code: { Args: { referral_code: string }; Returns: Json }
       bootstrap_master: { Args: never; Returns: Json }
       claim_profile_completion_reward: { Args: never; Returns: Json }
+      coupon_origin_from_code: { Args: { code: string }; Returns: string }
       get_or_create_my_referral_code: { Args: never; Returns: Json }
       get_public_tournament_results: {
         Args: { tournament_id: string }
@@ -1345,7 +1355,9 @@ export type Database = {
           inserted_count: number
         }[]
       }
-      is_master: { Args: never; Returns: boolean }
+      is_master:
+        | { Args: never; Returns: boolean }
+        | { Args: { uid: string }; Returns: boolean }
       issue_referral_rewards: {
         Args: { p_trigger_tournament_id: string; p_trigger_user_id: string }
         Returns: Json

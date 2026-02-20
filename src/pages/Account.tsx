@@ -152,12 +152,12 @@ export default function Account() {
       };
       const { data, error } = await unsafeSupabase
         .from("referrals")
-        .select("id,referred_id,created_at")
+        .select("id,referred_id,created_at,referred_email,referred_label")
         .eq("referrer_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string }>;
+      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string; referred_email: string | null; referred_label: string | null }>;
     },
   });
 
@@ -299,11 +299,16 @@ export default function Account() {
   // Referral detail expand state
   const [expandedReferral, setExpandedReferral] = useState<string | null>(null);
 
-  function getReferredLabel(userId: string): string {
+  function getReferredLabel(userId: string): { primary: string; secondary: string | null } {
+    const ref = (myReferrals ?? []).find((r) => r.referred_id === userId);
+    const snapLabel = ref?.referred_label;
+    const snapEmail = ref?.referred_email;
     const p = profileMap.get(userId);
-    if (p?.display_name) return p.display_name;
-    if (p?.email) return p.email;
-    return `User …${userId.slice(-6)}`;
+
+    const primary = snapLabel || snapEmail || p?.display_name || p?.email || `User …${userId.slice(-6)}`;
+    // Show email as secondary when primary is a name (not already the email)
+    const secondary = primary !== snapEmail && snapEmail ? snapEmail : null;
+    return { primary, secondary };
   }
 
   return (
@@ -566,7 +571,12 @@ export default function Account() {
                         onClick={() => setExpandedReferral(isExpanded ? null : ref.id)}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-medium truncate">{getReferredLabel(ref.referred_id)}</span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium truncate block">{getReferredLabel(ref.referred_id).primary}</span>
+                            {getReferredLabel(ref.referred_id).secondary && (
+                              <span className="text-xs text-muted-foreground truncate block">{getReferredLabel(ref.referred_id).secondary}</span>
+                            )}
+                          </div>
                           {hasUpgraded ? (
                             <Badge variant="default" className="text-xs shrink-0">Upgraded ✅</Badge>
                           ) : (
