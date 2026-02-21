@@ -38,8 +38,38 @@ Canonical operator flow for individual prize workflows:
 - **Where implemented:** `src/pages/Finalize.tsx`, `supabase/functions/finalize/index.ts`, `src/pages/PublishSuccess.tsx`.
 - **Failure checkpoint:** if publish fails, inspect RPC/update errors in finalize logs and confirm public pages query only published records.
 
+## 6) Referral signup and reward
+- **Route:** `/auth?mode=signup&ref=REF-XXXX` → `/auth/callback` → `/account`
+- **Primary actions:** sign up with referral code, confirm email (possibly cross-device), referral captured by global hook.
+- **Artifacts:** `referrals` row linking referrer → referee; `referral_rewards` + `coupons` rows after referee upgrades.
+- **Where implemented:** `src/pages/Auth.tsx` (signup with metadata), `src/hooks/useApplyPendingReferral.ts` (global capture), `src/pages/Account.tsx` (visibility).
+- **Failure checkpoint:** use `?debug_referrals=1` to trace capture; see [Troubleshooting](./TROUBLESHOOTING.md) playbook #6.
+
+## 7) Tournament upgrade via coupon
+- **Route:** `/t/:id/upgrade`
+- **Primary actions:** enter coupon code → `apply_coupon_for_tournament` validates → `redeem_coupon_for_tournament` creates entitlement.
+- **Artifacts:** `coupon_redemptions` row, `tournament_entitlements` row, referral rewards triggered for the chain.
+- **Where implemented:** `src/pages/TournamentUpgrade.tsx`.
+- **Failure checkpoint:** if coupon is rejected, check coupon validity (active, not expired, not fully redeemed).
+
+## 8) Tournament upgrade via UPI
+- **Route:** `/t/:id/upgrade` → `/master-dashboard`
+- **Primary actions:** organizer pays via UPI, submits UTR → master reviews in Payment Approvals panel.
+- **Artifacts:** `tournament_payments` row (pending → approved), `tournament_entitlements` row, referral rewards triggered.
+- **Where implemented:** `src/pages/TournamentUpgrade.tsx` (submit), `src/components/master/PendingPaymentsPanel.tsx` (review), `review_tournament_payment` RPC.
+- **Failure checkpoint:** if approval fails, check RPC errors in master dashboard console; verify tournament ownership.
+
+## 9) Profile completion reward
+- **Route:** `/account`
+- **Primary actions:** fill all 5 profile fields → click "Claim Reward".
+- **Artifacts:** `coupons` row with origin `profile_reward`, `profiles.profile_reward_claimed = true`.
+- **Where implemented:** `src/pages/Account.tsx`, `claim_profile_completion_reward` RPC.
+- **Failure checkpoint:** if claim fails, verify all 5 fields are non-empty and `profile_reward_claimed` is still false.
+
 ## Related docs
-- `docs/USER_GUIDE.md`
-- `docs/EXPORTS_COVERAGE_VS_RCA.md`
-- `docs/GLOSSARY.md`
-- `docs/TROUBLESHOOTING.md`
+- [User Guide](./USER_GUIDE.md)
+- [Referrals and Rewards](./REFERRALS_AND_REWARDS.md)
+- [Coupons Lifecycle](./COUPONS_LIFECYCLE.md)
+- [Exports Coverage vs RCA](./EXPORTS_COVERAGE_VS_RCA.md)
+- [Glossary](./GLOSSARY.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)

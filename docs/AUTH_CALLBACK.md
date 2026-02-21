@@ -12,6 +12,36 @@ Documents the `/auth/callback` handler behavior for email confirmation redirects
 
 ---
 
+## Referral Capture (Cross-device)
+
+When a user signs up via a referral link (`/auth?mode=signup&ref=REF-XXXX`), Prize-Manager must capture the referral code even if the user confirms their email on a different device.
+
+### Storage at signup (`src/pages/Auth.tsx`)
+
+- The referral code is stored in **`user_metadata.pending_referral_code`** (durable, cross-device) via the `signUp` options.
+- It is also stored in **localStorage** (`pm_referral_code`) as a same-device fallback.
+- The `emailRedirectTo` URL includes `?ref=REF-XXXX` for additional resilience against URL stripping.
+
+### Global apply hook (`src/hooks/useApplyPendingReferral.ts`)
+
+A global hook wired in `src/App.tsx` runs **once per authenticated session** (not only on `/auth/callback`):
+
+- **Priority order:** URL `ref` param → `user_metadata.pending_referral_code` → localStorage
+- **RPC:** Calls `apply_referral_code` (idempotent; never blocks login or navigation)
+- **Cleanup:** Removes localStorage key and nulls `user_metadata.pending_referral_code` after apply attempt
+- **Error handling:** All errors are non-blocking; failures are logged but never prevent the user from proceeding
+
+### Debug mode
+
+Add `?debug_referrals=1` to any URL (works in dev/preview environments). Look for `[referral-hook]` console logs showing:
+- Which source was chosen (`url` / `user_metadata` / `localStorage`)
+- The redacted referral code
+- RPC result and any non-blocking errors
+
+See also: [Referrals and Rewards](./REFERRALS_AND_REWARDS.md) for the full referral system reference.
+
+---
+
 ## Supported Flows
 
 The callback handler (`src/pages/AuthCallback.tsx`) supports multiple auth patterns:

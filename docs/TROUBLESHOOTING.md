@@ -109,8 +109,68 @@ Scenario-based first response for common failures.
 3. Allow popups for print/PDF flows.
 4. Retry export and inspect console warnings.
 
+---
+
+## 6) Referral not showing under /account
+
+**Symptoms**
+- Organizer signed up via referral link but no referral appears under "Referred Users" for the referrer.
+- Referrer's reward coupons are not generated after referee upgrades.
+
+**Likely causes**
+- Referral code was not captured at signup (URL stripping by email client, localStorage lost cross-device).
+- `apply_referral_code` RPC failed silently.
+- Referee has not yet upgraded to Pro (rewards are issued on upgrade approval).
+
+**Where to inspect**
+- `src/hooks/useApplyPendingReferral.ts` — global apply hook.
+- `src/pages/Auth.tsx` — signup with `pending_referral_code` in user_metadata.
+- `src/pages/AuthCallback.tsx` — callback-time referral apply.
+
+**First-response steps**
+1. Add `?debug_referrals=1` to the referee's URL and check console for `[referral-hook]` logs.
+2. Check if `user_metadata.pending_referral_code` was set: inspect the user's auth metadata in Supabase dashboard.
+3. Run verification SQL:
+```sql
+SELECT id, referrer_id, referred_id, referred_email, created_at
+FROM referrals
+WHERE referred_id = '<referee_user_id>'
+ORDER BY created_at DESC LIMIT 5;
+```
+4. If the referral row exists but no reward: check if the referee has completed a Pro upgrade (check `tournament_payments` and `tournament_entitlements`).
+
+---
+
+## 7) Coupon exists in DB but not visible in /admin/coupons
+
+**Symptoms**
+- Coupon record exists in the `coupons` table but does not appear in the admin coupon list.
+
+**Likely causes**
+- Admin filter state is hiding the coupon (e.g., "Global" filter hides targeted coupons, "Admin" source filter hides system coupons).
+- RLS blocking: the logged-in user may not have master role.
+
+**Where to inspect**
+- `src/components/admin/coupons/CouponCodesPanel.tsx` — filter logic.
+- `src/hooks/useCouponsAdmin.ts` — data fetching and access checks.
+
+**First-response steps**
+1. Reset all filters to "All" in both scope and source dropdowns.
+2. Search by coupon code prefix (e.g., `PROFILE-`, `REF1-`).
+3. Confirm with SQL:
+```sql
+SELECT id, code, origin, is_active, issued_to_email, created_at
+FROM coupons
+WHERE code ILIKE '%<search_term>%'
+ORDER BY created_at DESC LIMIT 10;
+```
+
+---
+
 ## Related docs
-- `docs/AUTH_CALLBACK.md`
-- `docs/SECURITY_ACCESS_CONTROL.md`
-- `docs/EXPORTS_COVERAGE_VS_RCA.md`
-- `docs/KEY_USER_FLOWS.md`
+- [Auth Callback](./AUTH_CALLBACK.md)
+- [Referrals and Rewards](./REFERRALS_AND_REWARDS.md)
+- [Coupons Lifecycle](./COUPONS_LIFECYCLE.md)
+- [Security & Access Control](./SECURITY_ACCESS_CONTROL.md)
+- [Exports Coverage vs RCA](./EXPORTS_COVERAGE_VS_RCA.md)
+- [Key User Flows](./KEY_USER_FLOWS.md)

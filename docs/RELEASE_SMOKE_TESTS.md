@@ -31,3 +31,34 @@ Run these checks in staging/production after deploying `allocatePrizes` and publ
    - **Has Gift**
    - **Gift Items**
 3. Confirm pre-existing columns are unchanged in name/order/content.
+
+## 5) Referral cross-device capture
+1. As User A, generate a referral code on `/account`.
+2. Open the referral signup link in a different browser/incognito window.
+3. Sign up as User B. Confirm email on a third device or same device.
+4. Log in as User B → verify referral was captured (check User A's `/account` for the referred user, or run `SELECT * FROM referrals WHERE referrer_id = '<user_a_id>' ORDER BY created_at DESC LIMIT 1;`).
+
+## 6) Profile completion reward + admin visibility
+1. As an organizer, complete all 5 profile fields on `/account`.
+2. Click "Claim Reward" → confirm success toast.
+3. Log in as master → `/admin/coupons` → search `PROFILE-`.
+4. Confirm the coupon appears with origin badge "System" and correct `issued_to_email`.
+
+## 7) Referral reward coupons + admin drilldown
+1. Complete a Pro upgrade for a referred organizer (via UPI approval or 100% coupon).
+2. Log in as master → `/admin/coupons` → search `REF1-`.
+3. Confirm L1 coupon exists with origin `referral_l1` and correct `issued_to_email` (the referrer).
+4. Click the coupon row → drilldown should show trigger user and tournament context.
+
+## 8) Manual UPI payment approval → entitlement
+1. As organizer, submit a UTR on `/t/:id/upgrade`.
+2. As master, go to `/master-dashboard` → Payment Approvals.
+3. Approve the payment.
+4. Confirm the organizer's tournament now shows Pro access (no paywall, full features).
+5. Verify: `SELECT * FROM tournament_entitlements WHERE tournament_id = '<id>' LIMIT 1;`
+
+## 9) Martech drilldown sanity
+1. Log in as master → `/admin/martech`.
+2. Confirm funnel charts render with non-zero counts (if data exists).
+3. Click any bar → drilldown panel opens with records.
+4. Verify no blank/error states in the drilldown.

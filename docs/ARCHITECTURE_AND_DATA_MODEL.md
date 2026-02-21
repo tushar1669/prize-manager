@@ -9,9 +9,9 @@
 
 ## Supabase objects (tables, views, functions, policies)
 - **Core tables used by the app:**
-  - `tournaments`, `categories`, `prizes`, `players`, `allocations`, `conflicts`, `rule_config`, `publications`, `institution_prize_groups`, `institution_prizes`, `user_roles`, `import_logs`. (src/integrations/supabase/types.ts → Database.public.Tables)
+  - `tournaments`, `categories`, `prizes`, `players`, `allocations`, `conflicts`, `rule_config`, `publications`, `institution_prize_groups`, `institution_prizes`, `user_roles`, `import_logs`, `profiles`, `coupons`, `coupon_redemptions`, `tournament_payments`, `tournament_entitlements`, `referral_codes`, `referrals`, `referral_rewards`, `audit_events`. (src/integrations/supabase/types.ts → Database.public.Tables)
 - **Views:** `published_tournaments` is the public-safe view for published tournaments. (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments)
-- **RPC/DB functions referenced by the client:** `list_my_tournaments`, `publish_tournament`, `has_role`. (src/pages/Dashboard.tsx → Dashboard; src/pages/Finalize.tsx → publishMutation; supabase/functions/allocatePrizes/index.ts → Deno.serve)
+- **RPC/DB functions referenced by the client:** `list_my_tournaments`, `publish_tournament`, `has_role`, `apply_referral_code`, `get_or_create_my_referral_code`, `claim_profile_completion_reward`, `issue_referral_rewards`, `submit_tournament_payment_claim`, `review_tournament_payment`, `apply_coupon_for_tournament`, `redeem_coupon_for_tournament`, `admin_create_coupon`, `admin_list_coupons`, `bootstrap_master`. (src/integrations/supabase/types.ts → Database.public.Functions)
 
 ## Public read model
 - Public pages query `published_tournaments`, which filters to `is_published = true` and excludes archived/deleted tournaments. (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → CREATE VIEW public.published_tournaments)
@@ -23,10 +23,7 @@
 
 ```mermaid
 flowchart LR
-  UI[Organizer UI
-(Dashboard/Setup/Import/Finalize)] -->|Supabase client| DB[(Supabase tables
-(tournaments, players,
-prizes, rule_config, ...))]
+  UI[Organizer UI] -->|Supabase client| DB[(Supabase DB)]
   UI -->|Edge invoke| Alloc[Edge: allocatePrizes]
   UI -->|Edge invoke| Finalize[Edge: finalize]
   UI -->|Edge invoke| Parse[Edge: parseWorkbook]
@@ -35,4 +32,17 @@ prizes, rule_config, ...))]
   Parse --> DB
   DB -->|View| PublicView[published_tournaments]
   PublicUI[Public pages] --> PublicView
+
+  subgraph Referral & Rewards
+    Signup[Auth signup] -->|user_metadata| PendingRef[pending_referral_code]
+    PendingRef -->|useApplyPendingReferral| ApplyRPC[RPC: apply_referral_code]
+    ApplyRPC --> RefDB[(referrals)]
+    Upgrade[Pro upgrade approval] -->|RPC| IssueRewards[issue_referral_rewards]
+    IssueRewards --> RewardDB[(referral_rewards + coupons)]
+  end
+
+  subgraph Profile Reward
+    ProfileComplete[Profile 100%] -->|RPC| ClaimReward[claim_profile_completion_reward]
+    ClaimReward --> CouponDB[(coupons)]
+  end
 ```

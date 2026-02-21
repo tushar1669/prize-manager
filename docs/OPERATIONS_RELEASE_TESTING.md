@@ -23,6 +23,11 @@ npm run test:smoke
 2) **Finalize writes allocations** and increments version. (supabase/functions/finalize/index.ts → `Deno.serve`, lines ~150–214)
 3) **Public results render** from published tournaments only (no drafts). (supabase/migrations/20251226184159_c2405569-73f6-4622-827f-3183c54b8645.sql → `published_tournaments` view, lines ~6–28; src/pages/PublicResults.tsx → `PublicResults`, lines ~28–120)
 4) **Team prizes appear** when configured and active. (supabase/functions/allocateInstitutionPrizes/index.ts → `Deno.serve`, lines ~278–606; src/components/team-prizes/useTeamPrizeResults.ts → `useTeamPrizeResults`, lines ~74–152)
+5) **Referral rows appear** after cross-device signup via referral link. (src/hooks/useApplyPendingReferral.ts → `useApplyPendingReferral`)
+6) **System coupons have origin badges** in `/admin/coupons` — PROFILE-, REF1-, REF2-, REF3- prefixes visible with correct source tags. (src/pages/admin/AdminCoupons.tsx)
+7) **Martech funnel counts are non-zero** when referral/payment/profile data exists, and drilldowns open successfully. (src/pages/AdminMartech.tsx → `useMartechMetrics`, `useMartechDrilldown`)
+8) **Audit events are captured** for runtime errors, payment errors, and auth failures. (src/lib/audit/logAuditEvent.ts, src/lib/audit/globalErrorCapture.ts)
+9) **Password reset flow works** end-to-end: forgot password → email → `/reset-password` → new password → redirect to dashboard. (src/pages/Auth.tsx, src/pages/ResetPassword.tsx)
 
 ## Playwright coverage map (selected suites)
 - `e2e/allocate-flow.spec.ts`: Allocation review flow.

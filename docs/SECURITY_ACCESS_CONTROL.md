@@ -92,6 +92,28 @@ The `ProtectedRoute` component guards authenticated routes:
 
 ---
 
+## Referral, Coupon & Profile RLS Summary
+
+| Table | Users can... | Master can... | No one can... |
+|-------|-------------|---------------|---------------|
+| `referral_codes` | Read own code | Read all codes | Client insert/update/delete |
+| `referrals` | Read own (as referrer or referee) | Read all | Client insert/update/delete |
+| `referral_rewards` | Read own (as beneficiary) | Read all | Client insert/update/delete |
+| `coupons` | — | Full access (CRUD) | Non-master read/write |
+| `coupon_redemptions` | — | Full access (CRUD) | Non-master read/write |
+| `profiles` | Read + update own | Read all | Client insert/delete |
+| `tournament_payments` | Insert own, read own, update own pending | Full access (CRUD) | — |
+| `audit_events` | Insert own | Read all | Client update/delete |
+
+**Sensitive fields note:**
+- `profiles.phone` — visible only to the profile owner and master admins.
+- `coupons.issued_to_email` — snapshot field for admin drilldowns; not exposed to non-master users.
+- `referrals.referred_email` / `referred_label` — snapshot fields visible to the referrer and master admins.
+
+See also: [Referrals and Rewards](./REFERRALS_AND_REWARDS.md) · [Coupons Lifecycle](./COUPONS_LIFECYCLE.md)
+
+---
+
 ## Gotchas
 
 1. **Master check is dual:** Both `role === 'master'` in DB AND email in allowlist required
