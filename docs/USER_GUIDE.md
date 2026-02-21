@@ -109,6 +109,28 @@ Team prizes (Best School, Best Academy, Best City, etc.) are configured separate
 - **Public home listing:** Shows the newest published tournaments first with time-control badge (BLITZ/RAPID/CLASSICAL), arbiter/director names, entry fees, cash prize totals, city/venue, brochure and ChessResults/public-result links when provided.
 - **Public tournament detail & winners:** Displays event summary, schedule, external links, and final winners/allocations for viewers without organizer access.
 
+## Account, Coupons & Referrals
+
+### Account page (`/account`)
+- **Profile fields:** Edit display name, phone, city, organization name, and FIDE arbiter ID. Website is in the DB but excluded from the UI form and completion calculation.
+- **Profile completion meter:** Shows 0–100% (20% per field). At 100%, a "Claim Reward" button appears to issue a one-time Pro discount coupon (prefix: `PROFILE-`).
+- **Referral code:** Auto-generated on first visit (format: `REF-XXXX`). Click "Copy referral signup link" to share `/auth?mode=signup&ref=REF-XXXX`.
+- **Referred users:** Lists users who signed up via your link, showing their name/email or a masked ID fallback.
+- **Referral rewards:** Lists earned discount coupons from the 3-level referral program (L1=100%, L2=50%, L3=25%).
+
+### Tournament upgrade (`/t/:id/upgrade`)
+Two paths to Pro:
+1. **Coupon:** Enter a valid coupon code → if it covers 100% of the fee, upgrade is instant.
+2. **Manual UPI:** Pay ₹2,000 via UPI QR → submit the UTR → wait for master approval. The page auto-polls every 10 seconds.
+
+After approval, the tournament gets a `tournament_entitlements` row granting full Pro access (unlimited players, all exports, all print views).
+
+### How rewards are triggered
+- **Profile reward:** Claimed manually after completing all profile fields.
+- **Referral rewards:** Issued automatically when a referred organizer's Pro upgrade is approved (UPI or coupon).
+
+See also: [Referrals and Rewards](./REFERRALS_AND_REWARDS.md) · [Coupons Lifecycle](./COUPONS_LIFECYCLE.md).
+
 ## Known limitations
 - FIDE age calculations use the tournament start date; out-of-range DOBs remain ineligible.
 - Requires a clean Swiss-Manager Excel export; corrupted spreadsheets are not auto-repaired.

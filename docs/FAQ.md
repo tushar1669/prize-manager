@@ -8,7 +8,7 @@ This FAQ is generated from the current repository routes and component labels (n
 
 | Route | Screen | Action label (exact text) | Enabled / disabled logic | Result |
 |---|---|---|---|---|
-| `/` | Root redirect | UNKNOWN (automatic redirect, no visible button) | N/A | Redirects via `RootRedirect` component. |
+| `/` | Root redirect | (automatic redirect, no visible button) | N/A | Redirects via `RootRedirect` component based on auth state. |
 | `/public` | Public tournament list | `View Details` | Always enabled when card is rendered | Navigates to `/p/:slug`. |
 | `/public` | Public tournament list | `Load more` / `Loading...` | Disabled while loading more (`isLoadingMore`) | Fetches next page of tournaments. |
 | `/public` | Public tournament list (error state) | `Retry` | Enabled in error state | Refetches tournament list. |
@@ -19,7 +19,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/p/:slug/results` | Public final results | `Back` | Always enabled | Browser back if history exists; else `/`. |
 | `/p/:slug/results` | Public final results | `Brochure` | Rendered only when brochure URL exists; disabled while signed URL loads | Opens brochure link in new tab. |
 | `/p/:slug/results` | Public final results | `View Details` | Always enabled when page loads | Navigates to `/p/:slug`. |
-| `/p/:slug/details` | Legacy details redirect | UNKNOWN (automatic redirect, no visible button) | N/A | Redirects to `/p/:slug`. |
+| `/p/:slug/details` | Legacy details redirect | (automatic redirect, no visible button) | N/A | Redirects to `/p/:slug`. |
 | `/t/:id/public` | Public winners page | `Back` | Always enabled | Browser back if history exists; else `/`. |
 | `/t/:id/public` | Public winners page | `Brochure` | Rendered only when brochure URL exists | Opens brochure link in new tab. |
 | `/t/:id/public` | Public winners page | `Category Cards` / `Table View` / `Poster Grid` / `Arbiter Sheet` | Tabs shown when data exists | Switches public winners layout tab. |
@@ -29,7 +29,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/auth` | Auth | `Sign In` / `Create Account` (loading states: `Signing in...`, `Creating account...`) | Disabled while auth submit is running (`loading`) | Signs in or creates account. |
 | `/auth` | Auth | `Already signed up? Resend confirmation email` | Signup mode only | Reveals resend panel. |
 | `/auth` | Auth | `Sign up` / `Sign in` | Always enabled | Toggles auth mode. |
-| `/auth/callback` | Auth callback | UNKNOWN (no user-facing controls in route file) | N/A | Handles token/callback processing. |
+| `/auth/callback` | Auth callback | (no user-facing buttons) | N/A | Handles token/callback processing, referral capture, and redirect. See [Auth Callback](./AUTH_CALLBACK.md). |
 | `/pending-approval` | Pending approval | `Refresh Status` | Always enabled | Re-checks user verification state. |
 | `/pending-approval` | Pending approval | `Sign Out` | Always enabled | Signs user out. |
 | `/dashboard` | Tournament dashboard | `Approvals` (master only) | Visible for master role only | Navigates to `/master-dashboard`. |
@@ -38,7 +38,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/dashboard` | Tournament dashboard | `Resume` | Always enabled per row | `draft`→setup, `finalized`→finalize, otherwise publish screen. |
 | `/dashboard` | Tournament dashboard | `View Public` | Visible when tournament status is `published` | Navigates to `/t/:id/public`. |
 | `/dashboard` | Tournament dashboard | `Create Your First Tournament` | Visible when no tournaments and no search query | Creates first tournament. |
-| `/account` | Account settings | UNKNOWN | No actionable button on page | Read-only account info view. |
+| `/account` | Account settings | `Save Profile`, `Claim Reward`, `Copy referral signup link` | Save disabled while saving; Claim Reward enabled at 100% profile completion (one-time); Copy link always enabled | Edit profile fields, claim profile completion reward, generate/copy referral link, view referred users and earned rewards. |
 | `/t/:id/setup` | Tournament setup | `Details` / `Prize Structure` | Tab triggers always enabled | Switches setup tab. |
 | `/t/:id/setup` | Tournament setup (details tab) | `Save & Continue` / `Saving...` | Disabled while save mutation pending | Saves tournament details and proceeds in flow. |
 | `/t/:id/setup` | Tournament setup (details tab) | `Cancel` | Always enabled | Cancels edits (navigation/reset behavior from handler). |
@@ -51,7 +51,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/t/:id/order-review` | Category order review | `Confirm & Continue` / `Saving…` | Disabled while saving | Persists order/active flags and continues flow. |
 | `/t/:id/order-review` | Category order review | `Cancel` | Disabled while saving | Returns to setup page. |
 | `/t/:id/import` | Player import | `Restore draft` / `Discard` | Shown when saved draft exists | Restores/discards import draft. |
-| `/t/:id/import` | Player import | `Swiss-Manager export tip: enable ‘Print all columns’` | Always enabled in upload panel | Opens instruction dialog image. |
+| `/t/:id/import` | Player import | `Swiss-Manager export tip: enable 'Print all columns'` | Always enabled in upload panel | Opens instruction dialog image. |
 | `/t/:id/import` | Player import | `Back` | Always enabled | Navigates to setup prizes tab. |
 | `/t/:id/import` | Player import | `Import players & continue` (`Processing...` / `Importing...`) | Disabled unless parse OK + rows present + no validation errors + conflicts resolved + not pending | Writes players and proceeds to review/allocation. |
 | `/t/:id/import` | Player import | `View details` (tie ranks) | Shown when tie-rank imputation occurred | Opens tie-rank detail dialog. |
@@ -67,6 +67,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/t/:id/finalize` | Finalize | `Back to Review` | Always enabled | Navigates to `/t/:id/review`. |
 | `/t/:id/finalize` | Finalize | `Publish Tournament` (`Publishing...`) | Disabled while finalize mutation pending or when winners empty | Runs finalize+publish handler. |
 | `/t/:id/final/:view` | Final prize view | `Category Cards` / `Poster Grid` / `Arbiter Sheet` / `Team Prizes` | Tabs always visible; unknown view redirects to `/final/v1` | Switches printable/public-friendly view layout. |
+| `/t/:id/upgrade` | Tournament upgrade | `Submit Payment` / `Apply Coupon` | Submit requires valid UTR (6+ chars); Apply requires valid coupon code | Submits UPI payment claim or applies coupon for Pro upgrade. |
 | `/t/:id/publish` | Publish success | `View Public Page` | Published state | Opens published page. |
 | `/t/:id/publish` | Publish success | `Open in New Tab` | Published state | Opens public URL in new tab. |
 | `/t/:id/publish` | Publish success | `Unpublish Tournament` | Published state | Unpublishes tournament. |
@@ -83,22 +84,13 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/t/:id/settings` | Tournament settings | `Save Settings` / `Saving...` | Disabled while save mutation pending | Persists rule settings. |
 | `/master-dashboard` | Master dashboard | `Approve` / `Reject` | Disabled during approve/reject mutation | Verifies or rejects pending organizer account. |
 | `/master-dashboard` | Master dashboard | refresh icon button (`title="Refresh pending approvals"`) | Disabled while pending list loading | Refreshes pending approvals list. |
-| `/master-dashboard` | Master dashboard | UNKNOWN label (verification switch in “All Users”) | Disabled while toggle mutation pending | Toggles organizer verification state. |
+| `/master-dashboard` | Master dashboard | Verification toggle in "All Users" | Disabled while toggle mutation pending | Toggles organizer verification state. |
+| `/master-dashboard` | Master dashboard | `Approve` / `Reject` (Payment Approvals) | Disabled during mutation | Reviews manual UPI payment claims. |
 | `/admin/tournaments` | Admin tournaments | Filter chips: `All`, `Active`, `Draft`, `Archived`, `Deleted` | Always enabled | Filters tournament list by status. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `View Public` | Published and non-archived/non-deleted only | Opens public slug route. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `Open Setup` | Always enabled | Opens setup details tab. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `Open Allocation` | Always enabled | Opens review/allocation route. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `Hide from Public` | Published and active only | Hides public listing. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `Archive` / `Unarchive` | Depends on archive state | Archives/unarchives tournament. |
-| `/admin/tournaments` | Admin tournaments | Row menu action: `Move to Trash` / `Restore` / `Delete Permanently` | Depends on delete state; hard delete confirm text must match title | Soft delete, restore, or hard delete. |
-| `*` | Not found | UNKNOWN (content depends on `NotFound` page) | N/A | Fallback for unknown routes. |
-
-### UNKNOWN labels to verify manually
-When label text is provided by shared component internals or icon-only controls, verify here:
-- `src/components/AppNav.tsx` (global nav labels, route links).
-- `src/pages/AuthCallback.tsx` (if callback page renders text/actions).
-- `src/pages/NotFound.tsx` (fallback page button labels).
-- `src/pages/PlayerImport.tsx` + nested import components for all secondary actions not listed above.
+| `/admin/tournaments` | Admin tournaments | Row menu actions | Depends on state | View Public, Open Setup, Open Allocation, Hide, Archive, Trash, Delete. |
+| `/admin/audit` | Admin audit logs | Search + filter by event type | Always enabled for master | Searchable audit event log. |
+| `/reset-password` | Password reset | `Update Password` | Requires 6+ char password | Sets new password after email reset link. |
+| `*` | Not found | `Back to Home` | Always enabled | Fallback for unknown routes. |
 
 ---
 
@@ -109,7 +101,7 @@ When label text is provided by shared component internals or icon-only controls,
 **Q: What is the shortest organizer flow?**
 A: Dashboard → Setup (details + prize structure) → Import players → Review allocations (preview + commit) → Finalize → Publish.
 
-**Q: Why can’t I create a tournament from Dashboard?**
+**Q: Why can't I create a tournament from Dashboard?**
 A: `Create Tournament` is visible only to master or verified users. Unverified users see a pending-approval banner.
 
 **Q: Where do I edit tournament metadata (venue, dates, arbiter, links)?**
@@ -120,7 +112,7 @@ A: `/t/:id/setup` on the `Details` tab, then use `Save & Continue`.
 **Q: Which file format is accepted for import?**
 A: The import screen explicitly asks for Excel `.xlsx` or `.xls`.
 
-**Q: What does “Import players & continue” require before it enables?**
+**Q: What does "Import players & continue" require before it enables?**
 A: Parse must be OK, mapped rows must exist, validation errors must be zero, and duplicate conflicts must be fully resolved.
 
 **Q: What does Replace mode warning imply?**
@@ -128,7 +120,7 @@ A: Replace mode warns it will delete existing players before importing the new f
 
 ## Preview
 
-**Q: Why is “Commit Allocation” disabled?**
+**Q: Why is "Commit Allocation" disabled?**
 A: It stays disabled until preview has completed with coverage data, and also if critical unfilled reasons exist (e.g., internal/category inactive issues).
 
 **Q: What is the difference between Preview and Commit in review?**
@@ -148,7 +140,7 @@ A: It is disabled in preview mode, before preview completion, when conflicts rem
 A: On `/t/:id/finalize`, use `Export XLSX` in the Final Prize Views card.
 
 **Q: Why is Export XLSX disabled?**
-A: It’s disabled on Team tab and also disabled when there are no final winner rows available.
+A: It's disabled on Team tab and also disabled when there are no final winner rows available.
 
 **Q: Is print supported?**
 A: Yes. `/t/:id/finalize` has a `Print` action for the active final view tab.
@@ -172,16 +164,33 @@ A: Yes. On `/t/:id/publish`, use `Unpublish Tournament`.
 **Q: What is republish?**
 A: `Republish (Create v2)` / `Republish Tournament` creates a new published version after changes.
 
+## Account & Referrals
+
+**Q: How do I share my referral link?**
+A: Go to `/account` → "My Referral Code" → click "Copy referral signup link". Format: `/auth?mode=signup&ref=REF-XXXX`.
+
+**Q: What is the profile completion reward?**
+A: Complete all 5 profile fields → click "Claim Reward" for a one-time Pro discount coupon (`PROFILE-` prefix). See [Referrals and Rewards](./REFERRALS_AND_REWARDS.md).
+
+**Q: How do I upgrade a tournament to Pro?**
+A: `/t/:id/upgrade` — pay ₹2,000 via UPI + submit UTR, or apply a coupon code.
+
+**Q: My referral wasn't captured after cross-device signup.**
+A: See [Troubleshooting](./TROUBLESHOOTING.md) playbook #6. Use `?debug_referrals=1` to debug.
+
 ## Troubleshooting
 
-**Q: I see “No published results yet.” on public results page. Why?**
-A: The page loads but no published result rows exist for that slug yet.
+**Q: I see "No published results yet." on public results page. Why?**
+A: No published result rows exist for that slug yet.
 
 **Q: My account is stuck in pending approval.**
-A: Use `Refresh Status` on `/pending-approval`; a master user must approve your organizer account.
+A: Use `Refresh Status` on `/pending-approval`; a master user must approve your account.
 
-**Q: I can’t access a route directly.**
-A: Protected routes require authentication; master-only routes (`/master-dashboard`, `/admin/tournaments`) additionally require master role.
+**Q: I can't access a route directly.**
+A: Protected routes require authentication; master-only routes additionally require master role.
 
-**Q: I can’t find a button label mentioned elsewhere.**
-A: Treat it as `UNKNOWN` and verify in the referenced component/page file under “UNKNOWN labels to verify manually”.
+## Related docs
+- [Referrals and Rewards](./REFERRALS_AND_REWARDS.md)
+- [Coupons Lifecycle](./COUPONS_LIFECYCLE.md)
+- [Auth Callback](./AUTH_CALLBACK.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)

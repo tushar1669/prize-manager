@@ -38,6 +38,37 @@
 - **Coverage (.xlsx):** `src/utils/allocationCoverageExport.ts` flattens coverage entries (category/prize, candidate counts, winner info, reason codes, diagnosis summary) and downloads Excel.
 - **RCA (.xlsx):** `src/utils/allocationRcaExport.ts` exports engine vs final winners with status (`MATCH`, `OVERRIDDEN`, `NO_ELIGIBLE_WINNER`), override reasons, candidate counts, and diagnostics.
 
+## Manual UPI Payments (Pro Upgrade)
+- **Flow:** Organizer visits `/t/:id/upgrade` → pays ₹2,000 via UPI QR → submits UTR → master reviews in `/master-dashboard` Payment Approvals panel.
+- **Approval:** `review_tournament_payment` RPC creates a `tournament_entitlements` row granting Pro access and triggers `issue_referral_rewards` for the referral chain.
+- **Tables:** `tournament_payments` (claims), `tournament_entitlements` (granted access).
+- **Key files:** `src/pages/TournamentUpgrade.tsx`, `src/components/master/PendingPaymentsPanel.tsx`.
+
+## Profiles & Profile Completion Reward
+- **5 required fields:** `display_name`, `phone`, `city`, `org_name`, `fide_arbiter_id` (website is excluded from completion calculation).
+- **Completion meter:** 0–100% shown on `/account` (20% per field).
+- **Reward:** On 100% completion, organizer can claim a one-time Pro discount coupon via `claim_profile_completion_reward` RPC (origin: `profile_reward`, prefix: `PROFILE-`).
+- **Key files:** `src/pages/Account.tsx`, `src/utils/profileCompletion.ts`, `src/hooks/useOrganizerProfile.ts`.
+
+## Referral System
+- **3-level rewards:** L1 (100%), L2 (50%), L3 (25%) discount coupons issued when referred organizers upgrade.
+- **Cross-device capture:** Referral code stored in `user_metadata.pending_referral_code` at signup; applied by global hook `useApplyPendingReferral` (priority: URL > metadata > localStorage).
+- **Key RPCs:** `get_or_create_my_referral_code`, `apply_referral_code`, `issue_referral_rewards`.
+- **Tables:** `referral_codes`, `referrals`, `referral_rewards`.
+- **Canonical doc:** [Referrals and Rewards](./REFERRALS_AND_REWARDS.md).
+
+## Admin Panels (Master-only)
+- **`/admin/martech`**: Platform growth funnels (organizer, tournament, payment, profile, referral) with clickable bar charts opening drilldown panels. Uses `useMartechMetrics` and `useMartechDrilldown` hooks.
+- **`/admin/coupons`**: Coupon codes management + analytics. Filters by scope (Global/Targeted) and source (Admin/System). Drilldown shows origin-specific context for referral/profile coupons.
+- **`/admin/audit`**: Searchable audit event log from `audit_events` table. Events captured by `logAuditEvent` utility and `globalErrorCapture` (runtime errors, unhandled rejections).
+- **`/master-dashboard`**: Organizer approvals + payment approvals (UPI claims).
+- **Key files:** `src/pages/AdminMartech.tsx`, `src/pages/admin/AdminCoupons.tsx`, `src/pages/admin/AdminAuditLogs.tsx`, `src/pages/MasterDashboard.tsx`.
+
+## Password Reset
+- **Flow:** Auth page "Forgot password?" → `resetPasswordForEmail` with redirect to `/reset-password` → user sets new password via `updateUser`.
+- **Cooldown:** 60-second cooldown on the forgot password button to mitigate rate limits.
+- **Key files:** `src/pages/Auth.tsx`, `src/pages/ResetPassword.tsx`.
+
 ## Team / Institution Prizes (Phase 2)
 
 ### Architecture

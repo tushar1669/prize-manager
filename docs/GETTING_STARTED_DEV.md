@@ -37,7 +37,10 @@ Defined in `src/vite-env.d.ts` and consumed by `src/utils/featureFlags.ts`:
 - `VITE_ALLOC_VERBOSE_LOGS` (consumed in feature flags helper)
 
 ### Source of truth note
-`src/integrations/supabase/client.ts` currently hardcodes URL/key values in this repo snapshot. Treat deployment values as **UNKNOWN** and verify in your environment/secrets manager before release.
+`src/integrations/supabase/client.ts` currently hardcodes URL/key values in this repo snapshot. Verify deployment values in your environment/secrets manager before release.
+
+### Debug flags
+- **`?debug_referrals=1`**: Adds `[referral-hook]` console logs showing referral capture source, code, and RPC result. Works in dev/preview environments.
 
 ## 4) Run locally
 ```bash
@@ -48,7 +51,18 @@ Key routes are declared in `src/App.tsx`:
 - `/t/:id/import` (Player Import)
 - `/t/:id/review` (Conflict Review)
 - `/t/:id/finalize` (Finalize / publish entry)
+- `/t/:id/upgrade` (Pro upgrade — UPI or coupon)
 - `/public`, `/p/:slug`, `/p/:slug/results` (public surfaces)
+- `/account` (profile, referrals, rewards)
+- `/reset-password` (password reset after email link)
+
+Admin routes (master-only):
+- `/master-dashboard` — organizer approvals + payment approvals
+- `/admin/coupons` — coupon management + analytics
+- `/admin/martech` — platform growth funnels + drilldowns
+- `/admin/audit` — searchable audit event log
+- `/admin/tournaments` — tournament management
+- `/admin/users` — user approvals
 
 ## 5) Quick sanity path (before opening PR)
 ```bash
@@ -64,6 +78,8 @@ npm run test:smoke
 
 ## 6) First-run failures
 - Dependency install issues (registry/proxy): see script guidance in `scripts/bootstrap.sh`.
-- Auth redirect/session issues: see `docs/AUTH_CALLBACK.md` and `docs/TROUBLESHOOTING.md`.
-- Preview/edge function failures: see `docs/TROUBLESHOOTING.md` and `src/components/EdgeFunctionStatus.tsx`.
-- Public pages not visible: verify publish flow at `/t/:id/finalize` and `/t/:id/publish` (`src/pages/Finalize.tsx`, `src/pages/PublishSuccess.tsx`).
+- Auth redirect/session issues: see [Auth Callback](./AUTH_CALLBACK.md) and [Troubleshooting](./TROUBLESHOOTING.md).
+- Preview/edge function failures: see [Troubleshooting](./TROUBLESHOOTING.md) and `src/components/EdgeFunctionStatus.tsx`.
+- Public pages not visible: verify publish flow at `/t/:id/finalize` and `/t/:id/publish`.
+- Referral not captured: see [Troubleshooting](./TROUBLESHOOTING.md) playbook #6 and use `?debug_referrals=1`.
+- Coupon issues: see [Coupons Lifecycle](./COUPONS_LIFECYCLE.md) and [Troubleshooting](./TROUBLESHOOTING.md) playbook #7.
