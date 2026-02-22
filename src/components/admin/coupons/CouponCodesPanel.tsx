@@ -21,8 +21,20 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
 
-  const isSystemOrigin = (origin: string | null | undefined) =>
-    origin === "profile_reward" || origin?.startsWith("referral_");
+  const resolveOrigin = (c: { origin?: string | null; code: string }) => {
+    if (c.origin) return c.origin;
+    const upper = c.code.toUpperCase();
+    if (upper.startsWith("PROFILE-")) return "profile_reward";
+    if (upper.startsWith("REF1-")) return "referral_l1";
+    if (upper.startsWith("REF2-")) return "referral_l2";
+    if (upper.startsWith("REF3-")) return "referral_l3";
+    return "admin";
+  };
+
+  const isSystemOrigin = (c: { origin?: string | null; code: string }) => {
+    const o = resolveOrigin(c);
+    return o === "profile_reward" || o.startsWith("referral_");
+  };
 
   const filteredCoupons = useMemo(() => {
     let list = couponsAdmin.coupons;
@@ -36,9 +48,9 @@ export function CouponCodesPanel({ couponsAdmin }: CouponCodesPanelProps) {
 
     // Filter by source
     if (sourceFilter === "admin") {
-      list = list.filter((c) => !isSystemOrigin(c.origin));
+      list = list.filter((c) => !isSystemOrigin(c));
     } else if (sourceFilter === "system") {
-      list = list.filter((c) => isSystemOrigin(c.origin));
+      list = list.filter((c) => isSystemOrigin(c));
     }
 
     // Search by code prefix
