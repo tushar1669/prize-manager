@@ -27,6 +27,7 @@ import {
   FileSearch,
   Trophy,
   Medal,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IneligibilityTooltip } from "./IneligibilityTooltip";
@@ -623,6 +624,18 @@ export function AllocationDebugReport({
 
         <CollapsibleContent>
           <CardContent>
+            {!canViewFullResults ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <Lock className="h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  Detailed allocation debug report is available with Pro access.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Upgrade to Pro to view full coverage details.
+                </p>
+              </div>
+            ) : (
+            <>
             {coverage.length === 0 && (
               <Alert className="mb-6 border-muted">
                 <Info className="h-4 w-4" />
@@ -744,6 +757,8 @@ export function AllocationDebugReport({
                 )}
               </TabsContent>
             </Tabs>
+            )}
+            </>
             )}
           </CardContent>
         </CollapsibleContent>
