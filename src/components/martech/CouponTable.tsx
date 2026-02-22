@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,18 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Coupon, CouponRedemption } from "./types";
 import { formatDiscount } from "./types";
 
-function originLabel(origin: string | null | undefined): { label: string; variant: "default" | "secondary" | "outline" } {
+/** Derive origin from DB value, falling back to code-prefix heuristic (mirrors coupon_origin_from_code SQL). */
+function resolveOrigin(origin: string | null | undefined, code: string): string {
+  if (origin) return origin;
+  const upper = code.toUpperCase();
+  if (upper.startsWith("PROFILE-")) return "profile_reward";
+  if (upper.startsWith("REF1-")) return "referral_l1";
+  if (upper.startsWith("REF2-")) return "referral_l2";
+  if (upper.startsWith("REF3-")) return "referral_l3";
+  return "admin";
+}
+
+function originLabel(origin: string): { label: string; variant: "default" | "secondary" | "outline" } {
   switch (origin) {
     case "profile_reward": return { label: "Profile Reward", variant: "secondary" };
     case "referral_l1": return { label: "Referral L1", variant: "default" };
@@ -61,9 +72,11 @@ export function CouponTable({
     }
   };
 
-  // Drilldown: fetch referral_rewards when a referral coupon is selected
-  const drilldownOrigin = drilldownCoupon?.applies_to ? (drilldownCoupon as Coupon & { origin?: string }).origin : undefined;
-  const isReferralOrigin = typeof drilldownOrigin === "string" && drilldownOrigin.startsWith("referral_");
+  // Drilldown: derive origin using code-prefix fallback
+  const drilldownResolvedOrigin = drilldownCoupon
+    ? resolveOrigin(drilldownCoupon.origin, drilldownCoupon.code)
+    : "admin";
+  const isReferralOrigin = drilldownResolvedOrigin.startsWith("referral_");
 
   const { data: drilldownRewards } = useQuery({
     queryKey: ["coupon-drilldown-rewards", drilldownCoupon?.id],
@@ -88,8 +101,40 @@ export function CouponTable({
     },
   });
 
+  // Best-effort profile resolution for referral reward user IDs (master can read all profiles)
+  const drilldownUserIds = useMemo(() => {
+    if (!drilldownRewards?.length) return [];
+    const ids = new Set<string>();
+    for (const rw of drilldownRewards) {
+      ids.add(rw.beneficiary_id);
+      ids.add(rw.trigger_user_id);
+    }
+    return Array.from(ids);
+  }, [drilldownRewards]);
 
+  const { data: drilldownProfiles } = useQuery({
+    queryKey: ["coupon-drilldown-profiles", drilldownUserIds.join(",")],
+    enabled: drilldownUserIds.length > 0,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id,email,display_name")
+          .in("id", drilldownUserIds);
+        if (error) return [];
+        return (data ?? []) as Array<{ id: string; email: string; display_name: string | null }>;
+      } catch {
+        return [];
+      }
+    },
+  });
 
+  const profileLabel = (userId: string): string => {
+    const p = drilldownProfiles?.find((pr) => pr.id === userId);
+    if (p?.display_name) return `${p.display_name} (${p.email})`;
+    if (p?.email) return p.email;
+    return `User …${userId.slice(-6)}`;
+  };
   if (isLoading) {
     return (
       <div className="py-8 flex justify-center">
@@ -107,7 +152,7 @@ export function CouponTable({
     );
   }
 
-  const couponWithOrigin = (c: Coupon) => (c as Coupon & { origin?: string | null }).origin ?? null;
+  const getResolvedOrigin = (c: Coupon) => resolveOrigin(c.origin, c.code);
 
   return (
     <>
@@ -130,7 +175,7 @@ export function CouponTable({
             const couponRedemptions = redemptions?.filter((r) => r.coupon_id === c.id) ?? [];
             const redeemCount = couponRedemptions.length;
             const isExpired = c.ends_at ? new Date(c.ends_at) < new Date() : false;
-            const ol = originLabel(couponWithOrigin(c));
+            const ol = originLabel(getResolvedOrigin(c));
 
             return (
               <TableRow key={c.id} className={isExpired ? "opacity-60" : ""}>
@@ -202,8 +247,8 @@ export function CouponTable({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <code className="font-mono text-lg bg-muted px-3 py-1 rounded font-bold">{drilldownCoupon.code}</code>
-                    <Badge variant={originLabel(couponWithOrigin(drilldownCoupon)).variant}>
-                      {originLabel(couponWithOrigin(drilldownCoupon)).label}
+                    <Badge variant={originLabel(drilldownResolvedOrigin).variant}>
+                      {originLabel(drilldownResolvedOrigin).label}
                     </Badge>
                   </div>
                 </div>
@@ -221,6 +266,12 @@ export function CouponTable({
                     <p className="text-muted-foreground text-xs">Issued To</p>
                     <p className="truncate">{drilldownCoupon.issued_to_email || (drilldownCoupon.issued_to_user_id ? `User …${drilldownCoupon.issued_to_user_id.slice(-6)}` : "—")}</p>
                   </div>
+                  {drilldownCoupon.issued_to_user_id && (
+                    <div>
+                      <p className="text-muted-foreground text-xs">Issued To (User ID)</p>
+                      <p className="font-mono text-xs truncate">{drilldownCoupon.issued_to_user_id}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-muted-foreground text-xs">Validity</p>
                     <p>
@@ -238,7 +289,7 @@ export function CouponTable({
                 </div>
 
                 {/* Origin-specific details */}
-                {couponWithOrigin(drilldownCoupon)?.startsWith("referral_") && (
+                {isReferralOrigin && (
                   <div className="border-t pt-3 space-y-2">
                     <p className="text-sm font-medium">Referral Reward Details</p>
                     {drilldownRewards && drilldownRewards.length > 0 ? (
@@ -251,10 +302,10 @@ export function CouponTable({
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Beneficiary: <span className="font-mono">…{rw.beneficiary_id.slice(-6)}</span>
+                            Beneficiary: <span className="text-foreground">{profileLabel(rw.beneficiary_id)}</span>
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Trigger user: <span className="font-mono">…{rw.trigger_user_id.slice(-6)}</span>
+                            Trigger user: <span className="text-foreground">{profileLabel(rw.trigger_user_id)}</span>
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Tournament: <span className="font-mono">…{rw.trigger_tournament_id.slice(-8)}</span>
@@ -267,12 +318,17 @@ export function CouponTable({
                   </div>
                 )}
 
-                {couponWithOrigin(drilldownCoupon) === "profile_reward" && (
+                {drilldownResolvedOrigin === "profile_reward" && (
                   <div className="border-t pt-3">
                     <p className="text-sm font-medium">Profile Completion Reward</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       This coupon was issued as a reward for completing organizer profile fields.
                     </p>
+                    {drilldownCoupon.issued_to_email && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Recipient: <span className="text-foreground">{drilldownCoupon.issued_to_email}</span>
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
