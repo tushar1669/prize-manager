@@ -31,6 +31,7 @@ import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
 import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
+import { ManualPrizesCard } from "@/components/manual-prizes/ManualPrizesCard";
 
 interface Winner {
   prizeId: string;
@@ -601,6 +602,9 @@ export default function Finalize() {
               />
             )}
           </div>
+
+          {/* Special / Manual Prizes */}
+          <ManualPrizesCard tournamentId={id!} hasFullAccess={hasFullAccess} />
 
           {/* Publish CTA — moved ABOVE Final Prize Views */}
           <Card className="border-primary/50 bg-primary/5 print:hidden">

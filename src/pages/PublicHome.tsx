@@ -9,6 +9,13 @@ import { Link } from "react-router-dom";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
 
+interface PublicManualPrize {
+  tournament_id: string;
+  title: string;
+  winner_name: string;
+  sort_order: number;
+}
+
 type PublicTournament = {
   id: string;
   title: string;
@@ -45,6 +52,35 @@ export default function PublicHome() {
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [manualPrizesMap, setManualPrizesMap] = useState<Map<string, PublicManualPrize[]>>(new Map());
+
+  // Batch fetch manual prizes for a set of tournament IDs
+  const fetchManualPrizes = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const { data, error } = await (supabase.from as any)("tournament_manual_prizes")
+        .select("tournament_id,title,winner_name,sort_order")
+        .in("tournament_id", ids)
+        .eq("is_visible", true)
+        .order("sort_order", { ascending: true })
+        .limit(200);
+      if (error) { console.warn("[public] manual prizes fetch error", error); return; }
+      const grouped = new Map<string, PublicManualPrize[]>();
+      for (const row of (data ?? []) as PublicManualPrize[]) {
+        const arr = grouped.get(row.tournament_id) ?? [];
+        arr.push(row);
+        grouped.set(row.tournament_id, arr);
+      }
+      setManualPrizesMap((prev) => {
+        const next = new Map(prev);
+        grouped.forEach((v, k) => next.set(k, v));
+        return next;
+      });
+    } catch (err) {
+      console.warn("[public] manual prizes fetch failed", err);
+    }
+  };
+
   const { data: tournaments, isLoading, error, refetch } = useQuery({
     queryKey: ['public-tournaments'],
     queryFn: async (): Promise<PublicTournament[]> => {
@@ -68,6 +104,8 @@ export default function PublicHome() {
     if (tournaments) {
       setTournamentList(tournaments);
       setHasMore(tournaments.length === PAGE_SIZE);
+      const ids = tournaments.map((t) => t.id);
+      fetchManualPrizes(ids);
     }
   }, [tournaments]);
 
@@ -97,6 +135,10 @@ export default function PublicHome() {
     setTournamentList((prev) => [...prev, ...nextPage]);
     setHasMore(nextPage.length === PAGE_SIZE);
     setIsLoadingMore(false);
+
+    // Fetch manual prizes for newly loaded tournaments
+    const newIds = nextPage.map((t) => t.id);
+    fetchManualPrizes(newIds);
   };
 
   if (isLoading) {
@@ -187,6 +229,28 @@ export default function PublicHome() {
                         )}
                       </div>
                     </CardHeader>
+
+                    {/* Manual prize chips */}
+                    {(() => {
+                      const mp = manualPrizesMap.get(tournament.id);
+                      if (!mp || mp.length === 0) return null;
+                      const shown = mp.slice(0, 3);
+                      const extra = mp.length - 3;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 px-0">
+                          {shown.map((p, i) => (
+                            <Badge key={i} variant="outline" className="text-xs font-normal">
+                              {p.title}: {p.winner_name}
+                            </Badge>
+                          ))}
+                          {extra > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{extra} more
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <CardContent className="p-0">
                       <Button variant="outline" size="sm" asChild>

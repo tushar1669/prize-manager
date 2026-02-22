@@ -1027,6 +1027,63 @@ export type Database = {
           },
         ]
       }
+      tournament_manual_prizes: {
+        Row: {
+          created_at: string
+          id: string
+          is_visible: boolean
+          notes: string | null
+          prize_value: string | null
+          sort_order: number
+          sponsor: string | null
+          title: string
+          tournament_id: string
+          updated_at: string
+          winner_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          notes?: string | null
+          prize_value?: string | null
+          sort_order?: number
+          sponsor?: string | null
+          title: string
+          tournament_id: string
+          updated_at?: string
+          winner_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          notes?: string | null
+          prize_value?: string | null
+          sort_order?: number
+          sponsor?: string | null
+          title?: string
+          tournament_id?: string
+          updated_at?: string
+          winner_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_manual_prizes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_manual_prizes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_payments: {
         Row: {
           amount_inr: number
