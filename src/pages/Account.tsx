@@ -563,6 +563,7 @@ export default function Account() {
                   const rewards = rewardsByTriggerUser.get(ref.referred_id);
                   const hasUpgraded = !!rewards && rewards.length > 0;
                   const isExpanded = expandedReferral === ref.id;
+                  const label = getReferredLabel(ref.referred_id);
 
                   return (
                     <div key={ref.id} className="border rounded-md p-3">
@@ -572,9 +573,9 @@ export default function Account() {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="min-w-0">
-                            <span className="text-sm font-medium truncate block">{getReferredLabel(ref.referred_id).primary}</span>
-                            {getReferredLabel(ref.referred_id).secondary && (
-                              <span className="text-xs text-muted-foreground truncate block">{getReferredLabel(ref.referred_id).secondary}</span>
+                            <span className="text-sm font-medium truncate block">{label.primary}</span>
+                            {label.secondary && (
+                              <span className="text-xs text-muted-foreground truncate block">{label.secondary}</span>
                             )}
                           </div>
                           {hasUpgraded ? (
@@ -592,6 +593,11 @@ export default function Account() {
 
                       {isExpanded && (
                         <div className="mt-3 pl-1 space-y-2">
+                          {ref.referred_email && (
+                            <p className="text-xs text-muted-foreground">
+                              Email: <span className="text-foreground">{ref.referred_email}</span>
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             Joined {new Date(ref.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </p>
