@@ -52,6 +52,7 @@ export default function TournamentUpgrade() {
   const [couponCode, setCouponCode] = useState("");
   const [utrValue, setUtrValue] = useState("");
   const [upiCopied, setUpiCopied] = useState(false);
+  const [amountDue, setAmountDue] = useState(PRO_PRICE_INR);
   const { user } = useAuth();
 
   const { hasFullAccess, isLoading: accessLoading } = useTournamentAccess(id);
@@ -121,7 +122,8 @@ export default function TournamentUpgrade() {
     },
     onSuccess: async (result) => {
       if (result.amount_after > 0) {
-        toast.success(`Coupon applied. Remaining amount: ₹${result.amount_after}`);
+        setAmountDue(result.amount_after);
+        toast.success(`Coupon applied! Remaining amount: ₹${result.amount_after}`);
         return;
       }
 
@@ -144,7 +146,7 @@ export default function TournamentUpgrade() {
 
       const { data, error } = await supabase.rpc("submit_tournament_payment_claim" as never, {
         p_tournament_id: id,
-        p_amount_inr: PRO_PRICE_INR,
+        p_amount_inr: amountDue,
         p_utr: trimmedUtr,
       } as never);
 
@@ -309,7 +311,7 @@ export default function TournamentUpgrade() {
             <CardHeader>
               <CardTitle>Pay via UPI</CardTitle>
               <CardDescription>
-                Pay ₹{PRO_PRICE_INR} using any UPI app, then submit your UTR for verification.
+                Pay ₹{amountDue} using any UPI app, then submit your UTR for verification.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -337,11 +339,17 @@ export default function TournamentUpgrade() {
                     <p className="text-sm mt-1">{PAYEE_NAME}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
-                    <p className="text-sm font-semibold mt-1">₹{PRO_PRICE_INR}</p>
+                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
+                     <p className="text-sm font-semibold mt-1">₹{amountDue}</p>
                   </div>
                 </div>
               </div>
+
+              {amountDue < PRO_PRICE_INR && (
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+                  Pay exactly ₹{amountDue} (after coupon discount). Paying ₹{PRO_PRICE_INR} may cause your claim to be rejected.
+                </p>
+              )}
 
               {/* UTR input */}
               {canSubmitPayment && (
