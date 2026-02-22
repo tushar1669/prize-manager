@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function PublishSuccess() {
@@ -15,6 +15,8 @@ export default function PublishSuccess() {
   const location = useLocation();
   const slugFromState = location.state?.slug;
   const [isPublished, setIsPublished] = useState(true);
+  const [unpublishing, setUnpublishing] = useState(false);
+  const queryClient = useQueryClient();
 
   // Fetch publication if not passed in state
   const { data: publication } = useQuery({
@@ -55,14 +57,41 @@ export default function PublishSuccess() {
     navigate(`/t/${id}/public`);
   };
 
-  const handleUnpublish = () => {
-    setIsPublished(false);
-    toast.info("Tournament unpublished");
+  const handleUnpublish = async () => {
+    if (!id) return;
+    setUnpublishing(true);
+    try {
+      const { error: tError } = await supabase
+        .from('tournaments')
+        .update({ is_published: false, status: 'draft' })
+        .eq('id', id);
+      if (tError) throw tError;
+
+      // Deactivate active publications so public page stops resolving
+      await supabase
+        .from('publications')
+        .update({ is_active: false })
+        .eq('tournament_id', id)
+        .eq('is_active', true);
+
+      // Invalidate relevant caches
+      queryClient.invalidateQueries({ queryKey: ['publication', id] });
+      queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+
+      setIsPublished(false);
+      toast.success("Tournament unpublished — public page is no longer accessible");
+    } catch (err: any) {
+      console.error('[unpublish] error', err);
+      toast.error("Failed to unpublish: " + (err.message || 'Unknown error'));
+    } finally {
+      setUnpublishing(false);
+    }
   };
 
   const handleRepublish = () => {
-    setIsPublished(true);
-    toast.success("Tournament republished as v2");
+    // Navigate back to finalize so organizer can re-publish properly
+    navigate(`/t/${id}/finalize`);
   };
 
   return (
@@ -124,10 +153,11 @@ export default function PublishSuccess() {
                 <Button
                   onClick={handleUnpublish}
                   variant="outline"
+                  disabled={unpublishing}
                   className="w-full justify-start gap-2 text-warning border-warning/30 hover:bg-warning/10"
                 >
                   <XCircle className="h-4 w-4" />
-                  Unpublish Tournament
+                  {unpublishing ? "Unpublishing…" : "Unpublish Tournament"}
                 </Button>
 
                 <Button
