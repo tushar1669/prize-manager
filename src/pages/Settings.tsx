@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ruleConfigSchema, RuleConfigForm } from "@/lib/validations";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,89 @@ import { Switch } from "@/components/ui/switch";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { coerceGiftItems } from "@/lib/utils";
+import { useMemo } from "react";
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+type CategoryWithCriteria = {
+  id: string;
+  name: string;
+  is_main: boolean | null;
+  order_idx: number | null;
+  criteria_json?: Record<string, unknown> | null;
+};
+
+interface EffectiveBand {
+  label: string;
+  min: number;
+  max: number;
+  maxAge: number;
+  categoryCount: number;
+}
+
+function computeEffectiveBands(
+  categories: CategoryWithCriteria[],
+  policy: 'non_overlapping' | 'overlapping',
+  inclusive: boolean
+): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number } {
+  let dualFilterCount = 0;
+
+  // Groups by max_age
+  const maxAgeMap = new Map<number, { names: string[]; count: number }>();
+
+  for (const cat of categories) {
+    const cj = cat.criteria_json as Record<string, unknown> | null | undefined;
+    if (!cj) continue;
+
+    const rawMax = cj.max_age;
+    const rawMin = cj.min_age;
+    const hasAgeRule = (typeof rawMax === 'number' && isFinite(rawMax)) || (typeof rawMin === 'number' && isFinite(rawMin));
+    const allowedTypes = Array.isArray(cj.allowed_types) ? cj.allowed_types : [];
+
+    if (hasAgeRule && allowedTypes.length > 0) {
+      dualFilterCount++;
+    }
+
+    if (typeof rawMax === 'number' && isFinite(rawMax)) {
+      const existing = maxAgeMap.get(rawMax);
+      if (existing) {
+        existing.names.push(cat.name);
+        existing.count++;
+      } else {
+        maxAgeMap.set(rawMax, { names: [cat.name], count: 1 });
+      }
+    }
+  }
+
+  const hasAnyMaxAgeCategories = maxAgeMap.size > 0;
+  if (!hasAnyMaxAgeCategories) {
+    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount };
+  }
+
+  const sortedMaxAges = Array.from(maxAgeMap.keys()).sort((a, b) => a - b);
+  const bands: EffectiveBand[] = [];
+  let prevMax = -1;
+
+  for (const maxAge of sortedMaxAges) {
+    const group = maxAgeMap.get(maxAge)!;
+    const min = policy === 'overlapping' ? 0 : prevMax + 1;
+    const max = inclusive ? maxAge : maxAge - 1;
+
+    bands.push({
+      label: `Under ${maxAge}`,
+      min,
+      max,
+      maxAge,
+      categoryCount: group.count,
+    });
+
+    if (policy === 'non_overlapping') {
+      prevMax = inclusive ? maxAge : maxAge - 1;
+    }
+  }
+
+  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount };
+}
 
 export default function Settings() {
   const { id } = useParams();
@@ -50,19 +133,26 @@ export default function Settings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, is_main, order_idx')
+        .select('id, name, is_main, order_idx, criteria_json')
         .eq('tournament_id', id)
         .order('order_idx');
       
       console.log('[settings] categories render', { count: data?.length, sample: data?.[0] });
       
       if (error) throw error;
-      return data || [];
+      return (data || []) as CategoryWithCriteria[];
     },
     enabled: !!id
   });
 
+  // Compute effective age bands from categories
+  const ageBandPolicy = form.watch('age_band_policy') || 'non_overlapping';
+  const maxAgeInclusive = form.watch('max_age_inclusive') ?? true;
 
+  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount } = useMemo(
+    () => computeEffectiveBands(categories, ageBandPolicy as 'non_overlapping' | 'overlapping', maxAgeInclusive),
+    [categories, ageBandPolicy, maxAgeInclusive]
+  );
 
   const { data: hasActiveGiftPrizes = false } = useQuery({
     queryKey: ['settings-has-gifts', id],
@@ -310,7 +400,7 @@ export default function Settings() {
                                 Jan 1 of tournament year (default)
                               </Label>
                               <p className="text-sm text-muted-foreground">
-                                Age is computed as of January 1 in the tournament’s start year.
+                                Age is computed as of January 1 in the tournament's start year.
                               </p>
                             </div>
                           </div>
@@ -338,6 +428,10 @@ export default function Settings() {
                           </div>
                         </RadioGroup>
                       </FormControl>
+                      {/* E) How age is calculated micro-callout */}
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Age is computed in whole years on the cutoff date (months are not considered).
+                      </p>
                     </FormItem>
                   )}
                 />
@@ -454,38 +548,94 @@ export default function Settings() {
                   )}
                 />
 
+                {/* C) Age Band Policy — RadioGroup instead of Switch */}
                 <FormField
                   control={form.control}
                   name="age_band_policy"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between py-2">
-                      <div>
-                        <FormLabel className="text-foreground font-medium">
-                          Age Band Policy
-                        </FormLabel>
-                        <FormDescription className="text-sm text-muted-foreground mt-1 space-y-2">
-                          <div>
-                            <strong>Non-overlapping (recommended):</strong> Each child fits exactly one Under-X band.
-                            <ul className="list-disc ml-5 mt-1 text-xs">
-                              <li>U8 = ages 0–8</li>
-                              <li>U11 = ages 9–11</li>
-                              <li>U14 = ages 12–14</li>
-                              <li>U17 = ages 15–17</li>
-                            </ul>
-                            <span className="text-xs">Best when you want one age prize per child.</span>
-                          </div>
-                          <div>
-                            <strong>Overlapping:</strong> A child can qualify for multiple Under-X bands at once.
-                            <span className="text-xs block mt-1">Example: A 10-year-old is eligible for U11, U14, and U17 simultaneously.</span>
-                          </div>
-                        </FormDescription>
-                      </div>
+                    <FormItem>
+                      <FormLabel className="text-foreground font-medium">
+                        Age Band Policy
+                      </FormLabel>
+                      <FormDescription className="text-sm text-muted-foreground mt-1 mb-4">
+                        Controls how Under-X age categories divide the age range.
+                      </FormDescription>
                       <FormControl>
-                        <Switch
-                          checked={field.value === 'overlapping'}
-                          onCheckedChange={(checked) => field.onChange(checked ? 'overlapping' : 'non_overlapping')}
-                        />
+                        <RadioGroup
+                          value={field.value || 'non_overlapping'}
+                          onValueChange={field.onChange}
+                          className="space-y-3"
+                        >
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="non_overlapping" id="age-band-non-overlapping" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="age-band-non-overlapping" className="font-medium cursor-pointer">
+                                Non-overlapping
+                                <span className="ml-2 text-xs text-muted-foreground font-normal">(recommended)</span>
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Each player fits exactly one Under-X band. Best when you want one age prize per child.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value="overlapping" id="age-band-overlapping" className="mt-1" />
+                            <div className="space-y-1">
+                              <Label htmlFor="age-band-overlapping" className="font-medium cursor-pointer">
+                                Overlapping
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                A player can qualify for multiple Under-X bands. Use when younger children should also compete in older bands.
+                              </p>
+                            </div>
+                          </div>
+                        </RadioGroup>
                       </FormControl>
+
+                      {/* D) Dynamic bands or no-effect note */}
+                      <div className="mt-4">
+                        {hasAnyMaxAgeCategories ? (
+                          <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                            <p className="font-medium text-foreground mb-2">
+                              Your effective age bands ({ageBandPolicy === 'non_overlapping' ? 'non-overlapping' : 'overlapping'}):
+                            </p>
+                            <ul className="list-disc ml-5 space-y-0.5 text-muted-foreground">
+                              {effectiveBands.map((band) => (
+                                <li key={band.maxAge}>
+                                  {band.label}:{' '}
+                                  {band.max < band.min ? (
+                                    <span className="text-destructive">empty with current Inclusive setting</span>
+                                  ) : (
+                                    <span>ages {band.min}–{band.max}</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <span>
+                              None of your categories currently use Max Age / Min Age rules.
+                              This setting only affects categories with Max Age/Min Age set in Edit Rules.
+                              Categories using Type labels (U13, F09, etc.) are not affected by Age Band Policy.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* F) Dual-filter warning */}
+                      <Alert className="mt-4 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 text-amber-900 dark:text-amber-200">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          If a category sets both Type labels (e.g., U13) AND Max Age/Min Age, a player must match <strong>both</strong> to be eligible. This can cause unexpected exclusions.
+                          {dualFilterCount > 0 && (
+                            <span className="block mt-1 font-medium">
+                              You currently have {dualFilterCount} {dualFilterCount === 1 ? 'category' : 'categories'} using both filters.
+                            </span>
+                          )}
+                        </AlertDescription>
+                      </Alert>
                     </FormItem>
                   )}
                 />
@@ -565,6 +715,7 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            {/* G) Policy Summary — updated with Age Band Policy */}
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle>Tournament Policy Summary</CardTitle>
@@ -586,6 +737,15 @@ export default function Settings() {
                         ? 'Tournament start date'
                         : 'Jan 1 of tournament year'}
                     </strong>
+                  </li>
+                  <li>
+                    Age Band Policy:{' '}
+                    <strong>
+                      {ageBandPolicy === 'overlapping' ? 'Overlapping' : 'Non-overlapping'}
+                    </strong>
+                    {!hasAnyMaxAgeCategories && (
+                      <span className="text-muted-foreground"> (no effect — no categories use Max Age)</span>
+                    )}
                   </li>
                   {hasActiveGiftPrizes && (
                     <li>
