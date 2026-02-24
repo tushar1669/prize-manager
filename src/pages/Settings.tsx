@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -43,7 +43,7 @@ function computeEffectiveBands(
   categories: CategoryWithCriteria[],
   policy: 'non_overlapping' | 'overlapping',
   inclusive: boolean
-): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number } {
+): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number; ageLimitsCategoryCount: number } {
   let dualFilterCount = 0;
 
   // Groups by max_age
@@ -74,8 +74,13 @@ function computeEffectiveBands(
   }
 
   const hasAnyMaxAgeCategories = maxAgeMap.size > 0;
+  const ageLimitsCategoryCount = categories.filter(cat => {
+    const cj2 = cat.criteria_json as Record<string, unknown> | null | undefined;
+    if (!cj2) return false;
+    return (typeof cj2.max_age === 'number' && isFinite(cj2.max_age)) || (typeof cj2.min_age === 'number' && isFinite(cj2.min_age));
+  }).length;
   if (!hasAnyMaxAgeCategories) {
-    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount };
+    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount, ageLimitsCategoryCount };
   }
 
   const sortedMaxAges = Array.from(maxAgeMap.keys()).sort((a, b) => a - b);
@@ -100,7 +105,7 @@ function computeEffectiveBands(
     }
   }
 
-  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount };
+  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount, ageLimitsCategoryCount };
 }
 
 export default function Settings() {
@@ -149,7 +154,7 @@ export default function Settings() {
   const ageBandPolicy = form.watch('age_band_policy') || 'non_overlapping';
   const maxAgeInclusive = form.watch('max_age_inclusive') ?? true;
 
-  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount } = useMemo(
+  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount, ageLimitsCategoryCount } = useMemo(
     () => computeEffectiveBands(categories, ageBandPolicy as 'non_overlapping' | 'overlapping', maxAgeInclusive),
     [categories, ageBandPolicy, maxAgeInclusive]
   );
@@ -596,6 +601,9 @@ export default function Settings() {
                       <div className="mt-4">
                         {hasAnyMaxAgeCategories ? (
                           <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                            <p className="font-medium text-foreground mb-1">
+                              Age Limits used in: <strong>{ageLimitsCategoryCount} {ageLimitsCategoryCount === 1 ? 'category' : 'categories'}</strong>
+                            </p>
                             <p className="font-medium text-foreground mb-2">
                               Your effective age bands ({ageBandPolicy === 'non_overlapping' ? 'non-overlapping' : 'overlapping'}):
                             </p>
@@ -613,13 +621,29 @@ export default function Settings() {
                             </ul>
                           </div>
                         ) : (
-                          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
-                            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                            <span>
-                              None of your categories currently use Max Age / Min Age rules.
-                              This setting only affects categories with Max Age/Min Age set in Edit Rules.
-                              Categories using Type labels (U13, F09, etc.) are not affected by Age Band Policy.
-                            </span>
+                          <div className="rounded-md border border-amber-700 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-600 p-4 text-sm space-y-2">
+                            <p className="font-semibold text-base">Not used yet</p>
+                            <p>
+                              This setting only works when you set Age Limits (Max Age / Min Age) inside a prize category.
+                            </p>
+                            <p>
+                              To set Age Limits: <strong>Prize Structure → Edit Rules</strong>
+                            </p>
+                            <p>
+                              Age Limits used in: <strong>{ageLimitsCategoryCount} categories</strong>
+                            </p>
+                            <p className="text-white/80 text-xs">
+                              Categories using Type labels (U13, F09, etc.) are <strong>not</strong> affected by this setting.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-1 border-white/70 text-white hover:bg-amber-700 dark:hover:bg-amber-700"
+                              onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
+                            >
+                              Open Prize Structure
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -627,8 +651,9 @@ export default function Settings() {
                       {/* F) Dual-filter warning */}
                       <Alert className="mt-4 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 text-amber-900 dark:text-amber-200">
                         <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle className="font-semibold">Watch out: dual filters</AlertTitle>
                         <AlertDescription>
-                          If a category sets both Type labels (e.g., U13) AND Max Age/Min Age, a player must match <strong>both</strong> to be eligible. This can cause unexpected exclusions.
+                          If a category uses both Type labels (like U13) <strong>and</strong> Age Limits (Max/Min Age), players must match <strong>both</strong> to be eligible. This often causes unexpected exclusions.
                           {dualFilterCount > 0 && (
                             <span className="block mt-1 font-medium">
                               You currently have {dualFilterCount} {dualFilterCount === 1 ? 'category' : 'categories'} using both filters.
@@ -744,7 +769,7 @@ export default function Settings() {
                       {ageBandPolicy === 'overlapping' ? 'Overlapping' : 'Non-overlapping'}
                     </strong>
                     {!hasAnyMaxAgeCategories && (
-                      <span className="text-muted-foreground"> (no effect — no categories use Max Age)</span>
+                      <span className="text-muted-foreground"> (not active — no categories have Age Limits)</span>
                     )}
                   </li>
                   {hasActiveGiftPrizes && (
