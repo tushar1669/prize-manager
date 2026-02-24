@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -117,6 +117,7 @@ export default function TournamentSetup() {
   // Track age input values for reactive helper text display
   const [criteriaMaxAgeInput, setCriteriaMaxAgeInput] = useState<string>('');
   const [criteriaMinAgeInput, setCriteriaMinAgeInput] = useState<string>('');
+  const [criteriaAllowedTypesInput, setCriteriaAllowedTypesInput] = useState<string>('');
   const [criteriaMaxAgeInclusiveOverride, setCriteriaMaxAgeInclusiveOverride] = useState<boolean | null>(null);
   
   const ensuringMainCategory = useRef(false);
@@ -439,6 +440,7 @@ export default function TournamentSetup() {
       // Initialize age input values for reactive helper text
       setCriteriaMaxAgeInput(String(catCriteria?.max_age ?? ''));
       setCriteriaMinAgeInput(String(catCriteria?.min_age ?? ''));
+      setCriteriaAllowedTypesInput((catCriteria?.allowed_types as string[] ?? []).join(', '));
       setCriteriaMaxAgeInclusiveOverride(
         typeof catCriteria?.max_age_inclusive === 'boolean' ? catCriteria.max_age_inclusive : null
       );
@@ -2488,10 +2490,20 @@ export default function TournamentSetup() {
                       id="criteria-types"
                       placeholder="e.g., PC, S60, F14, U15, Section A"
                       defaultValue={criteria?.allowed_types?.join(', ')}
+                      onChange={(e) => setCriteriaAllowedTypesInput(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Uses the Type column from Swiss-Manager ranking file (e.g., PC, S60, F14, U15). Only players whose Type matches will be eligible. Leave empty to allow all.
                     </p>
+                    {criteriaAllowedTypesInput.trim().length > 0 && (criteriaMaxAgeInput || criteriaMinAgeInput) && (
+                      <div className="mt-2 rounded-md border border-amber-700 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-600 p-3 text-sm flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span>
+                          <strong>Dual filter active</strong> — Players must match BOTH the Type label and the Age Limit to be eligible.
+                          If you only want Type-based eligibility, clear the Max Age / Min Age fields above.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </>
               );
