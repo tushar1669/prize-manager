@@ -231,6 +231,25 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
     );
   }
 
+  // Dual-filter warning chip: both Type labels AND Age Limits set
+  const hasTypes = Array.isArray(c.allowed_types) && c.allowed_types.length > 0;
+  const hasAgeLimits = (typeof c.max_age === 'number' && isFinite(c.max_age as number))
+                    || (typeof c.min_age === 'number' && isFinite(c.min_age as number));
+
+  if (hasTypes && hasAgeLimits) {
+    chips.push(
+      <Badge
+        key="dual-filter"
+        variant="outline"
+        className={cn("bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-400 gap-1", interactiveClassName)}
+        title="Players must match BOTH Type label and Age Limit"
+        {...interactiveProps}
+      >
+        ⚠ Type + Age
+      </Badge>
+    );
+  }
+
   if (chips.length === 0) return null;
 
   return (
