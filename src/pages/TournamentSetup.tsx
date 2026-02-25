@@ -2381,9 +2381,13 @@ export default function TournamentSetup() {
                       Include unrated players
                     </Label>
                   </div>
-                  {criteria?.unrated_only && (
+                  {criteria?.unrated_only ? (
                     <p className="text-xs text-muted-foreground ml-6">
                       This is implied when "Unrated-only" is enabled.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground ml-6">
+                      When OFF, players without a rating number are excluded from this category.
                     </p>
                   )}
 
@@ -2411,7 +2415,7 @@ export default function TournamentSetup() {
                     </div>
                     {/* Gender warning for Girls Only */}
                     {criteriaGenderSelection === 'F' && (
-                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <div className="mt-2 rounded-md border border-amber-700 bg-amber-600 text-white dark:bg-amber-600 dark:text-white dark:border-amber-500 px-3 py-2 text-xs">
                         <strong>Reminder:</strong> Ensure your player import file has female players marked with gender=F. 
                         Otherwise these prizes will stay unfilled.
                       </div>
@@ -2440,7 +2444,7 @@ export default function TournamentSetup() {
                       defaultValue={criteria?.allowed_cities?.join(', ')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Leave empty to allow all cities
+                      Leave empty to allow all cities. Text must match what appears in your import (case doesn't matter).
                     </p>
                   </div>
 
@@ -2453,7 +2457,7 @@ export default function TournamentSetup() {
                       defaultValue={criteria?.allowed_clubs?.join(', ')}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Leave empty to allow all clubs
+                      Leave empty to allow all clubs. Text must match what appears in your import (case doesn't matter).
                     </p>
                   </div>
 
@@ -2466,7 +2470,7 @@ export default function TournamentSetup() {
                       defaultValue={criteria?.allowed_states?.join(', ') ?? ''}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Leave empty to allow all states. Accepts full names or abbreviations.
+                      Leave empty to allow all states. Text must match what appears in your import (case doesn't matter).
                     </p>
                   </div>
 
