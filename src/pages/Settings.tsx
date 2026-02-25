@@ -320,6 +320,9 @@ export default function Settings() {
                         <FormDescription className="text-sm text-muted-foreground mt-1">
                           When OFF, age limits are ignored for prize eligibility.
                         </FormDescription>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          When ON, players without a birth date can be excluded from age categories. Use "Allow Missing DOB" below if your import has missing DOBs.
+                        </p>
                       </div>
                       <FormControl>
                         <Switch
