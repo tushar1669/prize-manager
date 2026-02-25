@@ -43,8 +43,9 @@ function computeEffectiveBands(
   categories: CategoryWithCriteria[],
   policy: 'non_overlapping' | 'overlapping',
   inclusive: boolean
-): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number; ageLimitsCategoryCount: number } {
+): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number; dualFilterNames: string[]; ageLimitsCategoryCount: number } {
   let dualFilterCount = 0;
+  const dualFilterNames: string[] = [];
 
   // Groups by max_age
   const maxAgeMap = new Map<number, { names: string[]; count: number }>();
@@ -60,6 +61,7 @@ function computeEffectiveBands(
 
     if (hasAgeRule && allowedTypes.length > 0) {
       dualFilterCount++;
+      dualFilterNames.push(cat.name);
     }
 
     if (typeof rawMax === 'number' && isFinite(rawMax)) {
@@ -80,7 +82,7 @@ function computeEffectiveBands(
     return (typeof cj2.max_age === 'number' && isFinite(cj2.max_age)) || (typeof cj2.min_age === 'number' && isFinite(cj2.min_age));
   }).length;
   if (!hasAnyMaxAgeCategories) {
-    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount, ageLimitsCategoryCount };
+    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount, dualFilterNames, ageLimitsCategoryCount };
   }
 
   const sortedMaxAges = Array.from(maxAgeMap.keys()).sort((a, b) => a - b);
@@ -105,7 +107,7 @@ function computeEffectiveBands(
     }
   }
 
-  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount, ageLimitsCategoryCount };
+  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount, dualFilterNames, ageLimitsCategoryCount };
 }
 
 export default function Settings() {
@@ -113,7 +115,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
-  console.log('[settings] mount', { id });
+  
 
   const form = useForm<RuleConfigForm>({
     resolver: zodResolver(ruleConfigSchema),
@@ -142,7 +144,7 @@ export default function Settings() {
         .eq('tournament_id', id)
         .order('order_idx');
       
-      console.log('[settings] categories render', { count: data?.length, sample: data?.[0] });
+      
       
       if (error) throw error;
       return (data || []) as CategoryWithCriteria[];
@@ -154,7 +156,7 @@ export default function Settings() {
   const ageBandPolicy = form.watch('age_band_policy') || 'non_overlapping';
   const maxAgeInclusive = form.watch('max_age_inclusive') ?? true;
 
-  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount, ageLimitsCategoryCount } = useMemo(
+  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount, dualFilterNames, ageLimitsCategoryCount } = useMemo(
     () => computeEffectiveBands(categories, ageBandPolicy as 'non_overlapping' | 'overlapping', maxAgeInclusive),
     [categories, ageBandPolicy, maxAgeInclusive]
   );
@@ -201,7 +203,7 @@ export default function Settings() {
         .eq('tournament_id', id)
         .maybeSingle();
       
-      console.log('[settings] load rules', { id, found: !!data });
+      
       
       const err = error as { code?: string; message?: string } | null;
       if (err && err.code !== 'PGRST116') {
@@ -237,7 +239,7 @@ export default function Settings() {
   // Upsert mutation
   const saveMutation = useMutation({
     mutationFn: async (values: RuleConfigForm) => {
-      console.log('[settings] save rules', { id, payload: values });
+      
       
       const { error } = await supabase
         .from('rule_config')
@@ -600,26 +602,37 @@ export default function Settings() {
                       {/* D) Dynamic bands or no-effect note */}
                       <div className="mt-4">
                         {hasAnyMaxAgeCategories ? (
-                          <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
-                            <p className="font-medium text-foreground mb-1">
-                              Age Limits used in: <strong>{ageLimitsCategoryCount} {ageLimitsCategoryCount === 1 ? 'category' : 'categories'}</strong>
-                            </p>
-                            <p className="font-medium text-foreground mb-2">
-                              Your effective age bands ({ageBandPolicy === 'non_overlapping' ? 'non-overlapping' : 'overlapping'}):
-                            </p>
-                            <ul className="list-disc ml-5 space-y-0.5 text-muted-foreground">
-                              {effectiveBands.map((band) => (
-                                <li key={band.maxAge}>
-                                  {band.label}:{' '}
-                                  {band.max < band.min ? (
-                                    <span className="text-destructive">empty with current Inclusive setting</span>
-                                  ) : (
-                                    <span>ages {band.min}–{band.max}</span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                          <>
+                            <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
+                              <p className="font-medium text-foreground mb-1">
+                                Age Limits used in: <strong>{ageLimitsCategoryCount} {ageLimitsCategoryCount === 1 ? 'category' : 'categories'}</strong>
+                              </p>
+                              <p className="font-medium text-foreground mb-2">
+                                Your effective age bands ({ageBandPolicy === 'non_overlapping' ? 'non-overlapping' : 'overlapping'}):
+                              </p>
+                              <ul className="list-disc ml-5 space-y-0.5 text-muted-foreground">
+                                {effectiveBands.map((band) => (
+                                  <li key={band.maxAge}>
+                                    {band.label}:{' '}
+                                    {band.max < band.min ? (
+                                      <span className="text-destructive">empty with current Inclusive setting</span>
+                                    ) : (
+                                      <span>ages {band.min}–{band.max}</span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
+                            >
+                              Open Prize Structure
+                            </Button>
+                          </>
                         ) : (
                           <div className="rounded-md border border-amber-700 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-600 p-4 text-sm space-y-2">
                             <p className="font-semibold text-base">Not used yet</p>
@@ -656,7 +669,11 @@ export default function Settings() {
                           If a category uses both Type labels (like U13) <strong>and</strong> Age Limits (Max/Min Age), players must match <strong>both</strong> to be eligible. This often causes unexpected exclusions.
                           {dualFilterCount > 0 && (
                             <span className="block mt-1 font-medium">
-                              You currently have {dualFilterCount} {dualFilterCount === 1 ? 'category' : 'categories'} using both filters.
+                              You currently have {dualFilterCount} {dualFilterCount === 1 ? 'category' : 'categories'} using both filters
+                              {dualFilterNames.length > 0 && (
+                                <>: {dualFilterNames.slice(0, 5).join(', ')}{dualFilterNames.length > 5 && `, +${dualFilterNames.length - 5} more`}</>
+                              )}
+                              .
                             </span>
                           )}
                         </AlertDescription>
