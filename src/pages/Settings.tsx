@@ -628,9 +628,9 @@ export default function Settings() {
                             </div>
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="default"
                               size="sm"
-                              className="mt-2"
+                              className="mt-2 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
                               onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
                             >
                               Open Prize Structure
@@ -653,9 +653,9 @@ export default function Settings() {
                             </p>
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="default"
                               size="sm"
-                              className="mt-1 border-white/70 text-white hover:bg-amber-700 dark:hover:bg-amber-700"
+                              className="mt-1 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
                               onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
                             >
                               Open Prize Structure
