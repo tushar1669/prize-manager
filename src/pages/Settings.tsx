@@ -43,9 +43,10 @@ function computeEffectiveBands(
   categories: CategoryWithCriteria[],
   policy: 'non_overlapping' | 'overlapping',
   inclusive: boolean
-): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number; dualFilterNames: string[]; ageLimitsCategoryCount: number } {
+): { bands: EffectiveBand[]; hasAnyMaxAgeCategories: boolean; dualFilterCount: number; dualFilterNames: string[]; dualFilterCategoryIds: string[]; ageLimitsCategoryCount: number } {
   let dualFilterCount = 0;
   const dualFilterNames: string[] = [];
+  const dualFilterCategoryIds: string[] = [];
 
   // Groups by max_age
   const maxAgeMap = new Map<number, { names: string[]; count: number }>();
@@ -62,6 +63,7 @@ function computeEffectiveBands(
     if (hasAgeRule && allowedTypes.length > 0) {
       dualFilterCount++;
       dualFilterNames.push(cat.name);
+      dualFilterCategoryIds.push(cat.id);
     }
 
     if (typeof rawMax === 'number' && isFinite(rawMax)) {
@@ -82,7 +84,7 @@ function computeEffectiveBands(
     return (typeof cj2.max_age === 'number' && isFinite(cj2.max_age)) || (typeof cj2.min_age === 'number' && isFinite(cj2.min_age));
   }).length;
   if (!hasAnyMaxAgeCategories) {
-    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount, dualFilterNames, ageLimitsCategoryCount };
+    return { bands: [], hasAnyMaxAgeCategories: false, dualFilterCount, dualFilterNames, dualFilterCategoryIds, ageLimitsCategoryCount };
   }
 
   const sortedMaxAges = Array.from(maxAgeMap.keys()).sort((a, b) => a - b);
@@ -107,7 +109,7 @@ function computeEffectiveBands(
     }
   }
 
-  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount, dualFilterNames, ageLimitsCategoryCount };
+  return { bands, hasAnyMaxAgeCategories: true, dualFilterCount, dualFilterNames, dualFilterCategoryIds, ageLimitsCategoryCount };
 }
 
 export default function Settings() {
@@ -156,10 +158,16 @@ export default function Settings() {
   const ageBandPolicy = form.watch('age_band_policy') || 'non_overlapping';
   const maxAgeInclusive = form.watch('max_age_inclusive') ?? true;
 
-  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount, dualFilterNames, ageLimitsCategoryCount } = useMemo(
+  const { bands: effectiveBands, hasAnyMaxAgeCategories, dualFilterCount, dualFilterNames, dualFilterCategoryIds, ageLimitsCategoryCount } = useMemo(
     () => computeEffectiveBands(categories, ageBandPolicy as 'non_overlapping' | 'overlapping', maxAgeInclusive),
     [categories, ageBandPolicy, maxAgeInclusive]
   );
+
+  const prizeStructureTarget = useMemo(() => {
+    if (!id) return '/';
+    if (dualFilterCategoryIds.length === 0) return `/t/${id}/setup?tab=prizes`;
+    return `/t/${id}/setup?tab=prizes&focus=dual_filters&expand=${encodeURIComponent(dualFilterCategoryIds.join(','))}`;
+  }, [dualFilterCategoryIds, id]);
 
   const { data: hasActiveGiftPrizes = false } = useQuery({
     queryKey: ['settings-has-gifts', id],
@@ -631,7 +639,7 @@ export default function Settings() {
                               variant="default"
                               size="sm"
                               className="mt-2 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
-                              onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
+                              onClick={() => navigate(prizeStructureTarget)}
                             >
                               Open Prize Structure
                             </Button>
@@ -656,7 +664,7 @@ export default function Settings() {
                               variant="default"
                               size="sm"
                               className="mt-1 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
-                              onClick={() => navigate(`/t/${id}/setup?tab=prizes`)}
+                              onClick={() => navigate(prizeStructureTarget)}
                             >
                               Open Prize Structure
                             </Button>
