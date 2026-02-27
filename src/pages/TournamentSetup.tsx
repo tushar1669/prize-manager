@@ -68,6 +68,15 @@ export default function TournamentSetup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "details";
+  const focusParam = searchParams.get('focus');
+  const expandIdsParam = searchParams.get('expand');
+  const deepLinkedDualFilterIds = useMemo(() => {
+    if (focusParam !== 'dual_filters' || !expandIdsParam) return [] as string[];
+    return expandIdsParam
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }, [expandIdsParam, focusParam]);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
@@ -103,6 +112,7 @@ export default function TournamentSetup() {
   }>({ open: false, sourceId: null });
   const [savingAll, setSavingAll] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const hasAppliedDualFilterDeepLink = useRef(false);
   const editorRefs = useRef(new Map<string, React.RefObject<CategoryPrizesEditorHandle>>());
   
   // Category delete dialog state
@@ -542,6 +552,36 @@ export default function TournamentSetup() {
       return next;
     });
   }, [sortedCategories]);
+
+  useEffect(() => {
+    if (activeTab !== 'prizes') {
+      hasAppliedDualFilterDeepLink.current = false;
+      return;
+    }
+    if (hasAppliedDualFilterDeepLink.current || deepLinkedDualFilterIds.length === 0 || sortedCategories.length === 0) return;
+
+    const idsToExpand = new Set(deepLinkedDualFilterIds);
+    setCollapsedCategories(() => {
+      const next: Record<string, boolean> = {};
+      sortedCategories.forEach((category) => {
+        next[category.id] = !idsToExpand.has(category.id);
+      });
+      return next;
+    });
+
+    const firstVisibleProblemCategory = sortedCategories.find((category) => idsToExpand.has(category.id));
+    if (firstVisibleProblemCategory) {
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`category-${firstVisibleProblemCategory.id}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+
+    hasAppliedDualFilterDeepLink.current = true;
+  }, [activeTab, deepLinkedDualFilterIds, sortedCategories]);
+
+  const deepLinkedDualFilterSet = useMemo(() => new Set(deepLinkedDualFilterIds), [deepLinkedDualFilterIds]);
 
   const handleCollapseAllCategories = useCallback((collapsed: boolean) => {
     setCollapsedCategories(() => {
@@ -1857,7 +1897,16 @@ export default function TournamentSetup() {
                     ) : categories && categories.length > 0 ? (
                       <div className="space-y-4">
                         {sortedCategories.map((cat) => (
-                          <div key={cat.id} data-category-id={cat.id}>
+                          <div
+                            key={cat.id}
+                            id={`category-${cat.id}`}
+                            data-category-id={cat.id}
+                            className={cn(
+                              deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
+                                ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
+                                : undefined
+                            )}
+                          >
                             <CategoryPrizesEditor
                               ref={getEditorRef(cat.id)}
                               category={{
