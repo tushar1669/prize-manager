@@ -563,9 +563,12 @@ export default function PlayerImport() {
   const [dataCoverage, setDataCoverage] = useState<{
     dob: number;
     gender: number;
+    rating: number;
     state: number;
     city: number;
-    federation: number;
+    club: number;
+    group_label: number;
+    type_label: number;
   } | null>(null);
   const [femaleCountSummary, setFemaleCountSummary] = useState<{
     femaleFromGender: number;
@@ -2349,9 +2352,12 @@ export default function PlayerImport() {
       const coverage = {
         dob: validPlayers.filter(p => p.dob).length / totalValid,
         gender: validPlayers.filter(p => p.gender).length / totalValid,
+        rating: validPlayers.filter(p => p.rating != null && Number(p.rating) > 0).length / totalValid,
         state: validPlayers.filter(p => p.state).length / totalValid,
         city: validPlayers.filter(p => p.city).length / totalValid,
-        federation: validPlayers.filter(p => p.federation).length / totalValid,
+        club: validPlayers.filter(p => p.club).length / totalValid,
+        group_label: validPlayers.filter(p => p.group_label).length / totalValid,
+        type_label: validPlayers.filter(p => p.type_label).length / totalValid,
       };
       setDataCoverage(coverage);
 
@@ -3154,7 +3160,11 @@ export default function PlayerImport() {
             )}
 
             {dataCoverage && (
-              <DataCoverageBar coverage={dataCoverage} />
+              <DataCoverageBar
+                coverage={dataCoverage}
+                ruleUsedFields={ruleUsedFields}
+                teamGroupByFields={[]}
+              />
             )}
 
             {/* Gender detection summary chip - always shown when players exist */}
