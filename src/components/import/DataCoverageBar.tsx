@@ -24,7 +24,7 @@ function CoverageChip({ label, percent, starred }: { label: string; percent: num
   return (
     <div className="text-center">
       <Badge variant="outline" className={`${color} text-base px-3 py-1 font-semibold`}>
-        {percent.toFixed(0)}%
+        {Number.isFinite(percent) ? Math.round(percent * 100) : 0}%
       </Badge>
       <div className="text-xs text-muted-foreground mt-1">
         {label}{starred ? ' ★' : ''}
