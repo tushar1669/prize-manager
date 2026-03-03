@@ -41,6 +41,7 @@ export interface PrizeWithWinner {
 export interface GroupResponse {
   group_id: string;
   name: string;
+  note?: string | null;
   config: GroupConfig;
   prizes: PrizeWithWinner[];
   eligible_institutions: number;
@@ -85,6 +86,74 @@ export async function fetchTeamPrizeResults(
 
   if (cached && cached.expiresAt > now) {
     return cached.data;
+  }
+
+
+  if (allocationVersion !== undefined && allocationVersion !== null) {
+    const version = Number(allocationVersion);
+    const [{ data: groups }, { data: prizes }, { data: allocations }, { data: notes }] = await Promise.all([
+      supabase.from('institution_prize_groups').select('*').eq('tournament_id', tournamentId).eq('is_active', true).order('name'),
+      supabase.from('institution_prizes').select('*').eq('is_active', true),
+      supabase.from('team_allocations').select('*').eq('tournament_id', tournamentId).eq('version', version),
+      supabase.from('team_allocation_notes').select('group_id, note').eq('tournament_id', tournamentId).eq('version', version),
+    ]);
+
+    if ((groups ?? []).length > 0 && (allocations ?? []).length > 0) {
+      const noteByGroup = new Map((notes ?? []).map((n: { group_id: string; note: string }) => [n.group_id, n.note]));
+      const byGroup = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of (allocations ?? []) as Array<Record<string, unknown>>) {
+        const key = String(row.group_id);
+        byGroup.set(key, [...(byGroup.get(key) ?? []), row]);
+      }
+      const response: TeamPrizeResultsResponse = {
+        groups: (groups as Array<Record<string, unknown>>).map((g) => {
+          const groupRows = byGroup.get(String(g.id)) ?? [];
+          const rowByPlace = new Map(groupRows.map((r) => [Number(r.place), r]));
+          const groupPrizes = ((prizes ?? []) as Array<Record<string, unknown>>).filter((p) => String(p.group_id) === String(g.id));
+          return {
+            group_id: String(g.id),
+            name: String(g.name ?? ''),
+            note: noteByGroup.get(String(g.id)) ?? null,
+            config: {
+              group_by: String(g.group_by ?? 'club'),
+              team_size: Number(g.team_size ?? 0),
+              female_slots: Number(g.female_slots ?? 0),
+              male_slots: Number(g.male_slots ?? 0),
+              scoring_mode: String(g.scoring_mode ?? ''),
+            },
+            prizes: groupPrizes.map((p) => {
+              const winner = rowByPlace.get(Number(p.place));
+              return {
+                id: String(p.id),
+                place: Number(p.place),
+                cash_amount: Number(p.cash_amount ?? 0),
+                has_trophy: Boolean(p.has_trophy),
+                has_medal: Boolean(p.has_medal),
+                is_active: true,
+                winner_institution: winner
+                  ? {
+                      key: String(winner.institution_key ?? ''),
+                      label: String(winner.institution_label ?? winner.institution_key ?? ''),
+                      total_points: Number(winner.total_points ?? 0),
+                      rank_sum: Number(winner.rank_sum ?? 0),
+                      best_individual_rank: Number(winner.best_individual_rank ?? 0),
+                      players: Array.isArray(winner.players_json) ? (winner.players_json as TeamPlayerInfo[]) : [],
+                    }
+                  : null,
+              };
+            }),
+            eligible_institutions: groupRows.length,
+            ineligible_institutions: 0,
+            ineligible_reasons: [],
+          };
+        }),
+        players_loaded: 0,
+        max_rank: 0,
+      };
+
+      teamPrizeResultCache.set(cacheKey, { data: response, expiresAt: now + TEAM_PRIZE_RESULT_TTL_MS });
+      return response;
+    }
   }
 
   const { data: { session } } = await supabase.auth.getSession();

@@ -20,7 +20,9 @@ export const ALIASES: Record<string, string[]> = {
 
   state: ['state', 'province', 'region', 'st', 'association'],
   city: ['city', 'town', 'location', 'place'],
-  club: ['club', 'chess_club', 'organization', 'academy', 'team'],
+  club: ['club', 'chess_club', 'organization', 'academy'],
+  team: ['team', 'institution', 'school_team'],
+  points: ['pts', 'points', 'score', 'total_points'],
 
   // Swiss-Manager uses "Fide-No." (with period and hyphen)
   fide_id: ['fide-no.', 'fide_no', 'fide-no', 'fideno', 'fide_id', 'fideid', 'fide', 'id'],

@@ -192,6 +192,67 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to insert allocations: ${insertError.message}`);
     }
 
+    // Persist team allocations snapshot for this version (if team groups exist)
+    const { count: teamGroupCount, error: teamGroupCountError } = await supabaseClient
+      .from('institution_prize_groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .eq('is_active', true);
+
+    if (teamGroupCountError) {
+      throw new Error(`Failed to check team groups: ${teamGroupCountError.message}`);
+    }
+
+    if ((teamGroupCount ?? 0) > 0) {
+      const { data: teamData, error: teamError } = await supabaseClient.functions.invoke('allocateInstitutionPrizes', {
+        body: { tournament_id: tournamentId },
+        headers: { Authorization: `Bearer ${authHeader.replace('Bearer ', '')}` },
+      });
+
+      if (teamError) {
+        throw new Error(`Failed to compute team allocations: ${teamError.message}`);
+      }
+
+      const teamGroups = (teamData as { groups?: Array<{ group_id: string; prizes: Array<{ place: number; winner_institution: { key: string; label: string; total_points: number; rank_sum: number; best_individual_rank: number; players: unknown[] } | null }> }> })?.groups ?? [];
+
+      const rows = teamGroups.flatMap((group) =>
+        group.prizes
+          .filter((prize) => prize.winner_institution)
+          .map((prize) => ({
+            tournament_id: tournamentId,
+            version: nextVersion,
+            group_id: group.group_id,
+            place: prize.place,
+            institution_key: prize.winner_institution!.key,
+            institution_label: prize.winner_institution!.label,
+            total_points: prize.winner_institution!.total_points,
+            rank_sum: prize.winner_institution!.rank_sum,
+            best_individual_rank: prize.winner_institution!.best_individual_rank,
+            players_json: prize.winner_institution!.players,
+          }))
+      );
+
+      const { error: clearTeamError } = await supabaseClient
+        .from('team_allocations')
+        .delete()
+        .eq('tournament_id', tournamentId)
+        .eq('version', nextVersion);
+
+      if (clearTeamError) {
+        throw new Error(`Failed to clear team allocations: ${clearTeamError.message}`);
+      }
+
+      if (rows.length > 0) {
+        const { error: insertTeamError } = await supabaseClient
+          .from('team_allocations')
+          .insert(rows);
+
+        if (insertTeamError) {
+          throw new Error(`Failed to persist team allocations: ${insertTeamError.message}`);
+        }
+      }
+    }
+
     // Update tournament status to 'finalized'
     const { error: updateError } = await supabaseClient
       .from('tournaments')

@@ -1,11 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 import {
-  buildTeam,
-  compareInstitutions,
-  getRankPoints,
-  isFemale,
-  isNotF,
+  computeTeamScores,
+  detectTieAtPrizeBoundary,
+  type TeamPrizePlayer,
 } from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -64,13 +62,10 @@ interface Player {
   id: string;
   name: string;
   rank: number;
-  rating: number | null;
   gender: string | null;
-  state: string | null;
-  city: string | null;
   club: string | null;
-  group_label: string | null;
-  type_label: string | null;
+  team: string | null;
+  points: number | null;
   tournament_id: string;
 }
 
@@ -98,6 +93,7 @@ interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  tied_at_boundary?: boolean;
 }
 
 interface PrizeWithWinner {
@@ -131,12 +127,9 @@ interface AllocateInstitutionPrizesRequest {
 }
 
 // Map group_by codes to player columns
-const GROUP_BY_COLUMN_MAP: Record<string, keyof Player> = {
-  'club': 'club',
-  'city': 'city',
-  'state': 'state',
-  'group_label': 'group_label',
-  'type_label': 'type_label',
+const GROUP_BY_COLUMN_MAP: Record<string, 'team' | 'club'> = {
+  team: 'team',
+  club: 'club',
 };
 
 Deno.serve(async (req: Request) => {
@@ -272,7 +265,7 @@ Deno.serve(async (req: Request) => {
     // Load players for this tournament (including group_label and type_label for grouping)
     const { data: players, error: playersError } = await supabase
       .from('players')
-      .select('id, name, rank, rating, gender, state, city, club, group_label, type_label, tournament_id')
+      .select('id, name, rank, gender, club, team, points, tournament_id')
       .eq('tournament_id', tournament_id)
       .order('rank');
 
@@ -324,98 +317,21 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Group players by institution
-      const institutionMap = new Map<string, Array<{
-        id: string;
-        name: string;
-        rank: number;
-        points: number;
-        gender: string | null;
-      }>>();
+            const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((player) => ({
+        id: player.id,
+        name: player.name,
+        rank: player.rank,
+        points: Number(player.points ?? 0),
+        gender: player.gender,
+        team: player.team,
+        club: player.club,
+      }));
 
-      for (const player of typedPlayers) {
-        const institutionKey = player[columnName] as string | null;
-        
-        // Skip players with empty/null institution
-        if (!institutionKey || institutionKey.trim() === '') {
-          continue;
-        }
-
-        const trimmedKey = institutionKey.trim();
-        const points = getRankPoints(player.rank, maxRank);
-
-        if (!institutionMap.has(trimmedKey)) {
-          institutionMap.set(trimmedKey, []);
-        }
-        institutionMap.get(trimmedKey)!.push({
-          id: player.id,
-          name: player.name,
-          rank: player.rank,
-          points,
-          gender: player.gender,
-        });
-      }
-
-      console.log(`[allocateInstitutionPrizes] Group "${group.name}": found ${institutionMap.size} institutions`);
-
-      // Build teams and score institutions
-      const scoredInstitutions: Array<{
-        key: string;
-        total_points: number;
-        rank_sum: number;
-        best_individual_rank: number;
-        team: TeamPlayerInfo[];
-      }> = [];
+      const scoredInstitutions = computeTeamScores(teamPlayers, group.team_size, columnName);
+      const ineligibleCount = 0;
       const ineligibleReasons: string[] = [];
-      let ineligibleCount = 0;
 
-      for (const [instKey, instPlayers] of institutionMap) {
-        const result = buildTeam(
-          instPlayers,
-          group.team_size,
-          group.female_slots,
-          group.male_slots
-        );
-
-        if (!result) {
-          ineligibleCount++;
-          // Determine reason
-          const femaleCount = instPlayers.filter(p => isFemale(p.gender)).length;
-          const notFCount = instPlayers.filter(p => isNotF(p.gender)).length;
-          
-          if (group.female_slots > 0 && femaleCount < group.female_slots) {
-            ineligibleReasons.push(`${instKey}: needs ${group.female_slots} females, has ${femaleCount}`);
-          } else if (group.male_slots > 0 && notFCount < group.male_slots) {
-            ineligibleReasons.push(`${instKey}: needs ${group.male_slots} males, has ${notFCount}`);
-          } else {
-            ineligibleReasons.push(`${instKey}: needs ${group.team_size} players, has ${instPlayers.length}`);
-          }
-          continue;
-        }
-
-        const team = result.team.map(p => ({
-          player_id: p.id,
-          name: p.name,
-          rank: p.rank,
-          points: p.points,
-          gender: p.gender,
-        }));
-        const total_points = team.reduce((sum, p) => sum + p.points, 0);
-        const rank_sum = team.reduce((sum, p) => sum + p.rank, 0);
-        const best_individual_rank = Math.min(...team.map(p => p.rank));
-
-        scoredInstitutions.push({
-          key: instKey,
-          total_points,
-          rank_sum,
-          best_individual_rank,
-          team,
-        });
-      }
-
-      // Sort institutions by scoring criteria
-      scoredInstitutions.sort(compareInstitutions);
-
+      const boundaryTies = detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
       console.log(`[allocateInstitutionPrizes] Group "${group.name}": ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible`);
 
       // Assign prizes
@@ -437,7 +353,8 @@ Deno.serve(async (req: Request) => {
             total_points: winner.total_points,
             rank_sum: winner.rank_sum,
             best_individual_rank: winner.best_individual_rank,
-            players: winner.team,
+            players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+            tied_at_boundary: boundaryTies.includes(winner.key),
           } : null,
         };
       });

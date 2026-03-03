@@ -16,6 +16,8 @@ export type SupabasePlayerPayload = {
   state: string | null;
   city: string | null;
   club: string | null;
+  team: string | null;
+  points: number | null;
   disability: string | null;
   special_notes: string | null;
   fide_id: string | null;
@@ -88,6 +90,8 @@ export function buildSupabasePlayerPayload(
   let state = getAliasedValue('state') ?? player.state;
   const city = getAliasedValue('city') ?? player.city;
   const club = getAliasedValue('club') ?? player.club;
+  const team = getAliasedValue('team') ?? player.team;
+  const pointsValue = getAliasedValue('points') ?? player.points;
   const disabilityFromField = getAliasedValue('disability') ?? player.disability;
   const specialNotes = getAliasedValue('special_notes') ?? player.special_notes;
   const fideId = getAliasedValue('fide_id') ?? player.fide_id;
@@ -177,6 +181,8 @@ export function buildSupabasePlayerPayload(
     state: state ? String(state) : null,
     city: city ? String(city) : null,
     club: club ? String(club) : null,
+    team: team ? String(team) : null,
+    points: pointsValue != null && pointsValue !== "" ? Number(pointsValue) : null,
     disability: disability != null ? String(disability) : null,
     special_notes: specialNotes ? String(specialNotes) : null,
     fide_id: toNumericFideOrNull(fideId),

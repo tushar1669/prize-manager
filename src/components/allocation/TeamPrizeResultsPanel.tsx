@@ -201,6 +201,13 @@ function GroupCard({ group }: { group: GroupResponse }) {
               </Alert>
             )}
 
+            {group.note && (
+              <Alert className="border-primary/20 bg-primary/5">
+                <Info className="h-4 w-4" />
+                <AlertDescription>{group.note}</AlertDescription>
+              </Alert>
+            )}
+
             {/* Ineligible institutions */}
             {group.ineligible_institutions > 0 && group.ineligible_reasons.length > 0 && (
               <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>

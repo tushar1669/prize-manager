@@ -630,7 +630,7 @@ function scoreRow(row: unknown[]): number {
   const coreHits = coreFields.filter((field) => normalized.some((cell) => cell.includes(field)));
   score += coreHits.length * 10;
 
-  const secondaryFields = ["fide", "gender", "fed", "club", "state", "city"];
+  const secondaryFields = ["fide", "gender", "fed", "club", "team", "state", "city", "pts", "points"];
   const secondaryHits = secondaryFields.filter((field) => normalized.some((cell) => cell.includes(field)));
   score += secondaryHits.length * 3;
 
