@@ -124,22 +124,40 @@ async function loadTeamPrizes(
       console.error('[generatePdf] Error checking team prizes:', countError);
       teamPrizeError = countError.message || 'Unknown error';
     } else if ((count || 0) > 0) {
-      console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
+      const { data: latestAlloc } = await supabaseClient
+        .from('team_allocations')
+        .select('version')
+        .eq('tournament_id', tournamentId)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
-        'allocateInstitutionPrizes',
-        {
-          body: { tournament_id: tournamentId },
-          headers: { Authorization: authHeader }
+      if (latestAlloc?.version != null) {
+        const { data: persistedData, error: persistedError } = await supabaseClient.functions.invoke('publicTeamPrizes', {
+          body: { tournament_id: tournamentId }
+        });
+        if (!persistedError && persistedData?.groups?.length) {
+          teamPrizeResults = persistedData as TeamPrizeResults;
         }
-      );
+      }
 
-      if (teamError) {
-        console.error('[generatePdf] Team prize allocation error:', teamError);
-        teamPrizeError = teamError.message || 'Unknown error';
-      } else {
-        teamPrizeResults = teamData as TeamPrizeResults;
-        console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
+      if (!teamPrizeResults) {
+        console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
+        const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
+          'allocateInstitutionPrizes',
+          {
+            body: { tournament_id: tournamentId },
+            headers: { Authorization: authHeader }
+          }
+        );
+
+        if (teamError) {
+          console.error('[generatePdf] Team prize allocation error:', teamError);
+          teamPrizeError = teamError.message || 'Unknown error';
+        } else {
+          teamPrizeResults = teamData as TeamPrizeResults;
+          console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
+        }
       }
     } else {
       console.log('[generatePdf] No active team prize groups');

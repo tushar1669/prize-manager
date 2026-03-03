@@ -92,6 +92,8 @@ export const playerImportSchema = z.object({
   state: z.string().max(50, "State must be less than 50 characters").nullable().optional(),
   city: z.string().max(50, "City must be less than 50 characters").nullable().optional(),
   club: z.string().max(100, "Club must be less than 100 characters").nullable().optional(),
+  team: z.string().max(100, "Team must be less than 100 characters").nullable().optional(),
+  points: z.number().nullable().optional(),
   disability: z.string().max(100, "Disability must be less than 100 characters").nullable().optional(),
   special_notes: z.string().max(500, "Special notes must be less than 500 characters").nullable().optional(),
   fide_id: z.string().max(20, "FIDE ID must be less than 20 characters").nullable().optional(),
