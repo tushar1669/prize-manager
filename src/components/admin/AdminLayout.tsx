@@ -8,6 +8,7 @@ const adminLinks = [
   { to: "/admin/martech", label: "Martech" },
   { to: "/admin/tournaments", label: "Tournaments" },
   { to: "/admin/coupons", label: "Coupons" },
+  { to: "/admin/team-snapshots", label: "Team Snapshots" },
 ];
 
 const buildStamp = `${__BUILD_COMMIT__} · ${__BUILD_TIME__}`;

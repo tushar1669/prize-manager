@@ -7,6 +7,7 @@ const quickLinks = [
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
   { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
   { to: "/admin/audit", title: "Audit Logs", description: "View error events, runtime diagnostics, and user-facing error references." },
+  { to: "/admin/team-snapshots", title: "Team Snapshots", description: "Detect and backfill missing team allocation snapshots for published tournaments." },
 ];
 
 export default function AdminHome() {
