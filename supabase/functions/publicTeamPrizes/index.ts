@@ -6,6 +6,12 @@ const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "publicTeamPrizes";
 const corsHeaders = CORS_HEADERS;
 
+interface PublicationRow {
+  tournament_id: string;
+  is_active: boolean;
+  version: number;
+}
+
 interface InstitutionPrizeGroup {
   id: string;
   name: string;
@@ -38,10 +44,10 @@ Deno.serve(async (req: Request) => {
     let tournamentId = body.tournament_id as string | undefined;
     const slug = body.slug as string | undefined;
 
-    let publication: { tournament_id: string; is_active: boolean } | null = null;
+    let publication: PublicationRow | null = null;
     if (slug) {
-      const { data } = await supabase.from('publications').select('tournament_id, is_active').eq('slug', slug).maybeSingle();
-      publication = data as typeof publication;
+      const { data } = await supabase.from('publications').select('tournament_id, is_active, version').eq('slug', slug).maybeSingle();
+      publication = data as PublicationRow | null;
       tournamentId = tournamentId ?? publication?.tournament_id;
     }
 
@@ -50,8 +56,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!publication) {
-      const { data } = await supabase.from('publications').select('tournament_id, is_active').eq('tournament_id', tournamentId).eq('is_active', true).maybeSingle();
-      publication = data as typeof publication;
+      const { data } = await supabase.from('publications').select('tournament_id, is_active, version').eq('tournament_id', tournamentId).eq('is_active', true).maybeSingle();
+      publication = data as PublicationRow | null;
     }
 
     const { data: tournament } = await supabase.from('tournaments').select('id, is_published').eq('id', tournamentId).maybeSingle();
