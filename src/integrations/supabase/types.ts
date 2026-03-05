@@ -1494,6 +1494,14 @@ export type Database = {
       bootstrap_master: { Args: never; Returns: Json }
       claim_profile_completion_reward: { Args: never; Returns: Json }
       coupon_origin_from_code: { Args: { code: string }; Returns: string }
+      detect_missing_team_snapshots: {
+        Args: never
+        Returns: {
+          published_version: number
+          tournament_id: string
+          tournament_title: string
+        }[]
+      }
       get_or_create_my_referral_code: { Args: never; Returns: Json }
       get_public_tournament_results: {
         Args: { tournament_id: string }
