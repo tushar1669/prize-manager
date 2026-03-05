@@ -123,6 +123,11 @@ export async function fetchTeamPrizeResults(
             },
             prizes: groupPrizes.map((p) => {
               const winner = rowByPlace.get(Number(p.place));
+              // Derive display-only values from player_snapshot (real DB columns only)
+              const snapshot = winner ? (Array.isArray(winner.player_snapshot) ? (winner.player_snapshot as TeamPlayerInfo[]) : []) : [];
+              const rankSum = snapshot.reduce((sum, pl) => sum + (pl.rank ?? 0), 0);
+              const bestRank = snapshot.length > 0 ? Math.min(...snapshot.map((pl) => pl.rank ?? Infinity)) : 0;
+
               return {
                 id: String(p.id),
                 place: Number(p.place),
@@ -133,11 +138,11 @@ export async function fetchTeamPrizeResults(
                 winner_institution: winner
                   ? {
                       key: String(winner.institution_key ?? ''),
-                      label: String(winner.institution_label ?? winner.institution_key ?? ''),
+                      label: String(winner.institution_key ?? ''),
                       total_points: Number(winner.total_points ?? 0),
-                      rank_sum: Number(winner.rank_sum ?? 0),
-                      best_individual_rank: Number(winner.best_individual_rank ?? 0),
-                      players: Array.isArray(winner.players_json) ? (winner.players_json as TeamPlayerInfo[]) : [],
+                      rank_sum: rankSum,
+                      best_individual_rank: bestRank,
+                      players: snapshot,
                     }
                   : null,
               };

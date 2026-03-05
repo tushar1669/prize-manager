@@ -31,6 +31,14 @@ interface InstitutionPrize {
   has_medal: boolean;
 }
 
+interface PlayerSnapshot {
+  player_id: string;
+  name: string;
+  rank: number;
+  points: number;
+  gender: string | null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (hasPingQueryParam(req)) return pingResponse(FUNCTION_NAME, BUILD_VERSION);
@@ -65,15 +73,8 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Tournament not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { data: latestAlloc } = await supabase
-      .from('team_allocations')
-      .select('version')
-      .eq('tournament_id', tournamentId)
-      .order('version', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const latestVersion = (latestAlloc as { version?: number } | null)?.version;
+    // Pin to the active publication's version
+    const pinnedVersion = publication.version;
 
     const { data: groups } = await supabase.from('institution_prize_groups').select('*').eq('tournament_id', tournamentId).eq('is_active', true).order('name');
     const typedGroups = (groups ?? []) as InstitutionPrizeGroup[];
@@ -85,20 +86,23 @@ Deno.serve(async (req: Request) => {
     const { data: prizes } = await supabase.from('institution_prizes').select('*').in('group_id', groupIds).eq('is_active', true).order('place');
     const allPrizes = (prizes ?? []) as InstitutionPrize[];
 
-    if (latestVersion != null) {
-      const { data: rows } = await supabase
-        .from('team_allocations')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .eq('version', latestVersion)
-        .order('group_id')
-        .order('place');
+    // Try persisted snapshot for the pinned publication version
+    const { data: rows } = await supabase
+      .from('team_allocations')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .eq('version', pinnedVersion)
+      .order('group_id')
+      .order('place');
 
+    const hasPersistedSnapshot = ((rows ?? []) as Array<Record<string, unknown>>).length > 0;
+
+    if (hasPersistedSnapshot) {
       const { data: notes } = await supabase
         .from('team_allocation_notes')
         .select('group_id, note')
         .eq('tournament_id', tournamentId)
-        .eq('version', latestVersion);
+        .eq('version', pinnedVersion);
 
       const notesByGroup = new Map((notes ?? []).map((n: { group_id: string; note: string }) => [n.group_id, n.note]));
       const rowsByGroup = new Map<string, Array<Record<string, unknown>>>();
@@ -125,6 +129,11 @@ Deno.serve(async (req: Request) => {
           },
           prizes: groupPrizes.map((prize) => {
             const winner = prizeMap.get(prize.place);
+            // Derive display values from player_snapshot (real DB columns only)
+            const snapshot = winner ? (Array.isArray(winner.player_snapshot) ? winner.player_snapshot as PlayerSnapshot[] : []) : [];
+            const rankSum = snapshot.reduce((sum, p) => sum + (p.rank ?? 0), 0);
+            const bestRank = snapshot.length > 0 ? Math.min(...snapshot.map((p) => p.rank ?? Infinity)) : 0;
+
             return {
               id: prize.id,
               place: prize.place,
@@ -135,11 +144,11 @@ Deno.serve(async (req: Request) => {
               winner_institution: winner
                 ? {
                     key: String(winner.institution_key ?? ''),
-                    label: String(winner.institution_label ?? winner.institution_key ?? ''),
+                    label: String(winner.institution_key ?? ''),
                     total_points: Number(winner.total_points ?? 0),
-                    rank_sum: Number(winner.rank_sum ?? 0),
-                    best_individual_rank: Number(winner.best_individual_rank ?? 0),
-                    players: Array.isArray(winner.players_json) ? winner.players_json : [],
+                    rank_sum: rankSum,
+                    best_individual_rank: bestRank,
+                    players: snapshot.map((p) => ({ player_id: p.player_id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
                   }
                 : null,
             };
@@ -153,7 +162,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ groups: responseGroups, players_loaded: 0, max_rank: 0, hasTeamPrizes: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Fallback to live compute for old tournaments without snapshots
+    // Fallback to live compute when no persisted snapshot exists for the pinned version
     const { data: players } = await supabase
       .from('players')
       .select('id, name, rank, gender, club, team, points')
