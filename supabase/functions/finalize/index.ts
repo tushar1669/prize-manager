@@ -213,8 +213,9 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to compute team allocations: ${teamError.message}`);
       }
 
-      const teamGroups = (teamData as { groups?: Array<{ group_id: string; prizes: Array<{ place: number; winner_institution: { key: string; label: string; total_points: number; rank_sum: number; best_individual_rank: number; players: unknown[] } | null }> }> })?.groups ?? [];
+      const teamGroups = (teamData as { groups?: Array<{ group_id: string; prizes: Array<{ id: string; place: number; winner_institution: { key: string; total_points: number; players: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }> } | null }> }> })?.groups ?? [];
 
+      // Build player_ids from the player list and store full players array as player_snapshot
       const rows = teamGroups.flatMap((group) =>
         group.prizes
           .filter((prize) => prize.winner_institution)
@@ -222,13 +223,12 @@ Deno.serve(async (req) => {
             tournament_id: tournamentId,
             version: nextVersion,
             group_id: group.group_id,
+            prize_id: prize.id,
             place: prize.place,
             institution_key: prize.winner_institution!.key,
-            institution_label: prize.winner_institution!.label,
             total_points: prize.winner_institution!.total_points,
-            rank_sum: prize.winner_institution!.rank_sum,
-            best_individual_rank: prize.winner_institution!.best_individual_rank,
-            players_json: prize.winner_institution!.players,
+            player_ids: prize.winner_institution!.players.map((p) => p.player_id),
+            player_snapshot: prize.winner_institution!.players,
           }))
       );
 
@@ -250,6 +250,21 @@ Deno.serve(async (req) => {
         if (insertTeamError) {
           throw new Error(`Failed to persist team allocations: ${insertTeamError.message}`);
         }
+      }
+
+      // Verify team allocations were persisted
+      const { count: teamAllocCount, error: teamAllocCountError } = await supabaseClient
+        .from('team_allocations')
+        .select('id', { count: 'exact', head: true })
+        .eq('tournament_id', tournamentId)
+        .eq('version', nextVersion);
+
+      if (teamAllocCountError) {
+        throw new Error(`Failed to verify team allocations: ${teamAllocCountError.message}`);
+      }
+
+      if (rows.length > 0 && (teamAllocCount ?? 0) === 0) {
+        throw new Error('Team allocation persistence failed — finalize aborted');
       }
     }
 
