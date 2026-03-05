@@ -585,12 +585,14 @@ export type Database = {
           group_label: string | null
           id: string
           name: string
+          points: number | null
           rank: number
           rating: number | null
           sno: string | null
           special_notes: string | null
           state: string | null
           tags_json: Json | null
+          team: string | null
           tournament_id: string
           type_label: string | null
           unrated: boolean
@@ -611,12 +613,14 @@ export type Database = {
           group_label?: string | null
           id?: string
           name: string
+          points?: number | null
           rank: number
           rating?: number | null
           sno?: string | null
           special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
+          team?: string | null
           tournament_id: string
           type_label?: string | null
           unrated?: boolean
@@ -637,12 +641,14 @@ export type Database = {
           group_label?: string | null
           id?: string
           name?: string
+          points?: number | null
           rank?: number
           rating?: number | null
           sno?: string | null
           special_notes?: string | null
           state?: string | null
           tags_json?: Json | null
+          team?: string | null
           tournament_id?: string
           type_label?: string | null
           unrated?: boolean
@@ -967,6 +973,129 @@ export type Database = {
             foreignKeyName: "rule_config_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: true
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_allocation_notes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          note: string
+          tournament_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          note: string
+          tournament_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          note?: string
+          tournament_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_allocation_notes_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "institution_prize_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocation_notes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocation_notes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_allocations: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          institution_key: string
+          place: number
+          player_ids: string[]
+          player_snapshot: Json
+          prize_id: string
+          total_points: number
+          tournament_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          institution_key: string
+          place: number
+          player_ids?: string[]
+          player_snapshot?: Json
+          prize_id: string
+          total_points?: number
+          tournament_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          institution_key?: string
+          place?: number
+          player_ids?: string[]
+          player_snapshot?: Json
+          prize_id?: string
+          total_points?: number
+          tournament_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_allocations_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "institution_prize_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocations_prize_id_fkey"
+            columns: ["prize_id"]
+            isOneToOne: false
+            referencedRelation: "institution_prizes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
