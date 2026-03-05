@@ -6,6 +6,9 @@ verify_jwt = true
 [functions.allocateInstitutionPrizes]
 verify_jwt = true
 
+[functions.backfillTeamAllocations]
+verify_jwt = true
+
 [functions.finalize]
 verify_jwt = true
 
