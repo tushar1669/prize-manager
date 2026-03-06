@@ -47,6 +47,7 @@ export interface GroupResponse {
   eligible_institutions: number;
   ineligible_institutions: number;
   ineligible_reasons: string[];
+  scored_institutions?: WinnerInstitution[];
 }
 
 export interface TeamPrizeResultsResponse {
