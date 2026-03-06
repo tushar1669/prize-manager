@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, ArrowRight, Download, Printer, Info } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
@@ -124,7 +125,7 @@ export default function Finalize() {
   const { role } = useUserRole();
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
   const [activeView, setActiveView] = useState<FinalViewTab>('v1');
-
+  const [hasPendingTeamTies, setHasPendingTeamTies] = useState(false);
   // Debug log: which source was used (once per mount)
   useEffect(() => {
     console.log('[finalize] Page loaded', {
@@ -613,12 +614,20 @@ export default function Finalize() {
                 By publishing, you create an immutable version (v{publishVersion}) of these allocations.
                 The tournament will be available at a public URL that can be shared with participants.
               </p>
+              {hasPendingTeamTies && (
+                <Alert className="mb-4 border-destructive/30 bg-destructive/5">
+                  <AlertDescription className="text-destructive text-sm">
+                    ⚠ Unresolved team prize ties must be resolved before publishing. Switch to the "Team Prizes" tab.
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="space-y-3">
                 <Button 
                   onClick={() => publishMutation.mutate()}
-                  disabled={publishMutation.isPending}
+                  disabled={publishMutation.isPending || hasPendingTeamTies}
                   variant="outline"
                   className="w-full"
+                  title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
                 >
                   {publishMutation.isPending ? 'Publishing...' : 'Make Public'}
                 </Button>
@@ -720,7 +729,11 @@ export default function Finalize() {
                       <ArbiterSheetView winners={finalPrizeData?.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
                     </TabsContent>
                     <TabsContent value="v5" className="m-0">
-                      <TeamPrizesTabView tournamentId={id as string} />
+                      <TeamPrizesTabView
+                        tournamentId={id as string}
+                        allocationVersion={publishVersion}
+                        onPendingTiesChange={setHasPendingTeamTies}
+                      />
                     </TabsContent>
                   </div>
                 </Tabs>
@@ -743,7 +756,8 @@ export default function Finalize() {
             <Button 
               onClick={handlePublish} 
               className="gap-2"
-              disabled={finalizeMutation.isPending || winners.length === 0}
+              disabled={finalizeMutation.isPending || winners.length === 0 || hasPendingTeamTies}
+              title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
             >
               {finalizeMutation.isPending ? "Publishing..." : "Publish Tournament"}
               <ArrowRight className="h-4 w-4" />

@@ -114,6 +114,7 @@ interface GroupResponse {
   eligible_institutions: number;
   ineligible_institutions: number;
   ineligible_reasons: string[];
+  scored_institutions?: WinnerInstitution[];
 }
 
 interface AllocateInstitutionPrizesResponse {
@@ -359,6 +360,19 @@ Deno.serve(async (req: Request) => {
         };
       });
 
+      // Build scored_institutions for client-side tie detection
+      // Include enough to cover all prizes + runner-up for boundary detection
+      const maxPrizePlace = groupPrizes.reduce((max, p) => Math.max(max, p.place), 0);
+      const scoredLimit = Math.max(maxPrizePlace + 25, scoredInstitutions.length);
+      const scoredForResponse: WinnerInstitution[] = scoredInstitutions.slice(0, scoredLimit).map((inst) => ({
+        key: inst.key,
+        label: inst.key,
+        total_points: inst.total_points,
+        rank_sum: inst.rank_sum,
+        best_individual_rank: inst.best_individual_rank,
+        players: inst.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+      }));
+
       groupResponses.push({
         group_id: group.id,
         name: group.name,
@@ -372,7 +386,8 @@ Deno.serve(async (req: Request) => {
         prizes: prizesWithWinners,
         eligible_institutions: scoredInstitutions.length,
         ineligible_institutions: ineligibleCount,
-        ineligible_reasons: ineligibleReasons.slice(0, 10), // Limit to first 10 reasons
+        ineligible_reasons: ineligibleReasons.slice(0, 10),
+        scored_institutions: scoredForResponse,
       });
     }
 

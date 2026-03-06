@@ -1,21 +1,54 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { TeamPrizeResultsPanel } from '@/components/allocation/TeamPrizeResultsPanel';
+import { TeamTieBreakDialog } from '@/components/allocation/TeamTieBreakDialog';
 import { useTeamPrizeResults } from '@/components/team-prizes/useTeamPrizeResults';
+import type { GroupResponse } from '@/components/team-prizes/useTeamPrizeResults';
+import type { TieInfo } from '@/utils/teamTieDetection';
+import { hasUnresolvedTeamTies } from '@/utils/teamTieDetection';
 import { Loader2, Users } from 'lucide-react';
 
 interface TeamPrizesTabViewProps {
   tournamentId: string;
+  allocationVersion?: number;
+  /** Called whenever the pending-tie state changes */
+  onPendingTiesChange?: (hasPending: boolean) => void;
 }
 
-export function TeamPrizesTabView({ tournamentId }: TeamPrizesTabViewProps) {
+export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange }: TeamPrizesTabViewProps) {
   const {
     hasTeamPrizes,
     checkingTeamPrizes,
     data,
     isLoading,
     error,
-  } = useTeamPrizeResults(tournamentId, { enabled: true });
+  } = useTeamPrizeResults(tournamentId, { enabled: true, allocationVersion });
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<GroupResponse | null>(null);
+  const [selectedTieInfo, setSelectedTieInfo] = useState<TieInfo | null>(null);
+
+  const hasPending = useMemo(
+    () => data ? hasUnresolvedTeamTies(data.groups) : false,
+    [data]
+  );
+
+  useEffect(() => {
+    onPendingTiesChange?.(hasPending);
+  }, [hasPending, onPendingTiesChange]);
+
+  const handleTieResolutionRequest = (group: GroupResponse, tieInfo: TieInfo) => {
+    setSelectedGroup(group);
+    setSelectedTieInfo(tieInfo);
+    setDialogOpen(true);
+  };
+
+  const handleResolved = () => {
+    setDialogOpen(false);
+    setSelectedGroup(null);
+    setSelectedTieInfo(null);
+  };
 
   // Loading state while checking if team prizes exist
   if (checkingTeamPrizes) {
@@ -68,7 +101,22 @@ export function TeamPrizesTabView({ tournamentId }: TeamPrizesTabViewProps) {
         data={data}
         isLoading={false}
         error={null}
+        tournamentId={tournamentId}
+        allocationVersion={allocationVersion}
+        onTieResolutionRequest={handleTieResolutionRequest}
       />
+
+      {selectedGroup && selectedTieInfo && (
+        <TeamTieBreakDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          tournamentId={tournamentId}
+          version={allocationVersion ?? 1}
+          group={selectedGroup}
+          tieInfo={selectedTieInfo}
+          onResolved={handleResolved}
+        />
+      )}
     </div>
   );
 }

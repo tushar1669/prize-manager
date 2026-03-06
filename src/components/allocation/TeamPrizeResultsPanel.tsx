@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Trophy, Medal, Award, AlertCircle, Info } from 'lucide-react';
+import { Users, Trophy, Medal, Award, AlertCircle, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 
 // Re-export types from shared hook for convenience
 export type {
@@ -38,6 +39,10 @@ interface TeamPrizeResultsPanelProps {
   data: TeamPrizeResultsResponse | null;
   isLoading?: boolean;
   error?: string | null;
+  /** When set, enables tie resolution controls */
+  allocationVersion?: number;
+  tournamentId?: string;
+  onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
 }
 
 const GROUP_BY_LABELS: Record<string, string> = {
@@ -59,13 +64,14 @@ function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
-function GroupCard({ group }: { group: GroupResponse }) {
+function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void }) {
   const [expanded, setExpanded] = React.useState(true);
   const [showIneligible, setShowIneligible] = React.useState(false);
 
   const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
+  const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
 
   return (
     <Card>
@@ -208,6 +214,46 @@ function GroupCard({ group }: { group: GroupResponse }) {
               </Alert>
             )}
 
+            {/* Tie detection warnings */}
+            {tieInfo && !tieInfo.hasNote && onTieResolutionRequest && (
+              <Alert className="border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertTitle className="text-destructive">Tie detected at place {tieInfo.affectedPlaces[tieInfo.affectedPlaces.length - 1]}</AlertTitle>
+                <AlertDescription className="text-destructive/80">
+                  {tieInfo.tiedInstitutions.length} institutions have identical scores ({tieInfo.tiedInstitutions[0]?.total_points} pts, rank sum {tieInfo.tiedInstitutions[0]?.rank_sum}).
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onTieResolutionRequest(group, tieInfo)}
+                    >
+                      Resolve Tie
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {tieInfo && tieInfo.hasNote && (
+              <Alert className="border-primary/20 bg-primary/5">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <AlertTitle className="text-primary">Tie resolved</AlertTitle>
+                <AlertDescription className="text-muted-foreground">
+                  Arbiter note: "{group.note}"
+                  {onTieResolutionRequest && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="ml-2"
+                      onClick={() => onTieResolutionRequest(group, tieInfo)}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Ineligible institutions */}
             {group.ineligible_institutions > 0 && group.ineligible_reasons.length > 0 && (
               <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>
@@ -236,7 +282,7 @@ function GroupCard({ group }: { group: GroupResponse }) {
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -297,7 +343,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error }: TeamPrizeResul
 
       <div className="space-y-4">
         {data.groups.map((group) => (
-          <GroupCard key={group.group_id} group={group} />
+          <GroupCard key={group.group_id} group={group} onTieResolutionRequest={onTieResolutionRequest} />
         ))}
       </div>
     </div>
