@@ -27,6 +27,7 @@ import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_s
 import {
   computeTeamScores,
   type TeamPrizePlayer,
+  type TeamGroupByKey,
 } from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2026-03-05T15:30:00Z";
@@ -197,25 +198,21 @@ Deno.serve(async (req: Request) => {
       } satisfies BackfillResponse);
     }
 
-    // --- Load players ---
+    // --- Load players (all groupable columns) ---
     const { data: players, error: plErr } = await supabase
       .from("players")
-      .select("id, name, rank, gender, club, team, points, tournament_id")
+      .select("id, name, rank, gender, club, team, city, state, group_label, type_label, points, tournament_id")
       .eq("tournament_id", tournament_id)
       .order("rank");
 
     if (plErr) throw new Error(`Players load failed: ${plErr.message}`);
 
-    const typedPlayers = (players || []) as Array<{
-      id: string; name: string; rank: number; gender: string | null;
-      club: string | null; team: string | null; points: number | null;
-    }>;
+    const typedPlayers = (players || []) as Array<Record<string, unknown>>;
 
-    // --- Column mapping (same as allocateInstitutionPrizes) ---
-    const GROUP_BY_COLUMN_MAP: Record<string, "team" | "club"> = {
-      team: "team",
-      club: "club",
-    };
+    // --- All supported group_by keys ---
+    const VALID_GROUP_BY_KEYS: Set<TeamGroupByKey> = new Set([
+      'team', 'club', 'city', 'state', 'group_label', 'type_label',
+    ]);
 
     // --- Compute and collect insert rows ---
     const insertRows: Array<{
@@ -231,8 +228,8 @@ Deno.serve(async (req: Request) => {
     }> = [];
 
     for (const group of groups) {
-      const columnName = GROUP_BY_COLUMN_MAP[group.group_by];
-      if (!columnName) {
+      const columnName = group.group_by as TeamGroupByKey;
+      if (!VALID_GROUP_BY_KEYS.has(columnName)) {
         console.warn(`[${FUNCTION_NAME}] Unknown group_by: ${group.group_by}, skipping`);
         continue;
       }
@@ -243,13 +240,17 @@ Deno.serve(async (req: Request) => {
       if (groupPrizes.length === 0) continue;
 
       const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        rank: p.rank,
+        id: String(p.id),
+        name: String(p.name ?? ''),
+        rank: Number(p.rank ?? 0),
         points: Number(p.points ?? 0),
-        gender: p.gender,
-        team: p.team,
-        club: p.club,
+        gender: (p.gender as string | null) ?? null,
+        team: (p.team as string | null) ?? null,
+        club: (p.club as string | null) ?? null,
+        city: (p.city as string | null) ?? null,
+        state: (p.state as string | null) ?? null,
+        group_label: (p.group_label as string | null) ?? null,
+        type_label: (p.type_label as string | null) ?? null,
       }));
 
       const scored = computeTeamScores(teamPlayers, group.team_size, columnName);

@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
-import { computeTeamScores, type TeamPrizePlayer } from "../_shared/teamPrizes.ts";
+import { computeTeamScores, type TeamPrizePlayer, type TeamGroupByKey } from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "publicTeamPrizes";
@@ -163,9 +163,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Fallback to live compute when no persisted snapshot exists for the pinned version
+    const VALID_GROUP_BY_KEYS: Set<TeamGroupByKey> = new Set([
+      'team', 'club', 'city', 'state', 'group_label', 'type_label',
+    ]);
+
     const { data: players } = await supabase
       .from('players')
-      .select('id, name, rank, gender, club, team, points')
+      .select('id, name, rank, gender, club, team, city, state, group_label, type_label, points')
       .eq('tournament_id', tournamentId)
       .order('rank');
 
@@ -177,10 +181,15 @@ Deno.serve(async (req: Request) => {
       gender: (p.gender as string | null) ?? null,
       club: (p.club as string | null) ?? null,
       team: (p.team as string | null) ?? null,
+      city: (p.city as string | null) ?? null,
+      state: (p.state as string | null) ?? null,
+      group_label: (p.group_label as string | null) ?? null,
+      type_label: (p.type_label as string | null) ?? null,
     }));
 
     const responseGroups = typedGroups.map((group) => {
-      const scored = computeTeamScores(teamPlayers, group.team_size, group.group_by === 'team' ? 'team' : 'club');
+      const groupByKey = VALID_GROUP_BY_KEYS.has(group.group_by as TeamGroupByKey) ? (group.group_by as TeamGroupByKey) : 'club';
+      const scored = computeTeamScores(teamPlayers, group.team_size, groupByKey);
       const groupPrizes = allPrizes.filter((p) => p.group_id === group.id);
 
       return {

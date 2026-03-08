@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -124,6 +124,7 @@ export default function Finalize() {
   const { user } = useAuth();
   const { role } = useUserRole();
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
+  const hasAutoFinalizedRef = useRef(false);
   const [activeView, setActiveView] = useState<FinalViewTab>('v1');
   const [hasPendingTeamTies, setHasPendingTeamTies] = useState(false);
   // Debug log: which source was used (once per mount)
@@ -347,9 +348,11 @@ export default function Finalize() {
   });
 
   useEffect(() => {
-    if (!id || winners.length === 0 || finalizeResult || finalizeMutation.isPending) return;
+    if (!id || winners.length === 0 || finalizeResult || hasAutoFinalizedRef.current) return;
+    hasAutoFinalizedRef.current = true;
     finalizeMutation.mutate(winners);
-  }, [finalizeMutation, finalizeMutation.isPending, finalizeResult, id, winners]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, winners, finalizeResult]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -443,7 +446,7 @@ export default function Finalize() {
     }
   });
 
-  const handlePublish = () => {
+  const handlePublish = useCallback(() => {
     if (winners.length === 0) {
       toast.error("No allocations to finalize");
       return;
@@ -457,16 +460,19 @@ export default function Finalize() {
       }
 
       try {
+        // Step 1: finalize if not already done
         const result = finalizeResult ?? await finalizeMutation.mutateAsync(winners);
         setFinalizeResult(result);
-        navigate(`/t/${id}/publish`, { state: { version: result.version } });
+
+        // Step 2: publish via canonical RPC
+        await publishMutation.mutateAsync();
       } catch (error) {
         console.error('[finalize] publish flow error', error);
       }
     };
 
     void proceed();
-  };
+  }, [winners, id, finalizeResult, finalizeMutation, publishMutation, navigate]);
 
   // Show loading state when fetching from DB
   if (dataLoading) {
@@ -623,13 +629,13 @@ export default function Finalize() {
               )}
               <div className="space-y-3">
                 <Button 
-                  onClick={() => publishMutation.mutate()}
-                  disabled={publishMutation.isPending || hasPendingTeamTies}
+                  onClick={handlePublish}
+                  disabled={publishMutation.isPending || finalizeMutation.isPending || hasPendingTeamTies}
                   variant="outline"
                   className="w-full"
                   title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
                 >
-                  {publishMutation.isPending ? 'Publishing...' : 'Make Public'}
+                  {publishMutation.isPending || finalizeMutation.isPending ? 'Publishing...' : 'Make Public'}
                 </Button>
                 <Button
                   onClick={() => navigate(`/t/${id}/public`)}
@@ -756,10 +762,10 @@ export default function Finalize() {
             <Button 
               onClick={handlePublish} 
               className="gap-2"
-              disabled={finalizeMutation.isPending || winners.length === 0 || hasPendingTeamTies}
+              disabled={finalizeMutation.isPending || publishMutation.isPending || winners.length === 0 || hasPendingTeamTies}
               title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
             >
-              {finalizeMutation.isPending ? "Publishing..." : "Publish Tournament"}
+              {finalizeMutation.isPending || publishMutation.isPending ? "Publishing..." : "Publish Tournament"}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>

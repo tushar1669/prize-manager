@@ -4,6 +4,7 @@ import {
   computeTeamScores,
   detectTieAtPrizeBoundary,
   type TeamPrizePlayer,
+  type TeamGroupByKey,
 } from "../_shared/teamPrizes.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
@@ -127,11 +128,10 @@ interface AllocateInstitutionPrizesRequest {
   tournament_id: string;
 }
 
-// Map group_by codes to player columns
-const GROUP_BY_COLUMN_MAP: Record<string, 'team' | 'club'> = {
-  team: 'team',
-  club: 'club',
-};
+// All supported group_by keys (must match _shared/teamPrizes.ts TeamGroupByKey)
+const VALID_GROUP_BY_KEYS: Set<TeamGroupByKey> = new Set([
+  'team', 'club', 'city', 'state', 'group_label', 'type_label',
+]);
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
@@ -263,10 +263,10 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[allocateInstitutionPrizes] Loaded ${allPrizes.length} active prizes`);
 
-    // Load players for this tournament (including group_label and type_label for grouping)
+    // Load players for this tournament (all groupable columns)
     const { data: players, error: playersError } = await supabase
       .from('players')
-      .select('id, name, rank, gender, club, team, points, tournament_id')
+      .select('id, name, rank, gender, club, team, city, state, group_label, type_label, points, tournament_id')
       .eq('tournament_id', tournament_id)
       .order('rank');
 
@@ -289,8 +289,8 @@ Deno.serve(async (req: Request) => {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
       
       // Determine which column to group by
-      const columnName = GROUP_BY_COLUMN_MAP[group.group_by];
-      if (!columnName) {
+      const columnName = group.group_by as TeamGroupByKey;
+      if (!VALID_GROUP_BY_KEYS.has(columnName)) {
         console.warn(`[allocateInstitutionPrizes] Unknown group_by: ${group.group_by}, skipping group ${group.name}`);
         groupResponses.push({
           group_id: group.id,
@@ -318,14 +318,18 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-            const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((player) => ({
-        id: player.id,
-        name: player.name,
-        rank: player.rank,
+      const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((player: Record<string, unknown>) => ({
+        id: String(player.id),
+        name: String(player.name ?? ''),
+        rank: Number(player.rank ?? 0),
         points: Number(player.points ?? 0),
-        gender: player.gender,
-        team: player.team,
-        club: player.club,
+        gender: (player.gender as string | null) ?? null,
+        team: (player.team as string | null) ?? null,
+        club: (player.club as string | null) ?? null,
+        city: (player.city as string | null) ?? null,
+        state: (player.state as string | null) ?? null,
+        group_label: (player.group_label as string | null) ?? null,
+        type_label: (player.type_label as string | null) ?? null,
       }));
 
       const scoredInstitutions = computeTeamScores(teamPlayers, group.team_size, columnName);
