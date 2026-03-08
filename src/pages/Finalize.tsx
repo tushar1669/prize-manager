@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
@@ -124,6 +124,7 @@ export default function Finalize() {
   const { user } = useAuth();
   const { role } = useUserRole();
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
+  const hasAutoFinalizedRef = useRef(false);
   const [activeView, setActiveView] = useState<FinalViewTab>('v1');
   const [hasPendingTeamTies, setHasPendingTeamTies] = useState(false);
   // Debug log: which source was used (once per mount)
@@ -347,9 +348,11 @@ export default function Finalize() {
   });
 
   useEffect(() => {
-    if (!id || winners.length === 0 || finalizeResult || finalizeMutation.isPending) return;
+    if (!id || winners.length === 0 || finalizeResult || hasAutoFinalizedRef.current) return;
+    hasAutoFinalizedRef.current = true;
     finalizeMutation.mutate(winners);
-  }, [finalizeMutation, finalizeMutation.isPending, finalizeResult, id, winners]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, winners, finalizeResult]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
