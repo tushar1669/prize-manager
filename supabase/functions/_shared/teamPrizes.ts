@@ -1,3 +1,5 @@
+export type TeamGroupByKey = 'team' | 'club' | 'city' | 'state' | 'group_label' | 'type_label';
+
 export type TeamPrizePlayer = {
   id: string;
   name: string;
@@ -6,6 +8,10 @@ export type TeamPrizePlayer = {
   gender: string | null;
   club?: string | null;
   team?: string | null;
+  city?: string | null;
+  state?: string | null;
+  group_label?: string | null;
+  type_label?: string | null;
 };
 
 export type TeamPrizeInstitutionScore = {
@@ -26,12 +32,12 @@ export function compareInstitutions(a: TeamPrizeInstitutionScore, b: TeamPrizeIn
 export function computeTeamScores(
   players: TeamPrizePlayer[],
   teamSize: number,
-  groupBy: 'team' | 'club'
+  groupBy: TeamGroupByKey
 ): TeamPrizeInstitutionScore[] {
   const grouped = new Map<string, TeamPrizePlayer[]>();
 
   for (const player of players) {
-    const rawKey = (groupBy === 'team' ? player.team : player.club) ?? null;
+    const rawKey = (player[groupBy] as string | null | undefined) ?? null;
     const key = rawKey?.trim();
     if (!key) continue;
 

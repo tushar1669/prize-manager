@@ -42,6 +42,7 @@ export const GROUP_BY_OPTIONS: Array<{
   column: string;
   description: string;
 }> = [
+  { value: 'team', label: 'Team', column: 'team', description: 'Uses the team field from player data' },
   { value: 'club', label: 'School / Academy / Club', column: 'club', description: 'Uses the club field from player data' },
   { value: 'city', label: 'City', column: 'city', description: 'Groups players by their city' },
   { value: 'state', label: 'State', column: 'state', description: 'Groups players by their state' },
