@@ -1613,6 +1613,17 @@ export type Database = {
           reason: string
         }[]
       }
+      resolve_team_tie: {
+        Args: {
+          p_affected_places: number[]
+          p_group_id: string
+          p_note: string
+          p_rows: Json
+          p_tournament_id: string
+          p_version: number
+        }
+        Returns: Json
+      }
       review_tournament_payment: {
         Args: { p_decision: string; p_note?: string; p_payment_id: string }
         Returns: Json
