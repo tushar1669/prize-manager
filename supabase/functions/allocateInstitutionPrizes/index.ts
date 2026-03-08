@@ -363,7 +363,7 @@ Deno.serve(async (req: Request) => {
       // Build scored_institutions for client-side tie detection
       // Include enough to cover all prizes + runner-up for boundary detection
       const maxPrizePlace = groupPrizes.reduce((max, p) => Math.max(max, p.place), 0);
-      const scoredLimit = Math.max(maxPrizePlace + 25, scoredInstitutions.length);
+      const scoredLimit = Math.min(maxPrizePlace + 2, scoredInstitutions.length);
       const scoredForResponse: WinnerInstitution[] = scoredInstitutions.slice(0, scoredLimit).map((inst) => ({
         key: inst.key,
         label: inst.key,

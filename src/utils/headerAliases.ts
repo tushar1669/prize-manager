@@ -7,7 +7,7 @@ export const ALIASES: Record<string, string[]> = {
   sno: ['sno', 's_no', 'sno.', 'start_no', 'startno', 'seed', 'seeding', 'sr_no', 'srno'], // Start Number (distinct from rank)
 
   // Rating with priority (Rtg preferred over IRtg for Swiss-Manager)
-  rating: ['rtg', 'irtg', 'nrtg', 'rating', 'elo', 'fide_rating', 'std', 'standard'],
+  rating: ['rtg', 'irtg', 'nrtg', 'rtgi', 'rating', 'elo', 'fide_rating', 'std', 'standard'],
 
   name: ['name', 'player_name', 'player', 'playername', 'participant'],
   full_name: ['full_name', 'full name', 'fullname', 'name.1', 'name_1', 'name1', 'name (full)'],
@@ -21,7 +21,7 @@ export const ALIASES: Record<string, string[]> = {
   state: ['state', 'province', 'region', 'st', 'association'],
   city: ['city', 'town', 'location', 'place'],
   club: ['club', 'chess_club', 'organization', 'academy'],
-  team: ['team', 'institution', 'school_team'],
+  team: ['team', 'institution', 'school_team', 'school'],
   points: ['pts', 'points', 'score', 'total_points'],
 
   // Swiss-Manager uses "Fide-No." (with period and hyphen)

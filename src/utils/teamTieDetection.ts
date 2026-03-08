@@ -56,9 +56,11 @@ export function detectTeamTiesAtBoundary(group: GroupResponse): TieInfo | null {
   const scoredList = (group as GroupResponse & { scored_institutions?: WinnerInstitution[] }).scored_institutions;
   let hasRunnerUpTie = false;
 
-  if (scoredList && scoredList.length > filledPrizes.length) {
-    // The runner-up is the institution right after the last prize
-    const runnerUp = scoredList[filledPrizes.length];
+  // Use max awarded prize place (gap-safe: handles non-contiguous places like 1, 3)
+  const maxPrizePlace = sorted[sorted.length - 1].place;
+  if (scoredList && scoredList.length > maxPrizePlace) {
+    // scored_institutions is 0-indexed by rank position; first non-winner is at index maxPrizePlace
+    const runnerUp = scoredList[maxPrizePlace];
     if (runnerUp && scoresEqual(runnerUp, lastWinner)) {
       hasRunnerUpTie = true;
       // Add runner-up to cluster (it doesn't have a prize place)
