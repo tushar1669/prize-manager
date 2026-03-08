@@ -20,7 +20,7 @@ export const ALIASES: Record<string, string[]> = {
 
   state: ['state', 'province', 'region', 'st', 'association'],
   city: ['city', 'town', 'location', 'place'],
-  club: ['club', 'chess_club', 'organization', 'academy'],
+  club: ['club', 'chess_club', 'organization', 'academy', 'clubcity', 'club_city'],
   team: ['team', 'institution', 'school_team', 'school'],
   points: ['pts', 'points', 'score', 'total_points'],
 

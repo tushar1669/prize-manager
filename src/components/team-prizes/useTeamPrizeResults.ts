@@ -92,12 +92,25 @@ export async function fetchTeamPrizeResults(
 
   if (allocationVersion !== undefined && allocationVersion !== null) {
     const version = Number(allocationVersion);
-    const [{ data: groups }, { data: prizes }, { data: allocations }, { data: notes }] = await Promise.all([
+    // Step 1: fetch groups first so we can scope prizes to this tournament's groups
+    const [{ data: groups }, { data: allocations }, { data: notes }] = await Promise.all([
       supabase.from('institution_prize_groups').select('*').eq('tournament_id', tournamentId).eq('is_active', true).order('name'),
-      supabase.from('institution_prizes').select('*').eq('is_active', true),
       supabase.from('team_allocations').select('*').eq('tournament_id', tournamentId).eq('version', version),
       supabase.from('team_allocation_notes').select('group_id, note').eq('tournament_id', tournamentId).eq('version', version),
     ]);
+
+    // Step 2: scope institution_prizes to only groups belonging to this tournament
+    const groupIds = (groups ?? []).map((g: Record<string, unknown>) => String(g.id));
+    let prizes: Record<string, unknown>[] | null = null;
+    if (groupIds.length > 0) {
+      const { data } = await supabase
+        .from('institution_prizes')
+        .select('*')
+        .in('group_id', groupIds)
+        .eq('is_active', true)
+        .order('place');
+      prizes = data as Record<string, unknown>[] | null;
+    }
 
     if ((groups ?? []).length > 0 && (allocations ?? []).length > 0) {
       const noteByGroup = new Map((notes ?? []).map((n: { group_id: string; note: string }) => [n.group_id, n.note]));
