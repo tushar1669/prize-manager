@@ -87,11 +87,9 @@ export function TeamTieBreakDialog({
     const finalReason = reason.trim() || 'Confirmed default ordering';
 
     try {
-      // Only update team_allocations for institutions that have prize places
       const affectedPlaces = tieInfo.affectedPlaces;
 
       if (affectedPlaces.length > 0) {
-        // Get prize IDs for the affected places
         const prizeByPlace = new Map<number, PrizeWithWinner>();
         for (const p of group.prizes) {
           if (affectedPlaces.includes(p.place)) {
@@ -99,30 +97,13 @@ export function TeamTieBreakDialog({
           }
         }
 
-        // The reordered institutions that get prizes (first N from order where N = affectedPlaces count)
         const winnersFromOrder = order.slice(0, affectedPlaces.length);
 
-        // Step 1: Delete existing rows for affected places
-        const { error: deleteError } = await supabase
-          .from('team_allocations')
-          .delete()
-          .eq('tournament_id', tournamentId)
-          .eq('version', version)
-          .eq('group_id', tieInfo.groupId)
-          .in('place', affectedPlaces);
-
-        if (deleteError) throw new Error(`Delete failed: ${deleteError.message}`);
-
-        // Step 2: Re-insert with new order
-        const insertRows = winnersFromOrder.map((inst, idx) => {
+        const rowsPayload = winnersFromOrder.map((inst, idx) => {
           const place = affectedPlaces[idx];
           const prize = prizeByPlace.get(place);
           if (!prize) throw new Error(`No prize found for place ${place}`);
-
           return {
-            tournament_id: tournamentId,
-            version,
-            group_id: tieInfo.groupId,
             prize_id: prize.id,
             place,
             institution_key: inst.key,
@@ -132,28 +113,33 @@ export function TeamTieBreakDialog({
           };
         });
 
-        const { error: insertError } = await supabase
-          .from('team_allocations')
-          .insert(insertRows);
+        const { error: rpcError } = await supabase.rpc('resolve_team_tie', {
+          p_tournament_id: tournamentId,
+          p_version: version,
+          p_group_id: tieInfo.groupId,
+          p_affected_places: affectedPlaces,
+          p_rows: rowsPayload as unknown as Json,
+          p_note: finalReason,
+        });
 
-        if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
+        if (rpcError) throw new Error(rpcError.message);
+      } else {
+        // No affected places — just save the note directly
+        const { error: noteError } = await supabase
+          .from('team_allocation_notes')
+          .upsert(
+            {
+              tournament_id: tournamentId,
+              version,
+              group_id: tieInfo.groupId,
+              note: finalReason,
+              created_by: user?.id ?? null,
+            },
+            { onConflict: 'tournament_id,version,group_id' }
+          );
+
+        if (noteError) throw new Error(`Note save failed: ${noteError.message}`);
       }
-
-      // Step 3: Upsert note
-      const { error: noteError } = await supabase
-        .from('team_allocation_notes')
-        .upsert(
-          {
-            tournament_id: tournamentId,
-            version,
-            group_id: tieInfo.groupId,
-            note: finalReason,
-            created_by: user?.id ?? null,
-          },
-          { onConflict: 'tournament_id,version,group_id' }
-        );
-
-      if (noteError) throw new Error(`Note save failed: ${noteError.message}`);
 
       // Invalidate cache and refetch
       await queryClient.invalidateQueries({ queryKey: ['team-prize-results', tournamentId] });
