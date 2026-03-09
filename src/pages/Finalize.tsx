@@ -13,8 +13,6 @@ import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { slugifyWithSuffix } from "@/lib/slug";
-import { PUBLISH_V2_ENABLED } from "@/utils/featureFlags";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
 import { useAuth } from "@/hooks/useAuth";
@@ -361,77 +359,25 @@ export default function Finalize() {
       const requestId = crypto.randomUUID();
       console.log(`[publish] request id=${requestId} tournament=${id}`);
 
-      if (PUBLISH_V2_ENABLED) {
-        const { data, error } = await supabase.rpc('publish_tournament', {
-          tournament_id: id,
-          requested_slug: null
-        });
+      const { data, error } = await supabase.rpc('publish_tournament', {
+        tournament_id: id,
+        requested_slug: null
+      });
 
-        if (error) {
-          console.error(`[publish] error id=${requestId} message=${error.message}`);
-          throw error;
-        }
-
-        const payload = Array.isArray(data) ? data?.[0] : data;
-
-        if (!payload?.slug) {
-          console.error(`[publish] error id=${requestId} message=missing slug from RPC`);
-          throw new Error('Publish RPC did not return a slug');
-        }
-
-        console.log(`[publish] ok id=${requestId} slug=${payload.slug}`);
-        return { slug: payload.slug };
+      if (error) {
+        console.error(`[publish] error id=${requestId} message=${error.message}`);
+        throw error;
       }
 
-      const { data: tournament, error: tournamentError } = await supabase
-        .from('tournaments')
-        .select('title, public_slug, id')
-        .eq('id', id)
-        .maybeSingle();
+      const payload = Array.isArray(data) ? data?.[0] : data;
 
-      if (tournamentError) {
-        console.error(`[publish] error id=${requestId} message=${tournamentError.message}`);
-        throw tournamentError;
-      }
-      if (!tournament) {
-        console.error(`[publish] error id=${requestId} message=tournament not found`);
-        throw new Error('Tournament not found');
+      if (!payload?.slug) {
+        console.error(`[publish] error id=${requestId} message=missing slug from RPC`);
+        throw new Error('Publish RPC did not return a slug');
       }
 
-      const slug = tournament.public_slug || slugifyWithSuffix(tournament.title || 'tournament');
-
-      const { error: updateError } = await supabase
-        .from('tournaments')
-        .update({
-          is_published: true,
-          public_slug: slug,
-          status: 'published'
-        })
-        .eq('id', id);
-
-      if (updateError) {
-        console.error(`[publish] error id=${requestId} message=${updateError.message}`);
-        throw updateError;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-          const { error: pubError } = await supabase
-            .from('publications')
-            .upsert({
-              tournament_id: id,
-              slug,
-              version: publishVersion,
-              published_by: user?.id,
-              is_active: true
-            }, { onConflict: 'tournament_id,version' });
-
-      if (pubError) {
-        console.error(`[publish] error id=${requestId} message=${pubError.message}`);
-        throw pubError;
-      }
-
-      console.log(`[publish] ok id=${requestId} slug=${slug}`);
-      return { slug };
+      console.log(`[publish] ok id=${requestId} slug=${payload.slug}`);
+      return { slug: payload.slug };
     },
     onSuccess: ({ slug }) => {
       toast.success(`Published — /p/${slug}`);
