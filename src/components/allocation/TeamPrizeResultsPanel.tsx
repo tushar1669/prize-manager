@@ -20,16 +20,6 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 
-// Re-export types from shared hook for convenience
-export type {
-  TeamPlayerInfo,
-  WinnerInstitution,
-  GroupConfig,
-  PrizeWithWinner,
-  GroupResponse,
-  TeamPrizeResultsResponse,
-} from '@/components/team-prizes/useTeamPrizeResults';
-
 import type {
   TeamPrizeResultsResponse,
   GroupResponse,
