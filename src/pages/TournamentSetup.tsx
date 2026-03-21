@@ -1886,6 +1886,21 @@ export default function TournamentSetup() {
                                 </Form>
                               </DialogContent>
                             </Dialog>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => setCopyFromTournamentOpen(true)}
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy from Tournament
+                            </Button>
+                            <CopyFromTournamentDialog
+                              tournamentId={id!}
+                              open={copyFromTournamentOpen}
+                              onOpenChange={setCopyFromTournamentOpen}
+                              onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                            />
                           </>
                         )}
                       </div>
