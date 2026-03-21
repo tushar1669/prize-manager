@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
