@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -41,6 +41,7 @@ import { deepEqualNormalized, normalizeCriteria } from '@/utils/deepNormalize';
 import { TeamPrizesEditor } from '@/components/team-prizes';
 import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
 import { Switch } from "@/components/ui/switch";
+import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -117,6 +118,7 @@ export default function TournamentSetup() {
   
   // Category delete dialog state
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
+  const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
@@ -1884,6 +1886,21 @@ export default function TournamentSetup() {
                                 </Form>
                               </DialogContent>
                             </Dialog>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => setCopyFromTournamentOpen(true)}
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy from Tournament
+                            </Button>
+                            <CopyFromTournamentDialog
+                              tournamentId={id!}
+                              open={copyFromTournamentOpen}
+                              onOpenChange={setCopyFromTournamentOpen}
+                              onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                            />
                           </>
                         )}
                       </div>
