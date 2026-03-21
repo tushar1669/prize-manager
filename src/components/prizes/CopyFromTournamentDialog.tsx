@@ -172,7 +172,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
             tournament_id: tournamentId,
             name: importName,
             is_main: importIsMain,
-            criteria_json: criteria as Record<string, unknown>,
+            criteria_json: JSON.parse(JSON.stringify(criteria)),
             order_idx: maxOrderIdx + 1 + i,
             is_active: true,
           }])
