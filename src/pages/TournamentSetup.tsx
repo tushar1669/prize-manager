@@ -118,6 +118,7 @@ export default function TournamentSetup() {
   
   // Category delete dialog state
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
+  const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
