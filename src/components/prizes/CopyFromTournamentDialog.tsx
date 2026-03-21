@@ -168,14 +168,14 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
 
         const { data: newCat, error: catErr } = await supabase
           .from("categories")
-          .insert({
+          .insert([{
             tournament_id: tournamentId,
             name: importName,
             is_main: importIsMain,
-            criteria_json: criteria,
+            criteria_json: criteria as Record<string, unknown>,
             order_idx: maxOrderIdx + 1 + i,
             is_active: true,
-          })
+          }])
           .select("id")
           .single();
 
