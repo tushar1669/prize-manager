@@ -42,6 +42,23 @@ export function normalizeRating(raw: unknown, stripCommas: boolean = true): numb
 }
 
 /**
+ * Normalize points values (e.g. "5", "4.5", "5½")
+ * Returns null for invalid/empty values
+ */
+export function normalizePoints(raw: unknown): number | null {
+  if (raw == null) return null;
+  let str = String(raw).trim();
+  if (str === '') return null;
+  // Handle Swiss-Manager ½ fractions: "5½" → "5.5", "½" → "0.5"
+  str = str.replace('½', '.5');
+  // Strip commas/spaces
+  str = str.replace(/[,\s]/g, '');
+  const num = parseFloat(str);
+  if (isNaN(num)) return null;
+  return num;
+}
+
+/**
  * Configuration for unrated inference logic
  */
 export interface UnratedInferenceConfig {

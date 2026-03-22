@@ -66,6 +66,7 @@ import {
 } from '@/utils/importSchema';
 import {
   normalizeRating,
+  normalizePoints,
   inferUnrated,
   fillSingleGapRanksInPlace,
   imputeContinuousRanksFromTies,
@@ -2079,6 +2080,8 @@ export default function PlayerImport() {
           return; // Skip setting value below since we handled it
         } else if (fieldKey === 'fide_id' && value != null) {
           value = toNumericFideOrNull(value);
+        } else if (fieldKey === 'points') {
+          value = normalizePoints(value);
         } else if (fieldKey === 'unrated') {
           // Store raw unrated value for inference
           player._rawUnrated = value;
