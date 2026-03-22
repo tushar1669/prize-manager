@@ -1,68 +1,53 @@
 
 
-# Fix: Import Fails — "points: Expected number, received string" (all 746 rows rejected)
+# Fix: Data Coverage Bar Shows Ballooned Percentages (9987%, 1005%, etc.)
 
-## Root Cause Analysis
+## Issue
+All Data Coverage chips display values ~100× too large (e.g., DOB shows **9987%** instead of **99%**). Color coding is also broken — everything shows green because the thresholds compare against 0.8/0.5 but receive values in the thousands.
 
-**Bug location:** `src/pages/PlayerImport.tsx`, lines 2047-2091 (the mapping loop in `handleMappingConfirm`)
+## Root Cause
+**Double multiplication by 100** in `src/components/import/DataCoverageBar.tsx`:
 
-**What happens:**
-1. Swiss-Manager file has a `Pts` column (mapped to `points` via `ALIASES.points = ['pts', 'points', 'score', 'total_points']`)
-2. The mapping loop iterates each field. For `rank`, `sno`, `rating`, `dob`, `fide_id` — there are explicit conversion branches that coerce to the correct type
-3. For `points` — **there is no conversion branch**. It falls through to line 2086: `else if (typeof value === 'string') { value = value.trim() || null; }` — leaving it as a trimmed string (e.g. `"5"`, `"4.5"`, or `"5½"`)
-4. Zod schema (`playerImportSchema`) defines `points: z.number().nullable().optional()` — rejects strings
-5. **All 746 rows fail validation** with `points: Expected number, received string`
+```text
+coverage.dob = 0.9987  (ratio, correct)
 
-**Why it wasn't caught before:** Previous test files either lacked a `Pts` column or had numeric-typed cells (XLSX stores numbers natively). This file's `Pts` column contains text-formatted values.
-
-## Fix (2 changes, 2 files)
-
-### Change 1: Add `normalizePoints` to `src/utils/valueNormalizers.ts`
-
-Add a new function after `normalizeRating`:
-
-```typescript
-export function normalizePoints(raw: unknown): number | null {
-  if (raw == null) return null;
-  let str = String(raw).trim();
-  if (str === '') return null;
-  // Handle Swiss-Manager ½ fractions: "5½" → "5.5", "½" → "0.5"
-  str = str.replace('½', '.5');
-  // Strip commas/spaces
-  str = str.replace(/[,\s]/g, '');
-  const num = parseFloat(str);
-  if (isNaN(num)) return null;
-  return num;
-}
+Line 68:  percent = coverage.dob * 100   →  99.87   (first ×100)
+Line 27:  display = percent * 100        →  9987    (second ×100)
+Line 20:  color   = 9987 >= 0.8 ? green  →  always green (broken)
 ```
 
-Handles: plain numbers (`"5"`), decimals (`"4.5"`), fraction notation (`"5½"`), commas (`"1,000"`), and nulls.
+The `CoverageChip` component already multiplies by 100 for display (line 27) AND expects a 0–1 ratio for color thresholds (lines 20–22). But lines 68–73 pre-multiply by 100 before passing.
 
-### Change 2: Add `points` branch in `src/pages/PlayerImport.tsx` mapping loop
+## Fix — 1 file, 3 line changes
 
-In the mapping loop (~line 2080, after the `fide_id` branch), add:
+**File:** `src/components/import/DataCoverageBar.tsx`
 
-```typescript
-} else if (fieldKey === 'points') {
-  value = normalizePoints(value);
+Remove the `* 100` from lines 68, 69, 70, and 73 — pass the raw ratio (0–1) directly:
+
+```tsx
+// Lines 68-70: change from coverage.X * 100 to coverage.X
+<CoverageChip label="DOB" percent={coverage.dob} />
+<CoverageChip label="Gender" percent={coverage.gender} />
+<CoverageChip label="Rated" percent={coverage.rating} />
+
+// Line 73: change from coverage[c.field] * 100 to coverage[c.field]
+<CoverageChip key={c.field} label={c.label} percent={coverage[c.field]} starred />
 ```
 
-This matches the exact pattern used for `rating` → `normalizeRating`, `rank` → `normalizeRankValue`, etc.
+This means `CoverageChip` receives the raw 0–1 ratio, its color thresholds (0.8, 0.5) work correctly, and `Math.round(percent * 100)` produces the correct display value (e.g., 99%).
 
-### Files touched
-1. `src/utils/valueNormalizers.ts` — add `normalizePoints` function (~8 lines)
-2. `src/pages/PlayerImport.tsx` — add 2-line branch in mapping loop + import
+## What is NOT changed
+- No schema, migration, RPC, or allocation logic changes
+- The `CoverageChip` component internals stay the same
+- The coverage computation in `PlayerImport.tsx` is correct (already produces 0–1 ratios)
 
-### What is NOT changed
-- No schema changes (Zod schema already accepts `number | null`)
-- No migration, no RLS, no edge functions
-- No allocation/finalize/publish logic
+## Expected result after fix
 
-## QA Checklist
-
-1. Re-upload the same Maharathi XLS file — expect 746 valid rows (was 0)
-2. Verify `points` column shows correct numeric values in preview table
-3. Verify fractional points (`5½`) parse to `5.5`
-4. Verify files without a `Pts` column still import correctly (points = null)
-5. Run existing tests: `vitest run tests/utils/valueNormalizers.spec.ts`
+| Field | Before | After |
+|-------|--------|-------|
+| DOB | 9987% (green) | 99% (green) |
+| Gender | 1005% (green) | 10% (red) |
+| Rated | 6354% (green) | 64% (amber) |
+| Club ★ | 9866% (green) | 99% (green) |
+| Type ★ | 6716% (green) | 67% (amber) |
 
