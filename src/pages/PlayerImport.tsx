@@ -66,6 +66,7 @@ import {
 } from '@/utils/importSchema';
 import {
   normalizeRating,
+  normalizePoints,
   inferUnrated,
   fillSingleGapRanksInPlace,
   imputeContinuousRanksFromTies,
