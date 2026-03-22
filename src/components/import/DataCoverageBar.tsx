@@ -65,12 +65,12 @@ export function DataCoverageBar({ coverage, ruleUsedFields, teamGroupByFields }:
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* Always-show chips */}
-          <CoverageChip label="DOB" percent={coverage.dob * 100} />
-          <CoverageChip label="Gender" percent={coverage.gender * 100} />
-          <CoverageChip label="Rated" percent={coverage.rating * 100} />
+          <CoverageChip label="DOB" percent={coverage.dob} />
+          <CoverageChip label="Gender" percent={coverage.gender} />
+          <CoverageChip label="Rated" percent={coverage.rating} />
           {/* Conditional chips */}
           {conditionalChips.map(c => (
-            <CoverageChip key={c.field} label={c.label} percent={coverage[c.field] * 100} starred />
+            <CoverageChip key={c.field} label={c.label} percent={coverage[c.field]} starred />
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-3 text-center">
