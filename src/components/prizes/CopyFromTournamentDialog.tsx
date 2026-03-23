@@ -172,7 +172,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
         if (sourceTournament) {
           const updatePayload: Record<string, unknown> = {};
           for (const field of DETAIL_FIELDS) {
-            const val = (sourceTournament as Record<string, unknown>)[field];
+            const val = (sourceTournament as unknown as Record<string, unknown>)[field];
             if (val !== null && val !== undefined && val !== '') {
               updatePayload[field] = val;
             }
