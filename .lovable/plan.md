@@ -1,53 +1,82 @@
 
 
-# Fix: Data Coverage Bar Shows Ballooned Percentages (9987%, 1005%, etc.)
+# Fix: Copy from Tournament — Main Prize Handling + Details Tab Copy
 
-## Issue
-All Data Coverage chips display values ~100× too large (e.g., DOB shows **9987%** instead of **99%**). Color coding is also broken — everything shows green because the thresholds compare against 0.8/0.5 but receive values in the thousands.
+## Problem 1: Main Prize becomes empty "Main Prize (imported)"
 
-## Root Cause
-**Double multiplication by 100** in `src/components/import/DataCoverageBar.tsx`:
+When copying prize structure, if the target tournament already has a Main category (auto-created with 0 prizes), the source's Main category is renamed to "Main Prize (imported)" with `is_main: false`. The target's original Main remains empty. The user ends up with an empty Main + a non-main duplicate.
 
-```text
-coverage.dob = 0.9987  (ratio, correct)
+**Root cause:** Lines 156-162 of `CopyFromTournamentDialog.tsx` — when `targetHasMain` is true, the code creates a new side category instead of merging prizes into the existing empty Main.
 
-Line 68:  percent = coverage.dob * 100   →  99.87   (first ×100)
-Line 27:  display = percent * 100        →  9987    (second ×100)
-Line 20:  color   = 9987 >= 0.8 ? green  →  always green (broken)
+**Fix:** When the source has a Main category AND the target already has a Main category, instead of creating a new "(imported)" category:
+1. Find the target's existing Main category ID
+2. Delete any existing prizes on it (it's typically empty)
+3. Insert the source Main's prizes directly into the target Main's category ID
+4. Skip creating a new category row entirely
+
+## Problem 2: "Copy from Tournament" button missing from Details tab
+
+The button only exists on the Prizes tab. The user wants it on the Details tab too, with the ability to copy tournament details (venue, city, time control, chief arbiter, etc.) and/or prize structure.
+
+**Approach:** Create a new `CopyFromTournamentFullDialog` component that:
+- Shows the same tournament selector
+- Offers two checkboxes: "Details" and "Prize Structure"
+- "Details" copies: venue, city, event_code, notes, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total, chessresults_url, public_results_url (NOT title, dates, slug, owner)
+- "Prize Structure" uses the same category+prize copy logic (with the fixed Main merge)
+- Place button on the Details tab card header
+
+**Simpler alternative (recommended):** Extend the existing `CopyFromTournamentDialog` with a `mode` prop:
+- `mode="prizes"` — current behavior (Prizes tab)
+- `mode="full"` — shows Details + Prize Structure checkboxes (Details tab)
+
+This avoids duplicating the tournament selector and category list UI.
+
+## Implementation Plan
+
+### Phase 1: Fix Main Prize merge logic (1 file)
+
+**File:** `src/components/prizes/CopyFromTournamentDialog.tsx`
+
+In `handleConfirm`, replace lines 149-210 (the main category handling block):
+
+```
+When source category is_main AND target already has a Main category:
+  1. Get targetMainId from targetCategories
+  2. Delete existing prizes: DELETE FROM prizes WHERE category_id = targetMainId
+  3. Insert source prizes with category_id = targetMainId
+  4. Skip category insert, increment categoriesCopied
+  
+When source category is_main AND target has NO Main:
+  Keep existing behavior (insert new category with is_main: true)
+
+Non-main categories:
+  Keep existing behavior (insert new category)
 ```
 
-The `CoverageChip` component already multiplies by 100 for display (line 27) AND expects a 0–1 ratio for color thresholds (lines 20–22). But lines 68–73 pre-multiply by 100 before passing.
+### Phase 2: Add "Copy from Tournament" to Details tab (2 files)
 
-## Fix — 1 file, 3 line changes
+**File:** `src/components/prizes/CopyFromTournamentDialog.tsx`
 
-**File:** `src/components/import/DataCoverageBar.tsx`
+- Add optional prop `copyMode?: 'prizes' | 'full'` (default: `'prizes'`)
+- When `copyMode='full'`, show two checkboxes before the category list: "Copy Details" and "Copy Prize Structure"
+- When "Copy Details" is checked, fetch source tournament's detail fields and apply them to the target tournament via `supabase.from('tournaments').update(...)` on confirm
+- When "Copy Prize Structure" is checked, show the existing category picker
+- At least one must be checked to enable the Confirm button
+- Detail fields to copy: `venue, city, event_code, notes, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total, chessresults_url, public_results_url`
 
-Remove the `* 100` from lines 68, 69, 70, and 73 — pass the raw ratio (0–1) directly:
+**File:** `src/pages/TournamentSetup.tsx`
 
-```tsx
-// Lines 68-70: change from coverage.X * 100 to coverage.X
-<CoverageChip label="DOB" percent={coverage.dob} />
-<CoverageChip label="Gender" percent={coverage.gender} />
-<CoverageChip label="Rated" percent={coverage.rating} />
+- Add a second `CopyFromTournamentDialog` instance on the Details tab card header with `copyMode="full"`
+- Add state: `copyFromTournamentDetailsOpen`
+- On complete, invalidate both `['categories', id]` and `['tournament', id]` queries and reset the details form
 
-// Line 73: change from coverage[c.field] * 100 to coverage[c.field]
-<CoverageChip key={c.field} label={c.label} percent={coverage[c.field]} starred />
-```
+### Files Changed
+1. `src/components/prizes/CopyFromTournamentDialog.tsx` — fix Main merge + add `copyMode` prop
+2. `src/pages/TournamentSetup.tsx` — add Copy button to Details tab
 
-This means `CoverageChip` receives the raw 0–1 ratio, its color thresholds (0.8, 0.5) work correctly, and `Math.round(percent * 100)` produces the correct display value (e.g., 99%).
-
-## What is NOT changed
-- No schema, migration, RPC, or allocation logic changes
-- The `CoverageChip` component internals stay the same
-- The coverage computation in `PlayerImport.tsx` is correct (already produces 0–1 ratios)
-
-## Expected result after fix
-
-| Field | Before | After |
-|-------|--------|-------|
-| DOB | 9987% (green) | 99% (green) |
-| Gender | 1005% (green) | 10% (red) |
-| Rated | 6354% (green) | 64% (amber) |
-| Club ★ | 9866% (green) | 99% (green) |
-| Type ★ | 6716% (green) | 67% (amber) |
+### What is NOT changed
+- No schema/migration changes
+- No RLS changes
+- No allocation/finalize logic
+- Existing Prizes tab "Copy from Tournament" button behavior preserved (minus the Main Prize bug)
 
