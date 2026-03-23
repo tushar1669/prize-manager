@@ -17,6 +17,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onComplete?: () => void;
+  /** 'prizes' = only prize structure (default). 'full' = details + prize structure checkboxes */
+  copyMode?: 'prizes' | 'full';
 }
 
 type SourceCategory = {
@@ -34,11 +36,23 @@ type SourceCategory = {
   }>;
 };
 
-export default function CopyFromTournamentDialog({ tournamentId, open, onOpenChange, onComplete }: Props) {
+const DETAIL_FIELDS = [
+  'venue', 'city', 'event_code', 'notes',
+  'time_control_base_minutes', 'time_control_increment_seconds',
+  'chief_arbiter', 'tournament_director',
+  'entry_fee_amount', 'cash_prize_total',
+  'chessresults_url', 'public_results_url',
+] as const;
+
+export default function CopyFromTournamentDialog({ tournamentId, open, onOpenChange, onComplete, copyMode = 'prizes' }: Props) {
   const { user } = useAuth();
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
+  const [copyDetails, setCopyDetails] = useState(true);
+  const [copyPrizeStructure, setCopyPrizeStructure] = useState(true);
+
+  const isFullMode = copyMode === 'full';
 
   // 1) Load other tournaments owned by this user
   const { data: otherTournaments } = useQuery({
@@ -59,9 +73,11 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
   });
 
   // 2) Load categories + prizes for selected source tournament
+  const showCategoryPicker = isFullMode ? copyPrizeStructure : true;
+
   const { data: sourceCategories, isLoading: loadingCategories } = useQuery({
     queryKey: ["copy-source-categories", selectedTournamentId],
-    enabled: !!selectedTournamentId,
+    enabled: !!selectedTournamentId && showCategoryPicker,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -105,6 +121,8 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
     if (!v) {
       setSelectedTournamentId("");
       setSelectedCategoryIds(new Set());
+      setCopyDetails(true);
+      setCopyPrizeStructure(true);
     }
     onOpenChange(v);
   };
@@ -117,100 +135,201 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
       .reduce((sum, c) => sum + (c.prizes?.length ?? 0), 0);
   }, [sourceCategories, selectedCategoryIds]);
 
+  // Determine if confirm button should be enabled
+  const canConfirm = useMemo(() => {
+    if (!selectedTournamentId) return false;
+    if (isFullMode) {
+      // At least one section must be checked
+      if (!copyDetails && !copyPrizeStructure) return false;
+      // If prize structure checked, need selected categories
+      if (copyPrizeStructure && selectedCount === 0) return false;
+      // If only details checked, that's fine
+      return true;
+    }
+    return selectedCount > 0;
+  }, [selectedTournamentId, isFullMode, copyDetails, copyPrizeStructure, selectedCount]);
+
   // Confirm handler
   const handleConfirm = async () => {
-    if (!sourceCategories || selectedCount === 0) return;
+    if (!selectedTournamentId) return;
     setCopying(true);
 
     try {
-      // Fetch existing target categories to check for main + get max order_idx
-      const { data: targetCategories, error: targetErr } = await supabase
-        .from("categories")
-        .select("id, is_main, order_idx")
-        .eq("tournament_id", tournamentId)
-        .eq("is_active", true);
-
-      if (targetErr) throw targetErr;
-
-      const targetHasMain = (targetCategories ?? []).some((c) => c.is_main);
-      const maxOrderIdx = (targetCategories ?? []).reduce(
-        (max, c) => Math.max(max, c.order_idx ?? 0),
-        -1
-      );
-
-      const selectedCats = sourceCategories.filter((c) => selectedCategoryIds.has(c.id));
-      // Sort by order_idx to preserve relative order
-      selectedCats.sort((a, b) => (a.order_idx ?? 0) - (b.order_idx ?? 0));
-
+      let detailsCopied = false;
       let categoriesCopied = 0;
       let prizesCopied = 0;
-      let mainHandled = false; // track if we've already allowed one main through
 
-      for (let i = 0; i < selectedCats.length; i++) {
-        const src = selectedCats[i];
-
-        // Determine is_main for imported category
-        let importIsMain = !!src.is_main;
-        let importName = src.name;
-
-        if (importIsMain) {
-          if (targetHasMain || mainHandled) {
-            importIsMain = false;
-            importName = `${src.name} (imported)`;
-          } else {
-            mainHandled = true;
-          }
-        }
-
-        // Strip legacy field from criteria
-        const criteria = { ...(src.criteria_json ?? {}) };
-        delete criteria.dob_on_or_after;
-
-        const { data: newCat, error: catErr } = await supabase
-          .from("categories")
-          .insert([{
-            tournament_id: tournamentId,
-            name: importName,
-            is_main: importIsMain,
-            criteria_json: JSON.parse(JSON.stringify(criteria)),
-            order_idx: maxOrderIdx + 1 + i,
-            is_active: true,
-          }])
-          .select("id")
+      // --- Copy Details ---
+      if (isFullMode && copyDetails) {
+        const { data: sourceTournament, error: srcErr } = await supabase
+          .from("tournaments")
+          .select(DETAIL_FIELDS.join(", "))
+          .eq("id", selectedTournamentId)
           .single();
 
-        if (catErr) {
-          console.error("[copy] category insert error", catErr.message);
-          toast.error(`Failed to copy category "${src.name}": ${catErr.message}`);
-          continue;
-        }
+        if (srcErr) throw srcErr;
 
-        categoriesCopied++;
+        if (sourceTournament) {
+          const updatePayload: Record<string, unknown> = {};
+          for (const field of DETAIL_FIELDS) {
+            const val = (sourceTournament as unknown as Record<string, unknown>)[field];
+            if (val !== null && val !== undefined && val !== '') {
+              updatePayload[field] = val;
+            }
+          }
 
-        // Copy prizes for this category
-        if (src.prizes && src.prizes.length > 0) {
-          const prizeRows = src.prizes.map((p) => ({
-            category_id: newCat.id,
-            place: p.place,
-            cash_amount: p.cash_amount ?? 0,
-            has_trophy: p.has_trophy ?? false,
-            has_medal: p.has_medal ?? false,
-            gift_items: coerceGiftItems(p.gift_items),
-            is_active: true,
-          }));
+          if (Object.keys(updatePayload).length > 0) {
+            const { error: updateErr } = await supabase
+              .from("tournaments")
+              .update(updatePayload)
+              .eq("id", tournamentId);
 
-          const { error: prizeErr } = await supabase.from("prizes").insert(prizeRows);
-          if (prizeErr) {
-            console.error("[copy] prizes insert error", prizeErr.message);
-            toast.error(`Prizes for "${src.name}" failed: ${prizeErr.message}`);
-          } else {
-            prizesCopied += prizeRows.length;
+            if (updateErr) throw updateErr;
+            detailsCopied = true;
           }
         }
       }
 
+      // --- Copy Prize Structure ---
+      const shouldCopyPrizes = isFullMode ? copyPrizeStructure : true;
+
+      if (shouldCopyPrizes && sourceCategories && selectedCount > 0) {
+        // Fetch existing target categories
+        const { data: targetCategories, error: targetErr } = await supabase
+          .from("categories")
+          .select("id, is_main, order_idx")
+          .eq("tournament_id", tournamentId)
+          .eq("is_active", true);
+
+        if (targetErr) throw targetErr;
+
+        const targetMainCat = (targetCategories ?? []).find((c) => c.is_main);
+        const maxOrderIdx = (targetCategories ?? []).reduce(
+          (max, c) => Math.max(max, c.order_idx ?? 0),
+          -1
+        );
+
+        const selectedCats = sourceCategories.filter((c) => selectedCategoryIds.has(c.id));
+        selectedCats.sort((a, b) => (a.order_idx ?? 0) - (b.order_idx ?? 0));
+
+        let mainHandled = false;
+
+        for (let i = 0; i < selectedCats.length; i++) {
+          const src = selectedCats[i];
+          const srcIsMain = !!src.is_main;
+
+          // --- MAIN CATEGORY MERGE LOGIC ---
+          if (srcIsMain && targetMainCat) {
+            // Merge into existing target Main: delete old prizes, insert source prizes
+            const targetMainId = targetMainCat.id;
+
+            // Delete existing prizes in target Main
+            await supabase.from("prizes").delete().eq("category_id", targetMainId);
+
+            // Update target Main category criteria from source
+            const criteria = { ...(src.criteria_json ?? {}) };
+            delete criteria.dob_on_or_after;
+
+            await supabase
+              .from("categories")
+              .update({ criteria_json: JSON.parse(JSON.stringify(criteria)) })
+              .eq("id", targetMainId);
+
+            // Insert source prizes into target Main
+            if (src.prizes && src.prizes.length > 0) {
+              const prizeRows = src.prizes.map((p) => ({
+                category_id: targetMainId,
+                place: p.place,
+                cash_amount: p.cash_amount ?? 0,
+                has_trophy: p.has_trophy ?? false,
+                has_medal: p.has_medal ?? false,
+                gift_items: coerceGiftItems(p.gift_items),
+                is_active: true,
+              }));
+
+              const { error: prizeErr } = await supabase.from("prizes").insert(prizeRows);
+              if (prizeErr) {
+                console.error("[copy] main prizes insert error", prizeErr.message);
+                toast.error(`Prizes for Main category failed: ${prizeErr.message}`);
+              } else {
+                prizesCopied += prizeRows.length;
+              }
+            }
+
+            categoriesCopied++;
+            mainHandled = true;
+            continue;
+          }
+
+          // --- NEW MAIN (no target main exists) ---
+          let importIsMain = srcIsMain;
+          let importName = src.name;
+
+          if (importIsMain) {
+            if (mainHandled) {
+              importIsMain = false;
+              importName = `${src.name} (imported)`;
+            } else {
+              mainHandled = true;
+            }
+          }
+
+          // Strip legacy field from criteria
+          const criteria = { ...(src.criteria_json ?? {}) };
+          delete criteria.dob_on_or_after;
+
+          const { data: newCat, error: catErr } = await supabase
+            .from("categories")
+            .insert([{
+              tournament_id: tournamentId,
+              name: importName,
+              is_main: importIsMain,
+              criteria_json: JSON.parse(JSON.stringify(criteria)),
+              order_idx: maxOrderIdx + 1 + i,
+              is_active: true,
+            }])
+            .select("id")
+            .single();
+
+          if (catErr) {
+            console.error("[copy] category insert error", catErr.message);
+            toast.error(`Failed to copy category "${src.name}": ${catErr.message}`);
+            continue;
+          }
+
+          categoriesCopied++;
+
+          // Copy prizes for this category
+          if (src.prizes && src.prizes.length > 0) {
+            const prizeRows = src.prizes.map((p) => ({
+              category_id: newCat.id,
+              place: p.place,
+              cash_amount: p.cash_amount ?? 0,
+              has_trophy: p.has_trophy ?? false,
+              has_medal: p.has_medal ?? false,
+              gift_items: coerceGiftItems(p.gift_items),
+              is_active: true,
+            }));
+
+            const { error: prizeErr } = await supabase.from("prizes").insert(prizeRows);
+            if (prizeErr) {
+              console.error("[copy] prizes insert error", prizeErr.message);
+              toast.error(`Prizes for "${src.name}" failed: ${prizeErr.message}`);
+            } else {
+              prizesCopied += prizeRows.length;
+            }
+          }
+        }
+      }
+
+      // Build success message
+      const parts: string[] = [];
+      if (detailsCopied) parts.push("details");
       if (categoriesCopied > 0) {
-        toast.success(`Copied ${categoriesCopied} categor${categoriesCopied === 1 ? "y" : "ies"} with ${prizesCopied} prize${prizesCopied === 1 ? "" : "s"}`);
+        parts.push(`${categoriesCopied} categor${categoriesCopied === 1 ? "y" : "ies"} with ${prizesCopied} prize${prizesCopied === 1 ? "" : "s"}`);
+      }
+      if (parts.length > 0) {
+        toast.success(`Copied ${parts.join(" and ")}`);
       }
 
       onComplete?.();
@@ -224,6 +343,18 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
     }
   };
 
+  // Build button label
+  const getButtonLabel = () => {
+    if (copying) return "Copying…";
+    if (isFullMode) {
+      const parts: string[] = [];
+      if (copyDetails) parts.push("Details");
+      if (copyPrizeStructure && selectedCount > 0) parts.push(`${selectedCount} Categor${selectedCount === 1 ? "y" : "ies"}`);
+      return parts.length > 0 ? `Copy ${parts.join(" + ")}` : "Copy";
+    }
+    return `Copy ${selectedCount > 0 ? selectedCount : ""} Categor${selectedCount === 1 ? "y" : "ies"}`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
@@ -233,7 +364,9 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
             Copy from Another Tournament
           </DialogTitle>
           <DialogDescription>
-            Import prize categories and prizes from one of your other tournaments.
+            {isFullMode
+              ? "Import tournament details and/or prize structure from one of your other tournaments."
+              : "Import prize categories and prizes from one of your other tournaments."}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,16 +392,43 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
             )}
           </div>
 
+          {/* Full mode: section checkboxes */}
+          {isFullMode && selectedTournamentId && (
+            <div className="space-y-3 rounded-md border p-3">
+              <Label className="text-sm font-medium">What to copy</Label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={copyDetails}
+                  onCheckedChange={(v) => setCopyDetails(!!v)}
+                />
+                <div>
+                  <span className="text-sm font-medium">Details</span>
+                  <p className="text-xs text-muted-foreground">Venue, city, time control, arbiter, fees, etc.</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={copyPrizeStructure}
+                  onCheckedChange={(v) => setCopyPrizeStructure(!!v)}
+                />
+                <div>
+                  <span className="text-sm font-medium">Prize Structure</span>
+                  <p className="text-xs text-muted-foreground">Categories and prizes (select below)</p>
+                </div>
+              </label>
+            </div>
+          )}
+
           {/* Category preview */}
-          {selectedTournamentId && loadingCategories && (
+          {selectedTournamentId && showCategoryPicker && loadingCategories && (
             <p className="text-sm text-muted-foreground">Loading categories…</p>
           )}
 
-          {selectedTournamentId && !loadingCategories && !hasCategories && (
+          {selectedTournamentId && showCategoryPicker && !loadingCategories && !hasCategories && (
             <p className="text-sm text-muted-foreground">No active categories found in this tournament.</p>
           )}
 
-          {selectedTournamentId && hasCategories && (
+          {selectedTournamentId && showCategoryPicker && hasCategories && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Categories to copy</Label>
@@ -316,8 +476,8 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={copying}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={copying || selectedCount === 0}>
-            {copying ? "Copying…" : `Copy ${selectedCount > 0 ? selectedCount : ""} Categor${selectedCount === 1 ? "y" : "ies"}`}
+          <Button onClick={handleConfirm} disabled={copying || !canConfirm}>
+            {getButtonLabel()}
           </Button>
         </DialogFooter>
       </DialogContent>

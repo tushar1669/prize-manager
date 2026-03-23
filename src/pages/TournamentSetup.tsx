@@ -119,6 +119,7 @@ export default function TournamentSetup() {
   // Category delete dialog state
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
+  const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
@@ -1354,8 +1355,34 @@ export default function TournamentSetup() {
               <form onSubmit={detailsForm.handleSubmit(onDetailsSubmit)} className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Tournament Information</CardTitle>
-                    <CardDescription>Basic details about your tournament</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Tournament Information</CardTitle>
+                        <CardDescription>Basic details about your tournament</CardDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setCopyFromTournamentDetailsOpen(true)}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy from Tournament
+                      </Button>
+                    </div>
+                    <CopyFromTournamentDialog
+                      tournamentId={id!}
+                      open={copyFromTournamentDetailsOpen}
+                      onOpenChange={setCopyFromTournamentDetailsOpen}
+                      copyMode="full"
+                      onComplete={() => {
+                        queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+                        queryClient.invalidateQueries({ queryKey: ['categories', id] });
+                        // Reset form so it picks up new values
+                        lastHandledTournamentIdRef.current = null;
+                      }}
+                    />
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <FormField
