@@ -135,7 +135,7 @@ export default function TournamentSetup() {
   
   const ensuringMainCategory = useRef(false);
 
-  // Delete category mutation (non-main only). FK CASCADE deletes prizes automatically.
+  // Delete category mutation (non-main only). FK CASCADE on prizes.category_id handles prize cleanup.
   const deleteCategoryMutation = useMutation({
     mutationFn: async (categoryId: string) => {
       const { error } = await supabase.from('categories').delete().eq('id', categoryId);
@@ -934,31 +934,25 @@ export default function TournamentSetup() {
       }
       if (dup.size) throw new Error('Each place must be unique within the category.');
 
-      // Order: deletes first to free up place constraints
-      const ops = [];
+      // Step 1: Delete first to free unique constraints (must complete before upsert)
       if (delta.deletes.length) {
-        ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
+        const delResult = await supabase.from('prizes').delete().in('id', delta.deletes);
+        if (delResult.error) throw new Error(delResult.error.message);
       }
 
+      // Step 2: Upsert after deletes complete
       if (upsertRows.length > 0) {
-        ops.push(
-          supabase
-            .from('prizes')
-            .upsert(upsertRows, { onConflict: 'category_id,place' })
-            .select('id')
-            .then(r => r)
-        );
-      }
-
-      const results = await Promise.all(ops);
-      for (const r of results) {
-        if (r?.error) {
-          const msg = r.error.message || 'Unknown error';
-          if (String(msg).includes('prizes_category_id_place_key') || r.error.code === '23505') {
+        const upsertResult = await supabase
+          .from('prizes')
+          .upsert(upsertRows, { onConflict: 'category_id,place' })
+          .select('id');
+        if (upsertResult.error) {
+          const msg = upsertResult.error.message || 'Unknown error';
+          if (String(msg).includes('prizes_category_id_place_key') || upsertResult.error.code === '23505') {
             throw new Error('Each place must be unique within the category.');
           }
-          if (r.error.code === '23502' && msg.toLowerCase().includes('column "id"')) {
-            throw new Error('Internal error: prize row saved without an ID (violates NOT NULL). Please contact support.');
+          if (upsertResult.error.code === '23502' && msg.toLowerCase().includes('column "id"')) {
+            throw new Error('Internal error: prize row saved without an ID. Please contact support.');
           }
           throw new Error(msg);
         }
