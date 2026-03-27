@@ -1,82 +1,98 @@
 
 
-# Fix: Copy from Tournament — Main Prize Handling + Details Tab Copy
+# Fix: Prize Save Race Condition + Missing FK CASCADE
 
-## Problem 1: Main Prize becomes empty "Main Prize (imported)"
+## Issues Found
 
-When copying prize structure, if the target tournament already has a Main category (auto-created with 0 prizes), the source's Main category is renamed to "Main Prize (imported)" with `is_main: false`. The target's original Main remains empty. The user ends up with an empty Main + a non-main duplicate.
+### Issue 1: Promise.all Race Condition (PRIMARY CAUSE of errors)
+**RCA:** `src/pages/TournamentSetup.tsx` lines 938-953 — delete and upsert operations fire in parallel via `Promise.all` with `.then(r => r)`. When both target the same `(category_id, place)`, the upsert can hit the unique constraint before the delete completes, causing `23505` (duplicate place) or `23502` (NOT NULL id) errors. This is why categories appear uneditable/unsaveable.
 
-**Root cause:** Lines 156-162 of `CopyFromTournamentDialog.tsx` — when `targetHasMain` is true, the code creates a new side category instead of merging prizes into the existing empty Main.
+**Fix:** Replace `Promise.all` with sequential `await` — delete first, then upsert.
 
-**Fix:** When the source has a Main category AND the target already has a Main category, instead of creating a new "(imported)" category:
-1. Find the target's existing Main category ID
-2. Delete any existing prizes on it (it's typically empty)
-3. Insert the source Main's prizes directly into the target Main's category ID
-4. Skip creating a new category row entirely
+### Issue 2: Missing FK CASCADE on prizes → categories
+**RCA:** The code comment at line 138 says "FK CASCADE deletes prizes automatically" but **no foreign key exists** between `prizes.category_id` and `categories.id`. Currently no orphaned prizes exist, but this is a ticking time bomb — if a category delete ever succeeds while prizes exist, those prizes become orphans that block future operations.
 
-## Problem 2: "Copy from Tournament" button missing from Details tab
+**Fix:** Add a foreign key constraint with ON DELETE CASCADE via migration.
 
-The button only exists on the Prizes tab. The user wants it on the Details tab too, with the ability to copy tournament details (venue, city, time control, chief arbiter, etc.) and/or prize structure.
+### Issue 3: No regression from Copy from Tournament
+The copy dialog uses sequential operations (delete then insert) correctly. No regression found.
 
-**Approach:** Create a new `CopyFromTournamentFullDialog` component that:
-- Shows the same tournament selector
-- Offers two checkboxes: "Details" and "Prize Structure"
-- "Details" copies: venue, city, event_code, notes, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total, chessresults_url, public_results_url (NOT title, dates, slug, owner)
-- "Prize Structure" uses the same category+prize copy logic (with the fixed Main merge)
-- Place button on the Details tab card header
-
-**Simpler alternative (recommended):** Extend the existing `CopyFromTournamentDialog` with a `mode` prop:
-- `mode="prizes"` — current behavior (Prizes tab)
-- `mode="full"` — shows Details + Prize Structure checkboxes (Details tab)
-
-This avoids duplicating the tournament selector and category list UI.
+---
 
 ## Implementation Plan
 
-### Phase 1: Fix Main Prize merge logic (1 file)
+### Phase 1: Fix Promise.all → Sequential Await (1 file)
 
-**File:** `src/components/prizes/CopyFromTournamentDialog.tsx`
+**File:** `src/pages/TournamentSetup.tsx`, lines 937-953
 
-In `handleConfirm`, replace lines 149-210 (the main category handling block):
-
+Replace:
+```typescript
+const ops = [];
+if (delta.deletes.length) {
+  ops.push(supabase.from('prizes').delete().in('id', delta.deletes).then(r => r));
+}
+if (upsertRows.length > 0) {
+  ops.push(
+    supabase.from('prizes').upsert(upsertRows, { onConflict: 'category_id,place' })
+      .select('id').then(r => r)
+  );
+}
+const results = await Promise.all(ops);
+for (const r of results) { ... }
 ```
-When source category is_main AND target already has a Main category:
-  1. Get targetMainId from targetCategories
-  2. Delete existing prizes: DELETE FROM prizes WHERE category_id = targetMainId
-  3. Insert source prizes with category_id = targetMainId
-  4. Skip category insert, increment categoriesCopied
-  
-When source category is_main AND target has NO Main:
-  Keep existing behavior (insert new category with is_main: true)
 
-Non-main categories:
-  Keep existing behavior (insert new category)
+With sequential logic:
+```typescript
+// Step 1: Delete first to free unique constraints
+if (delta.deletes.length) {
+  const delResult = await supabase.from('prizes').delete().in('id', delta.deletes);
+  if (delResult.error) throw new Error(delResult.error.message);
+}
+
+// Step 2: Upsert after deletes complete
+if (upsertRows.length > 0) {
+  const upsertResult = await supabase
+    .from('prizes')
+    .upsert(upsertRows, { onConflict: 'category_id,place' })
+    .select('id');
+  if (upsertResult.error) {
+    const msg = upsertResult.error.message || 'Unknown error';
+    if (msg.includes('prizes_category_id_place_key') || upsertResult.error.code === '23505') {
+      throw new Error('Each place must be unique within the category.');
+    }
+    if (upsertResult.error.code === '23502' && msg.toLowerCase().includes('column "id"')) {
+      throw new Error('Internal error: prize row saved without an ID. Please contact support.');
+    }
+    throw new Error(msg);
+  }
+}
 ```
 
-### Phase 2: Add "Copy from Tournament" to Details tab (2 files)
+### Phase 2: Add FK CASCADE migration (1 migration)
 
-**File:** `src/components/prizes/CopyFromTournamentDialog.tsx`
+SQL migration to add the missing foreign key:
+```sql
+ALTER TABLE public.prizes
+  ADD CONSTRAINT prizes_category_id_fkey
+  FOREIGN KEY (category_id) REFERENCES public.categories(id)
+  ON DELETE CASCADE;
+```
 
-- Add optional prop `copyMode?: 'prizes' | 'full'` (default: `'prizes'`)
-- When `copyMode='full'`, show two checkboxes before the category list: "Copy Details" and "Copy Prize Structure"
-- When "Copy Details" is checked, fetch source tournament's detail fields and apply them to the target tournament via `supabase.from('tournaments').update(...)` on confirm
-- When "Copy Prize Structure" is checked, show the existing category picker
-- At least one must be checked to enable the Confirm button
-- Detail fields to copy: `venue, city, event_code, notes, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total, chessresults_url, public_results_url`
+This ensures deleting a category automatically removes its prizes, matching the code's existing assumption.
 
-**File:** `src/pages/TournamentSetup.tsx`
+### Phase 3: Fix delete comment accuracy (cosmetic, same file)
 
-- Add a second `CopyFromTournamentDialog` instance on the Details tab card header with `copyMode="full"`
-- Add state: `copyFromTournamentDetailsOpen`
-- On complete, invalidate both `['categories', id]` and `['tournament', id]` queries and reset the details form
+Update the comment at line 138 from "FK CASCADE deletes prizes automatically" to reflect the now-accurate state after migration.
 
-### Files Changed
-1. `src/components/prizes/CopyFromTournamentDialog.tsx` — fix Main merge + add `copyMode` prop
-2. `src/pages/TournamentSetup.tsx` — add Copy button to Details tab
+---
 
-### What is NOT changed
-- No schema/migration changes
+## Files Changed
+1. `src/pages/TournamentSetup.tsx` — sequential await replacing Promise.all
+2. New Supabase migration — FK CASCADE on prizes.category_id
+
+## What is NOT changed
+- No allocation/finalize/publish logic
 - No RLS changes
-- No allocation/finalize logic
-- Existing Prizes tab "Copy from Tournament" button behavior preserved (minus the Main Prize bug)
+- No CopyFromTournamentDialog changes (no regression found)
+- No schema changes beyond the FK addition
 
