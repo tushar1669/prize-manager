@@ -111,6 +111,8 @@ interface DraftResult {
   team_groups: DraftTeamGroup[];
 }
 
+type ParseMode = "extract" | "draft";
+
 // ── Draft heuristic functions ────────────────────────────────────────────
 
 const CURRENCY_RE = /(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/gi;
@@ -129,7 +131,7 @@ const TEAM_SIZE_MAP: Record<string, number> = {
 
 const TROPHY_RE = /\btrophy\b/i;
 const MEDAL_RE = /\bmedal\b/i;
-const GIFT_RE = /\b(?:chess\s*set|voucher|gift|book|certificate|shield|memento)\b/i;
+const GIFT_RE = /\b(?:chess\s*set|voucher|gift|book|certificate|shield|memento)\b/gi;
 
 function parseCurrencyAmount(text: string): number | null {
   const m = text.match(/(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/i);
@@ -164,11 +166,7 @@ function parsePlaceFromLine(line: string): { places: number[]; isRange: boolean 
 function detectAwards(line: string): { has_trophy: boolean; has_medal: boolean; gift_items: string[] } {
   const has_trophy = TROPHY_RE.test(line);
   const has_medal = MEDAL_RE.test(line);
-  const gift_items: string[] = [];
-  const giftMatch = line.match(GIFT_RE);
-  if (giftMatch) {
-    gift_items.push(giftMatch[0].trim());
-  }
+  const gift_items = [...new Set([...line.matchAll(GIFT_RE)].map((m) => m[0].trim().toLowerCase()))];
   return { has_trophy, has_medal, gift_items };
 }
 
@@ -426,7 +424,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const tournamentId = body.tournament_id;
     const selectedEvent: string | null = body.selected_event ?? null;
-    const mode: string = body.mode ?? "extract";
+    const mode: ParseMode = body.mode === "draft" ? "draft" : "extract";
 
     if (!tournamentId || typeof tournamentId !== "string") {
       return jsonResponse({ error: "missing_tournament_id" }, 400);
