@@ -11,7 +11,6 @@ interface BrochurePrizeDraftDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tournamentId: string;
-  hasBrochure: boolean;
 }
 
 type Status =
@@ -91,7 +90,6 @@ export default function BrochurePrizeDraftDialog({
   open,
   onOpenChange,
   tournamentId,
-  hasBrochure,
 }: BrochurePrizeDraftDialogProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [response, setResponse] = useState<ApiResponse | null>(null);
@@ -172,7 +170,11 @@ export default function BrochurePrizeDraftDialog({
   const toggleCategory = (idx: number) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
       return next;
     });
   };
@@ -248,11 +250,22 @@ export default function BrochurePrizeDraftDialog({
         )}
 
         {status === "invalid_selected_event" && (
-          <ErrorCard
-            icon={<AlertTriangle className="h-6 w-6" />}
-            title="Invalid event selection"
-            description={`The selected event was not found in the brochure. Available events: ${response?.events?.join(", ") ?? "unknown"}`}
-          />
+          <div className="space-y-4 py-4">
+            <ErrorCard
+              icon={<AlertTriangle className="h-6 w-6" />}
+              title="Invalid event selection"
+              description="The selected event was not found in this brochure. Please pick one of the detected events."
+            />
+            {response?.events && response.events.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {response.events.map((ev) => (
+                  <Button key={ev} variant="outline" onClick={() => callFunction(ev)}>
+                    {ev}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {status === "error" && (
