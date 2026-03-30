@@ -42,6 +42,7 @@ import { TeamPrizesEditor } from '@/components/team-prizes';
 import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
 import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
+import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -120,6 +121,7 @@ export default function TournamentSetup() {
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
+  const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
@@ -1921,6 +1923,23 @@ export default function TournamentSetup() {
                               open={copyFromTournamentOpen}
                               onOpenChange={setCopyFromTournamentOpen}
                               onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              disabled={!tournament?.brochure_url}
+                              title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
+                              onClick={() => setBrochureDraftOpen(true)}
+                            >
+                              <Upload className="h-4 w-4" />
+                              Generate from Brochure
+                            </Button>
+                            <BrochurePrizeDraftDialog
+                              open={brochureDraftOpen}
+                              onOpenChange={setBrochureDraftOpen}
+                              tournamentId={id!}
+                              hasBrochure={!!tournament?.brochure_url}
                             />
                           </>
                         )}
