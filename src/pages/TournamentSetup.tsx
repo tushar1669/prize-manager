@@ -1939,7 +1939,6 @@ export default function TournamentSetup() {
                               open={brochureDraftOpen}
                               onOpenChange={setBrochureDraftOpen}
                               tournamentId={id!}
-                              hasBrochure={!!tournament?.brochure_url}
                             />
                           </>
                         )}
