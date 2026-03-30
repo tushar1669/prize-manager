@@ -42,6 +42,7 @@ import { TeamPrizesEditor } from '@/components/team-prizes';
 import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
 import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
+import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
 
 // Flip to true only when debugging
 const DEBUG = false;
