@@ -1924,6 +1924,23 @@ export default function TournamentSetup() {
                               onOpenChange={setCopyFromTournamentOpen}
                               onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
                             />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              disabled={!tournament?.brochure_url}
+                              title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
+                              onClick={() => setBrochureDraftOpen(true)}
+                            >
+                              <Upload className="h-4 w-4" />
+                              Generate from Brochure
+                            </Button>
+                            <BrochurePrizeDraftDialog
+                              open={brochureDraftOpen}
+                              onOpenChange={setBrochureDraftOpen}
+                              tournamentId={id!}
+                              hasBrochure={!!tournament?.brochure_url}
+                            />
                           </>
                         )}
                       </div>
