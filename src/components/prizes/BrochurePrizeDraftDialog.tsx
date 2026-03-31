@@ -139,6 +139,7 @@ async function applyDraftAddOnly(
 
   const cats = existingCats || [];
   const existingMain = cats.find((c) => c.is_main);
+  let resolvedMainCategoryId: string | null = existingMain?.id ?? null;
   const catByNormName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c]));
   let maxOrderIdx = cats.reduce((m, c) => Math.max(m, c.order_idx ?? 0), 0);
 
@@ -150,8 +151,8 @@ async function applyDraftAddOnly(
     const normName = dc.name.trim().toLowerCase();
 
     // Main category merging
-    if (dc.is_main && existingMain) {
-      categoryIdMap.push({ draftIdx: i, categoryId: existingMain.id });
+    if (dc.is_main && resolvedMainCategoryId) {
+      categoryIdMap.push({ draftIdx: i, categoryId: resolvedMainCategoryId });
       report.categories_reused++;
       continue;
     }
@@ -180,6 +181,9 @@ async function applyDraftAddOnly(
       .single();
     if (insErr) throw new Error(`Failed to create category "${dc.name}": ${insErr.message}`);
     categoryIdMap.push({ draftIdx: i, categoryId: inserted.id });
+    if (dc.is_main && !resolvedMainCategoryId) {
+      resolvedMainCategoryId = inserted.id;
+    }
     // Track in map so subsequent duplicate names reuse this
     catByNormName.set(normName, { id: inserted.id, name: dc.name, is_main: dc.is_main, order_idx: maxOrderIdx });
     report.categories_created++;
@@ -764,7 +768,7 @@ export default function BrochurePrizeDraftDialog({
             </div>
 
             {/* Apply controls */}
-            {hasCategories && !applyReport && (
+            {hasCategories && (
               <div className="space-y-3 border-t pt-4">
                 {/* Team groups opt-in */}
                 {draft.team_groups.length > 0 && (
