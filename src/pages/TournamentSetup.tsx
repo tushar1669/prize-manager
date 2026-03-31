@@ -80,6 +80,7 @@ export default function TournamentSetup() {
       .filter(Boolean);
   }, [expandIdsParam, focusParam]);
   const queryClient = useQueryClient();
+  const categoriesQueryKey = ['categories', id] as const;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error, showError, clearError } = useErrorPanel();
   const { setDirty, resetDirty, registerOnSave, sources } = useDirty();
@@ -488,7 +489,7 @@ export default function TournamentSetup() {
 
   // Fetch categories - force fresh fetch on mount to handle navigation back scenarios
   const { data: categories, isLoading: categoriesLoading } = useQuery({
-    queryKey: ['categories', id],
+    queryKey: categoriesQueryKey,
     queryFn: async () => {
       dlog('[categories] query start', { id, tab: activeTab });
       const { data, error } = await supabase
@@ -1939,7 +1940,7 @@ export default function TournamentSetup() {
                               open={brochureDraftOpen}
                               onOpenChange={setBrochureDraftOpen}
                               tournamentId={id!}
-                              onApplied={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                              onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                             />
                           </>
                         )}
