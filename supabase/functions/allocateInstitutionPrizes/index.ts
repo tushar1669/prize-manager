@@ -318,7 +318,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((player: Record<string, unknown>) => ({
+      const teamPlayers: TeamPrizePlayer[] = typedPlayers.map((player) => ({
         id: String(player.id),
         name: String(player.name ?? ''),
         rank: Number(player.rank ?? 0),

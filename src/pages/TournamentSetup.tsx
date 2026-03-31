@@ -1939,6 +1939,7 @@ export default function TournamentSetup() {
                               open={brochureDraftOpen}
                               onOpenChange={setBrochureDraftOpen}
                               tournamentId={id!}
+                              onApplied={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
                             />
                           </>
                         )}

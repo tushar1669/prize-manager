@@ -2,8 +2,11 @@ import { useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch } from "lucide-react";
+import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +14,7 @@ interface BrochurePrizeDraftDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tournamentId: string;
+  onApplied?: () => void;
 }
 
 type Status =
@@ -73,6 +77,17 @@ interface ApiResponse {
   message?: string;
 }
 
+interface ApplyReport {
+  categories_created: number;
+  categories_reused: number;
+  prizes_created: number;
+  prizes_skipped: number;
+  team_groups_created: number;
+  team_groups_reused: number;
+  team_prizes_created: number;
+  team_prizes_skipped: number;
+}
+
 const confidenceBadge = (c: string) => {
   const map: Record<string, { className: string; label: string }> = {
     HIGH: { className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300", label: "High" },
@@ -86,10 +101,255 @@ const confidenceBadge = (c: string) => {
 const formatCurrency = (n: number) =>
   n === 0 ? "—" : `₹${n.toLocaleString("en-IN")}`;
 
+/** Convert draft string[] gift_items to DB shape [{name, qty}] with dedup+counting */
+function convertGiftItems(items: string[]): Array<{ name: string; qty: number }> {
+  if (!items || items.length === 0) return [];
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const key = item.trim();
+    if (key) counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([name, qty]) => ({ name, qty }));
+}
+
+async function applyDraftAddOnly(
+  tournamentId: string,
+  draft: DraftResult,
+  includeTeamGroups: boolean,
+  verifiedTeamGroups: Set<number>,
+): Promise<ApplyReport> {
+  const report: ApplyReport = {
+    categories_created: 0,
+    categories_reused: 0,
+    prizes_created: 0,
+    prizes_skipped: 0,
+    team_groups_created: 0,
+    team_groups_reused: 0,
+    team_prizes_created: 0,
+    team_prizes_skipped: 0,
+  };
+
+  // Step 1: Fetch existing categories
+  const { data: existingCats, error: catErr } = await supabase
+    .from("categories")
+    .select("id, name, is_main, order_idx")
+    .eq("tournament_id", tournamentId)
+    .eq("is_active", true);
+  if (catErr) throw new Error(`Failed to fetch categories: ${catErr.message}`);
+
+  const cats = existingCats || [];
+  const existingMain = cats.find((c) => c.is_main);
+  const catByNormName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c]));
+  let maxOrderIdx = cats.reduce((m, c) => Math.max(m, c.order_idx ?? 0), 0);
+
+  // Step 2: Resolve category IDs (create or reuse)
+  const categoryIdMap: Array<{ draftIdx: number; categoryId: string }> = [];
+
+  for (let i = 0; i < draft.categories.length; i++) {
+    const dc = draft.categories[i];
+    const normName = dc.name.trim().toLowerCase();
+
+    // Main category merging
+    if (dc.is_main && existingMain) {
+      categoryIdMap.push({ draftIdx: i, categoryId: existingMain.id });
+      report.categories_reused++;
+      continue;
+    }
+
+    // Check for existing category with same name
+    const existing = catByNormName.get(normName);
+    if (existing) {
+      categoryIdMap.push({ draftIdx: i, categoryId: existing.id });
+      report.categories_reused++;
+      continue;
+    }
+
+    // Insert new category
+    maxOrderIdx++;
+    const { data: inserted, error: insErr } = await supabase
+      .from("categories")
+      .insert({
+        tournament_id: tournamentId,
+        name: dc.name.trim(),
+        is_main: dc.is_main && !existingMain,
+        criteria_json: {},
+        order_idx: maxOrderIdx,
+        is_active: true,
+      })
+      .select("id")
+      .single();
+    if (insErr) throw new Error(`Failed to create category "${dc.name}": ${insErr.message}`);
+    categoryIdMap.push({ draftIdx: i, categoryId: inserted.id });
+    // Track in map so subsequent duplicate names reuse this
+    catByNormName.set(normName, { id: inserted.id, name: dc.name, is_main: dc.is_main, order_idx: maxOrderIdx });
+    report.categories_created++;
+  }
+
+  // Step 3: Fetch existing prizes for all target categories
+  const targetCatIds = [...new Set(categoryIdMap.map((m) => m.categoryId))];
+  const { data: existingPrizes, error: pErr } = await supabase
+    .from("prizes")
+    .select("category_id, place")
+    .in("category_id", targetCatIds)
+    .eq("is_active", true);
+  if (pErr) throw new Error(`Failed to fetch prizes: ${pErr.message}`);
+
+  const existingPlaceMap = new Map<string, Set<number>>();
+  for (const p of existingPrizes || []) {
+    const key = p.category_id;
+    if (!existingPlaceMap.has(key)) existingPlaceMap.set(key, new Set());
+    existingPlaceMap.get(key)!.add(p.place);
+  }
+
+  // Step 4: Build and insert missing prizes
+  const prizeRows: Array<{
+    category_id: string;
+    place: number;
+    cash_amount: number;
+    has_trophy: boolean;
+    has_medal: boolean;
+    gift_items: Array<{ name: string; qty: number }>;
+    is_active: boolean;
+  }> = [];
+
+  for (const mapping of categoryIdMap) {
+    const dc = draft.categories[mapping.draftIdx];
+    const existingPlaces = existingPlaceMap.get(mapping.categoryId) || new Set<number>();
+
+    for (const dp of dc.prizes) {
+      if (existingPlaces.has(dp.place)) {
+        report.prizes_skipped++;
+        continue;
+      }
+      prizeRows.push({
+        category_id: mapping.categoryId,
+        place: dp.place,
+        cash_amount: dp.cash_amount,
+        has_trophy: dp.has_trophy,
+        has_medal: dp.has_medal,
+        gift_items: convertGiftItems(dp.gift_items),
+        is_active: true,
+      });
+    }
+  }
+
+  if (prizeRows.length > 0) {
+    // Insert in chunks of 200
+    for (let i = 0; i < prizeRows.length; i += 200) {
+      const chunk = prizeRows.slice(i, i + 200);
+      const { error: prizeInsErr } = await supabase.from("prizes").insert(chunk);
+      if (prizeInsErr) throw new Error(`Failed to insert prizes: ${prizeInsErr.message}`);
+    }
+    report.prizes_created = prizeRows.length;
+  }
+
+  // Step 5: Team groups (only if opted in and all verified)
+  if (includeTeamGroups && draft.team_groups.length > 0) {
+    const allVerified = draft.team_groups.every((_, idx) => verifiedTeamGroups.has(idx));
+    if (!allVerified) {
+      toast.warning("Some team groups were not verified — skipping team groups.");
+    } else {
+      // Fetch existing team groups
+      const { data: existingGroups, error: gErr } = await supabase
+        .from("institution_prize_groups")
+        .select("id, name")
+        .eq("tournament_id", tournamentId)
+        .eq("is_active", true);
+      if (gErr) throw new Error(`Failed to fetch team groups: ${gErr.message}`);
+
+      const groupByNorm = new Map((existingGroups || []).map((g) => [g.name.trim().toLowerCase(), g]));
+      const groupIdMap: Array<{ draftIdx: number; groupId: string }> = [];
+
+      for (let i = 0; i < draft.team_groups.length; i++) {
+        const tg = draft.team_groups[i];
+        const normName = tg.name.trim().toLowerCase();
+        const existing = groupByNorm.get(normName);
+
+        if (existing) {
+          groupIdMap.push({ draftIdx: i, groupId: existing.id });
+          report.team_groups_reused++;
+        } else {
+          const { data: inserted, error: insErr } = await supabase
+            .from("institution_prize_groups")
+            .insert({
+              tournament_id: tournamentId,
+              name: tg.name.trim(),
+              group_by: tg.group_by || "club",
+              team_size: tg.team_size || 3,
+              female_slots: 0,
+              male_slots: 0,
+              scoring_mode: "by_top_k_score",
+              is_active: true,
+            })
+            .select("id")
+            .single();
+          if (insErr) throw new Error(`Failed to create team group "${tg.name}": ${insErr.message}`);
+          groupIdMap.push({ draftIdx: i, groupId: inserted.id });
+          groupByNorm.set(normName, { id: inserted.id, name: tg.name });
+          report.team_groups_created++;
+        }
+      }
+
+      // Fetch existing team prizes
+      const targetGroupIds = [...new Set(groupIdMap.map((m) => m.groupId))];
+      const { data: existingTeamPrizes, error: tpErr } = await supabase
+        .from("institution_prizes")
+        .select("group_id, place")
+        .in("group_id", targetGroupIds)
+        .eq("is_active", true);
+      if (tpErr) throw new Error(`Failed to fetch team prizes: ${tpErr.message}`);
+
+      const teamPlaceMap = new Map<string, Set<number>>();
+      for (const tp of existingTeamPrizes || []) {
+        if (!teamPlaceMap.has(tp.group_id)) teamPlaceMap.set(tp.group_id, new Set());
+        teamPlaceMap.get(tp.group_id)!.add(tp.place);
+      }
+
+      const teamPrizeRows: Array<{
+        group_id: string;
+        place: number;
+        cash_amount: number;
+        has_trophy: boolean;
+        has_medal: boolean;
+        is_active: boolean;
+      }> = [];
+
+      for (const mapping of groupIdMap) {
+        const tg = draft.team_groups[mapping.draftIdx];
+        const existingPlaces = teamPlaceMap.get(mapping.groupId) || new Set<number>();
+
+        for (const dp of tg.prizes) {
+          if (existingPlaces.has(dp.place)) {
+            report.team_prizes_skipped++;
+            continue;
+          }
+          teamPrizeRows.push({
+            group_id: mapping.groupId,
+            place: dp.place,
+            cash_amount: dp.cash_amount,
+            has_trophy: dp.has_trophy,
+            has_medal: dp.has_medal,
+            is_active: true,
+          });
+        }
+      }
+
+      if (teamPrizeRows.length > 0) {
+        const { error: tpInsErr } = await supabase.from("institution_prizes").insert(teamPrizeRows);
+        if (tpInsErr) throw new Error(`Failed to insert team prizes: ${tpInsErr.message}`);
+        report.team_prizes_created = teamPrizeRows.length;
+      }
+    }
+  }
+
+  return report;
+}
+
 export default function BrochurePrizeDraftDialog({
   open,
   onOpenChange,
   tournamentId,
+  onApplied,
 }: BrochurePrizeDraftDialogProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [response, setResponse] = useState<ApiResponse | null>(null);
@@ -97,9 +357,16 @@ export default function BrochurePrizeDraftDialog({
   const [expandedJson, setExpandedJson] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
 
+  // Apply state
+  const [applying, setApplying] = useState(false);
+  const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
+  const [includeTeamGroups, setIncludeTeamGroups] = useState(false);
+  const [verifiedTeamGroups, setVerifiedTeamGroups] = useState<Set<number>>(new Set());
+
   const callFunction = useCallback(
     async (selectedEvent?: string | null) => {
       setStatus("loading");
+      setApplyReport(null);
       try {
         const { data, error } = await supabase.functions.invoke("parseBrochurePrizes", {
           body: {
@@ -154,11 +421,50 @@ export default function BrochurePrizeDraftDialog({
         setEvents([]);
         setExpandedJson(false);
         setExpandedCategories(new Set());
+        setApplyReport(null);
+        setApplying(false);
+        setIncludeTeamGroups(false);
+        setVerifiedTeamGroups(new Set());
       }
       onOpenChange(nextOpen);
     },
     [callFunction, onOpenChange, status],
   );
+
+  const handleApply = useCallback(async () => {
+    const draft = response?.draft;
+    if (!draft || applying) return;
+
+    setApplying(true);
+    try {
+      const report = await applyDraftAddOnly(
+        tournamentId,
+        draft,
+        includeTeamGroups,
+        verifiedTeamGroups,
+      );
+      setApplyReport(report);
+
+      const parts: string[] = [];
+      if (report.categories_created > 0) parts.push(`${report.categories_created} categories created`);
+      if (report.prizes_created > 0) parts.push(`${report.prizes_created} prizes created`);
+      if (report.prizes_skipped > 0) parts.push(`${report.prizes_skipped} prizes skipped (existing)`);
+      if (report.team_groups_created > 0) parts.push(`${report.team_groups_created} team groups created`);
+      if (report.team_prizes_created > 0) parts.push(`${report.team_prizes_created} team prizes created`);
+
+      if (parts.length === 0) {
+        toast.info("Nothing new to add — all categories and prizes already exist.");
+      } else {
+        toast.success(`Applied: ${parts.join(", ")}`);
+      }
+
+      onApplied?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to apply draft");
+    } finally {
+      setApplying(false);
+    }
+  }, [response?.draft, applying, tournamentId, includeTeamGroups, verifiedTeamGroups, onApplied]);
 
   const handleCopyJson = () => {
     if (response?.draft) {
@@ -170,11 +476,17 @@ export default function BrochurePrizeDraftDialog({
   const toggleCategory = (idx: number) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) {
-        next.delete(idx);
-      } else {
-        next.add(idx);
-      }
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const toggleTeamGroupVerified = (idx: number) => {
+    setVerifiedTeamGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
       return next;
     });
   };
@@ -184,13 +496,15 @@ export default function BrochurePrizeDraftDialog({
     ? draft.categories.reduce((s, c) => s + c.prizes.length, 0) + draft.team_groups.reduce((s, t) => s + t.prizes.length, 0)
     : 0;
 
+  const hasCategories = draft && draft.categories.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Draft Prize Structure</DialogTitle>
           <DialogDescription>
-            Auto-generated from brochure PDF — read-only preview
+            Auto-generated from brochure PDF — preview & apply
           </DialogDescription>
         </DialogHeader>
 
@@ -276,9 +590,26 @@ export default function BrochurePrizeDraftDialog({
           />
         )}
 
-        {/* ok_draft — summary + collapsible detail */}
+        {/* ok_draft — summary + collapsible detail + apply */}
         {status === "ok_draft" && draft && (
           <div className="space-y-4">
+            {/* Apply report */}
+            {applyReport && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30 p-4 space-y-1">
+                <p className="font-medium text-sm flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  Applied successfully
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Categories: {applyReport.categories_created} created, {applyReport.categories_reused} reused.
+                  Prizes: {applyReport.prizes_created} created, {applyReport.prizes_skipped} skipped.
+                  {(applyReport.team_groups_created > 0 || applyReport.team_prizes_created > 0) && (
+                    <> Team: {applyReport.team_groups_created} groups, {applyReport.team_prizes_created} prizes.</>
+                  )}
+                </p>
+              </div>
+            )}
+
             {/* Summary bar */}
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="flex items-center gap-1">
@@ -431,6 +762,63 @@ export default function BrochurePrizeDraftDialog({
                 </pre>
               )}
             </div>
+
+            {/* Apply controls */}
+            {hasCategories && !applyReport && (
+              <div className="space-y-3 border-t pt-4">
+                {/* Team groups opt-in */}
+                {draft.team_groups.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="include-teams"
+                        checked={includeTeamGroups}
+                        onCheckedChange={setIncludeTeamGroups}
+                        disabled={applying}
+                      />
+                      <Label htmlFor="include-teams" className="text-sm">
+                        Include team groups (LOW confidence)
+                      </Label>
+                    </div>
+                    {includeTeamGroups && (
+                      <div className="ml-6 space-y-1.5">
+                        {draft.team_groups.map((tg, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`verify-team-${idx}`}
+                              checked={verifiedTeamGroups.has(idx)}
+                              onCheckedChange={() => toggleTeamGroupVerified(idx)}
+                              disabled={applying}
+                            />
+                            <Label htmlFor={`verify-team-${idx}`} className="text-sm text-muted-foreground">
+                              I verified "{tg.name}"
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleApply}
+                  disabled={applying}
+                  className="w-full gap-2"
+                >
+                  {applying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Applying…
+                    </>
+                  ) : (
+                    "Apply (Add-only)"
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  Existing categories and prizes will not be modified or deleted.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
