@@ -440,7 +440,7 @@ export default function BrochurePrizeDraftDialog({
   );
 
   // Trigger parse when dialog opens and status is idle
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && status === "idle") {
       callFunction();
     }
