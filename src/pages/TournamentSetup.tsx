@@ -1234,7 +1234,21 @@ export default function TournamentSetup() {
       // Generate signed URL for display
       const { url } = await getSignedUrl('brochures', path);
       if (url) setBrochureSignedUrl(url);
-      toast.success('Brochure uploaded');
+
+      // Auto-save brochure_url to DB so parseBrochurePrizes works
+      // even if user doesn't manually save the Details form
+      const { error: dbErr } = await supabase
+        .from('tournaments')
+        .update({ brochure_url: path })
+        .eq('id', id!);
+
+      if (dbErr) {
+        toast.error('Brochure uploaded to storage but failed to save reference. Please save Details manually.');
+        console.error('[brochure] DB save failed', dbErr);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+        toast.success('Brochure uploaded');
+      }
     }
     setUploading(false);
   };
