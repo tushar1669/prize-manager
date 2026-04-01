@@ -439,11 +439,15 @@ export default function BrochurePrizeDraftDialog({
     [tournamentId],
   );
 
+  // Trigger parse when dialog opens and status is idle
+  React.useEffect(() => {
+    if (open && status === "idle") {
+      callFunction();
+    }
+  }, [open, status, callFunction]);
+
   const handleOpen = useCallback(
     (nextOpen: boolean) => {
-      if (nextOpen && status === "idle") {
-        callFunction();
-      }
       if (!nextOpen) {
         setStatus("idle");
         setResponse(null);
