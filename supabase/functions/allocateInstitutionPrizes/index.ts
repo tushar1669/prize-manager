@@ -68,6 +68,10 @@ interface Player {
   team: string | null;
   points: number | null;
   tournament_id: string;
+  city: string | null;
+  state: string | null;
+  group_label: string | null;
+  type_label: string | null;
 }
 
 // Response types

@@ -807,6 +807,7 @@ export default function BrochurePrizeDraftDialog({
                 <Button
                   onClick={handleApply}
                   disabled={applying}
+                  variant={applyReport ? "outline" : "default"}
                   className="w-full gap-2"
                 >
                   {applying ? (
@@ -814,12 +815,19 @@ export default function BrochurePrizeDraftDialog({
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Applying…
                     </>
+                  ) : applyReport ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      Re-apply (safe — add-only, idempotent)
+                    </>
                   ) : (
                     "Apply (Add-only)"
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  Existing categories and prizes will not be modified or deleted.
+                  {applyReport
+                    ? "Already applied this session. Re-applying will safely skip existing rows."
+                    : "Existing categories and prizes will not be modified or deleted."}
                 </p>
               </div>
             )}
