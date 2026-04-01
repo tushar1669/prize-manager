@@ -138,8 +138,7 @@ async function applyDraftAddOnly(
   if (catErr) throw new Error(`Failed to fetch categories: ${catErr.message}`);
 
   const cats = existingCats || [];
-  const existingMain = cats.find((c) => c.is_main);
-  let resolvedMainCategoryId: string | null = existingMain?.id ?? null;
+  let resolvedMainCategoryId: string | null = cats.find((c) => c.is_main)?.id ?? null;
   const catByNormName = new Map(cats.map((c) => [c.name.trim().toLowerCase(), c]));
   let maxOrderIdx = cats.reduce((m, c) => Math.max(m, c.order_idx ?? 0), 0);
 
@@ -149,30 +148,59 @@ async function applyDraftAddOnly(
   for (let i = 0; i < draft.categories.length; i++) {
     const dc = draft.categories[i];
     const normName = dc.name.trim().toLowerCase();
+    const existing = catByNormName.get(normName);
 
-    // Main category merging
-    if (dc.is_main && resolvedMainCategoryId) {
-      categoryIdMap.push({ draftIdx: i, categoryId: resolvedMainCategoryId });
-      report.categories_reused++;
+    // Main category: resolve one canonical target id for this entire apply run.
+    if (dc.is_main) {
+      if (resolvedMainCategoryId) {
+        categoryIdMap.push({ draftIdx: i, categoryId: resolvedMainCategoryId });
+        report.categories_reused++;
+        continue;
+      }
+
+      if (existing) {
+        resolvedMainCategoryId = existing.id;
+        categoryIdMap.push({ draftIdx: i, categoryId: existing.id });
+        report.categories_reused++;
+        continue;
+      }
+
+      maxOrderIdx++;
+      const { data: inserted, error: insErr } = await supabase
+        .from("categories")
+        .insert({
+          tournament_id: tournamentId,
+          name: dc.name.trim(),
+          is_main: true,
+          criteria_json: {},
+          order_idx: maxOrderIdx,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (insErr) throw new Error(`Failed to create category "${dc.name}": ${insErr.message}`);
+
+      resolvedMainCategoryId = inserted.id;
+      categoryIdMap.push({ draftIdx: i, categoryId: inserted.id });
+      catByNormName.set(normName, { id: inserted.id, name: dc.name, is_main: true, order_idx: maxOrderIdx });
+      report.categories_created++;
       continue;
     }
 
-    // Check for existing category with same name
-    const existing = catByNormName.get(normName);
+    // Non-main category: match by name, else create.
     if (existing) {
       categoryIdMap.push({ draftIdx: i, categoryId: existing.id });
       report.categories_reused++;
       continue;
     }
 
-    // Insert new category
     maxOrderIdx++;
     const { data: inserted, error: insErr } = await supabase
       .from("categories")
       .insert({
         tournament_id: tournamentId,
         name: dc.name.trim(),
-        is_main: dc.is_main && !existingMain,
+        is_main: false,
         criteria_json: {},
         order_idx: maxOrderIdx,
         is_active: true,
@@ -180,12 +208,9 @@ async function applyDraftAddOnly(
       .select("id")
       .single();
     if (insErr) throw new Error(`Failed to create category "${dc.name}": ${insErr.message}`);
+
     categoryIdMap.push({ draftIdx: i, categoryId: inserted.id });
-    if (dc.is_main && !resolvedMainCategoryId) {
-      resolvedMainCategoryId = inserted.id;
-    }
-    // Track in map so subsequent duplicate names reuse this
-    catByNormName.set(normName, { id: inserted.id, name: dc.name, is_main: dc.is_main, order_idx: maxOrderIdx });
+    catByNormName.set(normName, { id: inserted.id, name: dc.name, is_main: false, order_idx: maxOrderIdx });
     report.categories_created++;
   }
 
