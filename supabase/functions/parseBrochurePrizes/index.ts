@@ -490,7 +490,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (selectedEvent !== null && events.length >= 2 && !events.includes(selectedEvent)) {
+    if (
+      selectedEvent !== null &&
+      events.length >= 2 &&
+      !events.some((event) => event.toLowerCase() === selectedEvent.toLowerCase())
+    ) {
       return jsonResponse({
         status: "invalid_selected_event",
         events,
