@@ -43,7 +43,7 @@ async function ensureTournamentAccess(
   supabase: SupabaseClient,
   userId: string,
   tournamentId: string
-): Promise<Response | null> {
+): Promise<{ accessDenied: Response | null; tournament: { brochure_url: string | null } | null }> {
   const { data: tournament, error: tErr } = await supabase
     .from("tournaments")
     .select("id, owner_id, brochure_url")
@@ -51,22 +51,22 @@ async function ensureTournamentAccess(
     .maybeSingle();
 
   if (tErr) {
-    return jsonResponse({ error: "db_error", message: tErr.message }, 500);
+    return { accessDenied: jsonResponse({ error: "db_error", message: tErr.message }, 500), tournament: null };
   }
   if (!tournament) {
-    return jsonResponse({ error: "tournament_not_found" }, 404);
+    return { accessDenied: jsonResponse({ error: "tournament_not_found" }, 404), tournament: null };
   }
 
   const { data: isMaster, error: roleErr } = await supabase
     .rpc("has_role", { _user_id: userId, _role: "master" });
 
   if (roleErr) {
-    return jsonResponse({ error: "role_check_failed", message: roleErr.message }, 500);
+    return { accessDenied: jsonResponse({ error: "role_check_failed", message: roleErr.message }, 500), tournament: null };
   }
   if (tournament.owner_id !== userId && !isMaster) {
-    return jsonResponse({ error: "forbidden", message: "Not authorized for tournament" }, 403);
+    return { accessDenied: jsonResponse({ error: "forbidden", message: "Not authorized for tournament" }, 403), tournament: null };
   }
-  return null;
+  return { accessDenied: null, tournament: { brochure_url: tournament.brochure_url ?? null } };
 }
 
 // ── Draft parsing types ──────────────────────────────────────────────────
@@ -430,14 +430,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "missing_tournament_id" }, 400);
     }
 
-    const accessDenied = await ensureTournamentAccess(supabase, user.id, tournamentId);
+    const { accessDenied, tournament } = await ensureTournamentAccess(supabase, user.id, tournamentId);
     if (accessDenied) return accessDenied;
-
-    const { data: tournament } = await supabase
-      .from("tournaments")
-      .select("brochure_url")
-      .eq("id", tournamentId)
-      .single();
 
     const brochureUrl: string | null = tournament?.brochure_url ?? null;
 
