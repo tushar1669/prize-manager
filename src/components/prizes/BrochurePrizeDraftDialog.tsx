@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -439,11 +439,15 @@ export default function BrochurePrizeDraftDialog({
     [tournamentId],
   );
 
+  // Trigger parse when dialog opens and status is idle
+  useEffect(() => {
+    if (open && status === "idle") {
+      callFunction();
+    }
+  }, [open, status, callFunction]);
+
   const handleOpen = useCallback(
     (nextOpen: boolean) => {
-      if (nextOpen && status === "idle") {
-        callFunction();
-      }
       if (!nextOpen) {
         setStatus("idle");
         setResponse(null);
