@@ -39,6 +39,14 @@ function detectEvents(text: string): string[] {
     .map(({ label }) => label);
 }
 
+function normalizeTextLine(line: string): string {
+  return line.replace(/\s+/g, " ").trim();
+}
+
+function normalizeSectionName(name: string): string {
+  return normalizeTextLine(name).toLowerCase();
+}
+
 async function ensureTournamentAccess(
   supabase: SupabaseClient,
   userId: string,
@@ -214,10 +222,11 @@ function parsePrizeLinesFromBlock(block: string): DraftPrize[] {
 function detectSections(text: string): { name: string; body: string; isMain: boolean; isTeam: boolean }[] {
   const lines = text.split("\n");
   const sections: { name: string; startIdx: number; isMain: boolean; isTeam: boolean }[] = [];
+  const seenSectionNames = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line || line.length > 120) continue;
+    const line = normalizeTextLine(lines[i]);
+    if (!line || line.length > 80) continue;
 
     // Check if this line looks like a heading (short, no currency, possibly uppercase)
     const hasCurrency = CURRENCY_RE.test(line);
@@ -231,6 +240,11 @@ function detectSections(text: string): { name: string; body: string; isMain: boo
     // A heading candidate: short line without currency that has some alphabetic content
     const hasAlpha = /[a-zA-Z]{3,}/.test(line);
     if (!hasAlpha) continue;
+    if (/^[A-Z]{12,}$/.test(line)) continue;
+    if (/[a-z]+[A-Z][a-z]+/.test(line)) continue;
+    if (/^(?:u\d{2}|[a-e])\s*-\s*(?:\d{3,4}|\d{2,3}\s*-\s*\d{2,3})$/i.test(line)) continue;
+    if ((line.match(/\d+/g) ?? []).length >= 4) continue;
+    if ((line.match(/[A-Za-z]+/g) ?? []).some((token) => token.length > 24)) continue;
 
     // Check if next ~10 lines contain currency (this heading precedes prizes)
     let hasPrizesBelow = false;
@@ -242,6 +256,9 @@ function detectSections(text: string): { name: string; body: string; isMain: boo
     }
 
     if (hasPrizesBelow || isMain || isTeam) {
+      const normalizedName = normalizeSectionName(line);
+      if (seenSectionNames.has(normalizedName)) continue;
+      seenSectionNames.add(normalizedName);
       sections.push({ name: line, startIdx: i, isMain, isTeam });
     }
   }
@@ -273,33 +290,50 @@ function parseTeamSize(text: string): number {
 }
 
 function sliceTextForEvent(text: string, selectedEvent: string, events: string[]): string | null {
-  // Find section boundaries for each event
-  const markers = events
-    .map((ev) => {
-      const re = new RegExp(`\\b${ev}\\b`, "gi");
-      const matches: number[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(text)) !== null) matches.push(m.index);
-      return { event: ev, positions: matches };
-    })
-    .filter((e) => e.positions.length > 0);
+  const lines = text.split("\n");
+  const eventRegexes = events.map((event) => ({
+    event,
+    regex: new RegExp(`\\b${event}\\b`, "i"),
+  }));
 
-  const target = markers.find((m) => m.event.toLowerCase() === selectedEvent.toLowerCase());
-  if (!target || target.positions.length === 0) return null;
-
-  // Use the first occurrence of the selected event as start
-  const start = target.positions[0];
-
-  // Find the nearest subsequent event marker (different event) as end
-  let end = text.length;
-  for (const other of markers) {
-    if (other.event.toLowerCase() === selectedEvent.toLowerCase()) continue;
-    for (const pos of other.positions) {
-      if (pos > start && pos < end) end = pos;
+  let startIdx = -1;
+  const selectedLower = selectedEvent.toLowerCase();
+  for (let i = 0; i < lines.length; i++) {
+    const line = normalizeTextLine(lines[i]);
+    if (!line || line.length > 100) continue;
+    if (!eventRegexes.some(({ regex }) => regex.test(line))) continue;
+    const selectedRegex = eventRegexes.find(({ event }) => event.toLowerCase() === selectedLower)?.regex;
+    if (selectedRegex && selectedRegex.test(line)) {
+      startIdx = i;
+      break;
     }
   }
+  if (startIdx === -1) return null;
 
-  return text.slice(start, end);
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = normalizeTextLine(lines[i]);
+    if (!line || line.length > 100) continue;
+    for (const { event, regex } of eventRegexes) {
+      if (event.toLowerCase() === selectedLower) continue;
+      if (regex.test(line)) {
+        endIdx = i;
+        break;
+      }
+    }
+    if (endIdx !== lines.length) break;
+  }
+
+  const sliced = lines.slice(startIdx, endIdx).join("\n").trim();
+  return sliced.length > 0 ? sliced : null;
+}
+
+function hasMinimumPrizeSignal(sectionBody: string, prizes: DraftPrize[]): boolean {
+  if (prizes.length === 0) return false;
+  const lines = sectionBody.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
+  const currencyLines = lines.filter((line) => /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line)).length;
+  const placeLines = lines.filter((line) => PLACE_SINGLE_RE.test(line) || PLACE_RANGE_RE.test(line) || WINNER_RE.test(line) || RUNNER_RE.test(line)).length;
+  return currencyLines >= 1 && placeLines >= 1;
 }
 
 function buildDraft(text: string, brochureUrl: string, selectedEvent: string | null, events: string[]): DraftResult {
@@ -311,7 +345,7 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
   let workingText = text;
   if (selectedEvent && events.length >= 2) {
     const sliced = sliceTextForEvent(text, selectedEvent, events);
-    if (sliced && sliced.length > 50) {
+    if (sliced && sliced.length > 20) {
       workingText = sliced;
     } else {
       warnings.push(`Could not isolate section for event "${selectedEvent}"; using full text`);
@@ -337,10 +371,15 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
   } else {
     let orderIdx = 0;
     let hasMain = false;
+    const seenTeamNames = new Set<string>();
 
     for (const section of sections) {
       if (section.isTeam) {
         const prizes = parsePrizeLinesFromBlock(section.body);
+        if (!hasMinimumPrizeSignal(section.body, prizes)) continue;
+        const teamNameKey = normalizeSectionName(section.name);
+        if (seenTeamNames.has(teamNameKey)) continue;
+        seenTeamNames.add(teamNameKey);
         const teamSize = parseTeamSize(section.body);
         teamGroups.push({
           name: section.name,
@@ -354,7 +393,7 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
       }
 
       const prizes = parsePrizeLinesFromBlock(section.body);
-      if (prizes.length === 0) continue;
+      if (!hasMinimumPrizeSignal(section.body, prizes)) continue;
 
       const isMain = section.isMain && !hasMain;
       if (isMain) hasMain = true;
