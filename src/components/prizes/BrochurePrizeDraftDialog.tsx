@@ -461,7 +461,7 @@ export default function BrochurePrizeDraftDialog({
       }
       onOpenChange(nextOpen);
     },
-    [callFunction, onOpenChange, status],
+    [onOpenChange],
   );
 
   const handleApply = useCallback(async () => {
