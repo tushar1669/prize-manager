@@ -81,11 +81,14 @@ interface ApplyReport {
   categories_created: number;
   categories_reused: number;
   prizes_created: number;
-  prizes_skipped: number;
+  prizes_skipped_existing: number;
+  prizes_skipped_duplicate_in_draft: number;
   team_groups_created: number;
   team_groups_reused: number;
   team_prizes_created: number;
   team_prizes_skipped: number;
+  failed_categories: string[];
+  failed_team_groups: string[];
 }
 
 const confidenceBadge = (c: string) => {
@@ -122,11 +125,14 @@ async function applyDraftAddOnly(
     categories_created: 0,
     categories_reused: 0,
     prizes_created: 0,
-    prizes_skipped: 0,
+    prizes_skipped_existing: 0,
+    prizes_skipped_duplicate_in_draft: 0,
     team_groups_created: 0,
     team_groups_reused: 0,
     team_prizes_created: 0,
     team_prizes_skipped: 0,
+    failed_categories: [],
+    failed_team_groups: [],
   };
 
   // Step 1: Fetch existing categories
@@ -230,46 +236,80 @@ async function applyDraftAddOnly(
     existingPlaceMap.get(key)!.add(p.place);
   }
 
-  // Step 4: Build and insert missing prizes
-  const prizeRows: Array<{
-    category_id: string;
-    place: number;
-    cash_amount: number;
-    has_trophy: boolean;
-    has_medal: boolean;
-    gift_items: Array<{ name: string; qty: number }>;
-    is_active: boolean;
-  }> = [];
-
+  // Step 4: Group by resolved category and insert missing prizes in isolated batches
+  const categoryToDraftSections = new Map<string, DraftCategory[]>();
   for (const mapping of categoryIdMap) {
-    const dc = draft.categories[mapping.draftIdx];
-    const existingPlaces = existingPlaceMap.get(mapping.categoryId) || new Set<number>();
-
-    for (const dp of dc.prizes) {
-      if (existingPlaces.has(dp.place)) {
-        report.prizes_skipped++;
-        continue;
-      }
-      prizeRows.push({
-        category_id: mapping.categoryId,
-        place: dp.place,
-        cash_amount: dp.cash_amount,
-        has_trophy: dp.has_trophy,
-        has_medal: dp.has_medal,
-        gift_items: convertGiftItems(dp.gift_items),
-        is_active: true,
-      });
-    }
+    const current = categoryToDraftSections.get(mapping.categoryId) ?? [];
+    current.push(draft.categories[mapping.draftIdx]);
+    categoryToDraftSections.set(mapping.categoryId, current);
   }
 
-  if (prizeRows.length > 0) {
-    // Insert in chunks of 200
-    for (let i = 0; i < prizeRows.length; i += 200) {
-      const chunk = prizeRows.slice(i, i + 200);
-      const { error: prizeInsErr } = await supabase.from("prizes").insert(chunk);
-      if (prizeInsErr) throw new Error(`Failed to insert prizes: ${prizeInsErr.message}`);
+  for (const [categoryId, sections] of categoryToDraftSections.entries()) {
+    const existingPlaces = existingPlaceMap.get(categoryId) || new Set<number>();
+    const seenDraftKeys = new Set<string>();
+    const categoryRows: Array<{
+      category_id: string;
+      place: number;
+      cash_amount: number;
+      has_trophy: boolean;
+      has_medal: boolean;
+      gift_items: Array<{ name: string; qty: number }>;
+      is_active: boolean;
+    }> = [];
+
+    for (const section of sections) {
+      for (const dp of section.prizes) {
+        const dedupeKey = `${categoryId}:${dp.place}`;
+        if (seenDraftKeys.has(dedupeKey)) {
+          report.prizes_skipped_duplicate_in_draft++;
+          continue;
+        }
+        seenDraftKeys.add(dedupeKey);
+
+        if (existingPlaces.has(dp.place)) {
+          report.prizes_skipped_existing++;
+          continue;
+        }
+
+        categoryRows.push({
+          category_id: categoryId,
+          place: dp.place,
+          cash_amount: dp.cash_amount,
+          has_trophy: dp.has_trophy,
+          has_medal: dp.has_medal,
+          gift_items: convertGiftItems(dp.gift_items),
+          is_active: true,
+        });
+      }
     }
-    report.prizes_created = prizeRows.length;
+
+    if (categoryRows.length === 0) continue;
+
+    const { error: prizeInsErr } = await supabase.from("prizes").insert(categoryRows);
+    if (!prizeInsErr) {
+      report.prizes_created += categoryRows.length;
+      continue;
+    }
+
+    let categoryFailureMessage: string | null = null;
+    for (const row of categoryRows) {
+      const { error: rowErr } = await supabase.from("prizes").insert(row);
+      if (!rowErr) {
+        report.prizes_created++;
+        continue;
+      }
+
+      if (rowErr.message.toLowerCase().includes("duplicate key")) {
+        report.prizes_skipped_existing++;
+        continue;
+      }
+
+      categoryFailureMessage = rowErr.message;
+    }
+
+    if (categoryFailureMessage) {
+      report.failed_categories.push(`${categoryId}: ${categoryFailureMessage}`);
+    }
   }
 
   // Step 5: Team groups (only if opted in and all verified)
@@ -334,39 +374,76 @@ async function applyDraftAddOnly(
         teamPlaceMap.get(tp.group_id)!.add(tp.place);
       }
 
-      const teamPrizeRows: Array<{
-        group_id: string;
-        place: number;
-        cash_amount: number;
-        has_trophy: boolean;
-        has_medal: boolean;
-        is_active: boolean;
-      }> = [];
-
+      const groupToDraftSections = new Map<string, DraftTeamGroup[]>();
       for (const mapping of groupIdMap) {
-        const tg = draft.team_groups[mapping.draftIdx];
-        const existingPlaces = teamPlaceMap.get(mapping.groupId) || new Set<number>();
+        const current = groupToDraftSections.get(mapping.groupId) ?? [];
+        current.push(draft.team_groups[mapping.draftIdx]);
+        groupToDraftSections.set(mapping.groupId, current);
+      }
 
-        for (const dp of tg.prizes) {
-          if (existingPlaces.has(dp.place)) {
+      for (const [groupId, sections] of groupToDraftSections.entries()) {
+        const existingPlaces = teamPlaceMap.get(groupId) || new Set<number>();
+        const seenDraftKeys = new Set<string>();
+        const groupRows: Array<{
+          group_id: string;
+          place: number;
+          cash_amount: number;
+          has_trophy: boolean;
+          has_medal: boolean;
+          is_active: boolean;
+        }> = [];
+
+        for (const section of sections) {
+          for (const dp of section.prizes) {
+            const dedupeKey = `${groupId}:${dp.place}`;
+            if (seenDraftKeys.has(dedupeKey)) {
+              report.team_prizes_skipped++;
+              continue;
+            }
+            seenDraftKeys.add(dedupeKey);
+
+            if (existingPlaces.has(dp.place)) {
+              report.team_prizes_skipped++;
+              continue;
+            }
+            groupRows.push({
+              group_id: groupId,
+              place: dp.place,
+              cash_amount: dp.cash_amount,
+              has_trophy: dp.has_trophy,
+              has_medal: dp.has_medal,
+              is_active: true,
+            });
+          }
+        }
+
+        if (groupRows.length === 0) continue;
+
+        const { error: tpInsErr } = await supabase.from("institution_prizes").insert(groupRows);
+        if (!tpInsErr) {
+          report.team_prizes_created += groupRows.length;
+          continue;
+        }
+
+        let groupFailureMessage: string | null = null;
+        for (const row of groupRows) {
+          const { error: rowErr } = await supabase.from("institution_prizes").insert(row);
+          if (!rowErr) {
+            report.team_prizes_created++;
+            continue;
+          }
+
+          if (rowErr.message.toLowerCase().includes("duplicate key")) {
             report.team_prizes_skipped++;
             continue;
           }
-          teamPrizeRows.push({
-            group_id: mapping.groupId,
-            place: dp.place,
-            cash_amount: dp.cash_amount,
-            has_trophy: dp.has_trophy,
-            has_medal: dp.has_medal,
-            is_active: true,
-          });
-        }
-      }
 
-      if (teamPrizeRows.length > 0) {
-        const { error: tpInsErr } = await supabase.from("institution_prizes").insert(teamPrizeRows);
-        if (tpInsErr) throw new Error(`Failed to insert team prizes: ${tpInsErr.message}`);
-        report.team_prizes_created = teamPrizeRows.length;
+          groupFailureMessage = rowErr.message;
+        }
+
+        if (groupFailureMessage) {
+          report.failed_team_groups.push(`${groupId}: ${groupFailureMessage}`);
+        }
       }
     }
   }
@@ -480,10 +557,16 @@ export default function BrochurePrizeDraftDialog({
 
       const parts: string[] = [];
       if (report.categories_created > 0) parts.push(`${report.categories_created} categories created`);
+      if (report.categories_reused > 0) parts.push(`${report.categories_reused} categories reused`);
       if (report.prizes_created > 0) parts.push(`${report.prizes_created} prizes created`);
-      if (report.prizes_skipped > 0) parts.push(`${report.prizes_skipped} prizes skipped (existing)`);
+      if (report.prizes_skipped_existing > 0) parts.push(`${report.prizes_skipped_existing} prizes skipped (existing)`);
+      if (report.prizes_skipped_duplicate_in_draft > 0) parts.push(`${report.prizes_skipped_duplicate_in_draft} prizes skipped (duplicate in draft)`);
       if (report.team_groups_created > 0) parts.push(`${report.team_groups_created} team groups created`);
+      if (report.team_groups_reused > 0) parts.push(`${report.team_groups_reused} team groups reused`);
       if (report.team_prizes_created > 0) parts.push(`${report.team_prizes_created} team prizes created`);
+      if (report.team_prizes_skipped > 0) parts.push(`${report.team_prizes_skipped} team prizes skipped`);
+      if (report.failed_categories.length > 0) parts.push(`${report.failed_categories.length} categories failed`);
+      if (report.failed_team_groups.length > 0) parts.push(`${report.failed_team_groups.length} team groups failed`);
 
       if (parts.length === 0) {
         toast.info("Nothing new to add — all categories and prizes already exist.");
@@ -635,9 +718,12 @@ export default function BrochurePrizeDraftDialog({
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Categories: {applyReport.categories_created} created, {applyReport.categories_reused} reused.
-                  Prizes: {applyReport.prizes_created} created, {applyReport.prizes_skipped} skipped.
+                  Prizes: {applyReport.prizes_created} created, {applyReport.prizes_skipped_existing} skipped existing, {applyReport.prizes_skipped_duplicate_in_draft} skipped duplicate in draft.
                   {(applyReport.team_groups_created > 0 || applyReport.team_prizes_created > 0) && (
-                    <> Team: {applyReport.team_groups_created} groups, {applyReport.team_prizes_created} prizes.</>
+                    <> Team: {applyReport.team_groups_created} groups created, {applyReport.team_groups_reused} reused, {applyReport.team_prizes_created} prizes created, {applyReport.team_prizes_skipped} skipped.</>
+                  )}
+                  {(applyReport.failed_categories.length > 0 || applyReport.failed_team_groups.length > 0) && (
+                    <> Failed: {applyReport.failed_categories.length} categories, {applyReport.failed_team_groups.length} team groups.</>
                   )}
                 </p>
               </div>
