@@ -148,6 +148,32 @@ export default function PublishSuccess() {
 
             <Card>
               <CardContent className="pt-6 space-y-3">
+                <h3 className="font-semibold text-foreground mb-1">Organizer Tools</h3>
+                <p className="text-xs text-muted-foreground mb-3">Export, print, or review the full prize list</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    onClick={() => navigate(`/t/${id}/finalize`)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    View Final Prizes
+                  </Button>
+                  <Button
+                    onClick={() => navigate(`/t/${id}/final/v1`)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print Prize List
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6 space-y-3">
                 <h3 className="font-semibold text-foreground mb-3">Manage Publication</h3>
                 
                 <Button
