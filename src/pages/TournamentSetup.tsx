@@ -1000,7 +1000,6 @@ export default function TournamentSetup() {
         category_type: variables.categoryType,
       });
       queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      toast.info('Rules saved', { duration: 1500 });
       toast.success('Rules saved');
       resetDirty('criteria-sheet');
       setSavedCriteria(null);
