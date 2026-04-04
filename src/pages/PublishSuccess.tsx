@@ -3,7 +3,7 @@ import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw, FileText, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
