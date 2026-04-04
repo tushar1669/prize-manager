@@ -3,7 +3,7 @@ import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Eye, XCircle, RefreshCw, FileText, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -141,6 +141,32 @@ export default function PublishSuccess() {
                   >
                     <ExternalLink className="h-4 w-4" />
                     Open in New Tab
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6 space-y-3">
+                <h3 className="font-semibold text-foreground mb-1">Organizer Tools</h3>
+                <p className="text-xs text-muted-foreground mb-3">Export, print, or review the full prize list</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    onClick={() => navigate(`/t/${id}/finalize`)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    View Final Prizes
+                  </Button>
+                  <Button
+                    onClick={() => navigate(`/t/${id}/final/v1`)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print Prize List
                   </Button>
                 </div>
               </CardContent>
