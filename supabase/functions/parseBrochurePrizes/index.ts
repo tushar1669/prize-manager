@@ -140,6 +140,11 @@ const TEAM_SIZE_MAP: Record<string, number> = {
 const TROPHY_RE = /\btrophy\b/i;
 const MEDAL_RE = /\bmedal\b/i;
 const GIFT_RE = /\b(?:chess\s*set|voucher|gift|book|certificate|shield|memento)\b/gi;
+const PRIZE_HEADING_RE = /\b(?:prize\s+structure|main\s+prize|category\s+prizes?|special\s+prize|elo\s+below)\b/i;
+const CATEGORY_LABEL_RE = /^(?:rated\s+\d{3,4}\s*[-–]\s*\d{3,4}|unrated|best\s+[a-z0-9+ -]+|under\s*\d{1,2}\s*(?:boys|girls)|u[-\s]?\d{1,2})\b/i;
+const TROPHY_TOKEN_RE = /(?:\bT\b|\+?\s*TROPHY\b|🏆)/i;
+const MEDAL_TOKEN_RE = /(?:\bM\b|\+?\s*MEDAL\b|🏅)/i;
+const NOTE_ONLY_RE = /\b(?:for\s+all|participants?)\b/i;
 
 function parseCurrencyAmount(text: string): number | null {
   const m = text.match(/(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/i);
@@ -148,7 +153,7 @@ function parseCurrencyAmount(text: string): number | null {
 }
 
 function parsePlaceFromLine(line: string): { places: number[]; isRange: boolean } | null {
-  const rangeMatch = line.match(PLACE_RANGE_RE);
+  const rangeMatch = line.match(/(?:^|[\s:])(\d+)\s*(?:st|nd|rd|th)?\s*(?:to|[-–—]+)\s*(\d+)\s*(?:st|nd|rd|th)?\b/i) ?? line.match(PLACE_RANGE_RE);
   if (rangeMatch) {
     const start = parseInt(rangeMatch[1], 10);
     const end = parseInt(rangeMatch[2], 10);
@@ -164,6 +169,11 @@ function parsePlaceFromLine(line: string): { places: number[]; isRange: boolean 
     const p = parseInt(singleMatch[1], 10);
     if (p > 0 && p < 200) return { places: [p], isRange: false };
   }
+  const bareSingle = line.match(/(?:^|[\s:])(\d{1,2})(?=\s|$)/);
+  if (bareSingle) {
+    const p = parseInt(bareSingle[1], 10);
+    if (p > 0 && p < 200) return { places: [p], isRange: false };
+  }
 
   if (WINNER_RE.test(line)) return { places: [1], isRange: false };
   if (RUNNER_RE.test(line)) return { places: [2], isRange: false };
@@ -172,8 +182,8 @@ function parsePlaceFromLine(line: string): { places: number[]; isRange: boolean 
 }
 
 function detectAwards(line: string): { has_trophy: boolean; has_medal: boolean; gift_items: string[] } {
-  const has_trophy = TROPHY_RE.test(line);
-  const has_medal = MEDAL_RE.test(line);
+  const has_trophy = TROPHY_RE.test(line) || TROPHY_TOKEN_RE.test(line);
+  const has_medal = MEDAL_RE.test(line) || MEDAL_TOKEN_RE.test(line);
   const gift_items = [...new Set([...line.matchAll(GIFT_RE)].map((m) => m[0].trim().toLowerCase()))];
   return { has_trophy, has_medal, gift_items };
 }
@@ -185,6 +195,10 @@ function parsePrizeLinesFromBlock(block: string): DraftPrize[] {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.length < 3) continue;
+
+    if (NOTE_ONLY_RE.test(line) && !parseCurrencyAmount(line) && !parsePlaceFromLine(line)) {
+      continue;
+    }
 
     const placeResult = parsePlaceFromLine(line);
     const amount = parseCurrencyAmount(line);
@@ -217,6 +231,73 @@ function parsePrizeLinesFromBlock(block: string): DraftPrize[] {
   }
 
   return prizes;
+}
+
+function splitPages(text: string, pageCount: number): string[] {
+  const rawPages = text.split(/\f+/).map((page) => page.trim()).filter((page) => page.length > 0);
+  if (rawPages.length > 0) return rawPages;
+  if (pageCount <= 1) return [text];
+  return [text];
+}
+
+function scorePrizePage(pageText: string): number {
+  const lines = pageText.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
+  const headingHits = lines.filter((line) => PRIZE_HEADING_RE.test(line)).length;
+  const currencyHits = lines.filter((line) => /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line)).length;
+  const placeHits = lines.filter((line) => parsePlaceFromLine(line) !== null).length;
+  const categoryHits = lines.filter((line) => CATEGORY_LABEL_RE.test(line)).length;
+  return headingHits * 6 + currencyHits * 2 + placeHits * 2 + categoryHits;
+}
+
+function selectPrizeRelevantText(text: string, pageCount: number): string {
+  const pages = splitPages(text, pageCount);
+  if (pages.length <= 1) return text;
+
+  const scored = pages.map((pageText, index) => ({ index, pageText, score: scorePrizePage(pageText) }));
+  const strongPages = scored.filter((page) => page.score >= 10).sort((a, b) => a.index - b.index);
+  if (strongPages.length > 0) return strongPages.map((page) => page.pageText).join("\n");
+
+  const fallback = scored.filter((page) => page.score >= 6).sort((a, b) => a.index - b.index);
+  if (fallback.length > 0) return fallback.map((page) => page.pageText).join("\n");
+  return text;
+}
+
+function extractCategoryNameFromLine(line: string): string | null {
+  const normalized = normalizeTextLine(line)
+    .replace(/\s*[:|-]\s*$/, "")
+    .replace(/\b(?:prizes?|category)\b$/i, "")
+    .trim();
+  if (!normalized) return null;
+  if (normalized.length > 80) return null;
+  if (!CATEGORY_LABEL_RE.test(normalized) && !/\belo\s+below\b/i.test(normalized)) return null;
+  return normalized;
+}
+
+function splitSectionIntoSubcategories(sectionName: string, body: string): { name: string; body: string }[] {
+  if (!/\b(?:category|special|elo\s+below)\b/i.test(sectionName)) {
+    return [{ name: sectionName, body }];
+  }
+
+  const lines = body.split("\n");
+  const subSections: { name: string; startIdx: number }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const candidate = extractCategoryNameFromLine(lines[i]);
+    if (!candidate) continue;
+    subSections.push({ name: candidate, startIdx: i });
+  }
+
+  if (subSections.length === 0) return [{ name: sectionName, body }];
+
+  const result: { name: string; body: string }[] = [];
+  for (let s = 0; s < subSections.length; s++) {
+    const start = subSections[s].startIdx + 1;
+    const end = s + 1 < subSections.length ? subSections[s + 1].startIdx : lines.length;
+    const subBody = lines.slice(start, end).join("\n").trim();
+    if (!subBody) continue;
+    result.push({ name: subSections[s].name, body: subBody });
+  }
+  return result.length > 0 ? result : [{ name: sectionName, body }];
 }
 
 function detectSections(text: string): { name: string; body: string; isMain: boolean; isTeam: boolean }[] {
@@ -332,19 +413,20 @@ function hasMinimumPrizeSignal(sectionBody: string, prizes: DraftPrize[]): boole
   if (prizes.length === 0) return false;
   const lines = sectionBody.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
   const currencyLines = lines.filter((line) => /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line)).length;
-  const placeLines = lines.filter((line) => PLACE_SINGLE_RE.test(line) || PLACE_RANGE_RE.test(line) || WINNER_RE.test(line) || RUNNER_RE.test(line)).length;
-  return currencyLines >= 1 && placeLines >= 1;
+  const awardLines = lines.filter((line) => detectAwards(line).has_trophy || detectAwards(line).has_medal).length;
+  const placeLines = lines.filter((line) => parsePlaceFromLine(line) !== null).length;
+  return (currencyLines >= 1 && placeLines >= 1) || (awardLines >= 1 && placeLines >= 1);
 }
 
-function buildDraft(text: string, brochureUrl: string, selectedEvent: string | null, events: string[]): DraftResult {
+function buildDraft(text: string, brochureUrl: string, selectedEvent: string | null, events: string[], pageCount: number): DraftResult {
   const warnings: string[] = [];
   const categories: DraftCategory[] = [];
   const teamGroups: DraftTeamGroup[] = [];
 
   // Event filtering: if selected_event provided, slice the text
-  let workingText = text;
+  let workingText = selectPrizeRelevantText(text, pageCount);
   if (selectedEvent && events.length >= 2) {
-    const sliced = sliceTextForEvent(text, selectedEvent, events);
+    const sliced = sliceTextForEvent(workingText, selectedEvent, events);
     if (sliced && sliced.length > 20) {
       workingText = sliced;
     } else {
@@ -392,21 +474,24 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
         continue;
       }
 
-      const prizes = parsePrizeLinesFromBlock(section.body);
-      if (!hasMinimumPrizeSignal(section.body, prizes)) continue;
+      const parsedSections = splitSectionIntoSubcategories(section.name, section.body);
+      for (const parsedSection of parsedSections) {
+        const prizes = parsePrizeLinesFromBlock(parsedSection.body);
+        if (!hasMinimumPrizeSignal(parsedSection.body, prizes)) continue;
 
-      const isMain = section.isMain && !hasMain;
-      if (isMain) hasMain = true;
+        const isMain = section.isMain && !hasMain;
+        if (isMain) hasMain = true;
 
-      categories.push({
-        name: section.name,
-        is_main: isMain,
-        order_idx: orderIdx++,
-        confidence: prizes.some((p) => p.confidence === "HIGH") ? "HIGH" : "MEDIUM",
-        warnings: [],
-        criteria_json: {} as Record<string, never>,
-        prizes,
-      });
+        categories.push({
+          name: parsedSection.name,
+          is_main: isMain,
+          order_idx: orderIdx++,
+          confidence: prizes.some((p) => p.confidence === "HIGH") ? "HIGH" : "MEDIUM",
+          warnings: [],
+          criteria_json: {} as Record<string, never>,
+          prizes,
+        });
+      }
     }
   }
 
@@ -552,7 +637,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Draft mode (Phase 1.1) ──
-    const draft = buildDraft(text, brochureUrl, selectedEvent, events);
+    const draft = buildDraft(text, brochureUrl, selectedEvent, events, pageCount);
 
     console.log(`[${FUNCTION_NAME}] tournament_id=${tournamentId} status=ok_draft categories=${draft.categories.length} team_groups=${draft.team_groups.length}`);
 
