@@ -6,9 +6,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/** Map raw machine warning keys to human-friendly copy */
+const WARNING_COPY: Record<string, string> = {
+  no_prize_structure_detected:
+    "We couldn't find a recognizable prize structure in this brochure. Try a clearer brochure, or add prizes manually.",
+};
 
 interface BrochurePrizeDraftDialogProps {
   open: boolean;
