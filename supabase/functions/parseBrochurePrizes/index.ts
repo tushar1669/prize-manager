@@ -120,6 +120,10 @@ interface DraftResult {
 }
 
 type ParseMode = "extract" | "draft";
+interface ParsedPage {
+  pageIndex: number;
+  text: string;
+}
 
 // ── Draft heuristic functions ────────────────────────────────────────────
 
@@ -240,6 +244,13 @@ function splitPages(text: string, pageCount: number): string[] {
   return [text];
 }
 
+function toParsedPages(text: string, pageCount: number): ParsedPage[] {
+  return splitPages(text, pageCount).map((pageText, index) => ({
+    pageIndex: index,
+    text: pageText,
+  }));
+}
+
 function scorePrizePage(pageText: string): number {
   const lines = pageText.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
   const headingHits = lines.filter((line) => PRIZE_HEADING_RE.test(line)).length;
@@ -249,17 +260,67 @@ function scorePrizePage(pageText: string): number {
   return headingHits * 6 + currencyHits * 2 + placeHits * 2 + categoryHits;
 }
 
-function selectPrizeRelevantText(text: string, pageCount: number): string {
-  const pages = splitPages(text, pageCount);
-  if (pages.length <= 1) return text;
+function selectPrizeRelevantPages(pages: ParsedPage[]): ParsedPage[] {
+  if (pages.length <= 1) return pages;
+  const scored = pages.map((page) => ({ ...page, score: scorePrizePage(page.text) }));
+  const strong = scored.filter((page) => page.score >= 10);
+  if (strong.length > 0) return strong.map(({ pageIndex, text }) => ({ pageIndex, text }));
+  const fallback = scored.filter((page) => page.score >= 6);
+  if (fallback.length > 0) return fallback.map(({ pageIndex, text }) => ({ pageIndex, text }));
+  return pages;
+}
 
-  const scored = pages.map((pageText, index) => ({ index, pageText, score: scorePrizePage(pageText) }));
-  const strongPages = scored.filter((page) => page.score >= 10).sort((a, b) => a.index - b.index);
-  if (strongPages.length > 0) return strongPages.map((page) => page.pageText).join("\n");
+function isolateEventPages(
+  pages: ParsedPage[],
+  selectedEvent: string,
+  events: string[],
+): { text: string | null; isolated: ParsedPage[] } {
+  if (pages.length === 0) return { text: null, isolated: [] };
 
-  const fallback = scored.filter((page) => page.score >= 6).sort((a, b) => a.index - b.index);
-  if (fallback.length > 0) return fallback.map((page) => page.pageText).join("\n");
-  return text;
+  const selectedRegex = new RegExp(`\\b${selectedEvent}\\b`, "i");
+  const otherRegexes = events
+    .filter((event) => event.toLowerCase() !== selectedEvent.toLowerCase())
+    .map((event) => new RegExp(`\\b${event}\\b`, "i"));
+
+  const scored = pages.map((page) => {
+    const normalizedText = normalizeTextLine(page.text);
+    const prizeScore = scorePrizePage(page.text);
+    const hasSelected = selectedRegex.test(normalizedText);
+    const hasOther = otherRegexes.some((regex) => regex.test(normalizedText));
+    return { ...page, prizeScore, hasSelected, hasOther };
+  });
+
+  const selectedCandidates = scored.filter((page) => page.hasSelected);
+  if (selectedCandidates.length === 0) return { text: null, isolated: [] };
+
+  const anchor = [...selectedCandidates].sort((a, b) => {
+    const aScore = a.prizeScore + (a.hasOther ? -2 : 2);
+    const bScore = b.prizeScore + (b.hasOther ? -2 : 2);
+    return bScore - aScore;
+  })[0];
+
+  let start = anchor.pageIndex;
+  let end = pages.length - 1;
+
+  for (let i = anchor.pageIndex + 1; i < scored.length; i++) {
+    if (scored[i].hasOther && scored[i].prizeScore >= 6) {
+      end = i - 1;
+      break;
+    }
+  }
+
+  if (anchor.hasOther) {
+    // Event overview page can mention multiple events; avoid bleeding into prior event pages.
+    start = anchor.pageIndex;
+  }
+
+  if (end < start) {
+    return { text: null, isolated: [] };
+  }
+
+  const isolated = pages.filter((page) => page.pageIndex >= start && page.pageIndex <= end);
+  const isolatedText = isolated.map((page) => page.text).join("\n").trim();
+  return { text: isolatedText.length > 0 ? isolatedText : null, isolated };
 }
 
 function extractCategoryNameFromLine(line: string): string | null {
@@ -300,10 +361,9 @@ function splitSectionIntoSubcategories(sectionName: string, body: string): { nam
   return result.length > 0 ? result : [{ name: sectionName, body }];
 }
 
-function detectSections(text: string): { name: string; body: string; isMain: boolean; isTeam: boolean }[] {
+function detectSections(text: string, pageIndex: number): { name: string; body: string; isMain: boolean; isTeam: boolean; blockKey: string; pageIndex: number }[] {
   const lines = text.split("\n");
   const sections: { name: string; startIdx: number; isMain: boolean; isTeam: boolean }[] = [];
-  const seenSectionNames = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
     const line = normalizeTextLine(lines[i]);
@@ -337,15 +397,12 @@ function detectSections(text: string): { name: string; body: string; isMain: boo
     }
 
     if (hasPrizesBelow || isMain || isTeam) {
-      const normalizedName = normalizeSectionName(line);
-      if (seenSectionNames.has(normalizedName)) continue;
-      seenSectionNames.add(normalizedName);
       sections.push({ name: line, startIdx: i, isMain, isTeam });
     }
   }
 
   // Build body text for each section (from heading to next heading or EOF, capped at 2000 chars)
-  const result: { name: string; body: string; isMain: boolean; isTeam: boolean }[] = [];
+  const result: { name: string; body: string; isMain: boolean; isTeam: boolean; blockKey: string; pageIndex: number }[] = [];
   for (let s = 0; s < sections.length; s++) {
     const startLine = sections[s].startIdx + 1;
     const endLine = s + 1 < sections.length ? sections[s + 1].startIdx : lines.length;
@@ -355,6 +412,8 @@ function detectSections(text: string): { name: string; body: string; isMain: boo
       body,
       isMain: sections[s].isMain,
       isTeam: sections[s].isTeam,
+      blockKey: `page-${pageIndex}-line-${sections[s].startIdx}`,
+      pageIndex,
     });
   }
 
@@ -409,6 +468,122 @@ function sliceTextForEvent(text: string, selectedEvent: string, events: string[]
   return sliced.length > 0 ? sliced : null;
 }
 
+const GRID_CATEGORY_TOKEN_RE = /\b(?:main\s*prizes?|main|unrated|delhi|female|veteran\s*55\+?|specially\s*abled|boys?\s*under\s*0?\d{1,2}|girls?\s*under\s*0?\d{1,2}|\d{3,4}\s*[-–]\s*\d{3,4}|best\s+(?:academy|school))\b/gi;
+
+function splitGridHeaderCategories(headerLine: string): string[] {
+  const cleaned = normalizeTextLine(headerLine).replace(/^rank\s*/i, "");
+  const matches = [...cleaned.matchAll(GRID_CATEGORY_TOKEN_RE)].map((m) => normalizeTextLine(m[0]));
+  const normalized = matches
+    .map((name) => name
+      .replace(/\bmain\b/i, "Main Prize")
+      .replace(/\bmain prizes?\b/i, "Main Prize")
+      .replace(/\bboys\s+under\s*/i, "Boys Under ")
+      .replace(/\bgirls\s+under\s*/i, "Girls Under ")
+      .replace(/\s+/g, " ")
+      .trim())
+    .filter(Boolean);
+  return [...new Set(normalized)];
+}
+
+function parseGridPrizeRows(lines: string[], categoryCount: number): Map<number, { amount: number; has_trophy: boolean; has_medal: boolean }[]> {
+  const rows = new Map<number, { amount: number; has_trophy: boolean; has_medal: boolean }[]>();
+  for (const rawLine of lines) {
+    const line = normalizeTextLine(rawLine);
+    if (!line) continue;
+    const placeResult = parsePlaceFromLine(line);
+    if (!placeResult || placeResult.places.length !== 1) continue;
+    const place = placeResult.places[0];
+    const amounts = [...line.matchAll(/\b\d{3,6}\b/g)].map((m) => parseInt(m[0], 10));
+    const awards = detectAwards(line);
+    const cols = Array.from({ length: categoryCount }, (_, idx) => ({
+      amount: amounts[idx] ?? 0,
+      has_trophy: awards.has_trophy,
+      has_medal: awards.has_medal,
+    }));
+    rows.set(place, cols);
+  }
+  return rows;
+}
+
+function parseGridBlocksFromPage(page: ParsedPage): {
+  categories: { name: string; confidence: Confidence; blockKey: string; prizes: DraftPrize[] }[];
+  teamGroups: { name: string; blockKey: string; prizes: DraftPrize[] }[];
+  warnings: string[];
+} {
+  const lines = page.text.split("\n");
+  const warnings: string[] = [];
+  const categories: { name: string; confidence: Confidence; blockKey: string; prizes: DraftPrize[] }[] = [];
+  const teamGroups: { name: string; blockKey: string; prizes: DraftPrize[] }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = normalizeTextLine(lines[i]);
+    if (!line) continue;
+
+    if (/youngest\s+kid/i.test(line)) {
+      warnings.push(`Unstructured special award note on page ${page.pageIndex + 1}: ${line}`);
+    }
+
+    if (!/rank/i.test(line)) continue;
+    const headerCategories = splitGridHeaderCategories(line);
+    if (headerCategories.length < 2) continue;
+
+    const bodyLines: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const nextLine = normalizeTextLine(lines[j]);
+      if (!nextLine) {
+        if (bodyLines.length > 0) break;
+        continue;
+      }
+      if (/^rank\b/i.test(nextLine)) break;
+      if (/(?:rapid|blitz)\b/i.test(nextLine) && scorePrizePage(nextLine) < 2) break;
+      bodyLines.push(nextLine);
+      if (bodyLines.length >= 15) break;
+    }
+
+    const rowMap = parseGridPrizeRows(bodyLines, headerCategories.length);
+    if (rowMap.size === 0) continue;
+
+    for (let c = 0; c < headerCategories.length; c++) {
+      const categoryName = headerCategories[c];
+      const isTeam = /^best\s+(academy|school)$/i.test(categoryName);
+      const prizes: DraftPrize[] = [];
+      for (const [place, cols] of rowMap.entries()) {
+        const col = cols[c];
+        if (!col) continue;
+        if (col.amount <= 0 && !col.has_trophy && !col.has_medal) continue;
+        prizes.push({
+          place,
+          cash_amount: col.amount,
+          has_trophy: col.has_trophy,
+          has_medal: col.has_medal,
+          gift_items: [],
+          confidence: "MEDIUM",
+          source_text: `grid page ${page.pageIndex + 1} row ${place}`,
+        });
+      }
+      if (prizes.length === 0) continue;
+
+      const blockKey = `grid-page-${page.pageIndex}-header-${i}-col-${c}`;
+      if (isTeam) {
+        teamGroups.push({
+          name: categoryName,
+          blockKey,
+          prizes,
+        });
+      } else {
+        categories.push({
+          name: categoryName,
+          confidence: "MEDIUM",
+          blockKey,
+          prizes,
+        });
+      }
+    }
+  }
+
+  return { categories, teamGroups, warnings };
+}
+
 function hasMinimumPrizeSignal(sectionBody: string, prizes: DraftPrize[]): boolean {
   if (prizes.length === 0) return false;
   const lines = sectionBody.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
@@ -423,18 +598,30 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
   const categories: DraftCategory[] = [];
   const teamGroups: DraftTeamGroup[] = [];
 
-  // Event filtering: if selected_event provided, slice the text
-  let workingText = selectPrizeRelevantText(text, pageCount);
+  // Event filtering: page-aware isolation first, then prize-relevant filtering
+  const pages = toParsedPages(text, pageCount);
+  let workingPages = pages;
   if (selectedEvent && events.length >= 2) {
-    const sliced = sliceTextForEvent(workingText, selectedEvent, events);
-    if (sliced && sliced.length > 20) {
-      workingText = sliced;
+    const isolated = isolateEventPages(workingPages, selectedEvent, events);
+    if (isolated.text && isolated.isolated.length > 0) {
+      workingPages = isolated.isolated;
     } else {
-      warnings.push(`Could not isolate section for event "${selectedEvent}"; using full text`);
+      // Keep previous behavior as true fallback only if page-aware isolation fails.
+      const fullText = workingPages.map((page) => page.text).join("\n");
+      const sliced = sliceTextForEvent(fullText, selectedEvent, events);
+      if (sliced && sliced.length > 20) {
+        workingPages = [{ pageIndex: 0, text: sliced }];
+      } else {
+        warnings.push(`Could not isolate section for event "${selectedEvent}"; using full text`);
+      }
     }
   }
+  workingPages = selectPrizeRelevantPages(workingPages);
+  const workingText = workingPages.map((page) => page.text).join("\n");
 
-  const sections = detectSections(workingText);
+  const sections = workingPages.flatMap((page) => detectSections(page.text, page.pageIndex));
+  const seenCategoryBlocks = new Set<string>();
+  const seenTeamBlocks = new Set<string>();
 
   if (sections.length === 0) {
     // Fallback: try parsing the entire text as one block
@@ -453,15 +640,13 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
   } else {
     let orderIdx = 0;
     let hasMain = false;
-    const seenTeamNames = new Set<string>();
 
     for (const section of sections) {
       if (section.isTeam) {
         const prizes = parsePrizeLinesFromBlock(section.body);
         if (!hasMinimumPrizeSignal(section.body, prizes)) continue;
-        const teamNameKey = normalizeSectionName(section.name);
-        if (seenTeamNames.has(teamNameKey)) continue;
-        seenTeamNames.add(teamNameKey);
+        if (seenTeamBlocks.has(section.blockKey)) continue;
+        seenTeamBlocks.add(section.blockKey);
         const teamSize = parseTeamSize(section.body);
         teamGroups.push({
           name: section.name,
@@ -478,6 +663,9 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
       for (const parsedSection of parsedSections) {
         const prizes = parsePrizeLinesFromBlock(parsedSection.body);
         if (!hasMinimumPrizeSignal(parsedSection.body, prizes)) continue;
+        const blockIdentity = `${section.blockKey}:${normalizeSectionName(parsedSection.name)}`;
+        if (seenCategoryBlocks.has(blockIdentity)) continue;
+        seenCategoryBlocks.add(blockIdentity);
 
         const isMain = section.isMain && !hasMain;
         if (isMain) hasMain = true;
@@ -492,6 +680,40 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
           prizes,
         });
       }
+    }
+  }
+
+  // Grid reconstruction pass (page-local), focused on sparse table layouts.
+  let nextOrderIdx = categories.length;
+  for (const page of workingPages) {
+    const grid = parseGridBlocksFromPage(page);
+    warnings.push(...grid.warnings);
+
+    for (const category of grid.categories) {
+      if (seenCategoryBlocks.has(category.blockKey)) continue;
+      seenCategoryBlocks.add(category.blockKey);
+      categories.push({
+        name: category.name,
+        is_main: normalizeSectionName(category.name) === "main prize" && !categories.some((c) => c.is_main),
+        order_idx: nextOrderIdx++,
+        confidence: category.confidence,
+        warnings: ["Reconstructed from grid layout"],
+        criteria_json: {} as Record<string, never>,
+        prizes: category.prizes,
+      });
+    }
+
+    for (const group of grid.teamGroups) {
+      if (seenTeamBlocks.has(group.blockKey)) continue;
+      seenTeamBlocks.add(group.blockKey);
+      teamGroups.push({
+        name: group.name,
+        group_by: "club",
+        team_size: 4,
+        confidence: "LOW",
+        warnings: ["Team group reconstructed from grid — verify before applying"],
+        prizes: group.prizes,
+      });
     }
   }
 
