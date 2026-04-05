@@ -908,7 +908,7 @@ export default function BrochurePrizeDraftDialog({
             </div>
 
             {/* Apply controls */}
-            {hasCategories && (
+            {hasCategories && totalPrizes > 0 && (
               <div className="space-y-3 border-t pt-4">
                 {/* Team groups opt-in */}
                 {draft.team_groups.length > 0 && (
