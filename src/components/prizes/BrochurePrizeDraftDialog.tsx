@@ -6,9 +6,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarning, ImageOff, ScanSearch, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/** Map raw machine warning keys to human-friendly copy */
+const WARNING_COPY: Record<string, string> = {
+  no_prize_structure_detected:
+    "We couldn't find a recognizable prize structure in this brochure. Try a clearer brochure, or add prizes manually.",
+};
 
 interface BrochurePrizeDraftDialogProps {
   open: boolean;
@@ -739,20 +745,39 @@ export default function BrochurePrizeDraftDialog({
               {draft.team_groups.length > 0 && (
                 <span>{draft.team_groups.length} team groups</span>
               )}
-              <span>·</span>
+              <span className="text-muted-foreground">·</span>
               <span>Confidence: {confidenceBadge(draft.overall_confidence)}</span>
               {response?.selected_event && (
                 <Badge variant="secondary">{response.selected_event}</Badge>
+              )}
+              {/* Pick Different Event — only when multi-event was originally detected */}
+              {events.length > 1 && response?.selected_event && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => {
+                    setStatus("multi_event_detected");
+                    setResponse(null);
+                    setApplyReport(null);
+                    setExpandedCategories(new Set());
+                    setIncludeTeamGroups(false);
+                    setVerifiedTeamGroups(new Set());
+                  }}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Pick Different Event
+                </Button>
               )}
             </div>
 
             {/* Warnings */}
             {draft.warnings.length > 0 && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3 space-y-1">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3 space-y-1.5">
                 {draft.warnings.map((w, i) => (
                   <p key={i} className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                    {w}
+                    {WARNING_COPY[w] ?? w}
                   </p>
                 ))}
               </div>
@@ -883,7 +908,7 @@ export default function BrochurePrizeDraftDialog({
             </div>
 
             {/* Apply controls */}
-            {hasCategories && (
+            {hasCategories && totalPrizes > 0 && (
               <div className="space-y-3 border-t pt-4">
                 {/* Team groups opt-in */}
                 {draft.team_groups.length > 0 && (
