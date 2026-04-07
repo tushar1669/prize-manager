@@ -456,6 +456,33 @@ function isolateEventPages(
   return { text: isolatedText.length > 0 ? isolatedText : null, isolated };
 }
 
+function isolateEventBlocks(
+  pages: ParsedPage[],
+  selectedEvent: string,
+  events: string[],
+): { text: string | null; isolated: ParsedPage[] } {
+  if (pages.length === 0) return { text: null, isolated: [] };
+
+  const selectedRegex = new RegExp(`\\b${selectedEvent}\\b`, "i");
+  const otherRegexes = events
+    .filter((event) => event.toLowerCase() !== selectedEvent.toLowerCase())
+    .map((event) => new RegExp(`\\b${event}\\b`, "i"));
+
+  const pageScores = pages.map((page) => {
+    const lines = page.text.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
+    const selectedHits = lines.filter((line) => selectedRegex.test(line)).length;
+    const otherHits = lines.filter((line) => otherRegexes.some((regex) => regex.test(line))).length;
+    return { page, selectedHits, otherHits, prizeScore: scorePrizePage(page.text) };
+  });
+
+  const selectedPages = pageScores.filter((entry) => entry.selectedHits > 0 && entry.selectedHits >= entry.otherHits);
+  if (selectedPages.length === 0) return { text: null, isolated: [] };
+
+  const isolated = selectedPages.map((entry) => entry.page);
+  const isolatedText = isolated.map((page) => page.text).join("\n").trim();
+  return { text: isolatedText.length > 0 ? isolatedText : null, isolated };
+}
+
 function extractCategoryNameFromLine(line: string): string | null {
   const normalized = normalizeTextLine(line)
     .replace(/\s*[:|-]\s*$/, "")
@@ -601,21 +628,44 @@ function sliceTextForEvent(text: string, selectedEvent: string, events: string[]
   return sliced.length > 0 ? sliced : null;
 }
 
-const GRID_CATEGORY_TOKEN_RE = /\b(?:main\s*prizes?|main|unrated|delhi|female|veteran\s*55\+?|specially\s*abled|boys?\s*under\s*0?\d{1,2}|girls?\s*under\s*0?\d{1,2}|\d{3,4}\s*[-–]\s*\d{3,4}|best\s+(?:academy|school))\b/gi;
+function splitGridHeaderCategories(headerLines: string[]): string[] {
+  const joined = normalizeTextLine(headerLines.map((line) => line.replace(/^rank\b/i, "")).join(" "));
+  if (!joined) return [];
 
-function splitGridHeaderCategories(headerLine: string): string[] {
-  const cleaned = normalizeTextLine(headerLine).replace(/^rank\s*/i, "");
-  const matches = [...cleaned.matchAll(GRID_CATEGORY_TOKEN_RE)].map((m) => normalizeTextLine(m[0]));
-  const normalized = matches
-    .map((name) => name
-      .replace(/\bmain\b/i, "Main Prize")
-      .replace(/\bmain prizes?\b/i, "Main Prize")
-      .replace(/\bboys\s+under\s*/i, "Boys Under ")
-      .replace(/\bgirls\s+under\s*/i, "Girls Under ")
-      .replace(/\s+/g, " ")
-      .trim())
-    .filter(Boolean);
-  return [...new Set(normalized)];
+  const explicit: string[] = [];
+  const add = (name: string) => {
+    const normalized = normalizeTextLine(name);
+    if (!normalized) return;
+    if (!explicit.some((item) => normalizeSectionName(item) === normalizeSectionName(normalized))) {
+      explicit.push(normalized);
+    }
+  };
+
+  if (/\bmain(?:\s+prizes?)?\b/i.test(joined)) add("Main Prize");
+  for (const match of joined.matchAll(/\b(\d{3,4}\s*[-–]\s*\d{3,4})\b/gi)) add(match[1].replace(/\s*[-–]\s*/g, "-"));
+  if (/\bunrated\b/i.test(joined)) add("Unrated");
+  if (/\bdelhi\b/i.test(joined)) add("Delhi");
+  if (/\bfemale\b/i.test(joined)) add("Female");
+  if (/\bveteran\s*55\+?\b/i.test(joined)) add("Veteran 55+");
+  if (/\bspecially\s*abled\b/i.test(joined)) add("Specially Abled");
+
+  const extractChildCategories = (label: "Boys" | "Girls") => {
+    const sectionPattern = label === "Boys"
+      ? /\bboys?\b([\s\S]*?)(?=\bgirls?\b|$)/i
+      : /\bgirls?\b([\s\S]*?)$/i;
+    const section = joined.match(sectionPattern)?.[1] ?? "";
+    const ages = [...section.matchAll(/\b(?:under|u[-\s]?)\s*0?(\d{1,2})\b/gi)].map((m) => parseInt(m[1], 10));
+    const uniqueAges = [...new Set(ages)].filter((age) => age > 0 && age < 25);
+    for (const age of uniqueAges) add(`${label} Under ${age}`);
+  };
+
+  extractChildCategories("Boys");
+  extractChildCategories("Girls");
+
+  if (/best\s+academy/i.test(joined)) add("Best Academy");
+  if (/best\s+school/i.test(joined)) add("Best School");
+
+  return explicit;
 }
 
 function parseGridPrizeRows(lines: string[], categoryCount: number): Map<number, { amount: number; has_trophy: boolean; has_medal: boolean }[]> {
@@ -626,13 +676,17 @@ function parseGridPrizeRows(lines: string[], categoryCount: number): Map<number,
     const placeResult = parsePlaceFromLine(line);
     if (!placeResult || placeResult.places.length !== 1) continue;
     const place = placeResult.places[0];
-    const amounts = [...line.matchAll(/\b\d{3,6}\b/g)].map((m) => parseInt(m[0], 10));
+    const amounts = [...line.matchAll(/(?:₹|Rs\.?\s*|INR\s*)?\s*([\d,]{3,7})\b/g)]
+      .map((m) => parseInt(m[1].replace(/,/g, ""), 10))
+      .filter((n) => Number.isFinite(n) && n >= 100);
     const awards = detectAwards(line);
+    const hasAwardOnly = amounts.length === 0 && (awards.has_trophy || awards.has_medal);
     const cols = Array.from({ length: categoryCount }, (_, idx) => ({
       amount: amounts[idx] ?? 0,
       has_trophy: awards.has_trophy,
       has_medal: awards.has_medal,
     }));
+    if (!hasAwardOnly && amounts.length === 0) continue;
     rows.set(place, cols);
   }
   return rows;
@@ -657,7 +711,15 @@ function parseGridBlocksFromPage(page: ParsedPage): {
     }
 
     if (!/rank/i.test(line)) continue;
-    const headerCategories = splitGridHeaderCategories(line);
+    const headerLines = [line];
+    for (let h = i + 1; h < Math.min(i + 4, lines.length); h++) {
+      const headerContinuation = normalizeTextLine(lines[h]);
+      if (!headerContinuation) continue;
+      if (parsePlaceFromLine(headerContinuation)) break;
+      if (/^rank\b/i.test(headerContinuation)) break;
+      headerLines.push(headerContinuation);
+    }
+    const headerCategories = splitGridHeaderCategories(headerLines);
     if (headerCategories.length < 2) continue;
 
     const bodyLines: string[] = [];
@@ -726,6 +788,53 @@ function hasMinimumPrizeSignal(sectionBody: string, prizes: DraftPrize[]): boole
   return (currencyLines >= 1 && placeLines >= 1) || (awardLines >= 1 && placeLines >= 1);
 }
 
+function dedupePrizes(prizes: DraftPrize[]): DraftPrize[] {
+  const seen = new Set<string>();
+  const result: DraftPrize[] = [];
+  for (const prize of prizes) {
+    const giftSig = [...prize.gift_items].sort().join("|");
+    const signature = `${prize.place}|${prize.cash_amount}|${prize.has_trophy ? 1 : 0}|${prize.has_medal ? 1 : 0}|${giftSig}`;
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    result.push(prize);
+  }
+  return result;
+}
+
+function dedupeDraftCollections(categories: DraftCategory[], teamGroups: DraftTeamGroup[]): { categories: DraftCategory[]; teamGroups: DraftTeamGroup[] } {
+  const categorySeen = new Set<string>();
+  const dedupedCategories: DraftCategory[] = [];
+  for (const category of categories) {
+    const dedupedPrizes = dedupePrizes(category.prizes);
+    if (dedupedPrizes.length === 0) continue;
+    const categorySig = normalizeSectionName(category.name);
+    const prizeSig = dedupedPrizes
+      .map((prize) => `${prize.place}|${prize.cash_amount}|${prize.has_trophy ? 1 : 0}|${prize.has_medal ? 1 : 0}`)
+      .sort()
+      .join(",");
+    const signature = `${categorySig}|${prizeSig}`;
+    if (categorySeen.has(signature)) continue;
+    categorySeen.add(signature);
+    dedupedCategories.push({ ...category, prizes: dedupedPrizes });
+  }
+
+  const teamSeen = new Set<string>();
+  const dedupedTeamGroups: DraftTeamGroup[] = [];
+  for (const group of teamGroups) {
+    const dedupedPrizes = dedupePrizes(group.prizes);
+    if (dedupedPrizes.length === 0) continue;
+    const signature = `${normalizeSectionName(group.name)}|${dedupedPrizes
+      .map((prize) => `${prize.place}|${prize.cash_amount}|${prize.has_trophy ? 1 : 0}|${prize.has_medal ? 1 : 0}`)
+      .sort()
+      .join(",")}`;
+    if (teamSeen.has(signature)) continue;
+    teamSeen.add(signature);
+    dedupedTeamGroups.push({ ...group, prizes: dedupedPrizes });
+  }
+
+  return { categories: dedupedCategories, teamGroups: dedupedTeamGroups };
+}
+
 function buildDraft(text: string, brochureUrl: string, selectedEvent: string | null, events: string[], pageCount: number): DraftResult {
   const warnings: string[] = [];
   const categories: DraftCategory[] = [];
@@ -735,9 +844,11 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
   const pages = toParsedPages(text, pageCount);
   let workingPages = pages;
   if (selectedEvent && events.length >= 2) {
-    const isolated = isolateEventPages(workingPages, selectedEvent, events);
-    if (isolated.text && isolated.isolated.length > 0) {
-      workingPages = isolated.isolated;
+    const isolated = isolateEventBlocks(workingPages, selectedEvent, events);
+    const pageFallback = isolated.text ? isolated : isolateEventPages(workingPages, selectedEvent, events);
+    const finalIsolation = pageFallback;
+    if (finalIsolation.text && finalIsolation.isolated.length > 0) {
+      workingPages = finalIsolation.isolated;
     } else {
       // Keep previous behavior as true fallback only if page-aware isolation fails.
       const fullText = workingPages.map((page) => page.text).join("\n");
@@ -869,8 +980,10 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
     warnings.push("no_prize_structure_detected");
   }
 
+  const deduped = dedupeDraftCollections(categories, teamGroups);
+
   // Overall confidence
-  const allPrizes = [...categories.flatMap((c) => c.prizes), ...teamGroups.flatMap((t) => t.prizes)];
+  const allPrizes = [...deduped.categories.flatMap((c) => c.prizes), ...deduped.teamGroups.flatMap((t) => t.prizes)];
   const highCount = allPrizes.filter((p) => p.confidence === "HIGH").length;
   const overall: Confidence = allPrizes.length === 0 ? "LOW"
     : highCount / allPrizes.length > 0.6 ? "HIGH"
@@ -882,8 +995,8 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
     file_path: brochureUrl,
     overall_confidence: overall,
     warnings,
-    categories,
-    team_groups: teamGroups,
+    categories: deduped.categories,
+    team_groups: deduped.teamGroups,
   };
 }
 
