@@ -296,6 +296,21 @@ function parseShorthandAwards(line: string): { amount: number | null; has_trophy
   return { amount: null, has_trophy: false, has_medal: false };
 }
 
+function parseKhasdarShorthandToken(token: string): { amount: number | null; has_trophy: boolean; has_medal: boolean } {
+  const compact = normalizeTextLine(token).replace(/\s+/g, "").toUpperCase();
+  const explicitCombo = compact.match(/^(\d[\d,]*)\+(T|M)$/);
+  if (explicitCombo) {
+    return {
+      amount: parseInt(explicitCombo[1].replace(/,/g, ""), 10) || 0,
+      has_trophy: explicitCombo[2] === "T",
+      has_medal: explicitCombo[2] === "M",
+    };
+  }
+  if (compact === "T") return { amount: 0, has_trophy: true, has_medal: false };
+  if (compact === "M") return { amount: 0, has_trophy: false, has_medal: true };
+  return { amount: null, has_trophy: false, has_medal: false };
+}
+
 function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: DraftPrize[] }[] {
   const rows: { key: string; label: string }[] = [
     { key: "07", label: "Under 07" },
@@ -946,40 +961,53 @@ function parseKhasdarBlocks(text: string): {
     categories.push({ name, prizes, confidence, blockKey });
   };
 
+  const khasdarRatingRangeRe = /\b(1401|1501|1601|1701|1801|1901)\s*(?:[-–—]|to)\s*(1500|1600|1700|1800|1900|2000)\b/gi;
+  const hasKhasdarPrizeGridSignal = /\b(?:main\s*prize|winner|runner\s*up|best\s+unrated|best\s+sangli|under\s*0?\d{1,2}|u[-\s]?\d{1,2}|1401\s*(?:[-–—]|to)\s*1500)\b/i
+    .test(lines.join(" "));
+
   // MAIN PRIZES (rank 1..25)
   const mainRows = lines.filter((line) => /^\s*(?:\d{1,2})(?:st|nd|rd|th)?\b/i.test(line));
   const mainPrizes: DraftPrize[] = [];
   for (const line of mainRows) {
     const place = parsePlaceFromLine(line)?.places[0];
     if (!place || place > 25) continue;
-    const amount = parseCurrencyAmount(line) ?? parseShorthandAwards(line).amount;
-    if (amount === null) continue;
+    const shorthand = parseKhasdarShorthandToken(line);
+    const amount = parseCurrencyAmount(line) ?? shorthand.amount;
+    const hasPrizeSignal = amount !== null || shorthand.has_trophy || shorthand.has_medal;
+    if (!hasPrizeSignal) continue;
     mainPrizes.push({
       place,
-      cash_amount: amount,
-      has_trophy: place <= 8 || parseShorthandAwards(line).has_trophy,
-      has_medal: place >= 9 || parseShorthandAwards(line).has_medal,
+      cash_amount: amount ?? 0,
+      has_trophy: place <= 8 || shorthand.has_trophy,
+      has_medal: place >= 9 || shorthand.has_medal,
       gift_items: [],
       confidence: "MEDIUM",
       source_text: line.slice(0, 200),
     });
   }
-  pushCategory("Main Prize", mainPrizes, "MEDIUM", "khasdar-main-prize");
+  if (hasKhasdarPrizeGridSignal) {
+    pushCategory("Main Prize", mainPrizes, "MEDIUM", "khasdar-main-prize");
+  }
 
   const linesText = lines.join("\n");
 
   // Rating slabs with Winner / Runner Up
-  const ratingRanges = [...text.matchAll(/\b(1[4-9]0\d)\s*[-–]\s*(1[5-9]0\d|2000)\b/g)].map((m) =>
+  const ratingRanges = [...text.matchAll(khasdarRatingRangeRe)].map((m) =>
     `${m[1]}-${m[2]}`);
   const uniqueRanges = [...new Set(ratingRanges)].filter((name) => /^(1401-1500|1501-1600|1601-1700|1701-1800|1801-1900|1901-2000)$/.test(name));
   for (const range of uniqueRanges) {
-    const rangeMatcher = new RegExp(`${range.replace("-", "\\s*[-–]\\s*")}[\\s\\S]{0,240}`, "i");
+    const [start, end] = range.split("-");
+    const rangeMatcher = new RegExp(`${start}\\s*(?:[-–—]|to)\\s*${end}[\\s\\S]{0,260}`, "i");
     const snippet = text.match(rangeMatcher)?.[0] ?? range;
-    const winner = parseShorthandAwards(snippet.match(/(?:winner|1st)[^\n]*/i)?.[0] ?? "");
-    const runner = parseShorthandAwards(snippet.match(/(?:runner\s*up|2nd)[^\n]*/i)?.[0] ?? "");
+    const winnerLine = snippet.match(/(?:winner|1st)[^\n]*/i)?.[0] ?? "";
+    const runnerLine = snippet.match(/(?:runner\s*up|2nd)[^\n]*/i)?.[0] ?? "";
+    const winnerToken = winnerLine.match(/\b\d[\d,]*\s*\+\s*[TM]\b/i)?.[0] ?? winnerLine.match(/\bT\b/i)?.[0] ?? winnerLine.match(/\bM\b/i)?.[0] ?? "";
+    const runnerToken = runnerLine.match(/\b\d[\d,]*\s*\+\s*[TM]\b/i)?.[0] ?? runnerLine.match(/\bT\b/i)?.[0] ?? runnerLine.match(/\bM\b/i)?.[0] ?? "";
+    const winner = parseKhasdarShorthandToken(winnerToken);
+    const runner = parseKhasdarShorthandToken(runnerToken);
     pushCategory(range, [
-      { place: 1, cash_amount: winner.amount ?? 0, has_trophy: winner.has_trophy || /\bwinner\b/i.test(snippet), has_medal: false, gift_items: [], confidence: "MEDIUM", source_text: `${range} Winner` },
-      { place: 2, cash_amount: runner.amount ?? 0, has_trophy: false, has_medal: runner.has_medal || /\brunner\s*up\b/i.test(snippet), gift_items: [], confidence: "MEDIUM", source_text: `${range} Runner Up` },
+      { place: 1, cash_amount: winner.amount ?? 0, has_trophy: winner.has_trophy, has_medal: winner.has_medal, gift_items: [], confidence: "MEDIUM", source_text: `${range} Winner` },
+      { place: 2, cash_amount: runner.amount ?? 0, has_trophy: runner.has_trophy, has_medal: runner.has_medal, gift_items: [], confidence: "MEDIUM", source_text: `${range} Runner Up` },
     ], "MEDIUM", `khasdar-slab-${range}`);
   }
 
@@ -994,7 +1022,7 @@ function parseKhasdarBlocks(text: string): {
     for (let place = 1; place <= 10; place++) {
       const combo = combos[place - 1];
       const token = combo ? `${combo[1]}+${combo[2]}` : (place >= 4 && /\bM\b/i.test(row) ? "M" : place === 1 && /\bT\b/i.test(row) ? "T" : "");
-      const parsed = parseShorthandAwards(token);
+      const parsed = parseKhasdarShorthandToken(token);
       if (parsed.amount === null && !parsed.has_trophy && !parsed.has_medal) continue;
       prizes.push({ place, cash_amount: parsed.amount ?? 0, has_trophy: parsed.has_trophy, has_medal: parsed.has_medal, gift_items: [], confidence: "LOW", source_text: `${name} ${token}` });
     }
@@ -1012,7 +1040,7 @@ function parseKhasdarBlocks(text: string): {
     for (let place = 1; place <= 7; place++) {
       const combo = [...specialRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][place - 1];
       const token = combo ? `${combo[1]}+${combo[2]}` : (place >= 3 && /\bM\b/i.test(specialRow) ? "M" : place === 1 && /\bT\b/i.test(specialRow) ? "T" : "");
-      const parsed = parseShorthandAwards(token);
+      const parsed = parseKhasdarShorthandToken(token);
       if (parsed.amount === null && !parsed.has_trophy && !parsed.has_medal) continue;
       prizes.push({ place, cash_amount: parsed.amount ?? 0, has_trophy: parsed.has_trophy, has_medal: parsed.has_medal, gift_items: [], confidence: "LOW", source_text: `${special} ${token}` });
     }
@@ -1022,8 +1050,8 @@ function parseKhasdarBlocks(text: string): {
 
   const veterenRow = linesText.match(/\bbest\s+veter[ae]n\b[^\n]{0,220}/i)?.[0];
   if (veterenRow) {
-    const first = parseShorthandAwards([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][0]?.[0] ?? "T");
-    const second = parseShorthandAwards([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][1]?.[0] ?? "M");
+    const first = parseKhasdarShorthandToken([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][0]?.[0] ?? "T");
+    const second = parseKhasdarShorthandToken([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][1]?.[0] ?? "M");
     pushCategory("Best Veteren", [
       { place: 1, cash_amount: first.amount ?? 0, has_trophy: first.has_trophy || /\bT\b/i.test(veterenRow), has_medal: false, gift_items: [], confidence: "LOW", source_text: "Best Veteren parsed" },
       { place: 2, cash_amount: second.amount ?? 0, has_trophy: false, has_medal: second.has_medal || /\bM\b/i.test(veterenRow), gift_items: [], confidence: "LOW", source_text: "Best Veteren parsed" },
