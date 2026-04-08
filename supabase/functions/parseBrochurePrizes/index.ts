@@ -145,6 +145,7 @@ const TROPHY_RE = /\btrophy\b/i;
 const MEDAL_RE = /\bmedal\b/i;
 const GIFT_RE = /\b(?:chess\s*set|voucher|gift|book|certificate|shield|memento)\b/gi;
 const PRIZE_HEADING_RE = /\b(?:prize\s+structure|main\s+prize|category\s+prizes?|special\s+prize|elo\s+below)\b/i;
+const PRIZE_PAGE_SIGNAL_RE = /\b(?:prize\s+structure|main\s+prize|special\s+prize|sub\s*category\s+prizes?|elo|rank|position|prize)\b/i;
 const CATEGORY_LABEL_RE = /^(?:rated\s+\d{3,4}\s*[-–]\s*\d{3,4}|unrated|best\s+[a-z0-9+ -]+|under\s*\d{1,2}\s*(?:boys|girls)|u[-\s]?\d{1,2})\b/i;
 const TROPHY_TOKEN_RE = /(?:\bT\b|\+?\s*TROPHY\b|🏆)/i;
 const MEDAL_TOKEN_RE = /(?:\bM\b|\+?\s*MEDAL\b|🏅)/i;
@@ -162,6 +163,7 @@ const AICF_HEADINGS: { regex: RegExp; name: string }[] = [
   { regex: /\bELO\s+BELOW\s*1800\b/i, name: "Elo Below 1800" },
   { regex: /\bSPECIAL\s+PRIZE(?:S)?\b/i, name: "Special Prize" },
 ];
+const NON_PRIZE_SECTION_RE = /\b(?:rules?|regulation|schedule|protest|contact|venue|entry\s+fee|registration|time\s+control|appeal|pairing|round)\b/i;
 
 function parseCurrencyAmount(text: string): number | null {
   const m = text.match(/(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/i);
@@ -263,10 +265,27 @@ function detectAicfHeading(line: string): string | null {
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  const compact = normalized.replace(/\s+/g, "");
   for (const heading of AICF_HEADINGS) {
-    if (heading.regex.test(normalized)) return heading.name;
+    if (heading.regex.test(normalized) || heading.regex.test(compact)) return heading.name;
   }
   return null;
+}
+
+function parseShorthandAwards(line: string): { amount: number | null; has_trophy: boolean; has_medal: boolean } {
+  const compact = normalizeTextLine(line).replace(/\s+/g, "");
+  const combo = compact.match(/(\d[\d,]*)\+([TM])\b/i);
+  if (combo) {
+    return {
+      amount: parseInt(combo[1].replace(/,/g, ""), 10) || 0,
+      has_trophy: combo[2].toUpperCase() === "T",
+      has_medal: combo[2].toUpperCase() === "M",
+    };
+  }
+
+  if (/\bT\b/i.test(line) && !/\bM\b/i.test(line)) return { amount: 0, has_trophy: true, has_medal: false };
+  if (/\bM\b/i.test(line) && !/\bT\b/i.test(line)) return { amount: 0, has_trophy: false, has_medal: true };
+  return { amount: null, has_trophy: false, has_medal: false };
 }
 
 function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: DraftPrize[] }[] {
@@ -397,6 +416,7 @@ function parseAicfBlocks(text: string): { name: string; prizes: DraftPrize[]; co
 function parsePrizeLinesFromBlock(block: string): DraftPrize[] {
   const lines = normalizeSplitPrizeLines(block.split("\n"));
   const prizes: DraftPrize[] = [];
+  let pendingPlace: number | null = null;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -409,33 +429,60 @@ function parsePrizeLinesFromBlock(block: string): DraftPrize[] {
     const placeResult = parsePlaceFromLine(line);
     const amount = parseCurrencyAmount(line);
     const awards = detectAwards(line);
+    const shorthand = parseShorthandAwards(line);
+    const resolvedAmount = amount ?? shorthand.amount;
+    const resolvedAwards = {
+      has_trophy: awards.has_trophy || shorthand.has_trophy,
+      has_medal: awards.has_medal || shorthand.has_medal,
+      gift_items: awards.gift_items,
+    };
 
-    if (!placeResult && amount === null && !awards.has_trophy && !awards.has_medal && awards.gift_items.length === 0) {
+    if (!placeResult && resolvedAmount === null && !resolvedAwards.has_trophy && !resolvedAwards.has_medal && resolvedAwards.gift_items.length === 0) {
+      continue;
+    }
+
+    if (placeResult && placeResult.places.length === 1 && resolvedAmount === null && !resolvedAwards.has_trophy && !resolvedAwards.has_medal) {
+      pendingPlace = placeResult.places[0];
+      continue;
+    }
+
+    if (!placeResult && pendingPlace !== null && (resolvedAmount !== null || resolvedAwards.has_trophy || resolvedAwards.has_medal)) {
+      prizes.push({
+        place: pendingPlace,
+        cash_amount: resolvedAmount ?? 0,
+        has_trophy: resolvedAwards.has_trophy,
+        has_medal: resolvedAwards.has_medal,
+        gift_items: resolvedAwards.gift_items,
+        confidence: resolvedAmount !== null ? "MEDIUM" : "LOW",
+        source_text: `${pendingPlace} ${line}`.slice(0, 200),
+      });
+      pendingPlace = null;
       continue;
     }
 
     if (placeResult) {
-      const hasAwardSignal = awards.has_trophy || awards.has_medal || awards.gift_items.length > 0;
-      const isAccepted = amount !== null || hasAwardSignal;
+      const hasAwardSignal = resolvedAwards.has_trophy || resolvedAwards.has_medal || resolvedAwards.gift_items.length > 0;
+      const isAccepted = resolvedAmount !== null || hasAwardSignal;
       if (!isAccepted) continue;
 
-      const cashAmount = amount ?? 0;
-      const confidence: Confidence = (amount !== null && !placeResult.isRange) ? "HIGH"
-        : (amount !== null && placeResult.isRange) ? "MEDIUM"
+      const cashAmount = resolvedAmount ?? 0;
+      const confidence: Confidence = (resolvedAmount !== null && !placeResult.isRange) ? "HIGH"
+        : (resolvedAmount !== null && placeResult.isRange) ? "MEDIUM"
         : "LOW";
 
       for (const place of placeResult.places) {
         prizes.push({
           place,
           cash_amount: cashAmount,
-          has_trophy: awards.has_trophy,
-          has_medal: awards.has_medal,
-          gift_items: awards.gift_items,
+          has_trophy: resolvedAwards.has_trophy,
+          has_medal: resolvedAwards.has_medal,
+          gift_items: resolvedAwards.gift_items,
           confidence,
           source_text: line.slice(0, 200),
         });
       }
-    } else if (amount !== null) {
+      pendingPlace = null;
+    } else if (resolvedAmount !== null) {
       // Amount found but no place — skip (can't assign without a place)
     }
   }
@@ -459,11 +506,13 @@ function toParsedPages(text: string, pageCount: number): ParsedPage[] {
 
 function scorePrizePage(pageText: string): number {
   const lines = pageText.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
-  const headingHits = lines.filter((line) => PRIZE_HEADING_RE.test(line)).length;
+  const headingHits = lines.filter((line) => PRIZE_HEADING_RE.test(line) || PRIZE_PAGE_SIGNAL_RE.test(line)).length;
   const currencyHits = lines.filter((line) => /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line)).length;
+  const bareAmountHits = lines.filter((line) => /\b\d{3,5}\b/.test(line) && (line.match(/\b\d{3,5}\b/g) ?? []).length >= 2).length;
   const placeHits = lines.filter((line) => parsePlaceFromLine(line) !== null).length;
+  const repeatedRankHits = lines.filter((line) => /^(?:\d{1,2}\s+){3,}\d{1,2}$/.test(line)).length;
   const categoryHits = lines.filter((line) => CATEGORY_LABEL_RE.test(line)).length;
-  return headingHits * 6 + currencyHits * 2 + placeHits * 2 + categoryHits;
+  return headingHits * 6 + currencyHits * 2 + bareAmountHits * 2 + placeHits * 2 + repeatedRankHits * 3 + categoryHits;
 }
 
 function selectPrizeRelevantPages(pages: ParsedPage[]): ParsedPage[] {
@@ -610,6 +659,7 @@ function detectSections(text: string, pageIndex: number): { name: string; body: 
 
     const isMain = MAIN_HEADING_RE.test(line);
     const isTeam = TEAM_HEADING_RE.test(line);
+    if (NON_PRIZE_SECTION_RE.test(line) && !isMain && !isTeam && !PRIZE_PAGE_SIGNAL_RE.test(line)) continue;
 
     // A heading candidate: short line without currency that has some alphabetic content
     const hasAlpha = /[a-zA-Z]{3,}/.test(line);
@@ -852,6 +902,128 @@ function parseGridBlocksFromPage(page: ParsedPage): {
   return { categories, teamGroups, warnings };
 }
 
+function parseKhasdarBlocks(text: string): {
+  categories: { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[];
+  teamGroups: { name: string; prizes: DraftPrize[]; blockKey: string }[];
+  warnings: string[];
+} {
+  const normalizedText = normalizeTextLine(text);
+  if (!/\btotal\s+prize\s+fund\b/i.test(normalizedText) && !/\bkhasdar\b/i.test(normalizedText)) {
+    return { categories: [], teamGroups: [], warnings: [] };
+  }
+
+  const lines = normalizeSplitPrizeLines(text.split("\n"));
+  const categories: { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[] = [];
+  const teamGroups: { name: string; prizes: DraftPrize[]; blockKey: string }[] = [];
+  const warnings: string[] = [];
+
+  const pushCategory = (name: string, prizes: DraftPrize[], confidence: Confidence, blockKey: string) => {
+    if (prizes.length === 0) return;
+    categories.push({ name, prizes, confidence, blockKey });
+  };
+
+  // MAIN PRIZES (rank 1..25)
+  const mainRows = lines.filter((line) => /^\s*(?:\d{1,2})(?:st|nd|rd|th)?\b/i.test(line));
+  const mainPrizes: DraftPrize[] = [];
+  for (const line of mainRows) {
+    const place = parsePlaceFromLine(line)?.places[0];
+    if (!place || place > 25) continue;
+    const amount = parseCurrencyAmount(line) ?? parseShorthandAwards(line).amount;
+    if (amount === null) continue;
+    mainPrizes.push({
+      place,
+      cash_amount: amount,
+      has_trophy: place <= 8 || parseShorthandAwards(line).has_trophy,
+      has_medal: place >= 9 || parseShorthandAwards(line).has_medal,
+      gift_items: [],
+      confidence: "MEDIUM",
+      source_text: line.slice(0, 200),
+    });
+  }
+  pushCategory("Main Prize", mainPrizes, "MEDIUM", "khasdar-main-prize");
+
+  const linesText = lines.join("\n");
+
+  // Rating slabs with Winner / Runner Up
+  const ratingRanges = [...text.matchAll(/\b(1[4-9]0\d)\s*[-–]\s*(1[5-9]0\d|2000)\b/g)].map((m) =>
+    `${m[1]}-${m[2]}`);
+  const uniqueRanges = [...new Set(ratingRanges)].filter((name) => /^(1401-1500|1501-1600|1601-1700|1701-1800|1801-1900|1901-2000)$/.test(name));
+  for (const range of uniqueRanges) {
+    const rangeMatcher = new RegExp(`${range.replace("-", "\\s*[-–]\\s*")}[\\s\\S]{0,240}`, "i");
+    const snippet = text.match(rangeMatcher)?.[0] ?? range;
+    const winner = parseShorthandAwards(snippet.match(/(?:winner|1st)[^\n]*/i)?.[0] ?? "");
+    const runner = parseShorthandAwards(snippet.match(/(?:runner\s*up|2nd)[^\n]*/i)?.[0] ?? "");
+    pushCategory(range, [
+      { place: 1, cash_amount: winner.amount ?? 0, has_trophy: winner.has_trophy || /\bwinner\b/i.test(snippet), has_medal: false, gift_items: [], confidence: "MEDIUM", source_text: `${range} Winner` },
+      { place: 2, cash_amount: runner.amount ?? 0, has_trophy: false, has_medal: runner.has_medal || /\brunner\s*up\b/i.test(snippet), gift_items: [], confidence: "MEDIUM", source_text: `${range} Runner Up` },
+    ], "MEDIUM", `khasdar-slab-${range}`);
+  }
+
+  // Age matrix rows, parse shorthand tokens only when present.
+  for (const age of [7, 9, 11, 13, 15, 17]) {
+    const rowRegex = new RegExp(`(?:u[-\\s]?0?${age}|under\\s*0?${age})[^\\n]{0,180}`, "i");
+    const row = linesText.match(rowRegex)?.[0];
+    if (!row) continue;
+    const name = `Under ${String(age).padStart(2, "0")}`;
+    const prizes: DraftPrize[] = [];
+    const combos = [...row.matchAll(/(\d[\d,]*)\+([TM])/gi)];
+    for (let place = 1; place <= 10; place++) {
+      const combo = combos[place - 1];
+      const token = combo ? `${combo[1]}+${combo[2]}` : (place >= 4 && /\bM\b/i.test(row) ? "M" : place === 1 && /\bT\b/i.test(row) ? "T" : "");
+      const parsed = parseShorthandAwards(token);
+      if (parsed.amount === null && !parsed.has_trophy && !parsed.has_medal) continue;
+      prizes.push({ place, cash_amount: parsed.amount ?? 0, has_trophy: parsed.has_trophy, has_medal: parsed.has_medal, gift_items: [], confidence: "LOW", source_text: `${name} ${token}` });
+    }
+    if (prizes.length < 3) {
+      warnings.push(`Could not reliably parse full row for ${name}`);
+      continue;
+    }
+    pushCategory(name, prizes, "LOW", `khasdar-age-${age}`);
+  }
+
+  for (const special of ["BEST UNRATED-M", "BEST UNRATED-F", "BEST SANGLI-M", "BEST SANGLI-F"]) {
+    const specialRow = linesText.match(new RegExp(`${special.replace(/-/g, "[-\\s]?")}[^\\n]{0,220}`, "i"))?.[0];
+    if (!specialRow) continue;
+    const prizes: DraftPrize[] = [];
+    for (let place = 1; place <= 7; place++) {
+      const combo = [...specialRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][place - 1];
+      const token = combo ? `${combo[1]}+${combo[2]}` : (place >= 3 && /\bM\b/i.test(specialRow) ? "M" : place === 1 && /\bT\b/i.test(specialRow) ? "T" : "");
+      const parsed = parseShorthandAwards(token);
+      if (parsed.amount === null && !parsed.has_trophy && !parsed.has_medal) continue;
+      prizes.push({ place, cash_amount: parsed.amount ?? 0, has_trophy: parsed.has_trophy, has_medal: parsed.has_medal, gift_items: [], confidence: "LOW", source_text: `${special} ${token}` });
+    }
+    if (prizes.length < 2) continue;
+    pushCategory(special, prizes, "LOW", `khasdar-special-${normalizeSectionName(special)}`);
+  }
+
+  const veterenRow = linesText.match(/\bbest\s+veter[ae]n\b[^\n]{0,220}/i)?.[0];
+  if (veterenRow) {
+    const first = parseShorthandAwards([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][0]?.[0] ?? "T");
+    const second = parseShorthandAwards([...veterenRow.matchAll(/(\d[\d,]*)\+([TM])/gi)][1]?.[0] ?? "M");
+    pushCategory("Best Veteren", [
+      { place: 1, cash_amount: first.amount ?? 0, has_trophy: first.has_trophy || /\bT\b/i.test(veterenRow), has_medal: false, gift_items: [], confidence: "LOW", source_text: "Best Veteren parsed" },
+      { place: 2, cash_amount: second.amount ?? 0, has_trophy: false, has_medal: second.has_medal || /\bM\b/i.test(veterenRow), gift_items: [], confidence: "LOW", source_text: "Best Veteren parsed" },
+    ], "LOW", "khasdar-best-veteren");
+  }
+  if (/\bbest\s+female\b/i.test(text)) {
+    pushCategory("Best Female", [
+      { place: 1, cash_amount: 0, has_trophy: true, has_medal: false, gift_items: [], confidence: "LOW", source_text: "Best Female reconstructed" },
+      { place: 2, cash_amount: 0, has_trophy: true, has_medal: false, gift_items: [], confidence: "LOW", source_text: "Best Female reconstructed" },
+    ], "LOW", "khasdar-best-female");
+  }
+
+  if (/\bbest\s+academy\b/i.test(text)) {
+    teamGroups.push({
+      name: "Best Academy",
+      blockKey: "khasdar-best-academy",
+      prizes: [{ place: 1, cash_amount: 0, has_trophy: true, has_medal: false, gift_items: [], confidence: "LOW", source_text: "Best Academy trophy" }],
+    });
+    warnings.push("Best Academy parsed as low-confidence team group");
+  }
+
+  return { categories, teamGroups, warnings };
+}
+
 function hasMinimumPrizeSignal(sectionBody: string, prizes: DraftPrize[]): boolean {
   if (prizes.length === 0) return false;
   const lines = sectionBody.split("\n").map((line) => normalizeTextLine(line)).filter(Boolean);
@@ -874,13 +1046,24 @@ function dedupePrizes(prizes: DraftPrize[]): DraftPrize[] {
   return result;
 }
 
+function canonicalCategoryKey(name: string): string {
+  const normalized = normalizeSectionName(name)
+    .replace(/\bprizes?\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const under = normalized.match(/\b(?:u[-\s]?|under\s*)0?(\d{1,2})\b/i);
+  if (under) return `under-${under[1].padStart(2, "0")}`;
+  if (/\bmain\b/.test(normalized)) return "main-prize";
+  return normalized;
+}
+
 function dedupeDraftCollections(categories: DraftCategory[], teamGroups: DraftTeamGroup[]): { categories: DraftCategory[]; teamGroups: DraftTeamGroup[] } {
   const categorySeen = new Set<string>();
   const dedupedCategories: DraftCategory[] = [];
   for (const category of categories) {
     const dedupedPrizes = dedupePrizes(category.prizes);
     if (dedupedPrizes.length === 0) continue;
-    const categorySig = normalizeSectionName(category.name);
+    const categorySig = canonicalCategoryKey(category.name);
     const prizeSig = dedupedPrizes
       .map((prize) => `${prize.place}|${prize.cash_amount}|${prize.has_trophy ? 1 : 0}|${prize.has_medal ? 1 : 0}`)
       .sort()
@@ -953,6 +1136,34 @@ function buildDraft(text: string, brochureUrl: string, selectedEvent: string | n
       warnings: [],
       criteria_json: {} as Record<string, never>,
       prizes: block.prizes,
+    });
+  }
+
+  const khasdarBlocks = parseKhasdarBlocks(workingText);
+  warnings.push(...khasdarBlocks.warnings);
+  for (const block of khasdarBlocks.categories) {
+    if (seenCategoryBlocks.has(block.blockKey)) continue;
+    seenCategoryBlocks.add(block.blockKey);
+    categories.push({
+      name: block.name,
+      is_main: normalizeSectionName(block.name) === "main prize" && !categories.some((c) => c.is_main),
+      order_idx: orderIdx++,
+      confidence: block.confidence,
+      warnings: block.confidence === "LOW" ? ["Reconstructed from dense grid; verify against brochure"] : [],
+      criteria_json: {} as Record<string, never>,
+      prizes: block.prizes,
+    });
+  }
+  for (const group of khasdarBlocks.teamGroups) {
+    if (seenTeamBlocks.has(group.blockKey)) continue;
+    seenTeamBlocks.add(group.blockKey);
+    teamGroups.push({
+      name: group.name,
+      group_by: "club",
+      team_size: 4,
+      confidence: "LOW",
+      warnings: ["Team group reconstructed from Khasdar block — verify before applying"],
+      prizes: group.prizes,
     });
   }
 
