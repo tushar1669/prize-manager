@@ -790,7 +790,17 @@ function sliceTextForEvent(text: string, selectedEvent: string, events: string[]
   return sliced.length > 0 ? sliced : null;
 }
 
-function splitGridHeaderCategories(headerLines: string[]): string[] {
+function detectGridGenderContext(contextLines: string[]): "Boys" | "Girls" | null {
+  const joined = normalizeTextLine(contextLines.join(" "));
+  if (!joined) return null;
+  const hasBoys = /\bboys?\b/i.test(joined);
+  const hasGirls = /\bgirls?\b/i.test(joined);
+  if (hasBoys && !hasGirls) return "Boys";
+  if (hasGirls && !hasBoys) return "Girls";
+  return null;
+}
+
+function splitGridHeaderCategories(headerLines: string[], genderContext: "Boys" | "Girls" | null = null): string[] {
   const joined = normalizeTextLine(headerLines.map((line) => line.replace(/^rank\b/i, "")).join(" "));
   if (!joined) return [];
 
@@ -808,8 +818,21 @@ function splitGridHeaderCategories(headerLines: string[]): string[] {
   if (/\bunrated\b/i.test(joined)) add("Unrated");
   if (/\bdelhi\b/i.test(joined)) add("Delhi");
   if (/\bfemale\b/i.test(joined)) add("Female");
-  if (/\bveteran\s*55\+?\b/i.test(joined)) add("Veteran 55+");
+  const veteranMatches = [...joined.matchAll(/\bveteran\s*(\d{2})\+?\b/gi)];
+  if (veteranMatches.length > 0) {
+    for (const match of veteranMatches) add(`Veteran ${match[1]}+`);
+  } else if (/\bveteran\b/i.test(joined)) {
+    add("Veteran 55+");
+  }
   if (/\bspecially\s*abled\b/i.test(joined)) add("Specially Abled");
+  if (/\b(?:diff(?:erently)?\.?\s*abled|disabled)\b/i.test(joined)) add("Diff. Abled");
+
+  const standaloneUnderAges = [...joined.matchAll(/\b(?:under|u[-\s]?)\s*0?(\d{1,2})\b/gi)]
+    .map((m) => parseInt(m[1], 10))
+    .filter((age) => age > 0 && age < 25);
+  for (const age of [...new Set(standaloneUnderAges)]) {
+    add(`${genderContext ?? ""}${genderContext ? " " : ""}Under ${age}`);
+  }
 
   const extractChildCategories = (label: "Boys" | "Girls") => {
     const sectionPattern = label === "Boys"
@@ -836,8 +859,7 @@ function parseGridPrizeRows(lines: string[], categoryCount: number): Map<number,
     const line = normalizeTextLine(rawLine);
     if (!line) continue;
     const placeResult = parsePlaceFromLine(line);
-    if (!placeResult || placeResult.places.length !== 1) continue;
-    const place = placeResult.places[0];
+    if (!placeResult || placeResult.places.length === 0) continue;
     const amounts = [...line.matchAll(/(?:₹|Rs\.?\s*|INR\s*)?\s*([\d,]{3,7})\b/g)]
       .map((m) => parseInt(m[1].replace(/,/g, ""), 10))
       .filter((n) => Number.isFinite(n) && n >= 100);
@@ -849,7 +871,9 @@ function parseGridPrizeRows(lines: string[], categoryCount: number): Map<number,
       has_medal: awards.has_medal,
     }));
     if (!hasAwardOnly && amounts.length === 0) continue;
-    rows.set(place, cols);
+    for (const place of placeResult.places) {
+      rows.set(place, cols);
+    }
   }
   return rows;
 }
@@ -881,7 +905,9 @@ function parseGridBlocksFromPage(page: ParsedPage): {
       if (/^rank\b/i.test(headerContinuation)) break;
       headerLines.push(headerContinuation);
     }
-    const headerCategories = splitGridHeaderCategories(headerLines);
+    const contextLines = lines.slice(Math.max(0, i - 3), i).map((candidate) => normalizeTextLine(candidate)).filter(Boolean);
+    const genderContext = detectGridGenderContext([...contextLines, ...headerLines]);
+    const headerCategories = splitGridHeaderCategories(headerLines, genderContext);
     if (headerCategories.length < 2) continue;
 
     const bodyLines: string[] = [];
@@ -1104,7 +1130,12 @@ function canonicalCategoryKey(name: string): string {
     .replace(/\s+/g, " ")
     .trim();
   const under = normalized.match(/\b(?:u[-\s]?|under\s*)0?(\d{1,2})\b/i);
-  if (under) return `under-${under[1].padStart(2, "0")}`;
+  if (under) {
+    const ageKey = under[1].padStart(2, "0");
+    if (/\bboys?\b/.test(normalized)) return `boys-under-${ageKey}`;
+    if (/\bgirls?\b/.test(normalized)) return `girls-under-${ageKey}`;
+    return `under-${ageKey}`;
+  }
   if (/\bmain\b/.test(normalized)) return "main-prize";
   return normalized;
 }
