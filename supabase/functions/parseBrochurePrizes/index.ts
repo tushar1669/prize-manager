@@ -128,8 +128,9 @@ interface ParsedPage {
 // ── Draft heuristic functions ────────────────────────────────────────────
 
 const CURRENCY_RE = /(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/gi;
-const PLACE_SINGLE_RE = /(\d+)\s*(?:st|nd|rd|th)/i;
-const PLACE_RANGE_RE = /(\d+)\s*(?:st|nd|rd|th)?\s*[-–—]+\s*(\d+)\s*(?:st|nd|rd|th)/i;
+const ORDINAL_SUFFIX_RE_SRC = String.raw`(?:st|nd|rd|th|ˢ\s*ᵗ|ⁿ\s*ᵈ|ʳ\s*ᵈ|ᵗ\s*ʰ)`;
+const PLACE_SINGLE_RE = new RegExp(String.raw`(\d+)\s*${ORDINAL_SUFFIX_RE_SRC}\b`, "i");
+const PLACE_RANGE_RE = new RegExp(String.raw`(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})?\s*[-–—]+\s*(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})`, "i");
 const WINNER_RE = /\b(?:winner|1st)\b/i;
 const RUNNER_RE = /\brunner[\s-]*up\b/i;
 
@@ -151,10 +152,13 @@ const TROPHY_TOKEN_RE = /(?:\bT\b|\+?\s*TROPHY\b|🏆)/i;
 const MEDAL_TOKEN_RE = /(?:\bM\b|\+?\s*MEDAL\b|🏅)/i;
 const NOTE_ONLY_RE = /\b(?:for\s+all|participants?)\b/i;
 const PLACE_ONLY_LINE_RE = /^\s*(\d{1,2})\s*$/;
-const ORDINAL_CONTINUATION_RE = /^\s*(?:st|nd|rd|th)\b/i;
-const PLACE_ORDINAL_ONLY_RE = /^\s*(\d{1,2})\s*(?:st|nd|rd|th)\s*$/i;
-const ORDINAL_CURRENCY_OR_AWARD_RE = /^\s*(?:st|nd|rd|th)\b\s*(?:(?:₹|Rs\.?\s*|INR\s*)\d|.*\b(?:trophy|medal|gift|voucher|book|certificate|shield|memento)\b)/i;
-const ORDINAL_TOKEN_RE = /\b\d+\s*(?:st|nd|rd|th)\b/i;
+const ORDINAL_CONTINUATION_RE = new RegExp(String.raw`^\s*(?:${ORDINAL_SUFFIX_RE_SRC})\b`, "i");
+const PLACE_ORDINAL_ONLY_RE = new RegExp(String.raw`^\s*(\d{1,2})\s*(?:${ORDINAL_SUFFIX_RE_SRC})\s*$`, "i");
+const ORDINAL_CURRENCY_OR_AWARD_RE = new RegExp(
+  String.raw`^\s*(?:${ORDINAL_SUFFIX_RE_SRC})\b\s*(?:(?:₹|Rs\.?\s*|INR\s*)\d|.*\b(?:trophy|medal|gift|voucher|book|certificate|shield|memento)\b)`,
+  "i",
+);
+const ORDINAL_TOKEN_RE = new RegExp(String.raw`\b\d+\s*(?:${ORDINAL_SUFFIX_RE_SRC})\b`, "i");
 
 const AICF_HEADINGS: { regex: RegExp; name: string }[] = [
   { regex: /\bPRIZE\s+STRUCTURE\b/i, name: "Prize Structure" },
@@ -172,7 +176,11 @@ function parseCurrencyAmount(text: string): number | null {
 }
 
 function parsePlaceFromLine(line: string): { places: number[]; isRange: boolean } | null {
-  const rangeMatch = line.match(/(?:^|[\s:])(\d+)\s*(?:st|nd|rd|th)?\s*(?:to|[-–—]+)\s*(\d+)\s*(?:st|nd|rd|th)?\b/i) ?? line.match(PLACE_RANGE_RE);
+  const ordinalAwareRange = new RegExp(
+    String.raw`(?:^|[\s:])(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})?\s*(?:to|[-–—]+)\s*(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})?\b`,
+    "i",
+  );
+  const rangeMatch = line.match(ordinalAwareRange) ?? line.match(PLACE_RANGE_RE);
   if (rangeMatch) {
     const start = parseInt(rangeMatch[1], 10);
     const end = parseInt(rangeMatch[2], 10);
@@ -300,16 +308,20 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
   const result: { name: string; prizes: DraftPrize[] }[] = [];
   const lines = normalizeSplitPrizeLines(blockBody.split("\n"));
   const seen = new Set<string>();
+  const underBucketRe = /(?:\bu|under)\s*[-:]?\s*0?(\d{1,2})\b/i;
+  const ordinal123Re = new RegExp(String.raw`\b(?:1\s*${ORDINAL_SUFFIX_RE_SRC}|2\s*${ORDINAL_SUFFIX_RE_SRC}|3\s*${ORDINAL_SUFFIX_RE_SRC})\b`, "gi");
 
   // Row-level extraction first (higher confidence).
   for (const line of lines) {
     const normalized = normalizeTextLine(line);
     if (!normalized) continue;
 
-    const row = rows.find(({ key }) => new RegExp(`\\bU[-\\s]?${key}\\b`, "i").test(normalized));
+    const rowMatch = normalized.match(underBucketRe);
+    const bucket = rowMatch ? rowMatch[1].padStart(2, "0") : null;
+    const row = bucket ? rows.find(({ key }) => key === bucket) : null;
     if (!row) continue;
 
-    const ordinalMatches = [...normalized.matchAll(/\b(?:1st|2nd|3rd)\b/gi)].map((m) => m[0].toLowerCase());
+    const ordinalMatches = [...normalized.matchAll(ordinal123Re)].map((m) => m[0].toLowerCase());
     const trophyCount = [...normalized.matchAll(/\btrophy\b/gi)].length;
     const placeCount = Math.min(3, Math.max(ordinalMatches.length, trophyCount));
     if (placeCount < 3) continue;
@@ -330,9 +342,9 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
 
   // Deterministic block-level fallback for split/flattened matrices.
   const rankSignals = new Set<number>();
-  if (/\b1st\b/i.test(blockBody)) rankSignals.add(1);
-  if (/\b2nd\b/i.test(blockBody)) rankSignals.add(2);
-  if (/\b3rd\b/i.test(blockBody)) rankSignals.add(3);
+  if (new RegExp(String.raw`\b1\s*${ORDINAL_SUFFIX_RE_SRC}\b`, "i").test(blockBody)) rankSignals.add(1);
+  if (new RegExp(String.raw`\b2\s*${ORDINAL_SUFFIX_RE_SRC}\b`, "i").test(blockBody)) rankSignals.add(2);
+  if (new RegExp(String.raw`\b3\s*${ORDINAL_SUFFIX_RE_SRC}\b`, "i").test(blockBody)) rankSignals.add(3);
   if (rankSignals.size < 3) {
     if (/\b1\b/.test(blockBody)) rankSignals.add(1);
     if (/\b2\b/.test(blockBody)) rankSignals.add(2);
@@ -340,7 +352,7 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
   }
 
   const detectedBuckets = new Set<string>();
-  for (const match of blockBody.matchAll(/\b(?:u[-\s]?|under\s*)0?(\d{1,2})\b/gi)) {
+  for (const match of blockBody.matchAll(/(?:\bu|under)\s*[-:]?\s*0?(\d{1,2})\b/gi)) {
     const bucket = match[1].padStart(2, "0");
     if (rows.some((row) => row.key === bucket)) detectedBuckets.add(bucket);
   }
@@ -370,11 +382,23 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
 
 function parseAicfBlocks(text: string): { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[] {
   const lines = text.split("\n");
+  const prizeStructureAnchor = lines.findIndex((line) => /\bPRIZE\s+STRUCTURE\b/i.test(normalizeTextLine(line)));
+  const startIndex = prizeStructureAnchor >= 0 ? prizeStructureAnchor : 0;
+  let endIndex = lines.length;
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const normalized = normalizeTextLine(lines[i]);
+    if (!normalized) continue;
+    if (NON_PRIZE_SECTION_RE.test(normalized) && !detectAicfHeading(normalized)) {
+      endIndex = i;
+      break;
+    }
+  }
+  const anchored = lines.slice(startIndex, endIndex);
   const headings: { idx: number; name: string }[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const heading = detectAicfHeading(lines[i]);
-    if (heading) headings.push({ idx: i, name: heading });
+  for (let i = 0; i < anchored.length; i++) {
+    const heading = detectAicfHeading(anchored[i]);
+    if (!heading || heading === "Prize Structure") continue;
+    headings.push({ idx: i, name: heading });
   }
 
   if (headings.length === 0) return [];
@@ -383,8 +407,8 @@ function parseAicfBlocks(text: string): { name: string; prizes: DraftPrize[]; co
   for (let i = 0; i < headings.length; i++) {
     const heading = headings[i];
     const start = heading.idx + 1;
-    const end = i + 1 < headings.length ? headings[i + 1].idx : lines.length;
-    const body = lines.slice(start, end).join("\n").trim();
+    const end = i + 1 < headings.length ? headings[i + 1].idx : anchored.length;
+    const body = anchored.slice(start, end).join("\n").trim();
     if (!body) continue;
 
     if (heading.name === "Special Prize") {
