@@ -151,15 +151,16 @@ const MEDAL_TOKEN_RE = /(?:\bM\b|\+?\s*MEDAL\b|🏅)/i;
 const NOTE_ONLY_RE = /\b(?:for\s+all|participants?)\b/i;
 const PLACE_ONLY_LINE_RE = /^\s*(\d{1,2})\s*$/;
 const ORDINAL_CONTINUATION_RE = /^\s*(?:st|nd|rd|th)\b/i;
+const PLACE_ORDINAL_ONLY_RE = /^\s*(\d{1,2})\s*(?:st|nd|rd|th)\s*$/i;
 const ORDINAL_CURRENCY_OR_AWARD_RE = /^\s*(?:st|nd|rd|th)\b\s*(?:(?:₹|Rs\.?\s*|INR\s*)\d|.*\b(?:trophy|medal|gift|voucher|book|certificate|shield|memento)\b)/i;
 const ORDINAL_TOKEN_RE = /\b\d+\s*(?:st|nd|rd|th)\b/i;
 
 const AICF_HEADINGS: { regex: RegExp; name: string }[] = [
-  { regex: /^PRIZE STRUCTURE$/i, name: "Prize Structure" },
-  { regex: /^MAIN PRIZE$/i, name: "Main Prize" },
-  { regex: /^ELO BELOW 1600$/i, name: "Elo Below 1600" },
-  { regex: /^ELO BELOW 1800$/i, name: "Elo Below 1800" },
-  { regex: /^SPECIAL PRIZE$/i, name: "Special Prize" },
+  { regex: /\bPRIZE\s+STRUCTURE\b/i, name: "Prize Structure" },
+  { regex: /\bMAIN\s+PRIZE(?:S)?\b/i, name: "Main Prize" },
+  { regex: /\bELO\s+BELOW\s*1600\b/i, name: "Elo Below 1600" },
+  { regex: /\bELO\s+BELOW\s*1800\b/i, name: "Elo Below 1800" },
+  { regex: /\bSPECIAL\s+PRIZE(?:S)?\b/i, name: "Special Prize" },
 ];
 
 function parseCurrencyAmount(text: string): number | null {
@@ -205,13 +206,21 @@ function detectAwards(line: string): { has_trophy: boolean; has_medal: boolean; 
 }
 
 function normalizeSplitPrizeLines(lines: string[]): string[] {
+  const isAwardOrCurrencyLine = (line: string): boolean => {
+    if (!line) return false;
+    return /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line) ||
+      /\b(?:trophy|medal|gift|voucher|book|certificate|shield|memento)\b/i.test(line);
+  };
+
   const merged: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const current = normalizeTextLine(lines[i]);
     if (!current) continue;
 
     const next = i + 1 < lines.length ? normalizeTextLine(lines[i + 1]) : "";
+    const next2 = i + 2 < lines.length ? normalizeTextLine(lines[i + 2]) : "";
     const placeOnly = current.match(PLACE_ONLY_LINE_RE);
+
     if (
       placeOnly &&
       next &&
@@ -224,13 +233,36 @@ function normalizeSplitPrizeLines(lines: string[]): string[] {
       continue;
     }
 
+    if (
+      placeOnly &&
+      next &&
+      ORDINAL_CONTINUATION_RE.test(next) &&
+      !ORDINAL_TOKEN_RE.test(next) &&
+      next2 &&
+      isAwardOrCurrencyLine(next2)
+    ) {
+      merged.push(`${placeOnly[1]}${next} ${next2}`);
+      i += 2;
+      continue;
+    }
+
+    if (PLACE_ORDINAL_ONLY_RE.test(current) && next && isAwardOrCurrencyLine(next)) {
+      merged.push(`${current} ${next}`);
+      i += 1;
+      continue;
+    }
+
     merged.push(current);
   }
   return merged;
 }
 
 function detectAicfHeading(line: string): string | null {
-  const normalized = normalizeTextLine(line).replace(/[:\-–—]+$/, "").trim();
+  const normalized = normalizeTextLine(line)
+    .replace(/[:\-–—]+$/, "")
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   for (const heading of AICF_HEADINGS) {
     if (heading.regex.test(normalized)) return heading.name;
   }
@@ -248,6 +280,9 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
 
   const result: { name: string; prizes: DraftPrize[] }[] = [];
   const lines = normalizeSplitPrizeLines(blockBody.split("\n"));
+  const seen = new Set<string>();
+
+  // Row-level extraction first (higher confidence).
   for (const line of lines) {
     const normalized = normalizeTextLine(line);
     if (!normalized) continue;
@@ -266,11 +301,49 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
       has_trophy: true,
       has_medal: false,
       gift_items: [],
-      confidence: "MEDIUM",
+      confidence: "HIGH",
       source_text: normalized.slice(0, 200),
     }));
 
+    seen.add(row.key);
     result.push({ name: row.label, prizes });
+  }
+
+  // Deterministic block-level fallback for split/flattened matrices.
+  const rankSignals = new Set<number>();
+  if (/\b1st\b/i.test(blockBody)) rankSignals.add(1);
+  if (/\b2nd\b/i.test(blockBody)) rankSignals.add(2);
+  if (/\b3rd\b/i.test(blockBody)) rankSignals.add(3);
+  if (rankSignals.size < 3) {
+    if (/\b1\b/.test(blockBody)) rankSignals.add(1);
+    if (/\b2\b/.test(blockBody)) rankSignals.add(2);
+    if (/\b3\b/.test(blockBody)) rankSignals.add(3);
+  }
+
+  const detectedBuckets = new Set<string>();
+  for (const match of blockBody.matchAll(/\b(?:u[-\s]?|under\s*)0?(\d{1,2})\b/gi)) {
+    const bucket = match[1].padStart(2, "0");
+    if (rows.some((row) => row.key === bucket)) detectedBuckets.add(bucket);
+  }
+
+  const hasTrophySignal = /\b(?:trophy|trophies)\b/i.test(blockBody) || TROPHY_TOKEN_RE.test(blockBody);
+  const canReconstruct = hasTrophySignal && rankSignals.has(1) && rankSignals.has(2) && rankSignals.has(3);
+  if (canReconstruct) {
+    for (const row of rows) {
+      if (!detectedBuckets.has(row.key) || seen.has(row.key)) continue;
+      result.push({
+        name: row.label,
+        prizes: [1, 2, 3].map((place) => ({
+          place,
+          cash_amount: 0,
+          has_trophy: true,
+          has_medal: false,
+          gift_items: [],
+          confidence: "MEDIUM",
+          source_text: "Reconstructed from special prize matrix block",
+        })),
+      });
+    }
   }
 
   return result;
