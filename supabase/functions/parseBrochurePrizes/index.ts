@@ -128,7 +128,7 @@ interface ParsedPage {
 // ── Draft heuristic functions ────────────────────────────────────────────
 
 const CURRENCY_RE = /(?:₹|Rs\.?\s*|INR\s*)([\d,]+)\s*\/?-?/gi;
-const ORDINAL_SUFFIX_RE_SRC = String.raw`(?:st|nd|rd|th|ˢ\s*ᵗ|ⁿ\s*ᵈ|ʳ\s*ᵈ|ᵗ\s*ʰ)`;
+const ORDINAL_SUFFIX_RE_SRC = String.raw`(?:st|nd|rd|th|ˢ\s*ᵗ|ⁿ\s*ᵈ|ʳ\s*ᵈ|ᵗ\s*ʰ|ˢᵗ|ⁿᵈ|ʳᵈ|ᵗʰ|ᔆᵀ|ᴺᴰ|ᴿᴰ|ᵀᴴ)`;
 const PLACE_SINGLE_RE = new RegExp(String.raw`(\d+)\s*${ORDINAL_SUFFIX_RE_SRC}\b`, "i");
 const PLACE_RANGE_RE = new RegExp(String.raw`(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})?\s*[-–—]+\s*(\d+)\s*(?:${ORDINAL_SUFFIX_RE_SRC})`, "i");
 const WINNER_RE = /\b(?:winner|1st)\b/i;
@@ -167,6 +167,7 @@ const AICF_HEADINGS: { regex: RegExp; name: string }[] = [
   { regex: /\bELO\s+BELOW\s*1800\b/i, name: "Elo Below 1800" },
   { regex: /\bSPECIAL\s+PRIZE(?:S)?\b/i, name: "Special Prize" },
 ];
+const AICF_SECTION_ORDER = ["Main Prize", "Elo Below 1600", "Elo Below 1800", "Special Prize"] as const;
 const NON_PRIZE_SECTION_RE = /\b(?:rules?|regulation|schedule|protest|contact|venue|entry\s+fee|registration|time\s+control|appeal|pairing|round)\b/i;
 
 function parseCurrencyAmount(text: string): number | null {
@@ -374,9 +375,13 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
 
   const hasTrophySignal = /\b(?:trophy|trophies)\b/i.test(blockBody) || TROPHY_TOKEN_RE.test(blockBody);
   const canReconstruct = hasTrophySignal && rankSignals.has(1) && rankSignals.has(2) && rankSignals.has(3);
+  const hasUnder07 = /(?:\bu|under)\s*[-:]?\s*0?7\b/i.test(blockBody);
+  const hasUnder15 = /(?:\bu|under)\s*[-:]?\s*0?15\b/i.test(blockBody);
+  const forceFullKnownAicfBuckets = canReconstruct && hasUnder07 && hasUnder15;
   if (canReconstruct) {
     for (const row of rows) {
-      if (!detectedBuckets.has(row.key) || seen.has(row.key)) continue;
+      const shouldEmit = forceFullKnownAicfBuckets || detectedBuckets.has(row.key);
+      if (!shouldEmit || seen.has(row.key)) continue;
       result.push({
         name: row.label,
         prizes: [1, 2, 3].map((place) => ({
@@ -398,35 +403,120 @@ function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: Dra
 function parseAicfBlocks(text: string): { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[] {
   const lines = text.split("\n");
   const prizeStructureAnchor = lines.findIndex((line) => /\bPRIZE\s+STRUCTURE\b/i.test(normalizeTextLine(line)));
-  const startIndex = prizeStructureAnchor >= 0 ? prizeStructureAnchor : 0;
+  if (prizeStructureAnchor < 0) return [];
+  const startIndex = prizeStructureAnchor;
   let endIndex = lines.length;
+  let seenAicfPrizeHeading = false;
   for (let i = startIndex + 1; i < lines.length; i++) {
     const normalized = normalizeTextLine(lines[i]);
     if (!normalized) continue;
-    if (NON_PRIZE_SECTION_RE.test(normalized) && !detectAicfHeading(normalized)) {
+    const isKnownHeading = detectAicfHeading(normalized);
+    if (isKnownHeading && isKnownHeading !== "Prize Structure") {
+      seenAicfPrizeHeading = true;
+      continue;
+    }
+    const hasPrizeSignal = /\b(?:main\s+prize|special\s+prize|elo\s+below|rank|position|prize|trophy|under\s*0?\d{1,2})\b/i.test(normalized) ||
+      /(?:₹|Rs\.?\s*|INR\s*)\d/i.test(normalized) ||
+      parsePlaceFromLine(normalized) !== null;
+    if (seenAicfPrizeHeading && NON_PRIZE_SECTION_RE.test(normalized) && !hasPrizeSignal) {
       endIndex = i;
       break;
     }
   }
   const anchored = lines.slice(startIndex, endIndex);
-  const headings: { idx: number; name: string }[] = [];
+  const headingIndexes = new Map<string, number>();
   for (let i = 0; i < anchored.length; i++) {
     const heading = detectAicfHeading(anchored[i]);
-    if (!heading || heading === "Prize Structure") continue;
-    headings.push({ idx: i, name: heading });
+    if (!heading || heading === "Prize Structure" || headingIndexes.has(heading)) continue;
+    headingIndexes.set(heading, i);
   }
 
-  if (headings.length === 0) return [];
+  if (headingIndexes.size === 0) return [];
 
   const parsed: { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[] = [];
-  for (let i = 0; i < headings.length; i++) {
-    const heading = headings[i];
-    const start = heading.idx + 1;
-    const end = i + 1 < headings.length ? headings[i + 1].idx : anchored.length;
-    const body = anchored.slice(start, end).join("\n").trim();
+  const sectionBounds = (name: string): { start: number; end: number } | null => {
+    const idx = headingIndexes.get(name);
+    if (idx === undefined) return null;
+    const nexts = AICF_SECTION_ORDER
+      .map((sectionName) => headingIndexes.get(sectionName))
+      .filter((v): v is number => v !== undefined && v > idx);
+    const end = nexts.length > 0 ? Math.min(...nexts) : anchored.length;
+    return { start: idx + 1, end };
+  };
+
+  const mainBounds = sectionBounds("Main Prize");
+  const elo1600Bounds = sectionBounds("Elo Below 1600");
+  if (mainBounds && elo1600Bounds) {
+    const mergedStart = Math.min(mainBounds.start, elo1600Bounds.start);
+    const mergedEnd = Math.max(mainBounds.end, elo1600Bounds.end);
+    const mergedLines = normalizeSplitPrizeLines(anchored.slice(mergedStart, mergedEnd));
+    const mainPrizes: DraftPrize[] = [];
+    const elo1600Prizes: DraftPrize[] = [];
+    for (let i = 0; i < mergedLines.length; i++) {
+      const line = normalizeTextLine(mergedLines[i]);
+      if (!line || detectAicfHeading(line)) continue;
+      const placeMatches = [...line.matchAll(new RegExp(String.raw`(\d+)\s*${ORDINAL_SUFFIX_RE_SRC}`, "gi"))].map((m) => parseInt(m[1], 10));
+      const amountMatches = [...line.matchAll(/(?:₹|Rs\.?\s*|INR\s*)\s*([\d,]+)/gi)]
+        .map((m) => parseInt(m[1].replace(/,/g, ""), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (placeMatches.length >= 2 && amountMatches.length >= 2) {
+        mainPrizes.push({
+          place: placeMatches[0],
+          cash_amount: amountMatches[0],
+          has_trophy: false,
+          has_medal: false,
+          gift_items: [],
+          confidence: "MEDIUM",
+          source_text: line.slice(0, 200),
+        });
+        elo1600Prizes.push({
+          place: placeMatches[1],
+          cash_amount: amountMatches[1],
+          has_trophy: false,
+          has_medal: false,
+          gift_items: [],
+          confidence: "MEDIUM",
+          source_text: line.slice(0, 200),
+        });
+      }
+    }
+
+    const parsedMain = hasMinimumPrizeSignal(mergedLines.join("\n"), mainPrizes)
+      ? mainPrizes.filter((prize) => prize.place >= 1 && prize.place <= 15)
+      : [];
+    const parsedElo1600 = hasMinimumPrizeSignal(mergedLines.join("\n"), elo1600Prizes)
+      ? elo1600Prizes.filter((prize) => prize.place >= 1 && prize.place <= 3)
+      : [];
+
+    if (parsedMain.length > 0) {
+      parsed.push({
+        name: "Main Prize",
+        prizes: parsedMain,
+        confidence: "MEDIUM",
+        blockKey: "aicf-main-prize",
+      });
+    }
+    if (parsedElo1600.length > 0) {
+      parsed.push({
+        name: "Elo Below 1600",
+        prizes: parsedElo1600,
+        confidence: "MEDIUM",
+        blockKey: "aicf-elo-below-1600",
+      });
+    }
+  }
+
+  for (const sectionName of AICF_SECTION_ORDER) {
+    const bounds = sectionBounds(sectionName);
+    if (!bounds) continue;
+    if ((sectionName === "Main Prize" || sectionName === "Elo Below 1600") &&
+      parsed.some((entry) => normalizeSectionName(entry.name) === normalizeSectionName(sectionName))) {
+      continue;
+    }
+    const body = anchored.slice(bounds.start, bounds.end).join("\n").trim();
     if (!body) continue;
 
-    if (heading.name === "Special Prize") {
+    if (sectionName === "Special Prize") {
       const matrix = parseSpecialPrizeMatrix(body);
       for (const row of matrix) {
         parsed.push({
@@ -440,12 +530,16 @@ function parseAicfBlocks(text: string): { name: string; prizes: DraftPrize[]; co
     }
 
     const prizes = parsePrizeLinesFromBlock(body);
-    if (!hasMinimumPrizeSignal(body, prizes)) continue;
+    const filteredPrizes = sectionName === "Main Prize" ? prizes.filter((prize) => prize.place >= 1 && prize.place <= 15)
+      : sectionName === "Elo Below 1600" || sectionName === "Elo Below 1800"
+      ? prizes.filter((prize) => prize.place >= 1 && prize.place <= 3)
+      : prizes;
+    if (!hasMinimumPrizeSignal(body, filteredPrizes)) continue;
     parsed.push({
-      name: heading.name,
-      prizes,
-      confidence: prizes.some((p) => p.confidence === "HIGH") ? "HIGH" : "MEDIUM",
-      blockKey: `aicf-${normalizeSectionName(heading.name)}`,
+      name: sectionName,
+      prizes: filteredPrizes,
+      confidence: filteredPrizes.some((p) => p.confidence === "HIGH") ? "HIGH" : "MEDIUM",
+      blockKey: `aicf-${normalizeSectionName(sectionName)}`,
     });
   }
 
