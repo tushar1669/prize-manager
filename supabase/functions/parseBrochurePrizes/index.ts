@@ -928,20 +928,29 @@ function splitGridHeaderCategories(headerLines: string[], genderContext: "Boys" 
   if (/\bunrated\b/i.test(joined)) add("Unrated");
   if (/\bdelhi\b/i.test(joined)) add("Delhi");
   if (/\bfemale\b/i.test(joined)) add("Female");
-  const veteranMatches = [...joined.matchAll(/\bveteran\s*(\d{2})\+?\b/gi)];
+  const veteranMatches = [
+    ...joined.matchAll(/\bveteran\s*(\d{2})\+?\b/gi),
+    ...joined.matchAll(/\bveteran\b[\s:-]*(\d{2})\+?\b/gi),
+  ];
   if (veteranMatches.length > 0) {
     for (const match of veteranMatches) add(`Veteran ${match[1]}+`);
   } else if (/\bveteran\b/i.test(joined)) {
     add("Veteran 55+");
   }
   if (/\bspecially\s*abled\b/i.test(joined)) add("Specially Abled");
-  if (/\b(?:diff(?:erently)?\.?\s*abled|disabled)\b/i.test(joined)) add("Diff. Abled");
+  if (/\b(?:diff(?:erently)?\.?\s*abled|differently[-\s]*abled|disabled|physically\s*challenged)\b/i.test(joined)) {
+    add("Diff. Abled");
+  }
 
+  const hasExplicitBoys = /\bboys?\b/i.test(joined);
+  const hasExplicitGirls = /\bgirls?\b/i.test(joined);
   const standaloneUnderAges = [...joined.matchAll(/\b(?:under|u[-\s]?)\s*0?(\d{1,2})\b/gi)]
     .map((m) => parseInt(m[1], 10))
     .filter((age) => age > 0 && age < 25);
-  for (const age of [...new Set(standaloneUnderAges)]) {
-    add(`${genderContext ?? ""}${genderContext ? " " : ""}Under ${age}`);
+  if (!(hasExplicitBoys && hasExplicitGirls)) {
+    for (const age of [...new Set(standaloneUnderAges)]) {
+      add(`${genderContext ?? ""}${genderContext ? " " : ""}Under ${age}`);
+    }
   }
 
   const extractChildCategories = (label: "Boys" | "Girls") => {
@@ -997,10 +1006,17 @@ function parseGridBlocksFromPage(page: ParsedPage): {
   const warnings: string[] = [];
   const categories: { name: string; confidence: Confidence; blockKey: string; prizes: DraftPrize[] }[] = [];
   const teamGroups: { name: string; blockKey: string; prizes: DraftPrize[] }[] = [];
+  let activeGenderContext: "Boys" | "Girls" | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = normalizeTextLine(lines[i]);
     if (!line) continue;
+    const headingGender = detectGridGenderContext([line]);
+    if (/\bage\s*categor(?:y|ies)\b/i.test(line) && headingGender) {
+      activeGenderContext = headingGender;
+    } else if (/^(?:boys?|girls?)\b/i.test(line) && headingGender) {
+      activeGenderContext = headingGender;
+    }
 
     if (/youngest\s+kid/i.test(line)) {
       warnings.push(`Unstructured special award note on page ${page.pageIndex + 1}: ${line}`);
@@ -1016,7 +1032,8 @@ function parseGridBlocksFromPage(page: ParsedPage): {
       headerLines.push(headerContinuation);
     }
     const contextLines = lines.slice(Math.max(0, i - 3), i).map((candidate) => normalizeTextLine(candidate)).filter(Boolean);
-    const genderContext = detectGridGenderContext([...contextLines, ...headerLines]);
+    const directGenderContext = detectGridGenderContext([...contextLines, ...headerLines]);
+    const genderContext = directGenderContext ?? activeGenderContext;
     const headerCategories = splitGridHeaderCategories(headerLines, genderContext);
     if (headerCategories.length < 2) continue;
 
