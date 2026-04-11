@@ -312,6 +312,22 @@ function parseKhasdarShorthandToken(token: string): { amount: number | null; has
   return { amount: null, has_trophy: false, has_medal: false };
 }
 
+function parseKhasdarBareAmount(line: string): number | null {
+  if (/(?:₹|Rs\.?\s*|INR\s*)\d/i.test(line)) return null;
+  const normalized = normalizeTextLine(line);
+  const placeInfo = parsePlaceFromLine(normalized);
+  if (!placeInfo || placeInfo.places.length !== 1) return null;
+  const place = placeInfo.places[0];
+  if (place < 1 || place > 25) return null;
+  if (!new RegExp(String.raw`^\s*(?:${place})(?:\s*(?:${ORDINAL_SUFFIX_RE_SRC}))?\b`, "i").test(normalized)) return null;
+
+  const amounts = [...normalized.matchAll(/\b(\d{1,2},\d{3}|\d{4,5})\b/g)]
+    .map((m) => parseInt(m[1].replace(/,/g, ""), 10))
+    .filter((n) => Number.isFinite(n) && n >= 500 && n <= 100000);
+  if (amounts.length !== 1) return null;
+  return amounts[0];
+}
+
 function parseSpecialPrizeMatrix(blockBody: string): { name: string; prizes: DraftPrize[] }[] {
   const rows: { key: string; label: string }[] = [
     { key: "07", label: "Under 07" },
@@ -1075,6 +1091,7 @@ function parseKhasdarBlocks(text: string): {
   const categories: { name: string; prizes: DraftPrize[]; confidence: Confidence; blockKey: string }[] = [];
   const teamGroups: { name: string; prizes: DraftPrize[]; blockKey: string }[] = [];
   const warnings: string[] = [];
+  const linesText = lines.join("\n");
 
   const pushCategory = (name: string, prizes: DraftPrize[], confidence: Confidence, blockKey: string) => {
     if (prizes.length === 0) return;
@@ -1084,6 +1101,7 @@ function parseKhasdarBlocks(text: string): {
   const khasdarRatingRangeRe = /\b(1401|1501|1601|1701|1801|1901)\s*(?:[-–—]|to)\s*(1500|1600|1700|1800|1900|2000)\b/gi;
   const hasKhasdarPrizeGridSignal = /\b(?:main\s*prize|winner|runner\s*up|best\s+unrated|best\s+sangli|under\s*0?\d{1,2}|u[-\s]?\d{1,2}|1401\s*(?:[-–—]|to)\s*1500)\b/i
     .test(lines.join(" "));
+  const hasMainPrizeHeading = /\bmain\s*prize\b/i.test(linesText) || /\btotal\s+prize\s+fund\b/i.test(linesText);
 
   // MAIN PRIZES (rank 1..25)
   const mainRows = lines.filter((line) => /^\s*(?:\d{1,2})(?:st|nd|rd|th)?\b/i.test(line));
@@ -1092,7 +1110,7 @@ function parseKhasdarBlocks(text: string): {
     const place = parsePlaceFromLine(line)?.places[0];
     if (!place || place > 25) continue;
     const shorthand = parseKhasdarShorthandToken(line);
-    const amount = parseCurrencyAmount(line) ?? shorthand.amount;
+    const amount = parseCurrencyAmount(line) ?? shorthand.amount ?? (hasMainPrizeHeading ? parseKhasdarBareAmount(line) : null);
     const hasPrizeSignal = amount !== null || shorthand.has_trophy || shorthand.has_medal;
     if (!hasPrizeSignal) continue;
     mainPrizes.push({
@@ -1108,8 +1126,6 @@ function parseKhasdarBlocks(text: string): {
   if (hasKhasdarPrizeGridSignal) {
     pushCategory("Main Prize", mainPrizes, "MEDIUM", "khasdar-main-prize");
   }
-
-  const linesText = lines.join("\n");
 
   // Rating slabs with Winner / Runner Up
   const ratingRanges = [...text.matchAll(khasdarRatingRangeRe)].map((m) =>
