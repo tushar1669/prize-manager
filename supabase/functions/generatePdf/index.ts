@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: 'upgrade_required_for_export',
-          hint: 'PDF/print export is unavailable for tournaments above 100 players without active Pro entitlement.',
+          hint: 'PDF/print export is unavailable for tournaments above 150 players without active Pro entitlement.',
           access: accessState,
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
