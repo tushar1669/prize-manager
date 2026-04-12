@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.publicTeamPrizes]
 verify_jwt = false
+
+[functions.sendWelcomeEmail]
+verify_jwt = false
