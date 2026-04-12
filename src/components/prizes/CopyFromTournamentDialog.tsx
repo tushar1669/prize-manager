@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,12 +36,47 @@ type SourceCategory = {
   }>;
 };
 
+type SourceInstitutionGroup = {
+  id: string;
+  name: string;
+  group_by: string;
+  team_size: number;
+  female_slots: number;
+  male_slots: number;
+  scoring_mode: string;
+  is_active: boolean;
+};
+
+type SourceInstitutionPrize = {
+  group_id: string;
+  place: number;
+  cash_amount: number;
+  has_trophy: boolean;
+  has_medal: boolean;
+  is_active: boolean;
+};
+
 const DETAIL_FIELDS = [
   'venue', 'city', 'event_code', 'notes',
   'time_control_base_minutes', 'time_control_increment_seconds',
   'chief_arbiter', 'tournament_director',
   'entry_fee_amount', 'cash_prize_total',
   'chessresults_url', 'public_results_url',
+] as const;
+
+const RULE_CONFIG_FIELDS = [
+  "strict_age",
+  "allow_unrated_in_rating",
+  "allow_missing_dob_for_age",
+  "max_age_inclusive",
+  "prefer_main_on_equal_value",
+  "main_vs_side_priority_mode",
+  "non_cash_priority_mode",
+  "age_band_policy",
+  "multi_prize_policy",
+  "age_cutoff_policy",
+  "age_cutoff_date",
+  "category_priority_order",
 ] as const;
 
 export default function CopyFromTournamentDialog({ tournamentId, open, onOpenChange, onComplete, copyMode = 'prizes' }: Props) {
@@ -51,6 +86,8 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
   const [copying, setCopying] = useState(false);
   const [copyDetails, setCopyDetails] = useState(true);
   const [copyPrizeStructure, setCopyPrizeStructure] = useState(true);
+  const [copyTeamPrizeGroups, setCopyTeamPrizeGroups] = useState(false);
+  const [copyAllocationRules, setCopyAllocationRules] = useState(false);
 
   const isFullMode = copyMode === 'full';
 
@@ -91,6 +128,57 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
     },
   });
 
+  const { data: sourceAddOns, isLoading: loadingAddOns } = useQuery({
+    queryKey: ["copy-source-add-ons", selectedTournamentId],
+    enabled: !!selectedTournamentId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: sourceGroups, error: groupsErr } = await supabase
+        .from("institution_prize_groups")
+        .select("id, name, group_by, team_size, female_slots, male_slots, scoring_mode, is_active")
+        .eq("tournament_id", selectedTournamentId)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      if (groupsErr) throw groupsErr;
+
+      const groupIds = (sourceGroups ?? []).map((g) => g.id);
+      let sourceGroupPrizes: SourceInstitutionPrize[] = [];
+      if (groupIds.length > 0) {
+        const { data: groupPrizes, error: prizesErr } = await supabase
+          .from("institution_prizes")
+          .select("group_id, place, cash_amount, has_trophy, has_medal, is_active")
+          .in("group_id", groupIds)
+          .eq("is_active", true)
+          .order("place", { ascending: true });
+        if (prizesErr) throw prizesErr;
+        sourceGroupPrizes = (groupPrizes ?? []) as SourceInstitutionPrize[];
+      }
+
+      const { data: sourceRuleConfig, error: ruleErr } = await supabase
+        .from("rule_config")
+        .select(RULE_CONFIG_FIELDS.join(", "))
+        .eq("tournament_id", selectedTournamentId)
+        .maybeSingle();
+      if (ruleErr) throw ruleErr;
+
+      return {
+        groups: (sourceGroups ?? []) as SourceInstitutionGroup[],
+        groupPrizes: sourceGroupPrizes,
+        ruleConfig: sourceRuleConfig as Record<string, unknown> | null,
+      };
+    },
+  });
+
+  const sourceGroupCount = sourceAddOns?.groups?.length ?? 0;
+  const hasSourceTeamGroups = sourceGroupCount > 0;
+  const hasSourceRuleConfig = !!sourceAddOns?.ruleConfig;
+
+  useEffect(() => {
+    if (!selectedTournamentId) return;
+    setCopyTeamPrizeGroups(hasSourceTeamGroups);
+    setCopyAllocationRules(false);
+  }, [selectedTournamentId, hasSourceTeamGroups]);
+
   const hasCategories = (sourceCategories?.length ?? 0) > 0;
 
   // Toggle category selection
@@ -114,6 +202,8 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
   const handleTournamentChange = (val: string) => {
     setSelectedTournamentId(val);
     setSelectedCategoryIds(new Set());
+    setCopyTeamPrizeGroups(false);
+    setCopyAllocationRules(false);
   };
 
   // Reset on close
@@ -123,6 +213,8 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
       setSelectedCategoryIds(new Set());
       setCopyDetails(true);
       setCopyPrizeStructure(true);
+      setCopyTeamPrizeGroups(false);
+      setCopyAllocationRules(false);
     }
     onOpenChange(v);
   };
@@ -158,6 +250,9 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
       let detailsCopied = false;
       let categoriesCopied = 0;
       let prizesCopied = 0;
+      let teamGroupsCopied = 0;
+      let teamGroupsSkipped = 0;
+      let allocationRulesCopied = false;
 
       // --- Copy Details ---
       if (isFullMode && copyDetails) {
@@ -322,12 +417,94 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
         }
       }
 
+      // --- Copy Team Prize Groups ---
+      if (copyTeamPrizeGroups && sourceAddOns?.groups && sourceAddOns.groups.length > 0) {
+        const normalizeName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
+        const sourcePrizesByGroup = new Map<string, SourceInstitutionPrize[]>();
+        for (const prize of sourceAddOns.groupPrizes ?? []) {
+          const current = sourcePrizesByGroup.get(prize.group_id) ?? [];
+          current.push(prize);
+          sourcePrizesByGroup.set(prize.group_id, current);
+        }
+
+        const { data: targetGroups, error: targetGroupsErr } = await supabase
+          .from("institution_prize_groups")
+          .select("id, name")
+          .eq("tournament_id", tournamentId)
+          .eq("is_active", true);
+        if (targetGroupsErr) throw targetGroupsErr;
+
+        const targetByName = new Map((targetGroups ?? []).map((g) => [normalizeName(g.name), g.id]));
+
+        for (const srcGroup of sourceAddOns.groups) {
+          const normalized = normalizeName(srcGroup.name);
+          if (targetByName.has(normalized)) {
+            teamGroupsSkipped++;
+            continue;
+          }
+
+          const { data: newGroup, error: insertGroupErr } = await supabase
+            .from("institution_prize_groups")
+            .insert([{
+              tournament_id: tournamentId,
+              name: srcGroup.name,
+              group_by: srcGroup.group_by,
+              team_size: srcGroup.team_size,
+              female_slots: srcGroup.female_slots,
+              male_slots: srcGroup.male_slots,
+              scoring_mode: srcGroup.scoring_mode,
+              is_active: srcGroup.is_active ?? true,
+            }])
+            .select("id")
+            .single();
+          if (insertGroupErr) throw insertGroupErr;
+
+          targetByName.set(normalized, newGroup.id);
+          teamGroupsCopied++;
+
+          const srcGroupPrizes = sourcePrizesByGroup.get(srcGroup.id) ?? [];
+          if (srcGroupPrizes.length > 0) {
+            const prizeRows = srcGroupPrizes.map((p) => ({
+              group_id: newGroup.id,
+              place: p.place,
+              cash_amount: p.cash_amount ?? 0,
+              has_trophy: p.has_trophy ?? false,
+              has_medal: p.has_medal ?? false,
+              is_active: p.is_active ?? true,
+            }));
+            const { error: insertTeamPrizeErr } = await supabase.from("institution_prizes").insert(prizeRows);
+            if (insertTeamPrizeErr) throw insertTeamPrizeErr;
+          }
+        }
+      }
+
+      // --- Copy Allocation Rules ---
+      if (copyAllocationRules && sourceAddOns?.ruleConfig) {
+        const payload: Record<string, unknown> = { tournament_id: tournamentId };
+        for (const field of RULE_CONFIG_FIELDS) {
+          payload[field] = sourceAddOns.ruleConfig[field] ?? null;
+        }
+        const { error: ruleUpsertErr } = await supabase
+          .from("rule_config")
+          .upsert(payload, { onConflict: "tournament_id" });
+        if (ruleUpsertErr) throw ruleUpsertErr;
+        allocationRulesCopied = true;
+      }
+
       // Build success message
       const parts: string[] = [];
       if (detailsCopied) parts.push("details");
       if (categoriesCopied > 0) {
         parts.push(`${categoriesCopied} categor${categoriesCopied === 1 ? "y" : "ies"} with ${prizesCopied} prize${prizesCopied === 1 ? "" : "s"}`);
       }
+      if (teamGroupsCopied > 0) {
+        let teamPart = `${teamGroupsCopied} team group${teamGroupsCopied === 1 ? "" : "s"}`;
+        if (teamGroupsSkipped > 0) {
+          teamPart += ` (${teamGroupsSkipped} skipped)`;
+        }
+        parts.push(teamPart);
+      }
+      if (allocationRulesCopied) parts.push("allocation rules");
       if (parts.length > 0) {
         toast.success(`Copied ${parts.join(" and ")}`);
       }
@@ -416,6 +593,48 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
                   <p className="text-xs text-muted-foreground">Categories and prizes (select below)</p>
                 </div>
               </label>
+            </div>
+          )}
+
+          {selectedTournamentId && !loadingAddOns && (hasSourceTeamGroups || hasSourceRuleConfig) && (
+            <div className="space-y-3 rounded-md border p-3">
+              <Label className="text-sm font-medium">Optional add-ons</Label>
+              {hasSourceTeamGroups && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={copyTeamPrizeGroups}
+                    onCheckedChange={(v) => setCopyTeamPrizeGroups(!!v)}
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Team Prize Groups</span>
+                      <Badge variant="outline" className="text-xs">
+                        {sourceGroupCount} group{sourceGroupCount === 1 ? "" : "s"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Team/institution prize groups and their prizes</p>
+                  </div>
+                </label>
+              )}
+              {hasSourceRuleConfig && (
+                <div className="space-y-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={copyAllocationRules}
+                      onCheckedChange={(v) => setCopyAllocationRules(!!v)}
+                    />
+                    <div>
+                      <span className="text-sm font-medium">Allocation Rules</span>
+                      <p className="text-xs text-muted-foreground">Age policy, priority mode, multi-prize policy, etc.</p>
+                    </div>
+                  </label>
+                  {copyAllocationRules && (
+                    <p className="pl-7 text-xs text-amber-600">
+                      This will overwrite your current allocation rules.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
