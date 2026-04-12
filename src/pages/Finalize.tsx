@@ -501,8 +501,8 @@ export default function Finalize() {
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-950/30 print:hidden">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
             <div>
-              <p className="font-medium text-blue-800 dark:text-blue-200">Free for tournaments up to 100 players.</p>
-              <p className="mt-0.5 text-blue-700/80 dark:text-blue-300/70">Import your players first. If your tournament has 100 or fewer players, Pro features are enabled automatically.</p>
+              <p className="font-medium text-blue-800 dark:text-blue-200">Free for tournaments up to 150 players.</p>
+              <p className="mt-0.5 text-blue-700/80 dark:text-blue-300/70">Import your players first. If your tournament has 150 or fewer players, Pro features are enabled automatically.</p>
             </div>
           </div>
 
