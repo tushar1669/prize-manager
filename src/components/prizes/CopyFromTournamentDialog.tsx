@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { coerceGiftItems } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -159,7 +160,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
         .select(RULE_CONFIG_FIELDS.join(", "))
         .eq("tournament_id", selectedTournamentId)
         .maybeSingle();
-      if (ruleErr) throw ruleErr;
+      if (ruleErr) throw new Error(ruleErr.message);
 
       return {
         groups: (sourceGroups ?? []) as SourceInstitutionGroup[],
@@ -480,9 +481,9 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
 
       // --- Copy Allocation Rules ---
       if (copyAllocationRules && sourceAddOns?.ruleConfig) {
-        const payload: Record<string, unknown> = { tournament_id: tournamentId };
+        const payload: TablesInsert<"rule_config"> = { tournament_id: tournamentId };
         for (const field of RULE_CONFIG_FIELDS) {
-          payload[field] = sourceAddOns.ruleConfig[field] ?? null;
+          (payload as unknown as Record<string, unknown>)[field] = sourceAddOns.ruleConfig[field] ?? null;
         }
         const { error: ruleUpsertErr } = await supabase
           .from("rule_config")

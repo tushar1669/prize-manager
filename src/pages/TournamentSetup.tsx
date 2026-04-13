@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle, Copy } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowRight, X, Save, ChevronsDownUp, ChevronsUpDown, AlertTriangle, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -43,6 +43,8 @@ import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/Tournament
 import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
 import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
+import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
+import { downloadPrizeTemplateXlsx } from "@/utils/excel";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -123,6 +125,7 @@ export default function TournamentSetup() {
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
   const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
+  const [templateImportOpen, setTemplateImportOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
@@ -1936,6 +1939,30 @@ export default function TournamentSetup() {
                               open={copyFromTournamentOpen}
                               onOpenChange={setCopyFromTournamentOpen}
                               onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={downloadPrizeTemplateXlsx}
+                            >
+                              <Download className="h-4 w-4" />
+                              Download Template
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => setTemplateImportOpen(true)}
+                            >
+                              <Upload className="h-4 w-4" />
+                              Import from Template
+                            </Button>
+                            <PrizeTemplateImportDialog
+                              open={templateImportOpen}
+                              onOpenChange={setTemplateImportOpen}
+                              tournamentId={id!}
+                              onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                             />
                             <Button
                               size="sm"
