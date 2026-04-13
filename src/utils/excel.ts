@@ -426,6 +426,60 @@ export function downloadSwissManagerReferenceXlsx() {
   console.log('[excel] Swiss-Manager reference downloaded: SwissManagerRef + ReadMe sheets');
 }
 
+export function downloadPrizeTemplateXlsx() {
+  const categoriesSheet = XLSX.utils.aoa_to_sheet([
+    ['Name', 'Is Main', 'Gender', 'Min Age', 'Max Age', 'Min Rating', 'Max Rating', 'Include Unrated', 'Unrated Only', 'Allowed States', 'Allowed Cities', 'Allowed Clubs'],
+    ['Main Prize', 'yes', 'OPEN', '', '', '', '', 'no', 'no', '', '', ''],
+    ['Women', 'no', 'F', '', '', '', '', 'no', 'no', '', '', ''],
+  ]);
+
+  const prizesSheet = XLSX.utils.aoa_to_sheet([
+    ['Category', 'Place', 'Cash Amount', 'Trophy', 'Medal', 'Gift'],
+    ['Main Prize', '1', 10000, 'yes', 'yes', 'Chess Clock'],
+    ['Main Prize', '2', 6000, 'yes', 'no', ''],
+    ['Main Prize', '6-10', 0, 'no', 'yes', 'Certificate'],
+    ['Women', '1', 3000, 'yes', 'yes', ''],
+  ]);
+
+  const categoryRulesSheet = XLSX.utils.aoa_to_sheet([
+    ['Category', 'gender', 'min_age', 'max_age', 'min_rating', 'max_rating', 'include_unrated', 'unrated_only', 'allowed_states', 'allowed_cities', 'allowed_clubs'],
+    ['Women', 'F', '', '', '', '', 'no', 'no', '', '', ''],
+  ]);
+
+  const teamGroupsSheet = XLSX.utils.aoa_to_sheet([
+    ['Name', 'Group By', 'Team Size', 'Female Slots', 'Male Slots'],
+    ['Best Club', 'club', 4, 0, 0],
+  ]);
+
+  const teamPrizesSheet = XLSX.utils.aoa_to_sheet([
+    ['Group', 'Place', 'Cash Amount', 'Trophy', 'Medal'],
+    ['Best Club', '1', 5000, 'yes', 'yes'],
+    ['Best Club', '2', 2500, 'yes', 'no'],
+  ]);
+
+  const instructionsSheet = XLSX.utils.aoa_to_sheet([
+    ['PRIZE TEMPLATE (XLSX v1)'],
+    [''],
+    ['Use only .xlsx or .xls files. CSV is not supported.'],
+    ['Fill Categories first, then Prizes. Category names must match exactly.'],
+    ['Place accepts single values (1) or ranges (6-10). Ranges are expanded automatically.'],
+    ['Boolean cells accept yes/no (or true/false, 1/0).'],
+    ['Allowed States/Cities/Clubs can be comma-separated lists.'],
+    ['Category Rules sheet supports only safe criteria fields in this version.'],
+    ['Do not add rule_config fields (strict_age, cutoff policy, priority modes, etc.).'],
+    ['Team Groups and Team Prizes sheets are optional.'],
+  ]);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, categoriesSheet, 'Categories');
+  XLSX.utils.book_append_sheet(wb, prizesSheet, 'Prizes');
+  XLSX.utils.book_append_sheet(wb, categoryRulesSheet, 'Category Rules');
+  XLSX.utils.book_append_sheet(wb, teamGroupsSheet, 'Team Groups');
+  XLSX.utils.book_append_sheet(wb, teamPrizesSheet, 'Team Prizes');
+  XLSX.utils.book_append_sheet(wb, instructionsSheet, 'Instructions');
+  XLSX.writeFile(wb, 'prize_template_v1.xlsx');
+}
+
 /**
  * Generic multi-sheet Excel downloader (base utility)
  */
