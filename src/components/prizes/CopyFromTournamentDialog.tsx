@@ -165,7 +165,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
       return {
         groups: (sourceGroups ?? []) as SourceInstitutionGroup[],
         groupPrizes: sourceGroupPrizes,
-        ruleConfig: sourceRuleConfig as Record<string, unknown> | null,
+        ruleConfig: sourceRuleConfig as unknown as Record<string, unknown> | null,
       };
     },
   });

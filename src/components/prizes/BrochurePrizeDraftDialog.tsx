@@ -229,7 +229,7 @@ export default function BrochurePrizeDraftDialog({
         <DialogHeader>
           <DialogTitle>Draft Prize Structure</DialogTitle>
           <DialogDescription>
-            Auto-generated from brochure PDF — preview & apply
+            Best-effort extraction from brochure — always review before applying
           </DialogDescription>
         </DialogHeader>
 
@@ -276,7 +276,7 @@ export default function BrochurePrizeDraftDialog({
           <ErrorCard
             icon={<ImageOff className="h-6 w-6" />}
             title="Image brochures aren't supported yet"
-            description="OCR is not available. Please upload a text-based PDF brochure, or enter prizes manually using the XLSX template."
+            description="Image files can't be parsed automatically. Upload a text-based PDF, use Import from Template, or copy prizes from a previous tournament."
           />
         )}
 
@@ -284,7 +284,7 @@ export default function BrochurePrizeDraftDialog({
           <ErrorCard
             icon={<ScanSearch className="h-6 w-6" />}
             title="Scanned / image-only PDF"
-            description="This PDF appears to contain only scanned images with no extractable text. Upload a text-based PDF or enter prizes manually."
+            description="This PDF contains only scanned images with no extractable text. Upload a text-based PDF, use Import from Template, or copy from a previous tournament."
           />
         )}
 
@@ -383,6 +383,15 @@ export default function BrochurePrizeDraftDialog({
                     {WARNING_COPY[w] ?? w}
                   </p>
                 ))}
+              </div>
+            )}
+
+            {/* Empty draft fallback callout */}
+            {!hasCategories && (
+              <div className="rounded-lg border border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30 p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  You can also import prizes using the Excel template or copy from a previous tournament.
+                </p>
               </div>
             )}
 
@@ -513,6 +522,15 @@ export default function BrochurePrizeDraftDialog({
             {/* Apply controls */}
             {hasCategories && totalPrizes > 0 && (
               <div className="space-y-3 border-t pt-4">
+                {/* Low confidence warning */}
+                {draft.overall_confidence === "LOW" && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3">
+                    <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      Low confidence extraction — carefully verify each category and prize amount before applying.
+                    </p>
+                  </div>
+                )}
                 {/* Team groups opt-in */}
                 {draft.team_groups.length > 0 && (
                   <div className="space-y-2">
