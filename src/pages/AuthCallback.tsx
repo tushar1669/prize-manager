@@ -302,13 +302,12 @@ export default function AuthCallback() {
 
       console.log('[auth-callback] User role data:', roleData);
 
-      if (roleData?.role === 'master' || roleData?.is_verified) {
-        console.log('[auth-callback] Redirecting verified user to dashboard');
-        navigate('/dashboard', { replace: true });
+      if (roleData?.role === 'master') {
+        console.log('[auth-callback] Redirecting master user to dashboard');
       } else {
-        console.log('[auth-callback] Redirecting unverified user to pending-approval');
-        navigate('/pending-approval', { replace: true });
+        console.log('[auth-callback] Redirecting organizer user to dashboard');
       }
+      navigate('/dashboard', { replace: true });
     };
 
     handleCallback();

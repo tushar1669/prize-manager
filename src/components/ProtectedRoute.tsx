@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
@@ -13,14 +13,12 @@ interface ProtectedRouteProps {
 /**
  * Protected route wrapper that handles:
  * 1. Unauthenticated users → redirect to /auth
- * 2. Unverified organizers → redirect to /pending-approval (except on that page)
- * 3. Non-masters trying to access master routes → redirect to /dashboard
- * 4. Masters and verified organizers → allow through
+ * 2. Non-masters trying to access master routes → redirect to /dashboard
+ * 3. Authenticated organizers and masters → allow through
  */
 export function ProtectedRoute({ children, requireMaster = false }: ProtectedRouteProps) {
   const { user, loading: authLoading } = useAuth();
-  const { authzStatus, is_master, is_verified, role } = useUserRole();
-  const location = useLocation();
+  const { authzStatus, is_master } = useUserRole();
   const hasNotifiedAccessDeniedRef = useRef(false);
 
   const isLoading = authLoading || authzStatus === 'loading';
@@ -36,20 +34,6 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
   // Not logged in → auth page
   if (!user) {
     return <Navigate to="/auth" replace />;
-  }
-
-  // Check if on pending-approval page to avoid redirect loop
-  const isOnPendingApproval = location.pathname === '/pending-approval';
-  
-  // Masters bypass all checks
-  if (authzStatus === 'ready' && is_master) {
-    return <>{children}</>;
-  }
-
-  // Unverified organizers get redirected to pending-approval
-  // (unless they're already on that page)
-  if (authzStatus === 'ready' && role === 'organizer' && !is_verified && !isOnPendingApproval) {
-    return <Navigate to="/pending-approval" replace />;
   }
 
   // Master-only routes: non-masters get redirected

@@ -30,7 +30,7 @@ type DashboardTournament = TournamentRow | TournamentView;
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { authzStatus, role, is_master, is_verified } = useUserRole();
+  const { authzStatus, is_master } = useUserRole();
   const { pendingCount } = usePendingApprovals();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -253,23 +253,12 @@ export default function Dashboard() {
                 </Button>
               </>
             )}
-            {(is_master || is_verified) && (
-              <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
-                <Plus className="h-4 w-4" />
-                {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
-              </Button>
-            )}
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {createMutation.isPending ? 'Creating...' : 'Create Tournament'}
+            </Button>
           </div>
         </div>
-
-        {/* Creator gate banner */}
-        {authzStatus === 'ready' && role === 'organizer' && !is_verified && (
-          <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              Your account is awaiting master verification before you can create tournaments.
-            </p>
-          </div>
-        )}
 
         <div className="mb-6">
           <div className="relative max-w-sm">
