@@ -613,7 +613,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
                         {sourceGroupCount} group{sourceGroupCount === 1 ? "" : "s"}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">Team/institution prize groups and their prizes</p>
+                    <p className="text-xs text-muted-foreground">Team prize groups and their prizes</p>
                   </div>
                 </label>
               )}

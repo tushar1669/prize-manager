@@ -162,7 +162,7 @@ export function TeamTieBreakDialog({
         <DialogHeader>
           <DialogTitle>Resolve Team Prize Tie — {group.name}</DialogTitle>
           <DialogDescription>
-            {tieInfo.tiedInstitutions.length} institutions have identical scores at the prize boundary.
+            {tieInfo.tiedInstitutions.length} teams have identical scores at the prize boundary.
             Confirm or reorder them below.
           </DialogDescription>
         </DialogHeader>

@@ -1755,7 +1755,7 @@ export default function TournamentSetup() {
                   )}
                   onClick={() => setPrizeMode('team')}
                 >
-                  Team / Institution Prizes
+                  Team Prizes
                 </button>
               </div>
             </div>

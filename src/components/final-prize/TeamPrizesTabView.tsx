@@ -67,7 +67,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
           <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-semibold text-foreground">No Team Prizes Configured</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            This tournament does not have any team or institution prize groups set up.
+            This tournament does not have any team prize groups set up.
           </p>
         </CardContent>
       </Card>
