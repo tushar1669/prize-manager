@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
 
 export interface TournamentAccessState {
   hasFullAccess: boolean;
   isFreeSmall: boolean;
   playersCount: number;
   previewMainLimit: number;
+  freePlayerThreshold: number;
   isLoading: boolean;
   /** Set when the RPC call fails (e.g. missing DB migration) */
   errorCode: string | null;
@@ -16,6 +18,7 @@ interface AccessRow {
   is_free_small_tournament: boolean;
   players_count: number;
   preview_main_limit: number;
+  free_player_threshold?: number | null;
 }
 
 const FUNCTION_MISSING_CODES = ['42883', 'PGRST202'];
@@ -68,6 +71,7 @@ export function useTournamentAccess(tournamentId?: string): TournamentAccessStat
     isFreeSmall: data?.is_free_small_tournament ?? false,
     playersCount: data?.players_count ?? 0,
     previewMainLimit: data?.preview_main_limit ?? 8,
+    freePlayerThreshold: resolveFreePlayerThreshold(data?.free_player_threshold),
     isLoading,
     errorCode,
   };

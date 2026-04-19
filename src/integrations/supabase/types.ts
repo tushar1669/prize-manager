@@ -1529,6 +1529,7 @@ export type Database = {
           is_free_small_tournament: boolean
           players_count: number
           preview_main_limit: number
+          free_player_threshold: number
         }[]
       }
       has_role: {

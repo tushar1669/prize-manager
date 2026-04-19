@@ -44,7 +44,7 @@ function buildDateRange(start?: string | null, end?: string | null) {
 export default function FinalPrizeView() {
   const { id, view } = useParams();
   const { data, isLoading, error, grouped } = useFinalPrizeData(id);
-  const { hasFullAccess, previewMainLimit, errorCode: accessErrorCode } = useTournamentAccess(id);
+  const { hasFullAccess, previewMainLimit, freePlayerThreshold, errorCode: accessErrorCode } = useTournamentAccess(id);
   const normalized = normalizeView(view);
   const dateRange = useMemo(
     () => buildDateRange(data?.tournament?.start_date, data?.tournament?.end_date),
@@ -113,10 +113,10 @@ export default function FinalPrizeView() {
                   <CategoryCardsView groups={grouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                 </TabsContent>
                 <TabsContent value="v3" className={`m-0 ${normalized !== 'v3' ? 'print:hidden' : ''}`}>
-                  <PosterGridView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
+                  <PosterGridView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />
                 </TabsContent>
                 <TabsContent value="v4" className={`m-0 ${normalized !== 'v4' ? 'print:hidden' : ''}`}>
-                  <ArbiterSheetView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} />
+                  <ArbiterSheetView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />
                 </TabsContent>
                 <TabsContent value="v5" className={`m-0 ${normalized !== 'v5' ? 'print:hidden' : ''}`}>
                   <TeamPrizesTabView tournamentId={id as string} />
