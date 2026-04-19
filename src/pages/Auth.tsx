@@ -27,11 +27,13 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordCooldown, setForgotPasswordCooldown] = useState(0);
-  
+  const [submitCooldown, setSubmitCooldown] = useState(0);
+
   // Resend confirmation state
   const [showResend, setShowResend] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Referral code (only for signup)
   const [referralCode, setReferralCode] = useState(
