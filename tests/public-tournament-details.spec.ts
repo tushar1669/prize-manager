@@ -199,4 +199,47 @@ describe("fetchPublicTournamentDetails", () => {
     expect(or).toHaveBeenCalledTimes(2);
     expect(eq).not.toHaveBeenCalled();
   });
+
+  it("returns null when tournament is not published", async () => {
+    const indexedChain = {
+      select: vi.fn(),
+      or: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn(),
+    };
+    indexedChain.select.mockReturnValue(indexedChain);
+    indexedChain.or.mockReturnValue(indexedChain);
+    indexedChain.maybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: null,
+      status: 200,
+    });
+
+    const fallbackChain = {
+      select: vi.fn(),
+      or: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn(),
+    };
+    fallbackChain.select.mockReturnValue(fallbackChain);
+    fallbackChain.eq.mockReturnValue(fallbackChain);
+    fallbackChain.maybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: null,
+      status: 200,
+    });
+
+    const supabaseClient = {
+      from: vi.fn().mockImplementationOnce(() => indexedChain).mockImplementationOnce(() => fallbackChain),
+    };
+
+    const result = await fetchPublicTournamentDetails(
+      supabaseClient as unknown as Parameters<typeof fetchPublicTournamentDetails>[0],
+      "unpublished-open"
+    );
+
+    expect(result).toBeNull();
+    expect(indexedChain.or).toHaveBeenCalledWith("publication_slug.eq.unpublished-open,public_slug.eq.unpublished-open");
+    expect(fallbackChain.eq).toHaveBeenCalledWith("slug", "unpublished-open");
+  });
 });

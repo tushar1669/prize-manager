@@ -9,13 +9,7 @@ import { BrochureLink } from "@/components/public/BrochureLink";
 import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { PublicHeader } from "@/components/public/PublicHeader";
-
-type PublishedTournamentBasic = {
-  id: string;
-  title: string;
-  slug: string;
-  brochure_url: string | null;
-};
+import { fetchPublishedTournamentBySlug, type PublicTournamentLookup } from "@/utils/publicTournamentLookup";
 
 interface PublicResultRow {
   prize_id: string;
@@ -38,33 +32,8 @@ export default function PublicResults() {
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament', slug],
-    queryFn: async (): Promise<PublishedTournamentBasic | null> => {
-      // Try indexed slug columns first (publication_slug or public_slug)
-      const { data: indexedData, error: indexedError } = await supabase
-        .from('published_tournaments')
-        .select('id, title, slug, brochure_url')
-        .or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
-        .maybeSingle();
-
-      if (indexedError) throw indexedError;
-      if (indexedData) {
-        console.log(`[public] anon fetch ok slug=${slug} (indexed)`);
-        return indexedData as unknown as PublishedTournamentBasic | null;
-      }
-
-      // Fallback to computed slug column
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('published_tournaments')
-        .select('id, title, slug, brochure_url')
-        .eq('slug', slug as string)
-        .maybeSingle();
-
-      if (fallbackError) throw fallbackError;
-      if (fallbackData) {
-        console.log(`[public] anon fetch ok slug=${slug} (fallback)`);
-      }
-      return fallbackData as unknown as PublishedTournamentBasic | null;
-    },
+    queryFn: async (): Promise<PublicTournamentLookup | null> =>
+      fetchPublishedTournamentBySlug(supabase, slug as string),
     enabled: !!slug,
     staleTime: 60_000,
   });
@@ -74,14 +43,13 @@ export default function PublicResults() {
     queryFn: async () => {
       if (!tournament?.id) return { rows: [], hasFullAccess: false, otherCategoriesLocked: false };
 
-      const { data, error } = await (supabase.rpc as Function)(
-        'get_public_tournament_results',
-        { tournament_id: tournament.id }
-      ) as { data: PublicResultRow[] | null; error: Error | null };
+      const { data, error } = await supabase.rpc('get_public_tournament_results', {
+        tournament_id: tournament.id,
+      });
 
       if (error) throw error;
 
-      const typedData = (data || []) as PublicResultRow[];
+      const typedData = ((data ?? []) as unknown) as PublicResultRow[];
 
       const rows = typedData.map((row) => ({
         prize_id: row.prize_id,

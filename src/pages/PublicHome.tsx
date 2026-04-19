@@ -23,7 +23,9 @@ type PublicTournament = {
   end_date: string | null;
   city: string | null;
   venue: string | null;
-  public_slug: string;
+  public_slug: string | null;
+  publication_slug: string | null;
+  slug: string | null;
   created_at: string | null;
   time_control_base_minutes: number | null;
   time_control_increment_seconds: number | null;
@@ -58,7 +60,7 @@ export default function PublicHome() {
   const fetchManualPrizes = async (ids: string[]) => {
     if (ids.length === 0) return;
     try {
-      const { data, error } = await (supabase.from as any)("tournament_manual_prizes")
+      const { data, error } = await supabase.from("tournament_manual_prizes")
         .select("tournament_id,title,winner_name,sort_order")
         .in("tournament_id", ids)
         .eq("is_visible", true)
@@ -85,11 +87,8 @@ export default function PublicHome() {
     queryKey: ['public-tournaments'],
     queryFn: async (): Promise<PublicTournament[]> => {
       const { data, error } = await supabase
-        .from('tournaments')
-        .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds')
-        .eq('is_published', true)
-        .eq('is_archived', false)
-        .is('deleted_at', null)
+        .from('published_tournaments')
+        .select('id, title, start_date, end_date, city, venue, public_slug, publication_slug, slug, created_at, time_control_base_minutes, time_control_increment_seconds')
         .order('start_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .range(0, PAGE_SIZE - 1);
@@ -116,11 +115,8 @@ export default function PublicHome() {
     const to = from + PAGE_SIZE - 1;
 
     const { data, error: loadError } = await supabase
-      .from('tournaments')
-      .select('id, title, start_date, end_date, city, venue, public_slug, created_at, time_control_base_minutes, time_control_increment_seconds')
-      .eq('is_published', true)
-      .eq('is_archived', false)
-      .is('deleted_at', null)
+      .from('published_tournaments')
+      .select('id, title, start_date, end_date, city, venue, public_slug, publication_slug, slug, created_at, time_control_base_minutes, time_control_increment_seconds')
       .order('start_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -192,6 +188,8 @@ export default function PublicHome() {
               </Card>
             ) : (
               tournamentList.map((tournament) => {
+                const publicPathSlug = tournament.public_slug ?? tournament.publication_slug ?? tournament.slug;
+                if (!publicPathSlug) return null;
                 const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
                 const location = [tournament.city, tournament.venue].filter(Boolean).join(" • ") || null;
                 const timeFormat = classifyTimeControl(
@@ -254,7 +252,7 @@ export default function PublicHome() {
 
                     <CardContent className="p-0">
                       <Button variant="outline" size="sm" asChild>
-                        <Link to={`/p/${tournament.public_slug}`} className="gap-2">
+                        <Link to={`/p/${publicPathSlug}`} className="gap-2">
                           View Details
                         </Link>
                       </Button>
