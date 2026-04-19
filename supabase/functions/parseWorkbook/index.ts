@@ -3,6 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import * as XLSX from "npm:xlsx@0.18.5";
 import { hasPingQueryParam, pingResponse } from "../_shared/health.ts";
+import { buildImportStoragePath, IMPORTS_BUCKET, isMissingBucketError } from "../_shared/importStorage.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "parseWorkbook";
@@ -887,16 +888,27 @@ Deno.serve(async (req) => {
     logImport("ok", `rows=${rowCount}`);
 
     if (tournamentId) {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const path = `imports/${authData.user.id}/${tournamentId}/${today}/${fileHash}_${fileName}`;
-        await supabase.storage.from("imports").upload(path, bufferSlice, {
-          contentType,
-          upsert: false
-        });
-      } catch (storageError) {
-        const err = storageError as Error;
-        if (!err.message?.includes("already exists")) {
+      const today = new Date().toISOString().slice(0, 10);
+      const path = buildImportStoragePath({
+        userId: authData.user.id,
+        tournamentId,
+        date: today,
+        fileHash,
+        fileName
+      });
+
+      const { error: storageError } = await supabase.storage.from(IMPORTS_BUCKET).upload(path, bufferSlice, {
+        contentType,
+        upsert: false
+      });
+
+      if (storageError) {
+        if (storageError.message?.includes("already exists")) {
+          // No-op: uploads are best effort and import processing can continue.
+        } else if (isMissingBucketError(storageError.message, IMPORTS_BUCKET)) {
+          // Production environments may not provision this optional bucket.
+          logImport("ok", "storage_skipped_missing_imports_bucket");
+        } else {
           logImport("error", "storage_upload_failed");
         }
       }
