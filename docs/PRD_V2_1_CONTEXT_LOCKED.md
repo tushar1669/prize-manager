@@ -101,6 +101,7 @@ Can view published results only. No access to draft or non-published data.
 ### Confirmed production storage buckets
 - `brochures`
 - `exports`
+- No `imports` bucket is required for player import runtime; `parseWorkbook` treats import-file storage as best-effort and skips storage upload when `imports` is missing.
 
 ### Confirmed published/public surface
 - `published_tournaments` view is part of the public-results model
@@ -189,9 +190,9 @@ There is a likely mismatch between intended onboarding behavior and actual code/
 **Why it matters:** fresh signups may not follow the intended product path.
 
 ### 10.2 Storage contract drift
-Current production screenshots confirm `brochures` and `exports`. Repo/history references suggest an `imports` bucket may exist or may have existed in code paths.
+Current production screenshots confirm `brochures` and `exports`. Runtime import parsing no longer depends on an `imports` bucket being provisioned.
 
-**Why it matters:** import or parsing flows may depend on a production storage contract that is not actually current.
+**Why it matters:** storage contracts must match production truth so imports remain reliable across environments.
 
 ### 10.3 Threshold drift
 The intended threshold is 150, but there is risk of older definitions still existing in migrations or duplicated logic.
