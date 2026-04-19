@@ -312,7 +312,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Users className="h-5 w-5" />
-          Team / Institution Prizes
+          Team Prizes
         </h2>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>

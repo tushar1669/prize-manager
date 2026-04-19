@@ -21,7 +21,7 @@ export function PublicTeamPrizesSection({ tournamentId }: PublicTeamPrizesSectio
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Users className="h-5 w-5" />
-            Team / Institution Prizes
+            Team Prizes
           </CardTitle>
         </CardHeader>
         <CardContent>
