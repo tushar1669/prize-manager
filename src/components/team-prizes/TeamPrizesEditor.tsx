@@ -155,10 +155,10 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
       <div className="rounded-lg border bg-muted/50 p-4 text-sm">
         <p className="font-medium">How team prizes work:</p>
         <ul className="mt-2 space-y-1 text-muted-foreground">
-          <li>• Teams are formed by grouping players by a shared field (school, club, city, state, etc.)</li>
+          <li>• Teams are formed by grouping players by their institution (school, club, city, state, etc.)</li>
           <li>• Each team's score is the sum of top-K players' scores</li>
           <li>• Gender requirements ensure mixed teams if needed</li>
-          <li>• Players can win both individual AND team prizes</li>
+          <li>• Players can win both individual AND team prizes (team prizes ignore multi_prize_policy)</li>
         </ul>
       </div>
 
