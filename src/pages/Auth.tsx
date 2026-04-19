@@ -59,16 +59,50 @@ export default function Auth() {
   useEffect(() => {
     if (forgotPasswordCooldown <= 0) return;
     const timer = window.setInterval(() => {
-      setForgotPasswordCooldown((seconds) => {
-        if (seconds <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return seconds - 1;
-      });
+      setForgotPasswordCooldown((seconds) => (seconds <= 1 ? 0 : seconds - 1));
     }, 1000);
     return () => window.clearInterval(timer);
   }, [forgotPasswordCooldown]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (submitCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setSubmitCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [submitCooldown]);
+
+  // Detect Supabase rate limit errors
+  const isRateLimitError = (error: { message?: string; status?: number } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return (
+      error.status === 429 ||
+      msg.includes("rate limit") ||
+      msg.includes("too many") ||
+      msg.includes("for security purposes")
+    );
+  };
+
+  const isEmailNotConfirmedError = (error: { message?: string } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return msg.includes("not confirmed") || msg.includes("confirm your email");
+  };
+
+  const isAlreadyRegisteredError = (error: { message?: string } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already");
+  };
 
   // Referral apply is handled globally by useApplyPendingReferral hook (src/hooks/useApplyPendingReferral.ts)
 
