@@ -26,10 +26,9 @@ export default function PublicWinnersPage() {
     queryKey: ['public-tournament-by-id', id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tournaments')
+        .from('published_tournaments')
         .select('id, title, start_date, end_date, city, brochure_url')
         .eq('id', id)
-        .eq('is_published', true)
         .maybeSingle();
 
       if (error) throw error;
