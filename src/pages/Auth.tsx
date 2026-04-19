@@ -279,12 +279,15 @@ export default function Auth() {
               </div>
             )}
 
-            {showResend && !isLogin && (
+            {showResend && (
               <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="h-4 w-4" />
-                  Didn't receive the email?
+                  {isLogin ? 'Email not confirmed yet?' : "Didn't receive the email?"}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  We'll send a fresh confirmation link to this address. Check spam if it doesn't arrive in a minute.
+                </p>
                 <div className="space-y-2">
                   <Input
                     type="email"
@@ -292,20 +295,22 @@ export default function Auth() {
                     value={resendEmail}
                     onChange={(e) => setResendEmail(e.target.value)}
                   />
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    className="w-full" 
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
                     onClick={handleResendConfirmation}
-                    disabled={resendLoading}
+                    disabled={resendLoading || resendCooldown > 0}
                   >
                     {resendLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Sending...
                       </>
+                    ) : resendCooldown > 0 ? (
+                      `Resend available in ${resendCooldown}s`
                     ) : (
-                      'Resend Confirmation Email'
+                      'Resend confirmation email'
                     )}
                   </Button>
                 </div>
@@ -353,34 +358,41 @@ export default function Auth() {
 
             {isLogin && (
               <div className="text-right">
-                <Button 
-                  type="button" 
-                  variant="link" 
+                <Button
+                  type="button"
+                  variant="link"
                   className="text-xs text-muted-foreground p-0 h-auto"
                   onClick={handleForgotPassword}
                   disabled={forgotPasswordLoading || forgotPasswordCooldown > 0}
                 >
                   {forgotPasswordCooldown > 0
-                    ? `Resend in ${forgotPasswordCooldown}s`
+                    ? `Try again in ${forgotPasswordCooldown}s`
                     : forgotPasswordLoading
                       ? 'Sending...'
                       : 'Forgot password?'}
                 </Button>
               </div>
             )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (isLogin ? "Signing in..." : "Creating account...") : (isLogin ? "Sign In" : "Create Account")}
+            <Button type="submit" className="w-full" disabled={loading || submitCooldown > 0}>
+              {submitCooldown > 0
+                ? `Try again in ${submitCooldown}s`
+                : loading
+                  ? (isLogin ? "Signing in..." : "Creating account...")
+                  : (isLogin ? "Sign In" : "Create Account")}
             </Button>
-            
-            {!isLogin && !showResend && (
+
+            {!showResend && (
               <div className="text-center">
                 <Button
                   type="button"
                   variant="link"
                   className="text-xs text-muted-foreground p-0 h-auto"
-                  onClick={() => setShowResend(true)}
+                  onClick={() => {
+                    setResendEmail(email);
+                    setShowResend(true);
+                  }}
                 >
-                  Already signed up? Resend confirmation email
+                  {isLogin ? 'Need to confirm your email? Resend link' : 'Already signed up? Resend confirmation email'}
                 </Button>
               </div>
             )}
