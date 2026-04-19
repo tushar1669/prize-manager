@@ -119,11 +119,16 @@ export default function Auth() {
         redirectTo: `${window.location.origin}/reset-password`
       });
       if (error) {
-        const normalized = normalizeError(error);
-        toast.error(toastMessage(normalized));
-        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
+        if (isRateLimitError(error)) {
+          toast.error("Too many requests. Please wait a minute before trying again.");
+          setForgotPasswordCooldown(60);
+        } else {
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
+          logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
+        }
       } else {
-        toast.success('Password reset email sent! Check your inbox.');
+        toast.success('If an account exists for this email, a reset link has been sent.');
         setForgotPasswordCooldown(60);
       }
     } catch {
@@ -136,14 +141,24 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || submitCooldown > 0) return;
     setLoading(true);
-    
+
     if (isLogin) {
       const { error } = await signIn(email, password);
       if (error) {
-        const normalized = normalizeError(error);
-        toast.error(toastMessage(normalized));
-        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
+        if (isRateLimitError(error)) {
+          toast.error("Too many sign-in attempts. Please wait a minute and try again.");
+          setSubmitCooldown(60);
+        } else if (isEmailNotConfirmedError(error)) {
+          toast.error("Please confirm your email first. We can resend the confirmation link below.");
+          setResendEmail(email);
+          setShowResend(true);
+        } else {
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
+          logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
+        }
       } else {
         toast.success("Welcome back!");
         navigate("/dashboard");
@@ -171,28 +186,35 @@ export default function Auth() {
         options: signUpOptions,
       });
       if (error) {
-        if (error.message.includes('already registered')) {
-          const normalized = normalizeError(error);
-          toast.error(toastMessage(normalized));
+        if (isRateLimitError(error)) {
+          toast.error("Too many sign-up attempts. Please wait a minute and try again.");
+          setSubmitCooldown(60);
+        } else if (isAlreadyRegisteredError(error)) {
+          toast.message("This email is already registered. Switched to sign in — use your password or reset it.");
+          setIsLogin(true);
+          setShowResend(false);
         } else {
           const normalized = normalizeError(error);
           toast.error(toastMessage(normalized));
         }
       } else if (data?.user?.identities?.length === 0) {
-        toast.error("This email is already registered. Please sign in or resend confirmation.");
+        // Supabase returns success with empty identities for already-registered emails
+        toast.message("This email is already registered. Switched to sign in — use your password or reset it. If you never confirmed your email, use 'Resend confirmation email' below.");
+        setIsLogin(true);
         setResendEmail(email);
-        setShowResend(true);
       } else {
         toast.success("Account created! Please check your email to confirm.");
         setResendEmail(email);
         setShowResend(true);
+        setResendCooldown(60);
       }
     }
-    
+
     setLoading(false);
   };
 
   const handleResendConfirmation = async () => {
+    if (resendLoading || resendCooldown > 0) return;
     const emailToResend = resendEmail.trim() || email.trim();
     if (!emailToResend) {
       toast.error('Please enter your email address');
@@ -213,17 +235,21 @@ export default function Auth() {
         }
       });
       if (error) {
-        if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
+        if (isRateLimitError(error)) {
+          toast.error("Too many requests. Please wait a minute before resending.");
+          setResendCooldown(60);
+        } else if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
           toast.error('No account found with this email. Please sign up first.');
         } else if (error.message.toLowerCase().includes('already confirmed')) {
-          toast.success('Your email is already confirmed! You can sign in now.');
+          toast.success('Your email is already confirmed. You can sign in now.');
           setIsLogin(true);
           setShowResend(false);
         } else {
           toast.error(error.message);
         }
       } else {
-        toast.success('Confirmation email sent! Check your inbox.');
+        toast.success('Confirmation email sent. Check your inbox (and spam folder).');
+        setResendCooldown(60);
       }
     } catch {
       toast.error('Failed to resend confirmation email');
