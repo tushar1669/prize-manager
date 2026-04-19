@@ -33,7 +33,7 @@ export default function PublicResults() {
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament', slug],
     queryFn: async (): Promise<PublicTournamentLookup | null> =>
-      fetchPublishedTournamentBySlug(supabase as never, slug as string),
+      fetchPublishedTournamentBySlug(supabase, slug as string),
     enabled: !!slug,
     staleTime: 60_000,
   });
