@@ -82,15 +82,13 @@ export function usePendingApprovals() {
     },
   });
 
-  // Reject mutation (keeps row but marks as rejected via setting a note or just not approving)
-  // For now, we keep them unverified (soft reject)
+  // Reject mutation: demote organizer access without deleting rows/auth users.
+  // This preserves historical integrity while safely blocking organizer flows.
   const rejectMutation = useMutation({
     mutationFn: async (userId: string) => {
-      // For now, we just delete the role row (hard reject)
-      // User would need to re-register
       const { error } = await supabase
         .from('user_roles')
-        .delete()
+        .update({ role: 'user', is_verified: false })
         .eq('user_id', userId)
         .eq('role', 'organizer');
       
@@ -99,7 +97,7 @@ export function usePendingApprovals() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
-      toast.success('Organizer rejected');
+      toast.success('Organizer access disabled');
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : 'Failed to reject';
