@@ -27,11 +27,13 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordCooldown, setForgotPasswordCooldown] = useState(0);
-  
+  const [submitCooldown, setSubmitCooldown] = useState(0);
+
   // Resend confirmation state
   const [showResend, setShowResend] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Referral code (only for signup)
   const [referralCode, setReferralCode] = useState(
@@ -57,16 +59,50 @@ export default function Auth() {
   useEffect(() => {
     if (forgotPasswordCooldown <= 0) return;
     const timer = window.setInterval(() => {
-      setForgotPasswordCooldown((seconds) => {
-        if (seconds <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return seconds - 1;
-      });
+      setForgotPasswordCooldown((seconds) => (seconds <= 1 ? 0 : seconds - 1));
     }, 1000);
     return () => window.clearInterval(timer);
   }, [forgotPasswordCooldown]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (submitCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setSubmitCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [submitCooldown]);
+
+  // Detect Supabase rate limit errors
+  const isRateLimitError = (error: { message?: string; status?: number } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return (
+      error.status === 429 ||
+      msg.includes("rate limit") ||
+      msg.includes("too many") ||
+      msg.includes("for security purposes")
+    );
+  };
+
+  const isEmailNotConfirmedError = (error: { message?: string } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return msg.includes("not confirmed") || msg.includes("confirm your email");
+  };
+
+  const isAlreadyRegisteredError = (error: { message?: string } | null | undefined): boolean => {
+    if (!error) return false;
+    const msg = (error.message ?? "").toLowerCase();
+    return msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already");
+  };
 
   // Referral apply is handled globally by useApplyPendingReferral hook (src/hooks/useApplyPendingReferral.ts)
 
@@ -83,11 +119,16 @@ export default function Auth() {
         redirectTo: `${window.location.origin}/reset-password`
       });
       if (error) {
-        const normalized = normalizeError(error);
-        toast.error(toastMessage(normalized));
-        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
+        if (isRateLimitError(error)) {
+          toast.error("Too many requests. Please wait a minute before trying again.");
+          setForgotPasswordCooldown(60);
+        } else {
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
+          logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, suggestedAction: normalized.suggestedAction, referenceId: normalized.referenceId });
+        }
       } else {
-        toast.success('Password reset email sent! Check your inbox.');
+        toast.success('If an account exists for this email, a reset link has been sent.');
         setForgotPasswordCooldown(60);
       }
     } catch {
@@ -100,14 +141,24 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || submitCooldown > 0) return;
     setLoading(true);
-    
+
     if (isLogin) {
       const { error } = await signIn(email, password);
       if (error) {
-        const normalized = normalizeError(error);
-        toast.error(toastMessage(normalized));
-        logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
+        if (isRateLimitError(error)) {
+          toast.error("Too many sign-in attempts. Please wait a minute and try again.");
+          setSubmitCooldown(60);
+        } else if (isEmailNotConfirmedError(error)) {
+          toast.error("Please confirm your email first. We can resend the confirmation link below.");
+          setResendEmail(email);
+          setShowResend(true);
+        } else {
+          const normalized = normalizeError(error);
+          toast.error(toastMessage(normalized));
+          logAuditEvent({ eventType: normalized.eventType, severity: normalized.severity, message: error.message, friendlyMessage: normalized.friendlyMessage, referenceId: normalized.referenceId });
+        }
       } else {
         toast.success("Welcome back!");
         navigate("/dashboard");
@@ -135,28 +186,35 @@ export default function Auth() {
         options: signUpOptions,
       });
       if (error) {
-        if (error.message.includes('already registered')) {
-          const normalized = normalizeError(error);
-          toast.error(toastMessage(normalized));
+        if (isRateLimitError(error)) {
+          toast.error("Too many sign-up attempts. Please wait a minute and try again.");
+          setSubmitCooldown(60);
+        } else if (isAlreadyRegisteredError(error)) {
+          toast.message("This email is already registered. Switched to sign in — use your password or reset it.");
+          setIsLogin(true);
+          setShowResend(false);
         } else {
           const normalized = normalizeError(error);
           toast.error(toastMessage(normalized));
         }
       } else if (data?.user?.identities?.length === 0) {
-        toast.error("This email is already registered. Please sign in or resend confirmation.");
+        // Supabase returns success with empty identities for already-registered emails
+        toast.message("This email is already registered. Switched to sign in — use your password or reset it. If you never confirmed your email, use 'Resend confirmation email' below.");
+        setIsLogin(true);
         setResendEmail(email);
-        setShowResend(true);
       } else {
         toast.success("Account created! Please check your email to confirm.");
         setResendEmail(email);
         setShowResend(true);
+        setResendCooldown(60);
       }
     }
-    
+
     setLoading(false);
   };
 
   const handleResendConfirmation = async () => {
+    if (resendLoading || resendCooldown > 0) return;
     const emailToResend = resendEmail.trim() || email.trim();
     if (!emailToResend) {
       toast.error('Please enter your email address');
@@ -177,17 +235,21 @@ export default function Auth() {
         }
       });
       if (error) {
-        if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
+        if (isRateLimitError(error)) {
+          toast.error("Too many requests. Please wait a minute before resending.");
+          setResendCooldown(60);
+        } else if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
           toast.error('No account found with this email. Please sign up first.');
         } else if (error.message.toLowerCase().includes('already confirmed')) {
-          toast.success('Your email is already confirmed! You can sign in now.');
+          toast.success('Your email is already confirmed. You can sign in now.');
           setIsLogin(true);
           setShowResend(false);
         } else {
           toast.error(error.message);
         }
       } else {
-        toast.success('Confirmation email sent! Check your inbox.');
+        toast.success('Confirmation email sent. Check your inbox (and spam folder).');
+        setResendCooldown(60);
       }
     } catch {
       toast.error('Failed to resend confirmation email');
@@ -217,12 +279,15 @@ export default function Auth() {
               </div>
             )}
 
-            {showResend && !isLogin && (
+            {showResend && (
               <div className="mb-4 p-4 bg-muted/50 border border-border rounded-lg space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="h-4 w-4" />
-                  Didn't receive the email?
+                  {isLogin ? 'Email not confirmed yet?' : "Didn't receive the email?"}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  We'll send a fresh confirmation link to this address. Check spam if it doesn't arrive in a minute.
+                </p>
                 <div className="space-y-2">
                   <Input
                     type="email"
@@ -230,20 +295,22 @@ export default function Auth() {
                     value={resendEmail}
                     onChange={(e) => setResendEmail(e.target.value)}
                   />
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    className="w-full" 
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
                     onClick={handleResendConfirmation}
-                    disabled={resendLoading}
+                    disabled={resendLoading || resendCooldown > 0}
                   >
                     {resendLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Sending...
                       </>
+                    ) : resendCooldown > 0 ? (
+                      `Resend available in ${resendCooldown}s`
                     ) : (
-                      'Resend Confirmation Email'
+                      'Resend confirmation email'
                     )}
                   </Button>
                 </div>
@@ -291,34 +358,41 @@ export default function Auth() {
 
             {isLogin && (
               <div className="text-right">
-                <Button 
-                  type="button" 
-                  variant="link" 
+                <Button
+                  type="button"
+                  variant="link"
                   className="text-xs text-muted-foreground p-0 h-auto"
                   onClick={handleForgotPassword}
                   disabled={forgotPasswordLoading || forgotPasswordCooldown > 0}
                 >
                   {forgotPasswordCooldown > 0
-                    ? `Resend in ${forgotPasswordCooldown}s`
+                    ? `Try again in ${forgotPasswordCooldown}s`
                     : forgotPasswordLoading
                       ? 'Sending...'
                       : 'Forgot password?'}
                 </Button>
               </div>
             )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (isLogin ? "Signing in..." : "Creating account...") : (isLogin ? "Sign In" : "Create Account")}
+            <Button type="submit" className="w-full" disabled={loading || submitCooldown > 0}>
+              {submitCooldown > 0
+                ? `Try again in ${submitCooldown}s`
+                : loading
+                  ? (isLogin ? "Signing in..." : "Creating account...")
+                  : (isLogin ? "Sign In" : "Create Account")}
             </Button>
-            
-            {!isLogin && !showResend && (
+
+            {!showResend && (
               <div className="text-center">
                 <Button
                   type="button"
                   variant="link"
                   className="text-xs text-muted-foreground p-0 h-auto"
-                  onClick={() => setShowResend(true)}
+                  onClick={() => {
+                    setResendEmail(email);
+                    setShowResend(true);
+                  }}
                 >
-                  Already signed up? Resend confirmation email
+                  {isLogin ? 'Need to confirm your email? Resend link' : 'Already signed up? Resend confirmation email'}
                 </Button>
               </div>
             )}
