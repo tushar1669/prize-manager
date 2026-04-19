@@ -66,18 +66,25 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
     enabled: !!isMaster,
   });
 
-  const toggleVerifiedMutation = useMutation({
-    mutationFn: async ({ userId, newValue }: { userId: string; newValue: boolean }) => {
+  const toggleOrganizerAccessMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'master' | 'organizer' | 'user' }) => {
+      if (role === 'master') {
+        throw new Error('Master users cannot be deactivated');
+      }
+
+      const nextRole = role === 'organizer' ? 'user' : 'organizer';
       const { error } = await supabase
         .from('user_roles')
-        .update({ is_verified: newValue })
+        .update({ role: nextRole, is_verified: nextRole === 'organizer' })
         .eq('user_id', userId);
       if (error) throw error;
+
+      return nextRole;
     },
-    onSuccess: () => {
+    onSuccess: (nextRole) => {
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
-      toast.success('Verification status updated');
+      toast.success(nextRole === 'organizer' ? 'Organizer access enabled' : 'Organizer access disabled');
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : 'Failed to update';
@@ -111,7 +118,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Master Dashboard</h1>
-            <p className="text-muted-foreground">Manage user verification and approvals</p>
+            <p className="text-muted-foreground">Manage organizer approvals and access</p>
             {embeddedInAdmin && (
               <Link to="/dashboard" className="text-sm text-primary hover:underline">
                 Back to Dashboard
@@ -193,7 +200,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                             disabled={isApproving || isRejecting}
                           >
                             <UserX className="h-4 w-4" />
-                            Reject
+                            Disable Access
                           </Button>
                         </div>
                       </TableCell>
@@ -217,7 +224,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
         <Card>
           <CardHeader>
             <CardTitle>All Users</CardTitle>
-            <CardDescription>View and manage all user roles</CardDescription>
+            <CardDescription>Enable or disable organizer access without deleting users</CardDescription>
           </CardHeader>
           <CardContent>
             {users && users.length > 0 ? (
@@ -227,7 +234,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                     <TableHead>Email</TableHead>
                     <TableHead>User ID</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Verified</TableHead>
+                    <TableHead>Organizer Access</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -245,10 +252,12 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {u.is_verified ? (
-                          <Badge className="bg-green-600">Verified</Badge>
+                        {u.role === 'organizer' ? (
+                          <Badge className="bg-green-600">Enabled</Badge>
+                        ) : u.role === 'master' ? (
+                          <Badge>Always enabled</Badge>
                         ) : (
-                          <Badge variant="outline">Unverified</Badge>
+                          <Badge variant="outline">Disabled</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -257,14 +266,14 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                       <TableCell>
                         {u.role !== 'master' && (
                           <Switch
-                            checked={u.is_verified}
-                            onCheckedChange={(checked) => {
-                              toggleVerifiedMutation.mutate({
+                            checked={u.role === 'organizer'}
+                            onCheckedChange={() => {
+                              toggleOrganizerAccessMutation.mutate({
                                 userId: u.user_id,
-                                newValue: checked,
+                                role: u.role,
                               });
                             }}
-                            disabled={toggleVerifiedMutation.isPending}
+                            disabled={toggleOrganizerAccessMutation.isPending}
                           />
                         )}
                       </TableCell>
