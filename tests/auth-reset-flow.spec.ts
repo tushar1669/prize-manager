@@ -118,16 +118,16 @@ describe("auth reset flow", () => {
       redirectTo: "http://localhost:3000/reset-password",
     });
 
-    expect(screen.getByRole("button", { name: /resend in 60s/i })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /try again in 60s/i })).toHaveProperty("disabled", true);
 
-    fireEvent.click(screen.getByRole("button", { name: /resend in 60s/i }));
+    fireEvent.click(screen.getByRole("button", { name: /try again in 60s/i }));
     expect(mockResetPasswordForEmail).toHaveBeenCalledTimes(1);
 
     act(() => {
       vi.advanceTimersByTime(1000);
     });
 
-    expect(screen.getByRole("button", { name: /resend in 59s/i })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: /try again in 59s/i })).toHaveProperty("disabled", true);
   });
 
   it("calls updateUser when reset passwords match", async () => {
