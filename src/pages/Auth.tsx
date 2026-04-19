@@ -13,6 +13,7 @@ import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 
 const REFERRAL_STORAGE_KEY = "pm_referral_code";
+const REFERRAL_SIGNUP_INTENT_KEY = "pm_referral_signup_intent";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -168,6 +169,7 @@ export default function Auth() {
       const trimmedRef = referralCode.trim().toUpperCase();
       if (trimmedRef) {
         localStorage.setItem(REFERRAL_STORAGE_KEY, trimmedRef);
+        localStorage.setItem(REFERRAL_SIGNUP_INTENT_KEY, "1");
       }
 
       // Build redirect URL with referral code embedded so it works cross-device
@@ -190,6 +192,8 @@ export default function Auth() {
           toast.error("Too many sign-up attempts. Please wait a minute and try again.");
           setSubmitCooldown(60);
         } else if (isAlreadyRegisteredError(error)) {
+          localStorage.removeItem(REFERRAL_STORAGE_KEY);
+          localStorage.removeItem(REFERRAL_SIGNUP_INTENT_KEY);
           toast.message("This email is already registered. Switched to sign in — use your password or reset it.");
           setIsLogin(true);
           setShowResend(false);
@@ -199,6 +203,8 @@ export default function Auth() {
         }
       } else if (data?.user?.identities?.length === 0) {
         // Supabase returns success with empty identities for already-registered emails
+        localStorage.removeItem(REFERRAL_STORAGE_KEY);
+        localStorage.removeItem(REFERRAL_SIGNUP_INTENT_KEY);
         toast.message("This email is already registered. Switched to sign in — use your password or reset it. If you never confirmed your email, use 'Resend confirmation email' below.");
         setIsLogin(true);
         setResendEmail(email);
@@ -224,6 +230,9 @@ export default function Auth() {
     try {
       // Carry referral code in resend redirect if available (localStorage or form)
       const resendRef = referralCode.trim().toUpperCase() || localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || '';
+      if (resendRef) {
+        localStorage.setItem(REFERRAL_SIGNUP_INTENT_KEY, "1");
+      }
       const resendRedirect = resendRef
         ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(resendRef)}`
         : `${window.location.origin}/auth/callback`;

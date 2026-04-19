@@ -3,6 +3,7 @@ import { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 const REFERRAL_STORAGE_KEY = "pm_referral_code";
+const REFERRAL_SIGNUP_INTENT_KEY = "pm_referral_signup_intent";
 
 /**
  * Check if we're in dev/preview environment or debug mode is active.
@@ -27,9 +28,8 @@ function redact(code: string): string {
 /**
  * Global hook that applies a pending referral code exactly once per
  * authenticated session. Checks three sources in priority order:
- *   1) URL param `ref`
- *   2) user_metadata.pending_referral_code (durable cross-device)
- *   3) localStorage REFERRAL_STORAGE_KEY (device-local)
+ *   1) user_metadata.pending_referral_code (durable cross-device)
+ *   2) URL/localStorage, but only when signup intent is present
  *
  * Must be mounted in a component that has access to the authenticated user.
  * Never blocks navigation or login flow.
@@ -47,11 +47,13 @@ export function useApplyPendingReferral(user: User | null) {
       const debug = isDebugReferrals();
 
       try {
-        // 1) URL param
-        const params = new URLSearchParams(window.location.search);
-        const refFromUrl = params.get("ref")?.trim().toUpperCase() || "";
+        // Never apply referral during password-recovery flow
+        if (window.location.pathname === "/reset-password") {
+          appliedRef.current = true;
+          return;
+        }
 
-        // 2) user_metadata
+        // 1) user_metadata
         let refFromMeta = "";
         try {
           const {
@@ -67,16 +69,24 @@ export function useApplyPendingReferral(user: User | null) {
           /* ignore */
         }
 
-        // 3) localStorage
-        const refFromStorage =
-          localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() ||
-          "";
+        const hasSignupIntent =
+          localStorage.getItem(REFERRAL_SIGNUP_INTENT_KEY) === "1";
 
-        const refCode = refFromUrl || refFromMeta || refFromStorage;
-        const source = refFromUrl
-          ? "url"
-          : refFromMeta
-            ? "user_metadata"
+        // 2) URL/localStorage fallbacks are allowed only when signup intent exists
+        const params = new URLSearchParams(window.location.search);
+        const refFromUrl = hasSignupIntent
+          ? params.get("ref")?.trim().toUpperCase() || ""
+          : "";
+
+        const refFromStorage = hasSignupIntent
+          ? localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || ""
+          : "";
+
+        const refCode = refFromMeta || refFromUrl || refFromStorage;
+        const source = refFromMeta
+          ? "user_metadata"
+          : refFromUrl
+            ? "url"
             : refFromStorage
               ? "localStorage"
               : "none";
@@ -86,6 +96,7 @@ export function useApplyPendingReferral(user: User | null) {
             url: refFromUrl ? redact(refFromUrl) : "(none)",
             meta: refFromMeta ? redact(refFromMeta) : "(none)",
             storage: refFromStorage ? redact(refFromStorage) : "(none)",
+            signupIntent: hasSignupIntent,
             chosen: refCode ? redact(refCode) : "(none)",
             source,
           });
@@ -107,9 +118,8 @@ export function useApplyPendingReferral(user: User | null) {
         }
 
         // Cleanup localStorage
-        if (refFromStorage) {
-          localStorage.removeItem(REFERRAL_STORAGE_KEY);
-        }
+        localStorage.removeItem(REFERRAL_STORAGE_KEY);
+        localStorage.removeItem(REFERRAL_SIGNUP_INTENT_KEY);
 
         // Cleanup user_metadata
         if (refFromMeta) {
