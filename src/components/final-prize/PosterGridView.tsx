@@ -6,16 +6,18 @@ import { Trophy, Medal, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
 
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
   tournamentId: string;
   hasFullAccess?: boolean;
+  freePlayerThreshold?: number;
 }
 
 type PosterGridPrintMode = 'compact' | 'one-per-page';
 
-export function PosterGridView({ winners, tournamentId, hasFullAccess = true }: PosterGridViewProps) {
+export function PosterGridView({ winners, tournamentId, hasFullAccess = true, freePlayerThreshold }: PosterGridViewProps) {
   const publicUrl = `/t/${tournamentId}/public`;
   const [printMode, setPrintMode] = useState<PosterGridPrintMode>('compact');
   const shareLink = useMemo(() => {
@@ -54,7 +56,7 @@ export function PosterGridView({ winners, tournamentId, hasFullAccess = true }: 
           <Lock className="h-12 w-12 text-muted-foreground/50" />
           <h3 className="text-lg font-semibold text-foreground">Poster Grid — Pro Only</h3>
           <p className="max-w-sm text-center text-sm text-muted-foreground">
-            Upgrade to Pro to access the Poster Grid print view for tournaments with more than 150 players.
+            {printViewUpgradeCopy('Poster Grid print', resolveFreePlayerThreshold(freePlayerThreshold))}
           </p>
         </div>
       </div>

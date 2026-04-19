@@ -3,14 +3,16 @@ import { Medal, Trophy, Lock } from 'lucide-react';
 import { FinalPrizeWinnerRow, useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
 
 interface ArbiterSheetViewProps {
   winners?: FinalPrizeWinnerRow[];
   tournamentId?: string;
   hasFullAccess?: boolean;
+  freePlayerThreshold?: number;
 }
 
-export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFullAccess = true }: ArbiterSheetViewProps) {
+export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFullAccess = true, freePlayerThreshold }: ArbiterSheetViewProps) {
   const queryTournamentId = providedWinners?.length ? undefined : tournamentId;
   const { data, isLoading } = useFinalPrizeData(queryTournamentId);
   const winners = useMemo(() => providedWinners ?? data?.winners ?? [], [providedWinners, data?.winners]);
@@ -22,7 +24,7 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
           <Lock className="h-12 w-12 text-muted-foreground/50" />
           <h3 className="text-lg font-semibold text-foreground">Arbiter Sheet — Pro Only</h3>
           <p className="max-w-sm text-center text-sm text-muted-foreground">
-            Upgrade to Pro to access the Arbiter Sheet view for tournaments with more than 150 players.
+            {printViewUpgradeCopy('Arbiter Sheet', resolveFreePlayerThreshold(freePlayerThreshold))}
           </p>
         </div>
       </div>

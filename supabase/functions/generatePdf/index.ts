@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
+import { exportUpgradeHint, resolveFreePlayerThreshold } from '../_shared/tournamentAccess.ts';
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "generatePdf";
@@ -258,7 +259,7 @@ Deno.serve(async (req) => {
 
     const { data: accessState, error: accessStateError } = await supabaseClient
       .rpc('get_tournament_access_state', { tournament_id: tournamentId })
-      .maybeSingle() as { data: { has_full_access: boolean } | null; error: unknown };
+      .maybeSingle() as { data: { has_full_access: boolean; free_player_threshold?: number | null } | null; error: unknown };
 
     if (accessStateError) {
       if (isMissingAccessStateRpc(accessStateError)) {
@@ -270,11 +271,13 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to resolve tournament access: ${(accessStateError as Error).message}`);
     }
 
+    const freePlayerThreshold = resolveFreePlayerThreshold(accessState?.free_player_threshold);
+
     if (!accessState?.has_full_access) {
       return new Response(
         JSON.stringify({
           error: 'upgrade_required_for_export',
-          hint: 'PDF/print export is unavailable for tournaments above 150 players without active Pro entitlement.',
+          hint: exportUpgradeHint(freePlayerThreshold),
           access: accessState,
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
