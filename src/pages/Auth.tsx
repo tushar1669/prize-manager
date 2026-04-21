@@ -11,9 +11,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
-
-const REFERRAL_STORAGE_KEY = "pm_referral_code";
-const REFERRAL_SIGNUP_INTENT_KEY = "pm_referral_signup_intent";
+import {
+  buildAuthCallbackRedirect,
+  REFERRAL_SIGNUP_INTENT_KEY,
+  REFERRAL_STORAGE_KEY,
+  resendConfirmationEmail,
+} from "@/lib/auth/resendConfirmation";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -172,12 +175,7 @@ export default function Auth() {
         localStorage.setItem(REFERRAL_SIGNUP_INTENT_KEY, "1");
       }
 
-      // Build redirect URL with referral code embedded so it works cross-device
-      const redirectUrl = trimmedRef
-        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(trimmedRef)}`
-        : `${window.location.origin}/auth/callback`;
-
-      const signUpOptions: Record<string, unknown> = { emailRedirectTo: redirectUrl };
+      const signUpOptions: Record<string, unknown> = { emailRedirectTo: buildAuthCallbackRedirect(trimmedRef) };
       // Store referral in user_metadata so it survives cross-device confirmation
       if (trimmedRef) {
         signUpOptions.data = { pending_referral_code: trimmedRef };
@@ -221,51 +219,30 @@ export default function Auth() {
 
   const handleResendConfirmation = async () => {
     if (resendLoading || resendCooldown > 0) return;
-    const emailToResend = resendEmail.trim() || email.trim();
-    if (!emailToResend) {
-      toast.error('Please enter your email address');
-      return;
-    }
+
     setResendLoading(true);
-    try {
-      // Carry referral code in resend redirect if available (localStorage or form)
-      const resendRef = referralCode.trim().toUpperCase() || localStorage.getItem(REFERRAL_STORAGE_KEY)?.trim().toUpperCase() || '';
-      if (resendRef) {
-        localStorage.setItem(REFERRAL_SIGNUP_INTENT_KEY, "1");
-      }
-      const resendRedirect = resendRef
-        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(resendRef)}`
-        : `${window.location.origin}/auth/callback`;
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: emailToResend,
-        options: {
-          emailRedirectTo: resendRedirect
-        }
-      });
-      if (error) {
-        if (isRateLimitError(error)) {
-          toast.error("Too many requests. Please wait a minute before resending.");
-          setResendCooldown(60);
-        } else if (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist')) {
-          toast.error('No account found with this email. Please sign up first.');
-        } else if (error.message.toLowerCase().includes('already confirmed')) {
-          toast.success('Your email is already confirmed. You can sign in now.');
-          setIsLogin(true);
-          setShowResend(false);
-        } else {
-          toast.error(error.message);
-        }
-      } else {
-        toast.success('Confirmation email sent. Check your inbox (and spam folder).');
+    const result = await resendConfirmationEmail({
+      resendEmail,
+      fallbackEmail: email,
+      referralCode,
+    });
+
+    if (result.ok) {
+      toast.success('Confirmation email sent. Check your inbox (and spam folder).');
+      setResendCooldown(60);
+    } else {
+      toast.error(result.message);
+      if (result.code === "rate_limited") {
         setResendCooldown(60);
+      } else if (result.code === "already_confirmed") {
+        setIsLogin(true);
+        setShowResend(false);
       }
-    } catch {
-      toast.error('Failed to resend confirmation email');
-    } finally {
-      setResendLoading(false);
     }
+
+    setResendLoading(false);
   };
+
 
   return (
     <div className="min-h-screen bg-background">

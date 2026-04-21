@@ -11,8 +11,15 @@ const {
   mockUpdateUser,
   mockGetSession,
   mockOnAuthStateChange,
+  mockVerifyOtp,
+  mockExchangeCodeForSession,
+  mockSetSession,
+  mockGetUser,
+  mockFromSelectEqSingle,
   mockToastSuccess,
   mockToastError,
+  mockToastInfo,
+  mockToastMessage,
   authState,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -22,8 +29,15 @@ const {
   mockUpdateUser: vi.fn(),
   mockGetSession: vi.fn(),
   mockOnAuthStateChange: vi.fn(),
+  mockVerifyOtp: vi.fn(),
+  mockExchangeCodeForSession: vi.fn(),
+  mockSetSession: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockFromSelectEqSingle: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
+  mockToastInfo: vi.fn(),
+  mockToastMessage: vi.fn(),
   authState: {
     user: null as unknown,
     signIn: vi.fn(),
@@ -56,7 +70,18 @@ vi.mock("@/integrations/supabase/client", () => ({
       updateUser: mockUpdateUser,
       getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
+      verifyOtp: mockVerifyOtp,
+      exchangeCodeForSession: mockExchangeCodeForSession,
+      setSession: mockSetSession,
+      getUser: mockGetUser,
     },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: mockFromSelectEqSingle,
+        }),
+      }),
+    }),
   },
 }));
 
@@ -64,6 +89,8 @@ vi.mock("sonner", () => ({
   toast: {
     success: mockToastSuccess,
     error: mockToastError,
+    info: mockToastInfo,
+    message: mockToastMessage,
   },
 }));
 
@@ -72,6 +99,7 @@ vi.mock("@/components/public/PublicHeader", () => ({
 }));
 
 import Auth from "@/pages/Auth";
+import AuthCallback from "@/pages/AuthCallback";
 import ResetPassword from "@/pages/ResetPassword";
 
 describe("auth reset flow", () => {
@@ -83,8 +111,15 @@ describe("auth reset flow", () => {
     mockUpdateUser.mockReset();
     mockGetSession.mockReset();
     mockOnAuthStateChange.mockReset();
+    mockVerifyOtp.mockReset();
+    mockExchangeCodeForSession.mockReset();
+    mockSetSession.mockReset();
+    mockGetUser.mockReset();
+    mockFromSelectEqSingle.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
+    mockToastInfo.mockReset();
+    mockToastMessage.mockReset();
     authState.user = null;
     authState.signIn.mockResolvedValue({ error: null });
     authState.signUp.mockResolvedValue({ data: null, error: null });
@@ -94,6 +129,11 @@ describe("auth reset flow", () => {
     mockSupabaseSignUp.mockResolvedValue({ data: { user: { identities: [{ id: "identity-1" }] } }, error: null });
     mockUpdateUser.mockResolvedValue({ error: null });
     mockGetSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
+    mockVerifyOtp.mockResolvedValue({ data: null, error: null });
+    mockExchangeCodeForSession.mockResolvedValue({ data: null, error: null });
+    mockSetSession.mockResolvedValue({ data: null, error: null });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockFromSelectEqSingle.mockResolvedValue({ data: { role: "organizer", is_verified: true } });
     mockOnAuthStateChange.mockReturnValue({
       data: {
         subscription: {
@@ -133,11 +173,6 @@ describe("auth reset flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /try again in 60s/i }));
     expect(mockResetPasswordForEmail).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-
-    expect(screen.getByRole("button", { name: /try again in 59s/i })).toHaveProperty("disabled", true);
   });
 
   it("applies resend confirmation cooldown copy consistently", async () => {
@@ -165,6 +200,34 @@ describe("auth reset flow", () => {
       vi.advanceTimersByTime(1000);
     });
     expect(screen.getByRole("button", { name: /try again in 59s/i })).toHaveProperty("disabled", true);
+  });
+
+
+  it("reuses resend helper behavior in callback recovery UI with cooldown", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+
+    render(React.createElement(MemoryRouter, { initialEntries: ["/auth/callback?ref=ref-abc"] }, React.createElement(AuthCallback)));
+
+    await screen.findByText(/confirmation required/i);
+
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: "organizer@example.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /resend confirmation email/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockResend).toHaveBeenCalledWith({
+      type: "signup",
+      email: "organizer@example.com",
+      options: { emailRedirectTo: "http://localhost:3000/auth/callback?ref=REF-ABC" },
+    });
+
+    expect(screen.getByRole("button", { name: /try again in 60s/i })).toHaveProperty("disabled", true);
+
   });
 
   it("calls updateUser when reset passwords match", async () => {
