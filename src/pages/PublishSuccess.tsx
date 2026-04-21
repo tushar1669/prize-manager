@@ -90,7 +90,7 @@ export default function PublishSuccess() {
   };
 
   const handleRepublish = () => {
-    // Navigate back to finalize so organizer can re-publish properly
+    // Navigate back to finalize so organizer can publish updated results
     navigate(`/t/${id}/finalize`);
   };
 
@@ -192,11 +192,11 @@ export default function PublishSuccess() {
                   className="w-full justify-start gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Edit & Re-publish
+                  Edit & Publish Again
                 </Button>
 
                 <p className="text-xs text-muted-foreground mt-4">
-                  Unpublishing hides the public page. To re-publish, return to Finalize and publish again — this creates a new version.
+                  Unpublishing hides the public page. To publish again later, return to Finalize and publish.
                 </p>
               </CardContent>
             </Card>
@@ -219,7 +219,7 @@ export default function PublishSuccess() {
                 </p>
                 <Button onClick={handleRepublish} className="gap-2">
                   <RefreshCw className="h-4 w-4" />
-                  Republish Tournament
+                  Publish Again
                 </Button>
               </CardContent>
             </Card>
