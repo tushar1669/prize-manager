@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, CheckCircle, Loader2, RefreshCw, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { resendConfirmationEmail } from "@/lib/auth/resendConfirmation";
+import { useResendConfirmation } from "@/lib/auth/useResendConfirmation";
 
 type CallbackStatus = 'loading' | 'success' | 'error' | 'expired' | 'missing';
 
@@ -62,8 +62,11 @@ export default function AuthCallback() {
   
   // Resend confirmation state
   const [resendEmail, setResendEmail] = useState('');
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const { resendLoading, resendCooldown, triggerResendConfirmation } = useResendConfirmation({
+    onAlreadyConfirmed: () => {
+      setTimeout(() => navigate('/auth'), 1500);
+    },
+  });
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -287,39 +290,12 @@ export default function AuthCallback() {
     handleCallback();
   }, [searchParams, navigate]);
 
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = window.setInterval(() => {
-      setResendCooldown((seconds) => (seconds <= 1 ? 0 : seconds - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [resendCooldown]);
-
   // Handle resend confirmation email
   const handleResendConfirmation = async () => {
-    if (resendLoading || resendCooldown > 0) return;
-
-    setResendLoading(true);
-    const result = await resendConfirmationEmail({
+    await triggerResendConfirmation({
       resendEmail,
       referralParam: searchParams.get('ref'),
     });
-
-    if (result.ok === true) {
-      toast.success('Confirmation email sent. Check your inbox (and spam folder).');
-      setResendCooldown(60);
-    } else {
-      const failure = result;
-      toast.error(failure.message);
-      if (failure.code === 'rate_limited') {
-        setResendCooldown(60);
-      } else if (failure.code === 'already_confirmed') {
-        setTimeout(() => navigate('/auth'), 1500);
-      }
-    }
-
-    setResendLoading(false);
   };
 
 

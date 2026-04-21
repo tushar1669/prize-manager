@@ -16,8 +16,8 @@ import {
   buildAuthCallbackRedirect,
   REFERRAL_SIGNUP_INTENT_KEY,
   REFERRAL_STORAGE_KEY,
-  resendConfirmationEmail,
 } from "@/lib/auth/resendConfirmation";
+import { useResendConfirmation } from "@/lib/auth/useResendConfirmation";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -37,8 +37,12 @@ export default function Auth() {
   // Resend confirmation state
   const [showResend, setShowResend] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const { resendLoading, resendCooldown, setResendCooldown, triggerResendConfirmation } = useResendConfirmation({
+    onAlreadyConfirmed: () => {
+      setIsLogin(true);
+      setShowResend(false);
+    },
+  });
 
   // Referral code (only for signup)
   const [referralCode, setReferralCode] = useState(
@@ -68,14 +72,6 @@ export default function Auth() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [forgotPasswordCooldown]);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = window.setInterval(() => {
-      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [resendCooldown]);
 
   useEffect(() => {
     if (submitCooldown <= 0) return;
@@ -221,30 +217,11 @@ export default function Auth() {
   };
 
   const handleResendConfirmation = async () => {
-    if (resendLoading || resendCooldown > 0) return;
-
-    setResendLoading(true);
-    const result = await resendConfirmationEmail({
+    await triggerResendConfirmation({
       resendEmail,
       fallbackEmail: email,
       referralCode,
     });
-
-    if (result.ok === true) {
-      toast.success('Confirmation email sent. Check your inbox (and spam folder).');
-      setResendCooldown(60);
-    } else {
-      const failure = result;
-      toast.error(failure.message);
-      if (failure.code === "rate_limited") {
-        setResendCooldown(60);
-      } else if (failure.code === "already_confirmed") {
-        setIsLogin(true);
-        setShowResend(false);
-      }
-    }
-
-    setResendLoading(false);
   };
 
 
