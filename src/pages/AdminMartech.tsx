@@ -126,8 +126,8 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
             <CardContent><p className="text-xs text-muted-foreground">Verified: {metrics.kpis.verifiedOrganizers.toLocaleString()}</p></CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardDescription>Pending approvals</CardDescription><CardTitle>{metrics.kpis.pendingApprovals.toLocaleString()}</CardTitle></CardHeader>
-            <CardContent><p className="text-xs text-muted-foreground">Awaiting verification</p></CardContent>
+            <CardHeader className="pb-2"><CardDescription>Unverified organizers</CardDescription><CardTitle>{metrics.kpis.pendingApprovals.toLocaleString()}</CardTitle></CardHeader>
+            <CardContent><p className="text-xs text-muted-foreground">Expected to stay near zero after onboarding defaults.</p></CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardDescription>Total tournaments</CardDescription><CardTitle>{metrics.kpis.totalTournaments.toLocaleString()}</CardTitle></CardHeader>

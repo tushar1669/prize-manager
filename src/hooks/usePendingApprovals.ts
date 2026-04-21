@@ -12,14 +12,14 @@ interface PendingUser {
 }
 
 /**
- * Hook for master to manage pending organizer approvals.
- * Fetches pending users by joining user_roles with profiles.
+ * Hook for master to manage exceptional unverified organizer rows.
+ * Fetches organizer users where is_verified=false by joining user_roles with profiles.
  */
 export function usePendingApprovals() {
   const { isMaster } = useUserRole();
   const queryClient = useQueryClient();
 
-  // Fetch pending organizers with their emails
+  // Fetch unverified organizers with their emails (typically empty in production)
   const { data: pendingUsers, isLoading, error, refetch } = useQuery({
     queryKey: ['pending-approvals'],
     queryFn: async (): Promise<PendingUser[]> => {

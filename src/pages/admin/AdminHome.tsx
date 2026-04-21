@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const quickLinks = [
-  { to: "/admin/users", title: "Users & Approvals", description: "Review new organizer requests and manage verification." },
+  { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, verification state, and moderation actions." },
   { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
   { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
