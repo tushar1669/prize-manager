@@ -4,10 +4,11 @@ import { cn } from "@/lib/utils";
 
 const adminLinks = [
   { to: "/admin", label: "Overview", end: true },
-  { to: "/admin/users", label: "Users/Approvals" },
+  { to: "/admin/users", label: "Users & Approvals" },
   { to: "/admin/martech", label: "Martech" },
   { to: "/admin/tournaments", label: "Tournaments" },
   { to: "/admin/coupons", label: "Coupons" },
+  { to: "/admin/audit", label: "Audit Logs" },
   { to: "/admin/team-snapshots", label: "Team Snapshots" },
 ];
 
