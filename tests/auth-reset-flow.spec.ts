@@ -6,6 +6,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 const {
   mockNavigate,
   mockResetPasswordForEmail,
+  mockResend,
+  mockSupabaseSignUp,
   mockUpdateUser,
   mockGetSession,
   mockOnAuthStateChange,
@@ -15,6 +17,8 @@ const {
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockResetPasswordForEmail: vi.fn(),
+  mockResend: vi.fn(),
+  mockSupabaseSignUp: vi.fn(),
   mockUpdateUser: vi.fn(),
   mockGetSession: vi.fn(),
   mockOnAuthStateChange: vi.fn(),
@@ -47,6 +51,8 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
       resetPasswordForEmail: mockResetPasswordForEmail,
+      resend: mockResend,
+      signUp: mockSupabaseSignUp,
       updateUser: mockUpdateUser,
       getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
@@ -72,6 +78,8 @@ describe("auth reset flow", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockResetPasswordForEmail.mockReset();
+    mockResend.mockReset();
+    mockSupabaseSignUp.mockReset();
     mockUpdateUser.mockReset();
     mockGetSession.mockReset();
     mockOnAuthStateChange.mockReset();
@@ -82,6 +90,8 @@ describe("auth reset flow", () => {
     authState.signUp.mockResolvedValue({ data: null, error: null });
 
     mockResetPasswordForEmail.mockResolvedValue({ error: null });
+    mockResend.mockResolvedValue({ error: null });
+    mockSupabaseSignUp.mockResolvedValue({ data: { user: { identities: [{ id: "identity-1" }] } }, error: null });
     mockUpdateUser.mockResolvedValue({ error: null });
     mockGetSession.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
     mockOnAuthStateChange.mockReturnValue({
@@ -127,6 +137,33 @@ describe("auth reset flow", () => {
       vi.advanceTimersByTime(1000);
     });
 
+    expect(screen.getByRole("button", { name: /try again in 59s/i })).toHaveProperty("disabled", true);
+  });
+
+  it("applies resend confirmation cooldown copy consistently", async () => {
+    vi.useFakeTimers();
+
+    render(React.createElement(MemoryRouter, { initialEntries: ["/auth?mode=signup"] }, React.createElement(Auth)));
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: "organizer@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: "password123" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockResend).toHaveBeenCalledTimes(0);
+    expect(screen.getByRole("button", { name: /try again in 60s/i })).toHaveProperty("disabled", true);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(screen.getByRole("button", { name: /try again in 59s/i })).toHaveProperty("disabled", true);
   });
 
