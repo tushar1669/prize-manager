@@ -1525,6 +1525,7 @@ export type Database = {
       get_tournament_access_state: {
         Args: { tournament_id: string }
         Returns: {
+          free_player_threshold: number
           has_full_access: boolean
           is_free_small_tournament: boolean
           players_count: number

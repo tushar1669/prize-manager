@@ -26,7 +26,7 @@ describe('tournament access threshold canonicalization', () => {
   it('pins SQL resolver threshold to a named 150 constant', () => {
     const migrationPath = path.resolve(
       process.cwd(),
-      'supabase/migrations/20260421120000_reassert_get_tournament_access_state_threshold_150.sql',
+      'supabase/migrations/20260421133000_reassert_get_tournament_access_state_threshold_150_corrective.sql',
     );
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
