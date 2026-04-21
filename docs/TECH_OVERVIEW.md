@@ -42,7 +42,7 @@
 - **Flow:** Organizer visits `/t/:id/upgrade` → pays ₹2,000 via UPI QR → submits UTR → master reviews in `/master-dashboard` Payment Approvals panel.
 - **Approval:** `review_tournament_payment` RPC creates a `tournament_entitlements` row granting Pro access and triggers `issue_referral_rewards` for the referral chain.
 - **Tables:** `tournament_payments` (claims), `tournament_entitlements` (granted access).
-- **Access threshold source of truth:** `public.get_tournament_access_state` returns `free_player_threshold` (currently **150**) and all UI/export entitlement messaging must read that returned value rather than hardcoding a number.
+- **Access threshold source of truth:** `public.get_tournament_access_state` returns `free_player_threshold` (currently **150**) and all UI/export entitlement messaging must read that returned value rather than hardcoding a number. Canonical re-assertion migration: `supabase/migrations/20260421120000_reassert_get_tournament_access_state_threshold_150.sql`.
 - **Key files:** `src/pages/TournamentUpgrade.tsx`, `src/components/master/PendingPaymentsPanel.tsx`.
 
 ## Profiles & Profile Completion Reward

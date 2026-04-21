@@ -26,12 +26,24 @@ describe('tournament access threshold canonicalization', () => {
   it('pins SQL resolver threshold to a named 150 constant', () => {
     const migrationPath = path.resolve(
       process.cwd(),
-      'supabase/migrations/20260419110000_canonicalize_free_player_threshold.sql',
+      'supabase/migrations/20260421120000_reassert_get_tournament_access_state_threshold_150.sql',
     );
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
     expect(sql).toContain('v_free_player_threshold CONSTANT integer := 150;');
     expect(sql).toContain('v_players_count BETWEEN 1 AND v_free_player_threshold');
+
+    expect(sql).not.toContain('v_players_count BETWEEN 1 AND 100');
+    expect(sql).toContain('free_player_threshold integer');
     expect(sql).toContain('free_player_threshold := v_free_player_threshold;');
   });
+
+  it('keeps generated Supabase types aligned with access-state return shape', () => {
+    const typesPath = path.resolve(process.cwd(), 'src/integrations/supabase/types.ts');
+    const types = fs.readFileSync(typesPath, 'utf8');
+
+    expect(types).toContain('get_tournament_access_state: {');
+    expect(types).toContain('free_player_threshold: number');
+  });
+
 });
