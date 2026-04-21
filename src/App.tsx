@@ -45,7 +45,6 @@ const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminTeamSnapshots = lazy(() => import("./pages/admin/AdminTeamSnapshots"));
-const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout").then((module) => ({ default: module.AdminLayout })));
 
 const queryClient = new QueryClient();
@@ -116,8 +115,8 @@ const App = () => {
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 
-                {/* Pending approval route - protected but allowed for unverified */}
-                <Route path="/pending-approval" element={<ProtectedRoute><PendingApproval /></ProtectedRoute>} />
+                {/* Legacy alias kept for old links; onboarding no longer relies on a pending-approval queue */}
+                <Route path="/pending-approval" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
 
                 {/* Protected routes */}
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

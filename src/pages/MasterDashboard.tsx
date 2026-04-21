@@ -23,7 +23,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
   const { isMaster, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
 
-  // Pending approvals hook
+  // Legacy unverified organizer exceptions
   const {
     pendingUsers,
     pendingCount,
@@ -127,7 +127,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
           </div>
           {pendingCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1">
-              {pendingCount} unverified organizer{pendingCount !== 1 ? 's' : ''}
+              {pendingCount} legacy unverified organizer{pendingCount !== 1 ? 's' : ''}
             </Badge>
           )}
         </div>
@@ -138,11 +138,11 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <CardTitle>Unverified Organizer Access</CardTitle>
+                  <CardTitle>Legacy Unverified Organizer Exceptions</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                    {pendingCount} needs review
+                    {pendingCount} needs manual review
                   </Badge>
                   <Button
                     variant="ghost"
