@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,7 +34,7 @@ export default function PublicResults() {
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament', slug],
     queryFn: async (): Promise<PublicTournamentLookup | null> =>
-      fetchPublishedTournamentBySlug(supabase as never, slug as string),
+      fetchPublishedTournamentBySlug(supabase, slug as string),
     enabled: !!slug,
     staleTime: 60_000,
   });
@@ -43,13 +44,13 @@ export default function PublicResults() {
     queryFn: async () => {
       if (!tournament?.id) return { rows: [], hasFullAccess: false, otherCategoriesLocked: false };
 
-      const { data, error } = await supabase.rpc('get_public_tournament_results', {
+      const { data, error }: { data: PublicResultRow[] | null; error: PostgrestError | null } = await supabase.rpc('get_public_tournament_results', {
         tournament_id: tournament.id,
       });
 
       if (error) throw error;
 
-      const typedData = ((data ?? []) as unknown) as PublicResultRow[];
+      const typedData = data ?? [];
 
       const rows = typedData.map((row) => ({
         prize_id: row.prize_id,

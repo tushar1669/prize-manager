@@ -1,3 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
 type SupabaseQueryResult<T> = {
   data: T | null;
   error: Error | null;
@@ -12,11 +15,7 @@ type SupabaseMaybeSingleQuery<T> = {
   maybeSingle(): Promise<SupabaseQueryResult<T>>;
 };
 
-type SupabaseClientLike = {
-  from(table: "published_tournaments"): {
-    select(fields: string): SupabaseQuery<PublicTournamentLookup>;
-  };
-};
+type SupabaseClientLike = Pick<SupabaseClient<Database>, "from">;
 
 export type PublicTournamentLookup = {
   id: string;
