@@ -317,7 +317,7 @@ export default function Auth() {
                         Sending...
                       </>
                     ) : resendCooldown > 0 ? (
-                      `Resend available in ${resendCooldown}s`
+                      `Try again in ${resendCooldown}s`
                     ) : (
                       'Resend confirmation email'
                     )}
