@@ -58,9 +58,9 @@ export default function PendingApproval() {
           <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
             <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
           </div>
-          <CardTitle className="text-xl">Account Pending Approval</CardTitle>
+          <CardTitle className="text-xl">Finishing setup</CardTitle>
           <CardDescription>
-            Your account is waiting for admin verification
+            We're getting your account ready
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -70,13 +70,13 @@ export default function PendingApproval() {
           </div>
           
           <p className="text-sm text-muted-foreground text-center">
-            An administrator will review your account shortly. Once approved, you'll be able to create and manage tournaments.
+            If you're not redirected to your dashboard automatically, tap "Refresh status" below.
           </p>
           
           <div className="flex flex-col gap-2">
             <Button onClick={handleRefresh} variant="outline" className="w-full gap-2">
               <RefreshCw className="h-4 w-4" />
-              Refresh Status
+              Refresh status
             </Button>
             <Button onClick={handleSignOut} variant="ghost" className="w-full gap-2 text-muted-foreground">
               <LogOut className="h-4 w-4" />

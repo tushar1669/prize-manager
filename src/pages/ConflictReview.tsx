@@ -780,7 +780,7 @@ export default function ConflictReview() {
           canViewFullResults={canViewFullResults}
         />
 
-        {/* Team / Institution Prize Results - shown when team prizes configured and preview completed */}
+        {/* Team Prize Results - shown when team prizes configured and preview completed */}
         {hasTeamPrizes && previewCompleted && (
           <div className="mb-6">
             <TeamPrizeResultsPanel

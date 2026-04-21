@@ -262,11 +262,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Creator gate banner */}
+        {/* Organizer access banner (legacy verification flag) */}
         {authzStatus === 'ready' && role === 'organizer' && !is_verified && (
           <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              This account has a legacy unverified flag, but organizer access is enabled.
+              Organizer access is enabled for this account. You can create and manage tournaments.
             </p>
           </div>
         )}
