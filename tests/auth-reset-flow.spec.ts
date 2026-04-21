@@ -225,9 +225,30 @@ describe("auth reset flow", () => {
       email: "organizer@example.com",
       options: { emailRedirectTo: "http://localhost:3000/auth/callback?ref=REF-ABC" },
     });
+    expect(mockToastSuccess).toHaveBeenCalledWith("Confirmation email sent. Check your inbox (and spam folder).");
 
     expect(screen.getByRole("button", { name: /try again in 60s/i })).toHaveProperty("disabled", true);
+  });
 
+  it("applies shared resend rate-limit handling on auth page", async () => {
+    vi.useFakeTimers();
+    mockResend.mockResolvedValue({ error: { message: "Too many requests", status: 429 } });
+
+    render(React.createElement(MemoryRouter, null, React.createElement(Auth)));
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: "organizer@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /need to confirm your email\? resend link/i }));
+    fireEvent.click(screen.getByRole("button", { name: /resend confirmation email/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockResend).toHaveBeenCalledTimes(1);
+    expect(mockToastError).toHaveBeenCalledWith("Too many requests. Please wait a minute before resending.");
+    expect(screen.getByRole("button", { name: /try again in 60s/i })).toHaveProperty("disabled", true);
   });
 
   it("calls updateUser when reset passwords match", async () => {
