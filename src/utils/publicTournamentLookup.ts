@@ -31,7 +31,7 @@ export async function fetchPublishedTournamentBySlug(
   const fields = "id, title, slug, brochure_url";
   const indexed = supabaseClient
     .from("published_tournaments")
-    .select(fields) as SupabaseQuery<PublicTournamentLookup>;
+    .select(fields) as unknown as SupabaseQuery<PublicTournamentLookup>;
   const indexedResult = await indexed
     .or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
     .maybeSingle();
@@ -41,7 +41,7 @@ export async function fetchPublishedTournamentBySlug(
 
   const fallback = supabaseClient
     .from("published_tournaments")
-    .select(fields) as SupabaseQuery<PublicTournamentLookup>;
+    .select(fields) as unknown as SupabaseQuery<PublicTournamentLookup>;
   const fallbackResult = await fallback.eq("slug", slug).maybeSingle();
 
   if (fallbackResult.error) throw fallbackResult.error;
