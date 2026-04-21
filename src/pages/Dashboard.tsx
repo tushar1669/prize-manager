@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
-import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,29 +30,12 @@ type DashboardTournament = TournamentRow | TournamentView;
 export default function Dashboard() {
   const { user } = useAuth();
   const { authzStatus, role, is_master, is_verified } = useUserRole();
-  const { pendingCount } = usePendingApprovals();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
     { open: false, tournamentId: null, title: "" }
   );
-  const hasShownPendingToast = useRef(false);
-
-  // Show toast notification for masters when there are pending approvals
-  useEffect(() => {
-    if (is_master && pendingCount > 0 && !hasShownPendingToast.current) {
-      hasShownPendingToast.current = true;
-      toast.info(
-        `${pendingCount} organizer${pendingCount > 1 ? 's' : ''} awaiting approval`,
-        { 
-          action: { label: "Review", onClick: () => navigate("/admin/users") },
-          duration: 6000 
-        }
-      );
-    }
-  }, [is_master, pendingCount, navigate]);
-
   // CRITICAL: Non-masters only see their own tournaments (include_all=false)
   // Master status requires BOTH role=master AND email in allowlist (enforced in useUserRole)
   const { data: tournaments, isLoading, error } = useQuery({
@@ -237,15 +219,7 @@ export default function Dashboard() {
               <>
                 <Button variant="outline" onClick={() => navigate("/admin/users")} className="gap-2 relative">
                   <UserCheck className="h-4 w-4" />
-                  Approvals
-                  {pendingCount > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="absolute -top-2 -right-2 h-5 min-w-5 px-1.5 text-xs font-semibold"
-                    >
-                      {pendingCount}
-                    </Badge>
-                  )}
+                  User Access
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/admin")} className="gap-2">
                   <Shield className="h-4 w-4" />

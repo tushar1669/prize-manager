@@ -118,7 +118,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Master Dashboard</h1>
-            <p className="text-muted-foreground">Manage organizer approvals and access</p>
+            <p className="text-muted-foreground">Manage organizer access and moderation controls</p>
             {embeddedInAdmin && (
               <Link to="/dashboard" className="text-sm text-primary hover:underline">
                 Back to Dashboard
@@ -127,95 +127,89 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
           </div>
           {pendingCount > 0 && (
             <Badge variant="destructive" className="text-sm px-3 py-1">
-              {pendingCount} pending approval{pendingCount !== 1 ? 's' : ''}
+              {pendingCount} unverified organizer{pendingCount !== 1 ? 's' : ''}
             </Badge>
           )}
         </div>
 
-        {/* Pending Approvals Card - PRIORITY */}
-        <Card className="mb-6 border-amber-200 dark:border-amber-800">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <CardTitle>Organizer Approvals</CardTitle>
-              </div>
-              <div className="flex items-center gap-2">
-                {pendingCount > 0 && (
+        {pendingCount > 0 && (
+          <Card className="mb-6 border-amber-200 dark:border-amber-800">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  <CardTitle>Unverified Organizer Access</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                    {pendingCount} pending
+                    {pendingCount} needs review
                   </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => refetchPending()}
-                  disabled={pendingLoading}
-                  title="Refresh pending approvals"
-                >
-                  <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => refetchPending()}
+                    disabled={pendingLoading}
+                    title="Refresh unverified organizers"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
               </div>
-            </div>
-            <CardDescription>Review and approve new organizer registrations</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {pendingLoading ? (
-              <div className="py-4 flex justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              </div>
-            ) : pendingUsers.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Registered</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingUsers.map((u) => (
-                    <TableRow key={u.user_id}>
-                      <TableCell className="font-medium">{u.email}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(u.created_at).toLocaleDateString()} {new Date(u.created_at).toLocaleTimeString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1 text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
-                            onClick={() => approve(u.user_id)}
-                            disabled={isApproving || isRejecting}
-                          >
-                            <UserCheck className="h-4 w-4" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
-                            onClick={() => reject(u.user_id)}
-                            disabled={isApproving || isRejecting}
-                          >
-                            <UserX className="h-4 w-4" />
-                            Disable Access
-                          </Button>
-                        </div>
-                      </TableCell>
+              <CardDescription>Manual review for exceptional unverified organizer rows.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pendingLoading ? (
+                <div className="py-4 flex justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Registered</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="py-6 text-center text-muted-foreground">
-                <UserCheck className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                <p>No pending approvals</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingUsers.map((u) => (
+                      <TableRow key={u.user_id}>
+                        <TableCell className="font-medium">{u.email}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(u.created_at).toLocaleDateString()} {new Date(u.created_at).toLocaleTimeString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
+                              onClick={() => approve(u.user_id)}
+                              disabled={isApproving || isRejecting}
+                            >
+                              <UserCheck className="h-4 w-4" />
+                              Verify
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
+                              onClick={() => reject(u.user_id)}
+                              disabled={isApproving || isRejecting}
+                            >
+                              <UserX className="h-4 w-4" />
+                              Disable Access
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Payments Card */}
         <PendingPaymentsPanel />
