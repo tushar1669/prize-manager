@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { SignUpWithPasswordCredentials } from "@supabase/supabase-js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,7 +176,9 @@ export default function Auth() {
         localStorage.setItem(REFERRAL_SIGNUP_INTENT_KEY, "1");
       }
 
-      const signUpOptions: Record<string, unknown> = { emailRedirectTo: buildAuthCallbackRedirect(trimmedRef) };
+      const signUpOptions: SignUpWithPasswordCredentials["options"] = {
+        emailRedirectTo: buildAuthCallbackRedirect(trimmedRef),
+      };
       // Store referral in user_metadata so it survives cross-device confirmation
       if (trimmedRef) {
         signUpOptions.data = { pending_referral_code: trimmedRef };

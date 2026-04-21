@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { EmailOtpType, VerifyOtpParams } from "@supabase/supabase-js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,20 @@ interface DebugInfo {
   errorParam: string | null;
   origin: string;
 }
+
+const EMAIL_OTP_TYPES: ReadonlySet<EmailOtpType> = new Set([
+  'signup',
+  'invite',
+  'magiclink',
+  'recovery',
+  'email_change',
+  'email',
+]);
+
+const toEmailOtpType = (value: string | null): EmailOtpType | null => {
+  if (!value || !EMAIL_OTP_TYPES.has(value as EmailOtpType)) return null;
+  return value as EmailOtpType;
+};
 
 /**
  * AuthCallback handles email confirmation redirects from Supabase.
@@ -63,6 +78,7 @@ export default function AuthCallback() {
         const token = searchParams.get('token');
         const tokenHash = searchParams.get('token_hash');
         const otpType = searchParams.get('type');
+        const otpEmail = searchParams.get('email');
 
         // Build debug info
         const debug: DebugInfo = {
@@ -99,15 +115,15 @@ export default function AuthCallback() {
         }
 
         // Case 2: OTP flow - URL has ?token=...&type=...
-        if (otpType && (token || tokenHash)) {
+        const parsedOtpType = toEmailOtpType(otpType);
+        if (parsedOtpType && (tokenHash || (token && otpEmail))) {
           setFlowType('otp');
           console.log('[auth-callback] OTP flow: verifying token');
           toast.info('Verifying your email...');
 
-          // Build the OTP params - token_hash is required for VerifyTokenHashParams
-          const otpParams = tokenHash 
-            ? { type: otpType as 'signup', token_hash: tokenHash }
-            : { type: otpType as 'email', email: '', token: token || '' };
+          const otpParams: VerifyOtpParams = tokenHash
+            ? { type: parsedOtpType, token_hash: tokenHash }
+            : { type: parsedOtpType, email: otpEmail!, token: token! };
           
           const { data, error } = await supabase.auth.verifyOtp(otpParams);
 
@@ -132,6 +148,14 @@ export default function AuthCallback() {
           setStatus('success');
 
           await redirectAfterAuth();
+          return;
+        }
+
+        if (parsedOtpType && token && !otpEmail) {
+          setFlowType('missing');
+          setStatus('missing');
+          setErrorMessage('This confirmation link is incomplete. Please request a new confirmation email.');
+          toast.error('Invalid confirmation link');
           return;
         }
 
