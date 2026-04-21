@@ -282,14 +282,15 @@ export default function AuthCallback() {
       referralParam: searchParams.get('ref'),
     });
 
-    if (result.ok) {
+    if (result.ok === true) {
       toast.success('Confirmation email sent. Check your inbox (and spam folder).');
       setResendCooldown(60);
     } else {
-      toast.error(result.message);
-      if (result.code === 'rate_limited') {
+      const failure = result;
+      toast.error(failure.message);
+      if (failure.code === 'rate_limited') {
         setResendCooldown(60);
-      } else if (result.code === 'already_confirmed') {
+      } else if (failure.code === 'already_confirmed') {
         setTimeout(() => navigate('/auth'), 1500);
       }
     }
