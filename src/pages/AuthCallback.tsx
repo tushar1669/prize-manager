@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, CheckCircle, Loader2, RefreshCw, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { resendConfirmationEmail } from "@/lib/auth/resendConfirmation";
 
 type CallbackStatus = 'loading' | 'success' | 'error' | 'expired' | 'missing';
 
@@ -47,6 +48,7 @@ export default function AuthCallback() {
   // Resend confirmation state
   const [resendEmail, setResendEmail] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -261,48 +263,40 @@ export default function AuthCallback() {
     handleCallback();
   }, [searchParams, navigate]);
 
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
   // Handle resend confirmation email
   const handleResendConfirmation = async () => {
-    if (!resendEmail.trim()) {
-      toast.error('Please enter your email address');
-      return;
-    }
+    if (resendLoading || resendCooldown > 0) return;
 
     setResendLoading(true);
-    try {
-      // Carry ref if present in current URL (so resend keeps referral context)
-      const currentRef = searchParams.get('ref')?.trim() || '';
-      const resendRedirect = currentRef
-        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(currentRef)}`
-        : `${window.location.origin}/auth/callback`;
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: resendEmail.trim(),
-        options: {
-          emailRedirectTo: resendRedirect
-        }
-      });
+    const result = await resendConfirmationEmail({
+      resendEmail,
+      referralParam: searchParams.get('ref'),
+    });
 
-      if (error) {
-        // Handle common errors
-        if (error.message.toLowerCase().includes('not found') || 
-            error.message.toLowerCase().includes('does not exist')) {
-          toast.error('No account found with this email. Please sign up first.');
-        } else if (error.message.toLowerCase().includes('already confirmed')) {
-          toast.success('Your email is already confirmed! You can sign in.');
-          setTimeout(() => navigate('/auth'), 1500);
-        } else {
-          toast.error(error.message);
-        }
-      } else {
-        toast.success('Confirmation email sent! Check your inbox.');
+    if (result.ok) {
+      toast.success('Confirmation email sent. Check your inbox (and spam folder).');
+      setResendCooldown(60);
+    } else {
+      toast.error(result.message);
+      if (result.code === 'rate_limited') {
+        setResendCooldown(60);
+      } else if (result.code === 'already_confirmed') {
+        setTimeout(() => navigate('/auth'), 1500);
       }
-    } catch (err) {
-      toast.error('Failed to resend confirmation email');
-    } finally {
-      setResendLoading(false);
     }
+
+    setResendLoading(false);
   };
+
 
   // Debug panel for dev/preview environments
   const DebugPanel = () => {
@@ -359,13 +353,15 @@ export default function AuthCallback() {
             <Button 
               onClick={handleResendConfirmation} 
               className="w-full" 
-              disabled={resendLoading}
+              disabled={resendLoading || resendCooldown > 0}
             >
               {resendLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Sending...
                 </>
+              ) : resendCooldown > 0 ? (
+                `Try again in ${resendCooldown}s`
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
@@ -430,13 +426,15 @@ export default function AuthCallback() {
             <Button 
               onClick={handleResendConfirmation} 
               className="w-full" 
-              disabled={resendLoading}
+              disabled={resendLoading || resendCooldown > 0}
             >
               {resendLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Sending...
                 </>
+              ) : resendCooldown > 0 ? (
+                `Try again in ${resendCooldown}s`
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
