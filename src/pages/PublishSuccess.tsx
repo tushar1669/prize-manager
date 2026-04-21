@@ -192,11 +192,11 @@ export default function PublishSuccess() {
                   className="w-full justify-start gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Republish (Create v2)
+                  Edit & Re-publish
                 </Button>
 
                 <p className="text-xs text-muted-foreground mt-4">
-                  Unpublishing will hide the public page. Republishing after changes will create a new version.
+                  Unpublishing hides the public page. To re-publish, return to Finalize and publish again — this creates a new version.
                 </p>
               </CardContent>
             </Card>

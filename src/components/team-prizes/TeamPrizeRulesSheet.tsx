@@ -96,7 +96,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
         <SheetHeader>
           <SheetTitle>{isEdit ? 'Edit Team Rules' : 'Add Team Prize Group'}</SheetTitle>
           <SheetDescription>
-            Configure how teams are formed and scored for institution/team prizes.
+            Configure how teams are formed and scored.
           </SheetDescription>
         </SheetHeader>
 
