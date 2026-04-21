@@ -92,7 +92,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
               </Badge>
             )}
             <Badge variant="secondary">
-              {group.eligible_institutions} eligible institution{group.eligible_institutions !== 1 ? 's' : ''}
+              {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
             {filledPrizes.length > 0 && (
               <Badge className="bg-primary/10 text-primary border-primary/20">
@@ -111,7 +111,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-16">Place</TableHead>
-                      <TableHead>Institution</TableHead>
+                      <TableHead>Team</TableHead>
                       <TableHead className="text-right">Points</TableHead>
                       <TableHead className="text-right">Rank Sum</TableHead>
                       <TableHead className="text-right">Best Rank</TableHead>
@@ -172,15 +172,15 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
             ) : (
               <Alert variant="default" className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
-                <AlertTitle className="text-amber-800 dark:text-amber-200">No eligible institutions found</AlertTitle>
+                <AlertTitle className="text-amber-800 dark:text-amber-200">No eligible teams found</AlertTitle>
                 <AlertDescription className="text-amber-700 dark:text-amber-300 mt-2">
                   <p className="mb-2">Common causes:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm">
                     <li><strong>Missing "{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}" data</strong> – players may not have this field populated in the import</li>
                     {(group.config.female_slots > 0 || group.config.male_slots > 0) && (
-                      <li><strong>Gender requirements impossible</strong> – not enough female ({group.config.female_slots}) or male ({group.config.male_slots}) players per institution</li>
+                      <li><strong>Gender requirements impossible</strong> – not enough female ({group.config.female_slots}) or male ({group.config.male_slots}) players per team</li>
                     )}
-                    <li><strong>Team size too large</strong> – institutions need at least {group.config.team_size} players to qualify</li>
+                    <li><strong>Team size too large</strong> – teams need at least {group.config.team_size} players to qualify</li>
                   </ul>
                 </AlertDescription>
               </Alert>
@@ -192,7 +192,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>{unfilledPrizes.length} unfilled prize{unfilledPrizes.length !== 1 ? 's' : ''}</AlertTitle>
                 <AlertDescription>
-                  Not enough eligible institutions to fill all places.
+                  Not enough eligible teams to fill all places.
                 </AlertDescription>
               </Alert>
             )}
@@ -210,7 +210,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertTitle className="text-destructive">Tie detected at place {tieInfo.affectedPlaces[tieInfo.affectedPlaces.length - 1]}</AlertTitle>
                 <AlertDescription className="text-destructive/80">
-                  {tieInfo.tiedInstitutions.length} institutions have identical scores ({tieInfo.tiedInstitutions[0]?.total_points} pts, rank sum {tieInfo.tiedInstitutions[0]?.rank_sum}).
+                  {tieInfo.tiedInstitutions.length} teams have identical scores ({tieInfo.tiedInstitutions[0]?.total_points} pts, rank sum {tieInfo.tiedInstitutions[0]?.rank_sum}).
                   <div className="mt-2">
                     <Button
                       size="sm"
@@ -250,7 +250,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     {showIneligible ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    {group.ineligible_institutions} ineligible institution{group.ineligible_institutions !== 1 ? 's' : ''}
+                    {group.ineligible_institutions} ineligible team{group.ineligible_institutions !== 1 ? 's' : ''}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>

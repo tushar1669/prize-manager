@@ -583,7 +583,7 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
               {confirmDialog.action === "archive" &&
                 `"${confirmDialog.tournament?.title}" will be archived and hidden from public. You can unarchive it later.`}
               {confirmDialog.action === "unarchive" &&
-                `"${confirmDialog.tournament?.title}" will be restored as a draft. You'll need to re-publish to make it public.`}
+                `"${confirmDialog.tournament?.title}" will be restored as a draft. You'll need to publish it again to make it public.`}
               {confirmDialog.action === "softDelete" &&
                 `"${confirmDialog.tournament?.title}" will be moved to trash. You can restore it or permanently delete later.`}
               {confirmDialog.action === "restore" &&
