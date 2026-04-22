@@ -1605,6 +1605,10 @@ export type Database = {
           version: number
         }[]
       }
+      unpublish_tournament: {
+        Args: { tournament_id: string }
+        Returns: undefined
+      }
       redeem_coupon_for_tournament: {
         Args: { amount_before: number; code: string; tournament_id: string }
         Returns: {
