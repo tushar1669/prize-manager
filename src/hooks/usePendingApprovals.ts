@@ -74,10 +74,10 @@ export function usePendingApprovals() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
-      toast.success('Organizer approved');
+      toast.success('Legacy organizer record marked as verified');
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : 'Failed to approve';
+      const message = err instanceof Error ? err.message : 'Failed to verify legacy organizer record';
       toast.error(message);
     },
   });
@@ -97,10 +97,10 @@ export function usePendingApprovals() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
       queryClient.invalidateQueries({ queryKey: ['master-users'] });
-      toast.success('Organizer access disabled');
+      toast.success('Legacy organizer exception converted to standard user access');
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : 'Failed to reject';
+      const message = err instanceof Error ? err.message : 'Failed to update legacy organizer exception';
       toast.error(message);
     },
   });

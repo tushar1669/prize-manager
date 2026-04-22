@@ -122,7 +122,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
             </div>
             {pendingCount > 0 && (
               <Badge variant="destructive" className="text-sm px-3 py-1">
-                {pendingCount} legacy unverified organizer{pendingCount !== 1 ? 's' : ''}
+                {pendingCount} legacy organizer exception{pendingCount !== 1 ? 's' : ''}
               </Badge>
             )}
           </div>
@@ -131,7 +131,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
         {embeddedInAdmin && pendingCount > 0 && (
           <div className="mb-6 flex justify-end">
             <Badge variant="destructive" className="text-sm px-3 py-1">
-              {pendingCount} legacy unverified organizer{pendingCount !== 1 ? 's' : ''}
+              {pendingCount} legacy organizer exception{pendingCount !== 1 ? 's' : ''}
             </Badge>
           </div>
         )}
@@ -142,24 +142,24 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <CardTitle>Legacy Unverified Organizer Exceptions</CardTitle>
+                  <CardTitle>Legacy Organizer Exceptions</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                    {pendingCount} needs manual review
+                    {pendingCount} legacy review item{pendingCount !== 1 ? 's' : ''}
                   </Badge>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => refetchPending()}
                     disabled={pendingLoading}
-                    title="Refresh unverified organizers"
+                    title="Refresh legacy organizer exceptions"
                   >
                     <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
               </div>
-              <CardDescription>Manual review for exceptional unverified organizer rows.</CardDescription>
+              <CardDescription>Exceptional legacy organizer records that may still need manual verification updates.</CardDescription>
             </CardHeader>
             <CardContent>
               {pendingLoading ? (

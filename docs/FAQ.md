@@ -34,7 +34,7 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/pending-approval` | Pending approval | `Sign Out` | Always enabled | Signs user out. |
 | `/dashboard` | Tournament dashboard | `Approvals` (master only) | Visible for master role only | Navigates to `/master-dashboard`. |
 | `/dashboard` | Tournament dashboard | `Admin` (master only) | Visible for master role only | Navigates to `/admin/tournaments`. |
-| `/dashboard` | Tournament dashboard | `Create Tournament` / `Creating...` | Visible only for master/verified users; disabled while create is pending | Creates tournament and navigates to setup details tab. |
+| `/dashboard` | Tournament dashboard | `Create Tournament` / `Creating...` | Visible for master and organizer roles; disabled while create is pending | Creates tournament and navigates to setup details tab. |
 | `/dashboard` | Tournament dashboard | `Resume` | Always enabled per row | `draft`→setup, `finalized`→finalize, otherwise publish screen. |
 | `/dashboard` | Tournament dashboard | `View Public` | Visible when tournament status is `published` | Navigates to `/t/:id/public`. |
 | `/dashboard` | Tournament dashboard | `Create Your First Tournament` | Visible when no tournaments and no search query | Creates first tournament. |
@@ -82,8 +82,8 @@ This FAQ is generated from the current repository routes and component labels (n
 | `/t/:id/settings` | Tournament settings | `Edit Category Order` | Always enabled | Navigates to `/t/:id/order-review`. |
 | `/t/:id/settings` | Tournament settings | `Cancel` | Always enabled | Returns back/history (or setup prizes fallback). |
 | `/t/:id/settings` | Tournament settings | `Save Settings` / `Saving...` | Disabled while save mutation pending | Persists rule settings. |
-| `/master-dashboard` | Master dashboard | `Approve` / `Reject` | Disabled during approve/reject mutation | Verifies or rejects pending organizer account. |
-| `/master-dashboard` | Master dashboard | refresh icon button (`title="Refresh pending approvals"`) | Disabled while pending list loading | Refreshes pending approvals list. |
+| `/master-dashboard` | Master dashboard | `Verify` / `Disable Access` | Disabled during verify/disable mutation | Resolves exceptional legacy organizer records. |
+| `/master-dashboard` | Master dashboard | refresh icon button (`title="Refresh legacy organizer exceptions"`) | Disabled while pending list loading | Refreshes legacy organizer exception list. |
 | `/master-dashboard` | Master dashboard | Verification toggle in "All Users" | Disabled while toggle mutation pending | Toggles organizer verification state. |
 | `/master-dashboard` | Master dashboard | `Approve` / `Reject` (Payment Approvals) | Disabled during mutation | Reviews manual UPI payment claims. |
 | `/admin/tournaments` | Admin tournaments | Filter chips: `All`, `Active`, `Draft`, `Archived`, `Deleted` | Always enabled | Filters tournament list by status. |
@@ -102,7 +102,7 @@ This FAQ is generated from the current repository routes and component labels (n
 A: Dashboard → Setup (details + prize structure) → Import players → Review allocations (preview + commit) → Finalize → Publish.
 
 **Q: Why can't I create a tournament from Dashboard?**
-A: `Create Tournament` is visible only to master or verified users. Unverified users see a pending-approval banner.
+A: `Create Tournament` is visible to master users and organizers. If an account has a legacy `is_verified=false` organizer row, the dashboard shows a legacy account-state notice.
 
 **Q: Where do I edit tournament metadata (venue, dates, arbiter, links)?**
 A: `/t/:id/setup` on the `Details` tab, then use `Save & Continue`.
@@ -183,8 +183,8 @@ A: See [Troubleshooting](./TROUBLESHOOTING.md) playbook #6. Use `?debug_referral
 **Q: I see "No published results yet." on public results page. Why?**
 A: No published result rows exist for that slug yet.
 
-**Q: My account is stuck in pending approval.**
-A: Use `Refresh Status` on `/pending-approval`; a master user must approve your account.
+**Q: My account is on `/pending-approval`.**
+A: `/pending-approval` is now a legacy fallback route. Use `Refresh Status`; if the account remains there, ask a master admin to review the legacy organizer record.
 
 **Q: I can't access a route directly.**
 A: Protected routes require authentication; master-only routes additionally require master role.
