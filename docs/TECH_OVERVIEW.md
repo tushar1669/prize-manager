@@ -43,6 +43,17 @@
 - **Approval:** `review_tournament_payment` RPC creates a `tournament_entitlements` row granting Pro access and triggers `issue_referral_rewards` for the referral chain.
 - **Tables:** `tournament_payments` (claims), `tournament_entitlements` (granted access).
 - **Access threshold source of truth:** `public.get_tournament_access_state` returns `free_player_threshold` (currently **150**) and all UI/export entitlement messaging must read that returned value rather than hardcoding a number. Canonical corrective re-assertion migration: `supabase/migrations/20260421133000_reassert_get_tournament_access_state_threshold_150_corrective.sql`.
+- **Threshold migration lineage (operator note):**
+  - Original raise to 150: `supabase/migrations/20260412121000_raise_free_threshold_to_150.sql`.
+  - Canonicalization: `supabase/migrations/20260419110000_canonicalize_free_player_threshold.sql`.
+  - Reassertions: `supabase/migrations/20260421120000_reassert_get_tournament_access_state_threshold_150.sql`, then `supabase/migrations/20260421133000_reassert_get_tournament_access_state_threshold_150_corrective.sql`.
+  - **Latest authoritative corrective migration:** `supabase/migrations/20260421133000_reassert_get_tournament_access_state_threshold_150_corrective.sql`.
+- **Onboarding verified-default migration lineage (operator note):**
+  - Old legacy false path: `supabase/migrations/20251220141141_507aecc1-7771-4cf2-90e6-d8b9ff10c0df.sql` (self-service organizer insert path with `is_verified=false`).
+  - First corrective: `supabase/migrations/20260419120000_onboarding_default_verified_organizers.sql`.
+  - Later reassertions: `supabase/migrations/20260421133000_reassert_verified_organizer_onboarding.sql`, then `supabase/migrations/20260421150000_reconcile_verified_organizer_onboarding_drift.sql`.
+  - **Latest authoritative corrective migration:** `supabase/migrations/20260421150000_reconcile_verified_organizer_onboarding_drift.sql`.
+- Earlier migrations remain intentionally unchanged for forward-only deployment safety and production history; do not delete/rewrite/reorder historical migration files.
 - **Key files:** `src/pages/TournamentUpgrade.tsx`, `src/components/master/PendingPaymentsPanel.tsx`.
 
 ## Profiles & Profile Completion Reward
