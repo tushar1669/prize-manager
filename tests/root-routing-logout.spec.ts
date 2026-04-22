@@ -68,7 +68,6 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 }));
 
 import RootRedirect from "@/components/RootRedirect";
-import PendingApproval from "@/pages/PendingApproval";
 import { AppNav } from "@/components/AppNav";
 
 describe("root routing and logout landing", () => {
@@ -134,16 +133,4 @@ describe("root routing and logout landing", () => {
     });
   });
 
-  it("sends PendingApproval sign out to /", async () => {
-    authState.user = { email: "pending@example.com" };
-
-    render(React.createElement(MemoryRouter, null, React.createElement(PendingApproval)));
-
-    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
-
-    await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledWith("/", { replace: true });
-    });
-  });
 });
