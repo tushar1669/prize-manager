@@ -12,11 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
-import {
-  buildAuthCallbackRedirect,
-  REFERRAL_SIGNUP_INTENT_KEY,
-  REFERRAL_STORAGE_KEY,
-} from "@/lib/auth/resendConfirmation";
+import { buildAuthCallbackRedirect } from "@/lib/auth/resendConfirmation";
+import { REFERRAL_SIGNUP_INTENT_KEY, REFERRAL_STORAGE_KEY } from "@/lib/auth/referralStorageKeys";
 import { useResendConfirmation } from "@/lib/auth/useResendConfirmation";
 
 export default function Auth() {
