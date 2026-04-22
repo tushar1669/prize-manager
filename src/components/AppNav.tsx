@@ -43,11 +43,6 @@ export function AppNav() {
           </GuardedLink>
 
           <div className="flex items-center gap-4">
-            {role === "master" && (
-              <Button variant="outline" size="sm" onClick={() => navigate("/admin")}>
-                Admin
-              </Button>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
