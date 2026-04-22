@@ -61,18 +61,10 @@ export default function PublishSuccess() {
     if (!id) return;
     setUnpublishing(true);
     try {
-      const { error: tError } = await supabase
-        .from('tournaments')
-        .update({ is_published: false, status: 'draft' })
-        .eq('id', id);
-      if (tError) throw tError;
-
-      // Deactivate active publications so public page stops resolving
-      await supabase
-        .from('publications')
-        .update({ is_active: false })
-        .eq('tournament_id', id)
-        .eq('is_active', true);
+      const { error } = await supabase.rpc('unpublish_tournament', {
+        tournament_id: id,
+      });
+      if (error) throw error;
 
       // Invalidate relevant caches
       queryClient.invalidateQueries({ queryKey: ['publication', id] });
