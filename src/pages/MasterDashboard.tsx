@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle, UserCheck, UserX, Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 import { PendingPaymentsPanel } from "@/components/master/PendingPaymentsPanel";
 
 // Access controlled by ProtectedRoute requireMaster prop
@@ -288,7 +287,6 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
           </CardContent>
         </Card>
 
-        <EdgeFunctionStatus />
       </div>
     </div>
   );
