@@ -1,7 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-
-export const REFERRAL_STORAGE_KEY = "pm_referral_code";
-export const REFERRAL_SIGNUP_INTENT_KEY = "pm_referral_signup_intent";
+import { REFERRAL_SIGNUP_INTENT_KEY, REFERRAL_STORAGE_KEY } from "@/lib/auth/referralStorageKeys";
 
 export type ResendErrorCode =
   | "missing_email"
