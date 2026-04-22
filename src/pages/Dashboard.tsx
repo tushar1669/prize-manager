@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, Shield, UserCheck } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Shield } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -216,16 +216,10 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {is_master && (
-              <>
-                <Button variant="outline" onClick={() => navigate("/admin/users")} className="gap-2 relative">
-                  <UserCheck className="h-4 w-4" />
-                  User Access
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/admin")} className="gap-2">
-                  <Shield className="h-4 w-4" />
-                  Admin
-                </Button>
-              </>
+              <Button variant="outline" onClick={() => navigate("/admin")} className="gap-2">
+                <Shield className="h-4 w-4" />
+                Admin
+              </Button>
             )}
             {(is_master || role === 'organizer') && (
               <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
