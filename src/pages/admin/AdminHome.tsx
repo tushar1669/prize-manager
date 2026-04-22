@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
 const quickLinks = [
   { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, verification state, and moderation actions." },
@@ -33,6 +35,25 @@ export default function AdminHome() {
           </Link>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Operations Diagnostics</CardTitle>
+          <CardDescription>Manual health probes for platform runtime checks.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="edge-function-status">
+              <AccordionTrigger>Edge Function Health Probe</AccordionTrigger>
+              <AccordionContent>
+                <div className="pt-2">
+                  <EdgeFunctionStatus />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
     </div>
   );
 }
