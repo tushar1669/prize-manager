@@ -7,7 +7,7 @@ Documents the role-based access control system, master allowlist, and verificati
 ## What It Protects
 
 - Master-only pages (`/master-dashboard`, `/admin/users`, `/admin/martech`, `/admin/coupons`, `/admin/tournaments`)
-- Unverified organizer isolation (pending approval flow)
+- Legacy organizer exception handling (`/pending-approval` fallback)
 - Role escalation attacks (no client-side role assignment)
 
 ---
@@ -16,8 +16,8 @@ Documents the role-based access control system, master allowlist, and verificati
 
 | Role       | Description                                      |
 |------------|--------------------------------------------------|
-| `organizer`| Default role for new signups (unverified initially) |
-| `master`   | Superuser access, can approve organizers         |
+| `organizer`| Default role for new signups (verified by default) |
+| `master`   | Superuser access, can manage legacy organizer exceptions |
 
 **Where stored:** `public.user_roles` table with `role` enum and `is_verified` boolean.
 
@@ -37,20 +37,16 @@ Hard security boundary: only emails in the allowlist can access master functions
 ## Verification Lifecycle
 
 ```
-Signup → Confirm Email → Unverified Organizer → Master Approves → Verified Organizer
-           │                    │                      │
-           │                    └──→ /pending-approval │
-           │                                           │
-           └───────────────────────────────────────────┘
-                              ↓
-                         /dashboard
+Signup → Confirm Email → Verified Organizer → /dashboard
+           │
+           └── Legacy `is_verified=false` organizer row → /pending-approval (redirect fallback) → master review
 ```
 
-1. User signs up → `user_roles` row created with `role='organizer'`, `is_verified=false`
+1. User signs up → `user_roles` row created with `role='organizer'`, `is_verified=true` for the standard onboarding path
 2. User confirms email (Supabase Auth)
-3. User lands on `/pending-approval` until master approves
-4. Master visits `/master-dashboard` → approves organizer → sets `is_verified=true`
-5. On next load, verified organizer goes to `/dashboard`
+3. User lands on `/dashboard` in normal flow
+4. If a legacy organizer row has `is_verified=false`, user may be redirected to `/pending-approval`
+5. Master can resolve legacy exceptions from `/master-dashboard` by updating the organizer row
 
 **Where enforced:**
 - `src/pages/PendingApproval.tsx` – displays pending UI, redirects if verified
@@ -65,12 +61,12 @@ The `ProtectedRoute` component guards authenticated routes:
 
 | Prop             | Effect                                          |
 |------------------|-------------------------------------------------|
-| (default)        | Requires auth, redirects unverified to `/pending-approval` |
+| (default)        | Requires auth; legacy unverified organizer rows redirect to `/pending-approval` |
 | `requireMaster`  | Additionally requires master role               |
 
 **Master-only routes:**
-- `/master-dashboard` – organizer approvals
-- `/admin/users` – organizer approvals in admin layout
+- `/master-dashboard` – legacy organizer exception management
+- `/admin/users` – legacy organizer exception management in admin layout
 - `/admin/martech` – non-coupon martech placeholder
 - `/admin/coupons` – coupon code management and analytics
 - `/admin/tournaments` – view all tournaments
@@ -126,13 +122,13 @@ See also: [Referrals and Rewards](./REFERRALS_AND_REWARDS.md) · [Coupons Lifecy
 
 1. **Organizer flow:**
    - Sign up with new email
-   - Confirm email → should land on `/pending-approval`
+   - Confirm email → should land on `/dashboard`
    - Try navigating to `/master-dashboard` → should redirect to `/dashboard`
 
-2. **Master approval:**
+2. **Legacy exception review:**
    - Log in as master (allowlisted email)
-   - Go to `/master-dashboard` → see pending organizer
-   - Approve → organizer can now access `/dashboard`
+   - Go to `/master-dashboard` → if present, see legacy organizer exception rows
+   - Verify legacy row → organizer remains on `/dashboard`
 
 3. **Master route guard:**
    - Log in as verified organizer (not in allowlist)

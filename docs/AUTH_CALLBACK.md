@@ -8,7 +8,7 @@ Documents the `/auth/callback` handler behavior for email confirmation redirects
 
 - Session establishment from email confirmation links
 - Graceful handling of expired/invalid links
-- Proper routing based on user verification status
+- Proper routing based on role and any legacy verification exceptions
 
 ---
 
@@ -91,7 +91,7 @@ Email link: /auth/callback (no params, no hash)
 ```
 redirectAfterAuth():
   ├── role === 'master' OR is_verified === true  →  /dashboard
-  └── role === 'organizer' AND is_verified === false  →  /pending-approval
+  └── role === 'organizer' AND is_verified === false  →  /pending-approval (legacy fallback)
 ```
 
 **Where enforced:** Lines 199-223 in `src/pages/AuthCallback.tsx`
@@ -191,7 +191,7 @@ In dev/preview environments only, shows:
 
 1. **Fresh signup:**
    - Sign up → check email → click link
-   - Should land on `/pending-approval` (new organizer)
+   - Should land on `/dashboard` for standard new organizers (verified by default)
 
 2. **Expired link:**
    - Wait for link to expire (or use an old one)
