@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
+import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
 
 const PRO_PRICE_INR = 2000;
 const UPI_ID = "9559161414-5@ybl";
@@ -55,7 +56,8 @@ export default function TournamentUpgrade() {
   const [amountDue, setAmountDue] = useState(PRO_PRICE_INR);
   const { user } = useAuth();
 
-  const { hasFullAccess, isLoading: accessLoading } = useTournamentAccess(id);
+  const { hasFullAccess, isLoading: accessLoading, errorCode: accessErrorCode } = useTournamentAccess(id);
+  const hasBackendMigrationIssue = accessErrorCode === "backend_migration_missing";
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ["tournament-upgrade", id],
@@ -205,6 +207,12 @@ export default function TournamentUpgrade() {
       <div className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
         <BackBar to={id ? returnTo : "/dashboard"} label="Back" />
 
+        <BackendMigrationMissingAlert
+          errorCode={accessErrorCode}
+          onRetry={() => window.location.reload()}
+        />
+
+        {!hasBackendMigrationIssue && (
         <Card>
           <CardHeader>
             <CardTitle>Upgrade to Pro</CardTitle>
@@ -221,6 +229,7 @@ export default function TournamentUpgrade() {
             <p className="pt-1 font-medium text-foreground">Pro plan price: ₹{PRO_PRICE_INR}</p>
           </CardContent>
         </Card>
+        )}
 
         {/* Already Pro */}
         {!accessLoading && hasFullAccess && (
@@ -235,7 +244,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* Payment status banner */}
-        {!paymentLoading && latestPayment && (
+        {!hasBackendMigrationIssue && !paymentLoading && latestPayment && (
           <>
             {paymentStatus === "pending" && (
               <Card className="border-amber-300 dark:border-amber-800">
@@ -274,6 +283,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* Coupon section — preserved exactly */}
+        {!hasBackendMigrationIssue && (
         <Card className={couponHighlighted ? "border-primary/60" : ""}>
           <CardHeader>
             <CardTitle>Apply Coupon</CardTitle>
@@ -304,9 +314,10 @@ export default function TournamentUpgrade() {
             </Button>
           </CardContent>
         </Card>
+        )}
 
         {/* UPI Payment section — new */}
-        {!hasFullAccess && (
+        {!hasBackendMigrationIssue && !hasFullAccess && (
           <Card>
             <CardHeader>
               <CardTitle>Pay via UPI</CardTitle>

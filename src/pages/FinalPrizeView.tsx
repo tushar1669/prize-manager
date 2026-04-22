@@ -14,6 +14,7 @@ import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import { ArbiterSheetView } from '@/components/final-prize/ArbiterSheetView';
 import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
+import { BackendMigrationMissingAlert } from '@/components/access/BackendMigrationMissingAlert';
 
 const VIEW_TABS = [
   { id: 'v1', label: 'Category Cards' },
@@ -77,6 +78,7 @@ export default function FinalPrizeView() {
       )}
       <main className="pb-16 print:pb-0">
         <div className="mx-auto mt-6 max-w-7xl px-6 pm-print-page print:mt-2 print:px-4">
+          <BackendMigrationMissingAlert errorCode={accessErrorCode} className="mb-4 print:hidden" onRetry={() => window.location.reload()} />
           <Tabs value={normalized} className="w-full">
             <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-card border border-border p-1 shadow-sm print:hidden">
               {VIEW_TABS.map(tab => (
