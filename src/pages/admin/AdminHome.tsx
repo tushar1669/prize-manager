@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const quickLinks = [
-  { to: "/admin", title: "Overview", description: "Return to the admin overview and section launcher." },
   { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, verification state, and moderation actions." },
   { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },

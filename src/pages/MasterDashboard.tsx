@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
@@ -115,22 +114,27 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
       {!embeddedInAdmin && <AppNav />}
       
       <div className={embeddedInAdmin ? "px-0 py-0 max-w-6xl" : "container mx-auto px-6 py-8 max-w-6xl"}>
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Master Dashboard</h1>
-            <p className="text-muted-foreground">Manage organizer access and moderation controls</p>
-            {embeddedInAdmin && (
-              <Link to="/dashboard" className="text-sm text-primary hover:underline">
-                Back to Dashboard
-              </Link>
+        {!embeddedInAdmin && (
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Master Dashboard</h1>
+              <p className="text-muted-foreground">Manage organizer access and moderation controls</p>
+            </div>
+            {pendingCount > 0 && (
+              <Badge variant="destructive" className="text-sm px-3 py-1">
+                {pendingCount} legacy unverified organizer{pendingCount !== 1 ? 's' : ''}
+              </Badge>
             )}
           </div>
-          {pendingCount > 0 && (
+        )}
+
+        {embeddedInAdmin && pendingCount > 0 && (
+          <div className="mb-6 flex justify-end">
             <Badge variant="destructive" className="text-sm px-3 py-1">
               {pendingCount} legacy unverified organizer{pendingCount !== 1 ? 's' : ''}
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
 
         {pendingCount > 0 && (
           <Card className="mb-6 border-amber-200 dark:border-amber-800">
