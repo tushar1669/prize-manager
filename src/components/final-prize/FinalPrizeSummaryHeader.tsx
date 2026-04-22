@@ -4,9 +4,10 @@ import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
 import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
 import { buildFinalPrizeExportRows } from '@/utils/finalPrizeExport';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
-import { Printer, Download, Lock, Info } from 'lucide-react';
+import { Printer, Download, Lock } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { BackendMigrationMissingAlert } from '@/components/access/BackendMigrationMissingAlert';
 
 interface FinalPrizeSummaryHeaderProps {
   tournamentTitle?: string;
@@ -24,6 +25,7 @@ interface FinalPrizeSummaryHeaderProps {
 }
 
 export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals, hasFullAccess = true, accessErrorCode }: FinalPrizeSummaryHeaderProps) {
+  const hasBackendMigrationIssue = accessErrorCode === 'backend_migration_missing';
   const exportRows = useMemo(
     () => buildFinalPrizeExportRows(winners),
     [winners]
@@ -84,10 +86,7 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
           </div>
           <div className="flex flex-col gap-2">
             {accessErrorCode === 'backend_migration_missing' && (
-              <div className="flex items-center gap-2 rounded-full border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive">
-                <Info className="h-3.5 w-3.5" />
-                Backend not deployed yet (DB migrations missing).
-              </div>
+              <BackendMigrationMissingAlert errorCode={accessErrorCode} compact onRetry={() => window.location.reload()} />
             )}
             {!hasFullAccess && accessErrorCode !== 'backend_migration_missing' && (
               <div className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
@@ -101,7 +100,7 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
                 size="sm"
                 onClick={handleExportXlsx}
                 disabled={!hasFullAccess}
-                title={!hasFullAccess ? 'Upgrade to Pro to export' : undefined}
+                title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to export') : undefined}
                 className="rounded-full border-primary text-primary hover:bg-primary/10"
               >
                 <Download className="mr-2 h-4 w-4" /> Export XLSX
@@ -110,7 +109,7 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
                 size="sm"
                 onClick={handlePrint}
                 disabled={!hasFullAccess}
-                title={!hasFullAccess ? 'Upgrade to Pro to print' : undefined}
+                title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to print') : undefined}
                 className="rounded-full bg-primary text-primary-foreground shadow hover:bg-primary-hover"
               >
                 <Printer className="mr-2 h-4 w-4" /> Print

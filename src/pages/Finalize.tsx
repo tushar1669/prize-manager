@@ -32,6 +32,7 @@ import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { freeTierSummaryBody, freeTierSummaryLabel } from '@/constants/tournamentAccess';
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { ManualPrizesCard } from "@/components/manual-prizes/ManualPrizesCard";
+import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
 
 interface Winner {
   prizeId: string;
@@ -262,6 +263,7 @@ export default function Finalize() {
 
   const { data: finalPrizeData, grouped: finalPrizeGrouped, isLoading: finalPrizeLoading } = useFinalPrizeData(id);
   const { hasFullAccess, previewMainLimit, isFreeSmall, freePlayerThreshold, errorCode: accessErrorCode } = useTournamentAccess(id);
+  const hasBackendMigrationIssue = accessErrorCode === 'backend_migration_missing';
   const finalizeUpgradeUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`) : '/dashboard'), [id]);
   const finalizeCouponUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`, { coupon: true }) : '/dashboard'), [id]);
 
@@ -601,9 +603,7 @@ export default function Finalize() {
             <CardHeader className="flex flex-row items-center justify-between print:hidden">
               <div className="flex flex-col gap-1">
                 <CardTitle>Final Prize Views</CardTitle>
-                {accessErrorCode === 'backend_migration_missing' && (
-                  <p className="text-xs text-destructive">Backend not deployed yet (DB migrations missing).</p>
-                )}
+                <BackendMigrationMissingAlert errorCode={accessErrorCode} compact className="mt-2" onRetry={() => window.location.reload()} />
                 {!hasFullAccess && accessErrorCode !== 'backend_migration_missing' && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">Preview mode — some views are locked</p>
                 )}
@@ -614,7 +614,7 @@ export default function Finalize() {
                   size="sm"
                   onClick={handleTabExportXlsx}
                   disabled={isTeamTab || !finalPrizeData?.winners?.length || !hasFullAccess}
-                  title={!hasFullAccess ? 'Upgrade to Pro to export' : undefined}
+                  title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to export') : undefined}
                   className="rounded-full"
                 >
                   <Download className="mr-2 h-4 w-4" /> Export XLSX
@@ -623,7 +623,7 @@ export default function Finalize() {
                   size="sm"
                   onClick={handleTabPrint}
                   disabled={(isTeamTab && !finalPrizeData?.winners?.length) || !hasFullAccess}
-                  title={!hasFullAccess ? 'Upgrade to Pro to print' : undefined}
+                  title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to print') : undefined}
                   className="rounded-full"
                 >
                   <Printer className="mr-2 h-4 w-4" /> Print

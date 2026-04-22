@@ -35,6 +35,7 @@ import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { coerceGiftItems } from "@/lib/utils";
+import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
 
 interface Winner {
   prizeId: string;
@@ -109,7 +110,7 @@ export default function ConflictReview() {
   const [coverageData, setCoverageData] = useState<AllocationCoverageEntry[]>([]);
   const [previewCompleted, setPreviewCompleted] = useState(false);
   const [winnersExpanded, setWinnersExpanded] = useState(false);
-  const { hasFullAccess, previewMainLimit } = useTournamentAccess(id);
+  const { hasFullAccess, previewMainLimit, errorCode: accessErrorCode } = useTournamentAccess(id);
   const canViewFullResults = hasFullAccess;
 
   useEffect(() => {
@@ -663,6 +664,7 @@ export default function ConflictReview() {
             {summaryCounts.unfilled > 0 && <Badge variant="secondary">{summaryCounts.unfilled} Unfilled</Badge>}
           </div>
         </div>
+        <BackendMigrationMissingAlert errorCode={accessErrorCode} className="mb-6" onRetry={() => window.location.reload()} />
 
         <div className="mb-6 flex gap-4">
           <Button
@@ -743,7 +745,7 @@ export default function ConflictReview() {
           </AlertDescription>
         </Alert>
 
-        {!canViewFullResults && (
+        {!canViewFullResults && accessErrorCode !== 'backend_migration_missing' && (
           <Card className="mb-6 border-2 border-amber-400 bg-amber-100">
             <CardHeader>
               <CardTitle className="text-lg font-bold text-amber-950">Unlock full winner details</CardTitle>
