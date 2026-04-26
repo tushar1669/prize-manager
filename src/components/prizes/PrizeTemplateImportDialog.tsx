@@ -75,19 +75,25 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
+            v2 is the default, simple template path. v1 is available as a legacy advanced format. Upload an Excel template, review valid rows and errors, then apply add-only.{" "}
             <a
               href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V1_GUIDE.md"
               target="_blank"
               rel="noreferrer"
               className="underline"
             >
-              Template guide
+              Template guides
             </a>
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+            <p><strong>v2 (default/simple):</strong> Imports categories + individual prizes from one sheet.</p>
+            <p><strong>v1 (legacy/advanced):</strong> Multi-sheet format for advanced setups.</p>
+            <p className="text-muted-foreground">Team prizes and advanced allocation rules are still configured in the UI.</p>
+          </div>
+
           <Input
             type="file"
             accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
