@@ -44,7 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
 import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
-import { downloadPrizeTemplateXlsx } from "@/utils/excel";
+import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -1947,7 +1947,16 @@ export default function TournamentSetup() {
                               onClick={downloadPrizeTemplateXlsx}
                             >
                               <Download className="h-4 w-4" />
-                              Download Template
+                              Download Template (v2)
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-2"
+                              onClick={downloadPrizeTemplateV1Xlsx}
+                            >
+                              <Download className="h-4 w-4" />
+                              Download Legacy Template (v1)
                             </Button>
                             <Button
                               size="sm"
@@ -1956,7 +1965,7 @@ export default function TournamentSetup() {
                               onClick={() => setTemplateImportOpen(true)}
                             >
                               <Upload className="h-4 w-4" />
-                              Import from Template
+                              Import from Template (v2 default)
                             </Button>
                             <PrizeTemplateImportDialog
                               open={templateImportOpen}
