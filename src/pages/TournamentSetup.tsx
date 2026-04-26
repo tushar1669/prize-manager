@@ -1947,7 +1947,7 @@ export default function TournamentSetup() {
                               onClick={downloadPrizeTemplateXlsx}
                             >
                               <Download className="h-4 w-4" />
-                              Download Template (v2)
+                              Download Template
                             </Button>
                             <Button
                               size="sm"
@@ -1956,7 +1956,7 @@ export default function TournamentSetup() {
                               onClick={downloadPrizeTemplateV1Xlsx}
                             >
                               <Download className="h-4 w-4" />
-                              Download Legacy Template (v1)
+                              Legacy Template (advanced)
                             </Button>
                             <Button size="sm" variant="link" asChild>
                               <a
@@ -1964,7 +1964,7 @@ export default function TournamentSetup() {
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                Template guide (v2)
+                                Template guide (recommended/simple)
                               </a>
                             </Button>
                             <Button
@@ -1974,7 +1974,7 @@ export default function TournamentSetup() {
                               onClick={() => setTemplateImportOpen(true)}
                             >
                               <Upload className="h-4 w-4" />
-                              Import from Template (v2 default)
+                              Import from Template
                             </Button>
                             <PrizeTemplateImportDialog
                               open={templateImportOpen}
