@@ -75,7 +75,15 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            Upload an Excel template, review valid rows and errors, then apply add-only.
+            Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
+            <a
+              href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V1_GUIDE.md"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Template guide
+            </a>
           </DialogDescription>
         </DialogHeader>
 
