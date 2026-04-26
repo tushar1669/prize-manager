@@ -77,13 +77,22 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           <DialogDescription>
             v2 is the default, simple template path. v1 is available as a legacy advanced format. Upload an Excel template, review valid rows and errors, then apply add-only.{" "}
             <a
+              href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Template guide (v2)
+            </a>
+            {" "}(legacy advanced: {" "}
+            <a
               href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V1_GUIDE.md"
               target="_blank"
               rel="noreferrer"
               className="underline"
             >
-              Template guides
-            </a>
+              v1 guide
+            </a>)
           </DialogDescription>
         </DialogHeader>
 
