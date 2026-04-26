@@ -426,7 +426,7 @@ export function downloadSwissManagerReferenceXlsx() {
   console.log('[excel] Swiss-Manager reference downloaded: SwissManagerRef + ReadMe sheets');
 }
 
-export function downloadPrizeTemplateXlsx() {
+export function downloadPrizeTemplateV1Xlsx() {
   const categoriesSheet = XLSX.utils.aoa_to_sheet([
     ['Name', 'Is Main', 'Gender', 'Min Age', 'Max Age', 'Min Rating', 'Max Rating', 'Include Unrated', 'Unrated Only', 'Allowed States', 'Allowed Cities', 'Allowed Clubs'],
     ['Main Prize', 'yes', 'OPEN', '', '', '', '', 'no', 'no', '', '', ''],
@@ -478,6 +478,35 @@ export function downloadPrizeTemplateXlsx() {
   XLSX.utils.book_append_sheet(wb, teamPrizesSheet, 'Team Prizes');
   XLSX.utils.book_append_sheet(wb, instructionsSheet, 'Instructions');
   XLSX.writeFile(wb, 'prize_template_v1.xlsx');
+}
+
+export function downloadPrizeTemplateV2Xlsx() {
+  const prizesSheet = XLSX.utils.aoa_to_sheet([
+    ['Category', 'Is Main', 'Place', 'Cash Amount', 'Trophy', 'Medal', 'Gift Name', 'Gift Qty', 'Gender', 'Min Age', 'Max Age', 'Min Rating', 'Max Rating', 'Include Unrated', 'Unrated Only', 'Allowed States', 'Allowed Cities', 'Allowed Clubs', 'Notes'],
+    ['Main Prize', 'yes', '1', 10000, 'yes', 'yes', 'Chess Clock', 1, 'OPEN', '', '', '', '', 'no', 'no', '', '', '', ''],
+    ['Main Prize', 'yes', '2', 6000, 'yes', 'no', '', '', 'OPEN', '', '', '', '', 'no', 'no', '', '', '', ''],
+    ['Women', 'no', '1', 3000, 'yes', 'yes', '', '', 'F', '', '', '', '', 'no', 'no', '', '', '', ''],
+  ]);
+
+  const instructionsSheet = XLSX.utils.aoa_to_sheet([
+    ['PRIZE TEMPLATE (XLSX v2)'],
+    [''],
+    ['Use Prizes sheet only. Category rows may repeat for each prize row.'],
+    ['Category criteria must stay consistent across repeated rows of the same category.'],
+    ['Place accepts single values (1) or ranges (6-10). Ranges are expanded automatically.'],
+    ['Gift Qty repeats Gift Name that many times for import counting.'],
+    ['Team prizes are not imported in v2 template; add them manually in UI.'],
+    ['Advanced rule_config fields are not supported in import; set them manually in UI.'],
+  ]);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, prizesSheet, 'Prizes');
+  XLSX.utils.book_append_sheet(wb, instructionsSheet, 'Instructions');
+  XLSX.writeFile(wb, 'prize_template_v2.xlsx');
+}
+
+export function downloadPrizeTemplateXlsx() {
+  downloadPrizeTemplateV2Xlsx();
 }
 
 /**
