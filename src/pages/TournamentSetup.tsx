@@ -1804,12 +1804,12 @@ export default function TournamentSetup() {
 
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <CardTitle>Category Prizes</CardTitle>
                         <CardDescription>Age, rating, and special categories</CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
                         {(() => {
                           const allCollapsed = sortedCategories.length > 0 && sortedCategories.every(c => collapsedCategories[c.id]);
                           return (
