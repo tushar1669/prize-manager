@@ -1858,124 +1858,136 @@ export default function TournamentSetup() {
                                 </>
                               )}
                             </Button>
-                            <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="outline" className="gap-2">
-                                  <Plus className="h-4 w-4" />
-                                  Add Category
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Add Category</DialogTitle>
-                                  <DialogDescription>Create a new prize category</DialogDescription>
-                                </DialogHeader>
-                                <Form {...categoryForm}>
-                                  <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
-                                    <FormField
-                                      control={categoryForm.control}
-                                      name="name"
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>Category Name</FormLabel>
-                                          <FormControl>
-                                            <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                    <div>
-                                      <Label htmlFor="copy-from">Copy prize structure from</Label>
-                                      <select
-                                        id="copy-from"
-                                        className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
-                                        value={copyFromCategoryId || ''}
-                                        onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
-                                      >
-                                        <option value="">Do not copy</option>
-                                        {Array.isArray(categories) &&
-                                          categories.map((c) => (
-                                            <option key={c.id} value={c.id}>
-                                              {c.name} ({c.prizes?.length || 0} prizes)
-                                            </option>
-                                          ))}
-                                      </select>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Optional. Saves time when multiple categories share the same prize structure.
-                                      </p>
-                                      {copyFromCategoryId && (
-                                        <div className="flex items-center gap-2 mt-3">
-                                          <Checkbox 
-                                            checked={includeCriteriaOnCopy}
-                                            onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
-                                          />
-                                          <Label htmlFor="copy-criteria-checkbox">
-                                            Include Rules (criteria)
-                                          </Label>
+                            <div className="flex w-full flex-col gap-2 rounded-md border border-border/60 bg-muted/20 p-2 md:w-auto md:min-w-[22rem]">
+                              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Category actions</span>
+                              <div className="flex flex-wrap gap-2">
+                                <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                                  <DialogTrigger asChild>
+                                    <Button size="sm" variant="outline" className="gap-2">
+                                      <Plus className="h-4 w-4" />
+                                      Add Category
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Add Category</DialogTitle>
+                                      <DialogDescription>Create a new prize category</DialogDescription>
+                                    </DialogHeader>
+                                    <Form {...categoryForm}>
+                                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
+                                        <FormField
+                                          control={categoryForm.control}
+                                          name="name"
+                                          render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Category Name</FormLabel>
+                                              <FormControl>
+                                                <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
+                                              </FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )}
+                                        />
+                                        <div>
+                                          <Label htmlFor="copy-from">Copy prize structure from</Label>
+                                          <select
+                                            id="copy-from"
+                                            className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
+                                            value={copyFromCategoryId || ''}
+                                            onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
+                                          >
+                                            <option value="">Do not copy</option>
+                                            {Array.isArray(categories) &&
+                                              categories.map((c) => (
+                                                <option key={c.id} value={c.id}>
+                                                  {c.name} ({c.prizes?.length || 0} prizes)
+                                                </option>
+                                              ))}
+                                          </select>
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            Optional. Saves time when multiple categories share the same prize structure.
+                                          </p>
+                                          {copyFromCategoryId && (
+                                            <div className="flex items-center gap-2 mt-3">
+                                              <Checkbox 
+                                                checked={includeCriteriaOnCopy}
+                                                onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
+                                              />
+                                              <Label htmlFor="copy-criteria-checkbox">
+                                                Include Rules (criteria)
+                                              </Label>
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </div>
-                                    <DialogFooter>
-                                      <Button type="submit" disabled={createCategoryMutation.isPending}>
-                                        {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
-                                      </Button>
-                                    </DialogFooter>
-                                  </form>
-                                </Form>
-                              </DialogContent>
-                            </Dialog>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => setCopyFromTournamentOpen(true)}
-                            >
-                              <Copy className="h-4 w-4" />
-                              Copy from Tournament
-                            </Button>
+                                        <DialogFooter>
+                                          <Button type="submit" disabled={createCategoryMutation.isPending}>
+                                            {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
+                                          </Button>
+                                        </DialogFooter>
+                                      </form>
+                                    </Form>
+                                  </DialogContent>
+                                </Dialog>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-2"
+                                  onClick={() => setCopyFromTournamentOpen(true)}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                  Copy from Tournament
+                                </Button>
+                              </div>
+                            </div>
                             <CopyFromTournamentDialog
                               tournamentId={id!}
                               open={copyFromTournamentOpen}
                               onOpenChange={setCopyFromTournamentOpen}
                               onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
                             />
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={downloadPrizeTemplateXlsx}
-                            >
-                              <Download className="h-4 w-4" />
-                              Download Template
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="gap-2"
-                              onClick={downloadPrizeTemplateV1Xlsx}
-                            >
-                              <Download className="h-4 w-4" />
-                              Legacy Template (advanced)
-                            </Button>
-                            <Button size="sm" variant="link" asChild>
-                              <a
-                                href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                Template guide (recommended/simple)
-                              </a>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => setTemplateImportOpen(true)}
-                            >
-                              <Upload className="h-4 w-4" />
-                              Import from Template
-                            </Button>
+                            <div className="flex w-full flex-col gap-2 rounded-md border border-border/60 bg-muted/20 p-2 md:w-auto md:min-w-[22rem]">
+                              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Template workflow</span>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-2"
+                                  onClick={downloadPrizeTemplateXlsx}
+                                >
+                                  <Download className="h-4 w-4" />
+                                  Download Template
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-2"
+                                  onClick={() => setTemplateImportOpen(true)}
+                                >
+                                  <Upload className="h-4 w-4" />
+                                  Import from Template
+                                </Button>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="gap-2 text-muted-foreground"
+                                  onClick={downloadPrizeTemplateV1Xlsx}
+                                >
+                                  <Download className="h-4 w-4" />
+                                  Legacy Template (advanced)
+                                </Button>
+                                <Button size="sm" variant="link" asChild className="px-1">
+                                  <a
+                                    href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Template guide (recommended/simple)
+                                  </a>
+                                </Button>
+                              </div>
+                            </div>
                             <PrizeTemplateImportDialog
                               open={templateImportOpen}
                               onOpenChange={setTemplateImportOpen}
@@ -1984,7 +1996,7 @@ export default function TournamentSetup() {
                             />
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="ghost"
                               className="gap-2"
                               disabled={!tournament?.brochure_url}
                               title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
