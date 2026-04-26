@@ -75,14 +75,14 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            v2 is the default, simple template path and imports categories + individual prizes. Team Prizes are configured in the Team Prizes section/tab. v1 is available as a legacy advanced format. Upload an Excel template, review valid rows and errors, then apply add-only.{" "}
+            Use the recommended/simple template path to import categories + individual prizes. Team Prizes are configured in the Team Prizes section/tab. Legacy advanced import remains available if needed. Upload an Excel template, review valid rows and errors, then apply add-only.{" "}
             <a
               href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
               target="_blank"
               rel="noreferrer"
               className="underline"
             >
-              Template guide (v2)
+              Template guide (recommended/simple)
             </a>
             {" "}(legacy advanced: {" "}
             <a
@@ -91,16 +91,16 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
               rel="noreferrer"
               className="underline"
             >
-              v1 guide
+              legacy advanced guide
             </a>)
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-            <p><strong>v2 (default/simple):</strong> Imports categories + individual prizes from one sheet.</p>
+            <p><strong>Recommended/simple:</strong> Imports categories + individual prizes from one sheet.</p>
             <p className="text-muted-foreground">Team Prizes are configured in the Team Prizes section/tab.</p>
-            <p><strong>v1 (legacy/advanced):</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
+            <p><strong>Legacy advanced:</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
             <p className="text-muted-foreground">Advanced allocation rules are still configured in the UI.</p>
           </div>
 
