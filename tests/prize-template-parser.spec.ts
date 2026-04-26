@@ -58,6 +58,23 @@ describe('parsePrizeTemplateFile v2', () => {
     expect(result.draft.categories[0].prizes[0].gift_items).toEqual(['Chess Clock', 'Chess Clock', 'Chess Clock']);
   });
 
+
+  it('allows repeated-category rows to omit criteria after first row', async () => {
+    const file = workbookToFile('v2.xlsx', {
+      Prizes: [
+        ['Category', 'Place', 'Gender', 'Min Rating'],
+        ['Women', '1', 'F', 1200],
+        ['Women', '2', '', ''],
+      ],
+    });
+
+    const result = await parsePrizeTemplateFile(file);
+    expect(result.issues.filter((i) => i.severity === 'error')).toHaveLength(0);
+    expect(result.draft.categories).toHaveLength(1);
+    expect(result.draft.categories[0].prizes).toHaveLength(2);
+    expect(result.draft.categories[0].criteria_json).toMatchObject({ gender: 'F', min_rating: 1200 });
+  });
+
   it('raises validation error on conflicting category criteria across rows', async () => {
     const file = workbookToFile('v2.xlsx', {
       Prizes: [
