@@ -1958,6 +1958,15 @@ export default function TournamentSetup() {
                               <Download className="h-4 w-4" />
                               Download Legacy Template (v1)
                             </Button>
+                            <Button size="sm" variant="link" asChild>
+                              <a
+                                href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Template guide (v2)
+                              </a>
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
