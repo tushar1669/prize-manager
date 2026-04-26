@@ -1,48 +1,34 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
-type SupabaseQueryResult<T> = {
-  data: T | null;
-  error: Error | null;
-};
-
-type SupabaseQuery<T> = {
-  or(filters: string): SupabaseMaybeSingleQuery<T>;
-  eq(column: string, value: string): SupabaseMaybeSingleQuery<T>;
-};
-
-type SupabaseMaybeSingleQuery<T> = {
-  maybeSingle(): Promise<SupabaseQueryResult<T>>;
-};
-
 type SupabaseClientLike = Pick<SupabaseClient<Database>, "from">;
 
-export type PublicTournamentLookup = {
-  id: string;
-  title: string;
-  slug: string;
-  brochure_url: string | null;
-};
+type PublishedTournamentRow = Database["public"]["Tables"]["published_tournaments"]["Row"];
+
+export type PublicTournamentLookup = Pick<
+  PublishedTournamentRow,
+  "id" | "title" | "slug" | "brochure_url"
+>;
 
 export async function fetchPublishedTournamentBySlug(
   supabaseClient: SupabaseClientLike,
   slug: string
 ): Promise<PublicTournamentLookup | null> {
   const fields = "id, title, slug, brochure_url";
-  const indexed = supabaseClient
+  const indexedResult = await supabaseClient
     .from("published_tournaments")
-    .select(fields) as unknown as SupabaseQuery<PublicTournamentLookup>;
-  const indexedResult = await indexed
+    .select(fields)
     .or(`publication_slug.eq.${slug},public_slug.eq.${slug}`)
     .maybeSingle();
 
   if (indexedResult.error) throw indexedResult.error;
   if (indexedResult.data) return indexedResult.data;
 
-  const fallback = supabaseClient
+  const fallbackResult = await supabaseClient
     .from("published_tournaments")
-    .select(fields) as unknown as SupabaseQuery<PublicTournamentLookup>;
-  const fallbackResult = await fallback.eq("slug", slug).maybeSingle();
+    .select(fields)
+    .eq("slug", slug)
+    .maybeSingle();
 
   if (fallbackResult.error) throw fallbackResult.error;
   return fallbackResult.data;

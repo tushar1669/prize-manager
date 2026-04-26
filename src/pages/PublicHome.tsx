@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,27 +10,26 @@ import { Link } from "react-router-dom";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
 
-interface PublicManualPrize {
-  tournament_id: string;
-  title: string;
-  winner_name: string;
-  sort_order: number;
-}
+type PublicManualPrize = Pick<
+  Database["public"]["Tables"]["tournament_manual_prizes"]["Row"],
+  "tournament_id" | "title" | "winner_name" | "sort_order"
+>;
 
-type PublicTournament = {
-  id: string;
-  title: string;
-  start_date: string | null;
-  end_date: string | null;
-  city: string | null;
-  venue: string | null;
-  public_slug: string | null;
-  publication_slug: string | null;
-  slug: string | null;
-  created_at: string | null;
-  time_control_base_minutes: number | null;
-  time_control_increment_seconds: number | null;
-};
+type PublicTournament = Pick<
+  Database["public"]["Tables"]["published_tournaments"]["Row"],
+  | "id"
+  | "title"
+  | "start_date"
+  | "end_date"
+  | "city"
+  | "venue"
+  | "public_slug"
+  | "publication_slug"
+  | "slug"
+  | "created_at"
+  | "time_control_base_minutes"
+  | "time_control_increment_seconds"
+>;
 
 const PAGE_SIZE = 20;
 
@@ -94,7 +94,7 @@ export default function PublicHome() {
         .range(0, PAGE_SIZE - 1);
 
       if (error) throw error;
-      return (data as unknown as PublicTournament[]) ?? [];
+      return data ?? [];
     },
     staleTime: 60_000,
   });
@@ -127,7 +127,7 @@ export default function PublicHome() {
       return;
     }
 
-    const nextPage = (data as unknown as PublicTournament[]) ?? [];
+    const nextPage = data ?? [];
     setTournamentList((prev) => [...prev, ...nextPage]);
     setHasMore(nextPage.length === PAGE_SIZE);
     setIsLoadingMore(false);
