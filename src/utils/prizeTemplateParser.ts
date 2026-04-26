@@ -262,7 +262,6 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
 
   const seenCategoryPlace = new Set<string>();
   const prizeRows = getSheetRows(workbook, "Prizes");
-  const v2CriteriaByCategory = new Map<string, string>();
   prizeRows.forEach((row, idx) => {
     const rowNum = idx + 2;
     const categoryName = normalize(row.Category);
@@ -286,7 +285,6 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
 
       const parsedCriteria = parseCategoryCriteriaFromRow(row, "Prizes", rowNum, issues);
       if (!parsedCriteria) return;
-      v2CriteriaByCategory.set(normCategoryName, normalizeCriteriaForCompare(parsedCriteria));
 
       category = {
         name: categoryName,
@@ -311,19 +309,24 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
 
       const parsedCriteria = parseCategoryCriteriaFromRow(row, "Prizes", rowNum, issues);
       if (!parsedCriteria) return;
-      const currentCriteria = normalizeCriteriaForCompare(parsedCriteria);
-      const initialCriteria = v2CriteriaByCategory.get(normCategoryName) ?? normalizeCriteriaForCompare(category.criteria_json);
-      if (currentCriteria !== initialCriteria) {
-        const conflictingColumns = CRITERIA_COLUMN_MAPPINGS
-          .filter(([column, key]) => normalize(row[column]) && normalize((category?.criteria_json?.[key] as unknown) ?? "") !== normalize(parsedCriteria[key] ?? ""))
+
+      const providedMappings = CRITERIA_COLUMN_MAPPINGS.filter(([column]) => normalize(row[column]));
+      if (providedMappings.length > 0) {
+        const conflictingColumns = providedMappings
+          .filter(([, key]) => normalize((category?.criteria_json?.[key] as unknown) ?? "") !== normalize(parsedCriteria[key] ?? ""))
           .map(([column]) => column);
-        issues.push({
-          severity: "error",
-          sheet: "Prizes",
-          row: rowNum,
-          message: `Conflicting criteria for category "${categoryName}"${conflictingColumns.length ? ` (${conflictingColumns.join(", ")})` : ""}.`,
-        });
-        return;
+
+        if (Object.keys(category.criteria_json || {}).length === 0) {
+          category.criteria_json = parsedCriteria;
+        } else if (conflictingColumns.length > 0) {
+          issues.push({
+            severity: "error",
+            sheet: "Prizes",
+            row: rowNum,
+            message: `Conflicting criteria for category "${categoryName}" (${conflictingColumns.join(", ")}).`,
+          });
+          return;
+        }
       }
     }
 
