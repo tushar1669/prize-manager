@@ -14,13 +14,15 @@ v2 is a **single-sheet, simple import format** for:
 - importing individual prize rows (cash/trophy/medal/gift), and
 - quickly setting common category criteria from the same row set.
 
+In short: v2 imports **categories + individual prizes**.
+
 v2 is intentionally limited so operators can import quickly, then finish advanced setup in UI.
 
 ## What remains manual in UI
 
 After v2 import, keep configuring these manually in the app:
 
-1. **Team prizes** in the **Team Prizes UI** (team prizes are not imported from v2).
+1. **Team Prizes** in the **Team Prizes section/tab** (team prizes are not imported from v2).
 2. **Advanced allocation/rule configuration** (strict comparisons, cutoff strategy/details, priority/tie behavior, and other advanced controls).
 
 ---
@@ -115,3 +117,5 @@ Common blocking errors include:
 4. Resolve validation errors shown in dialog.
 5. Apply import.
 6. Complete **Team Prizes** and any **advanced allocation rules** manually in UI.
+
+> Need team-prize import behavior? Use the legacy advanced v1 template path. The default v2 path does not import team prizes.
