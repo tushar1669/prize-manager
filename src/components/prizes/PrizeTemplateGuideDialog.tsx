@@ -1,57 +1,10 @@
+import { PRIZE_TEMPLATE_V2_HEADERS, PRIZE_TEMPLATE_V2_SAMPLE_ROWS } from "@/constants/prizeTemplateV2";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface PrizeTemplateGuideDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const supportedColumns = [
-  "Category",
-  "Is Main",
-  "Place",
-  "Cash Amount",
-  "Trophy",
-  "Medal",
-  "Gift Name",
-  "Gift Qty",
-  "Notes",
-];
-
-const sampleRows = [
-  {
-    category: "Open",
-    isMain: "yes",
-    place: "1",
-    cashAmount: "25000",
-    trophy: "yes",
-    medal: "gold",
-    giftName: "Gift Hamper",
-    giftQty: "1",
-    notes: "Open winner",
-  },
-  {
-    category: "Open",
-    isMain: "yes",
-    place: "2",
-    cashAmount: "15000",
-    trophy: "no",
-    medal: "silver",
-    giftName: "",
-    giftQty: "",
-    notes: "Open runner-up",
-  },
-  {
-    category: "U1600",
-    isMain: "no",
-    place: "1",
-    cashAmount: "5000",
-    trophy: "no",
-    medal: "bronze",
-    giftName: "Chess Book",
-    giftQty: "1",
-    notes: "Rating category winner",
-  },
-];
 
 export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTemplateGuideDialogProps) {
   return (
@@ -67,7 +20,7 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
         <div className="space-y-4 text-sm">
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="font-medium">Supported columns (default v2 simplified path)</p>
-            <p className="mt-1 text-muted-foreground">{supportedColumns.join(", ")}</p>
+            <p className="mt-1 text-muted-foreground">{PRIZE_TEMPLATE_V2_HEADERS.join(", ")}</p>
           </div>
 
           <div className="rounded-md border p-3">
@@ -76,21 +29,17 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="p-1">Category</th><th className="p-1">Is Main</th><th className="p-1">Place</th><th className="p-1">Cash Amount</th><th className="p-1">Trophy</th><th className="p-1">Medal</th><th className="p-1">Gift Name</th><th className="p-1">Gift Qty</th><th className="p-1">Notes</th>
+                    {PRIZE_TEMPLATE_V2_HEADERS.map((header) => (
+                      <th key={header} className="p-1">{header}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {sampleRows.map((row, idx) => (
-                    <tr key={`${row.category}-${row.place}-${idx}`} className="border-b">
-                      <td className="p-1">{row.category}</td>
-                      <td className="p-1">{row.isMain}</td>
-                      <td className="p-1">{row.place}</td>
-                      <td className="p-1">{row.cashAmount}</td>
-                      <td className="p-1">{row.trophy}</td>
-                      <td className="p-1">{row.medal}</td>
-                      <td className="p-1">{row.giftName}</td>
-                      <td className="p-1">{row.giftQty}</td>
-                      <td className="p-1">{row.notes}</td>
+                  {PRIZE_TEMPLATE_V2_SAMPLE_ROWS.map((row, idx) => (
+                    <tr key={`${row[0]}-${row[2]}-${idx}`} className="border-b">
+                      {row.map((value, valueIdx) => (
+                        <td key={`${idx}-${valueIdx}`} className="p-1">{value}</td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
