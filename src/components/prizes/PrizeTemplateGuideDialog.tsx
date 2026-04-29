@@ -1,5 +1,7 @@
 import { PRIZE_TEMPLATE_V2_HEADERS, PRIZE_TEMPLATE_V2_SAMPLE_ROWS } from "@/constants/prizeTemplateV2";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { downloadPrizeTemplateXlsx } from "@/utils/excel";
 
 interface PrizeTemplateGuideDialogProps {
   open: boolean;
@@ -16,6 +18,12 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
             Use the simple v2 template to import categories and individual prizes. Add one row for each prize entry.
           </DialogDescription>
         </DialogHeader>
+
+        <div>
+          <Button type="button" variant="outline" onClick={downloadPrizeTemplateXlsx}>
+            Download v2 template
+          </Button>
+        </div>
 
         <div className="space-y-4 text-sm">
           <div className="rounded-md border bg-muted/30 p-3">
