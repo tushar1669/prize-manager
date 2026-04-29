@@ -1,55 +1,47 @@
-# Post-Template v2 Backlog (Non-Template Follow-ups)
+# Post-Template v2 Backlog (Non-Blocking Follow-ups)
 
-This backlog captures **confirmed, non-template** follow-ups discovered during recent audits.
+This backlog captures **confirmed, non-blocking follow-ups** from template v2 QA.
 
-- Scope is intentionally narrow: items here are **not required** for template v2 correctness.
-- Do not bundle these into template v2 delivery unless explicitly re-prioritized.
+- Current priority remains: keep template v2 simple and keep the guide in-app.
+- Items below are recorded as backlog and **must not be bundled into the active template-fix batch** unless they later become blockers.
 
-## Priority: High
+## Latest template QA carry-over (non-blocking)
 
-### 1) Dashboard legacy banner polish
-- **Issue:** The dashboard still carries legacy/banner presentation debt that is functionally acceptable but visually inconsistent with the current product shell.
-- **Why it matters:** It creates avoidable UX noise in the first authenticated screen and weakens perceived product quality.
-- **Risk if left as-is:** Low functional risk; moderate UX consistency risk.
-- **Recommended smallest future fix:** Consolidate banner copy + spacing tokens in the dashboard header area and remove stale variant styling paths without changing behavior.
+### 1) Prize-tab wording/hierarchy: Main Prize appears under “Category Prizes”
+- **Issue:** The Prize tab wording/hierarchy currently makes “Main Prize” appear under “Category Prizes.”
+- **Why it matters:** This can blur conceptual separation between primary winners and category awards, increasing setup ambiguity for organizers.
+- **Risk if left as-is:** Low functional/import risk; moderate UX clarity risk during prize configuration.
+- **Smallest safe future fix:** Adjust section naming and/or ordering so “Main Prize” is presented as a first-class top-level concept distinct from category prizes, without changing prize data behavior.
 
-### 2) Admin shell cohesion
-- **Issue:** Admin/master surfaces are operational, but shell-level layout/spacing/navigation cohesion still has legacy drift across screens.
-- **Why it matters:** Inconsistent shell patterns increase operator friction and maintenance overhead for future admin UI work.
-- **Risk if left as-is:** Low runtime risk; moderate maintainability and UX consistency risk.
-- **Recommended smallest future fix:** Standardize admin page container/header/action-row primitives and migrate only shell wrappers first (no feature behavior changes).
+### 2) Prize-tab layout density at current laptop viewport
+- **Issue:** The Prize tab feels dense at the currently used laptop viewport during template flow QA.
+- **Why it matters:** High visual density slows scanning and increases misreads when validating imported prize structure.
+- **Risk if left as-is:** Low correctness risk; moderate readability and operator-fatigue risk.
+- **Smallest safe future fix:** Apply minimal spacing/grouping polish in the Prize tab layout at the target viewport breakpoint only, with no interaction or logic changes.
 
-### 3) Duplicate/legacy RLS policies on published tournaments
-- **Issue:** Migration history indicates repeated published-tournament view/policy evolutions, which can leave duplication/legacy policy clutter risk unless re-audited and normalized.
-- **Why it matters:** Security policy clarity is critical; redundant policy surface increases chance of future misconfiguration.
-- **Risk if left as-is:** Moderate governance/security-audit risk, even if current behavior is correct.
-- **Recommended smallest future fix:** Run a targeted SQL policy inventory for `tournaments` + `published_tournaments` access paths and ship one cleanup migration that removes superseded policies only.
+### 3) Apply report wording: “Apply (Add-only)” and “skipped duplicate in draft”
+- **Issue:** Apply-report phrasing currently includes wording that can read as implementation jargon (e.g., “Apply (Add-only)” and “skipped duplicate in draft”).
+- **Why it matters:** Ambiguous wording can reduce confidence in import outcomes, especially for first-time organizers.
+- **Risk if left as-is:** Low behavior risk; moderate comprehension/confidence risk.
+- **Smallest safe future fix:** Copy-only pass on apply-report labels/messages to improve plain-language clarity while preserving exact underlying behavior.
 
-## Priority: Medium
+### 4) Team-mode discoverability while toggling between Individual and Team Prizes
+- **Issue:** Discoverability of Team mode remains weaker than desired when toggling between Individual and Team Prizes.
+- **Why it matters:** Users can miss or underuse team-specific setup paths, causing avoidable configuration retries.
+- **Risk if left as-is:** Low import correctness risk; moderate flow-efficiency risk for team tournaments.
+- **Smallest safe future fix:** Add lightweight in-context cueing (labeling/hint text/placement polish) around the toggle area only, with no logic or parser updates.
 
-### 4) Supabase types regeneration for missing view/RPC/table typing
-- **Issue:** Supabase-generated typings can drift when schema/view/RPC definitions evolve; recent audits flagged this as a follow-up area.
-- **Why it matters:** Type drift can hide integration regressions and weaken compile-time guarantees in data access code.
-- **Risk if left as-is:** Moderate developer-experience and regression-detection risk.
-- **Recommended smallest future fix:** Regenerate `src/integrations/supabase/types.ts`, review diff for missing/renamed view+RPC+table types, and commit the generated file only.
-
-### 5) Prize-tab hierarchy polish (not required for template correctness)
-- **Issue:** Prize-tab information hierarchy has polish opportunities, but these do not block or alter template v2 correctness.
-- **Why it matters:** Cleaner hierarchy reduces organizer cognitive load during prize setup/review.
-- **Risk if left as-is:** Low functional risk; moderate usability polish debt.
-- **Recommended smallest future fix:** Apply copy/section-order/visual grouping refinements in the prize tab only, with no parsing/import/allocation logic changes.
-
-## Priority: Low
-
-### 6) Public details route alias cleanup (`/p/:slug/details` vs `/p/:slug`)
-- **Issue:** Recent audit notes confirm both routes map to the same screen, creating redundant route surface.
-- **Why it matters:** Redundant routing increases long-term maintenance and test matrix size.
-- **Risk if left as-is:** Low risk; minor routing complexity and documentation drift.
-- **Recommended smallest future fix:** Keep one canonical route and convert the other to an explicit redirect (or formally document alias intent).
+### 5) Remaining template-flow polish that does not block correct import behavior
+- **Issue:** Additional template-flow polish opportunities remain, but they do not block correct import behavior.
+- **Why it matters:** Capturing this explicitly prevents scope creep while preserving a list of future UX refinements.
+- **Risk if left as-is:** Low functional risk; low-to-moderate perceived-quality risk.
+- **Smallest safe future fix:** Triage and apply only copy/layout micro-polish changes behind focused QA checks, explicitly excluding parser/runtime behavior work.
 
 ---
 
-## Out of scope for this backlog file
-- Implementing any of the fixes above.
-- Template v2 behavior changes.
-- Runtime/schema/feature work.
+## Guardrails for this backlog
+- Docs/backlog recording only.
+- No runtime changes.
+- No parser changes.
+- No UI behavior changes.
+- No broad product cleanup bundled with template QA fixes.
