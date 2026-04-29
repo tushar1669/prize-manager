@@ -2,6 +2,7 @@
 // Excel template and error export utilities for player import
 
 import * as XLSX from 'xlsx';
+import { PRIZE_TEMPLATE_V2_HEADERS, PRIZE_TEMPLATE_V2_SAMPLE_ROWS } from '@/constants/prizeTemplateV2';
 import { getPlayerDisplayName } from './playerName';
 
 type ImportSource = 'swiss-manager' | 'template' | 'unknown';
@@ -482,10 +483,8 @@ export function downloadPrizeTemplateV1Xlsx() {
 
 export function downloadPrizeTemplateV2Xlsx() {
   const prizesSheet = XLSX.utils.aoa_to_sheet([
-    ['Category', 'Is Main', 'Place', 'Cash Amount', 'Trophy', 'Medal', 'Gift Name', 'Gift Qty', 'Notes'],
-    ['Main Prize', 'yes', '1', 10000, 'yes', 'yes', 'Chess Clock', 1, 'Overall champion'],
-    ['Main Prize', 'yes', '2', 6000, 'yes', 'no', '', '', 'Main runner-up'],
-    ['Women', 'no', '1', 3000, 'yes', 'yes', '', '', 'Category prize'],
+    [...PRIZE_TEMPLATE_V2_HEADERS],
+    ...PRIZE_TEMPLATE_V2_SAMPLE_ROWS.map((row) => [...row]),
   ]);
 
   const instructionsSheet = XLSX.utils.aoa_to_sheet([
