@@ -59,7 +59,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
       const verifiedTeamGroups = new Set<number>(draft.team_groups.map((_, i) => i));
       const applyResult = await applyDraftAddOnly(tournamentId, draft, includeTeamGroups, verifiedTeamGroups);
       setReport(applyResult);
-      toast.success("Template applied (add-only).");
+      toast.success("Template applied. Existing prizes were kept; new prizes were added.");
       onApplied?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to apply template");
@@ -95,7 +95,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Need legacy advanced details? Use the "Include legacy team groups/prizes" option below after upload.
+            If your file includes legacy team-group/team-prize rows, you can choose to include them after upload.
           </p>
 
           <Input
@@ -159,14 +159,14 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
             <div className="space-y-1 rounded-md border p-3 text-sm">
               <p className="font-medium">Apply Result</p>
               <p>Categories created: {report.categories_created}; reused: {report.categories_reused}</p>
-              <p>Prizes created: {report.prizes_created}; skipped existing: {report.prizes_skipped_existing}; not re-added from repeated rows in this file: {report.prizes_skipped_duplicate_in_draft}</p>
+              <p>Prizes added: {report.prizes_created}; already in your tournament: {report.prizes_skipped_existing}; duplicate rows in this file (added once): {report.prizes_skipped_duplicate_in_draft}</p>
               {shouldShowTeamResultCounters ? (
                 <>
                   <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
                   <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
                 </>
               ) : (
-                <p className="text-muted-foreground">Team counters hidden: no legacy team-group/team-prize rows were detected in this file.</p>
+                <p className="text-muted-foreground">No legacy team-group/team-prize rows were found in this file.</p>
               )}
             </div>
           )}
