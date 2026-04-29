@@ -70,6 +70,8 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
 
   const errorIssues = issues.filter((i) => i.severity === "error");
   const warningIssues = issues.filter((i) => i.severity === "warning");
+  const hasTeamTemplateContent = !!draft && draft.team_groups.length > 0;
+  const shouldShowTeamResultCounters = hasTeamTemplateContent || (!!report && (report.team_groups_created > 0 || report.team_groups_reused > 0 || report.team_prizes_created > 0 || report.team_prizes_skipped > 0));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -158,8 +160,14 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
               <p className="font-medium">Apply Result</p>
               <p>Categories created: {report.categories_created}; reused: {report.categories_reused}</p>
               <p>Prizes created: {report.prizes_created}; skipped existing: {report.prizes_skipped_existing}; not re-added from repeated rows in this file: {report.prizes_skipped_duplicate_in_draft}</p>
-              <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
-              <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
+              {shouldShowTeamResultCounters ? (
+                <>
+                  <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
+                  <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">Team counters hidden: no legacy team-group/team-prize rows were detected in this file.</p>
+              )}
             </div>
           )}
         </div>
