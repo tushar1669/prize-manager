@@ -89,7 +89,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
             <p><strong>Recommended/simple (default v2):</strong> Imports categories + individual prizes from one sheet only.</p>
-            <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab (manual flow).</p>
+            <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes use the Team Prizes toggle in the Prizes area (manual flow).</p>
             <p><strong>Legacy advanced (optional):</strong> Multi-sheet format for older or advanced setups, including legacy team import behavior.</p>
             <p className="text-muted-foreground">Only use this if your file requires it. Advanced allocation rules are still configured in the UI.</p>
           </div>

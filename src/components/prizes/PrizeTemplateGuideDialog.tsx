@@ -58,7 +58,7 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
 
           <div className="rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/30 space-y-1">
             <p><strong>Rules are configured in the UI.</strong> After import, set or adjust category rules in Tournament Setup.</p>
-            <p><strong>Team Prizes are configured in the Team Prizes section/tab.</strong> Add Team Prizes there as a separate manual step.</p>
+            <p><strong>Team Prizes use the Team Prizes toggle in the Prizes area.</strong> Add Team Prizes there as a separate manual step.</p>
           </div>
         </div>
       </DialogContent>
