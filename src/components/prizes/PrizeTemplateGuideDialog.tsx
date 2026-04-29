@@ -7,53 +7,49 @@ interface PrizeTemplateGuideDialogProps {
 
 const supportedColumns = [
   "Category",
-  "Is Main Category",
-  "Prize Name",
-  "Prize Type",
-  "Amount",
-  "Currency",
-  "Rank From",
-  "Rank To",
-  "Tie Split",
-  "Description",
+  "Is Main",
+  "Place",
+  "Cash Amount",
+  "Trophy",
+  "Medal",
+  "Gift Name",
+  "Gift Qty",
+  "Notes",
 ];
 
 const sampleRows = [
   {
     category: "Open",
-    isMainCategory: "yes",
-    prizeName: "1st Place",
-    prizeType: "cash",
-    amount: "25000",
-    currency: "INR",
-    rankFrom: "1",
-    rankTo: "1",
-    tieSplit: "yes",
-    description: "Open winner",
+    isMain: "yes",
+    place: "1",
+    cashAmount: "25000",
+    trophy: "yes",
+    medal: "gold",
+    giftName: "Gift Hamper",
+    giftQty: "1",
+    notes: "Open winner",
   },
   {
     category: "Open",
-    isMainCategory: "yes",
-    prizeName: "2nd Place",
-    prizeType: "cash",
-    amount: "15000",
-    currency: "INR",
-    rankFrom: "2",
-    rankTo: "2",
-    tieSplit: "yes",
-    description: "Open runner-up",
+    isMain: "yes",
+    place: "2",
+    cashAmount: "15000",
+    trophy: "no",
+    medal: "silver",
+    giftName: "",
+    giftQty: "",
+    notes: "Open runner-up",
   },
   {
     category: "U1600",
-    isMainCategory: "no",
-    prizeName: "Best U1600",
-    prizeType: "cash",
-    amount: "5000",
-    currency: "INR",
-    rankFrom: "1",
-    rankTo: "1",
-    tieSplit: "yes",
-    description: "Rating category winner",
+    isMain: "no",
+    place: "1",
+    cashAmount: "5000",
+    trophy: "no",
+    medal: "bronze",
+    giftName: "Chess Book",
+    giftQty: "1",
+    notes: "Rating category winner",
   },
 ];
 
@@ -80,22 +76,21 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="p-1">Category</th><th className="p-1">Main</th><th className="p-1">Prize Name</th><th className="p-1">Type</th><th className="p-1">Amount</th><th className="p-1">Currency</th><th className="p-1">Rank From</th><th className="p-1">Rank To</th><th className="p-1">Tie Split</th><th className="p-1">Description</th>
+                    <th className="p-1">Category</th><th className="p-1">Is Main</th><th className="p-1">Place</th><th className="p-1">Cash Amount</th><th className="p-1">Trophy</th><th className="p-1">Medal</th><th className="p-1">Gift Name</th><th className="p-1">Gift Qty</th><th className="p-1">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sampleRows.map((row, idx) => (
-                    <tr key={`${row.category}-${row.prizeName}-${idx}`} className="border-b">
+                    <tr key={`${row.category}-${row.place}-${idx}`} className="border-b">
                       <td className="p-1">{row.category}</td>
-                      <td className="p-1">{row.isMainCategory}</td>
-                      <td className="p-1">{row.prizeName}</td>
-                      <td className="p-1">{row.prizeType}</td>
-                      <td className="p-1">{row.amount}</td>
-                      <td className="p-1">{row.currency}</td>
-                      <td className="p-1">{row.rankFrom}</td>
-                      <td className="p-1">{row.rankTo}</td>
-                      <td className="p-1">{row.tieSplit}</td>
-                      <td className="p-1">{row.description}</td>
+                      <td className="p-1">{row.isMain}</td>
+                      <td className="p-1">{row.place}</td>
+                      <td className="p-1">{row.cashAmount}</td>
+                      <td className="p-1">{row.trophy}</td>
+                      <td className="p-1">{row.medal}</td>
+                      <td className="p-1">{row.giftName}</td>
+                      <td className="p-1">{row.giftQty}</td>
+                      <td className="p-1">{row.notes}</td>
                     </tr>
                   ))}
                 </tbody>
