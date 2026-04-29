@@ -32,6 +32,15 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
   }, [draft]);
 
   const canApply = !!draft && (draft.categories.length > 0 || totalCategoryPrizes > 0);
+  const applyDisabledReason = !draft
+    ? "Upload a spreadsheet to preview import details."
+    : !canApply
+      ? "No importable categories or prizes were found. Fix the spreadsheet and re-upload."
+      : parsing
+        ? "Wait for parsing to finish before applying."
+        : applying
+          ? "Import is currently running."
+          : null;
 
   const onFileChange = async (file?: File | null) => {
     if (!file) return;
@@ -147,6 +156,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           {(errorIssues.length > 0 || warningIssues.length > 0) && (
             <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
               <p className="text-sm font-medium">Validation Issues</p>
+              <p className="text-xs text-muted-foreground">Errors must be fixed in the spreadsheet and then re-uploaded. Warnings should be reviewed and may still allow import.</p>
               <ul className="text-xs space-y-1">
                 {issues.map((issue, idx) => (
                   <li key={`${issue.sheet}-${issue.row}-${idx}`}>
@@ -173,8 +183,9 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         </div>
 
         <DialogFooter>
+          <div className="mr-auto text-xs text-muted-foreground">{applyDisabledReason ?? "You can apply with warnings after reviewing them."}</div>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>Close</Button>
-          <Button onClick={handleApply} disabled={!canApply || parsing || applying}>
+          <Button onClick={handleApply} disabled={!canApply || parsing || applying} title={applyDisabledReason ?? undefined}>
             {applying ? "Applying…" : "Apply Import"}
           </Button>
         </DialogFooter>
