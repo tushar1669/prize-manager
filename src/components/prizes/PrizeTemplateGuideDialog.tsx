@@ -64,7 +64,7 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
         <DialogHeader>
           <DialogTitle>How to use the template</DialogTitle>
           <DialogDescription>
-            Use the default v2 prize template to add prize categories and individual category prizes in one pass. Fill one row per prize entry.
+            Use the default v2 prize template path to import categories and individual prize rows in one pass. Fill one row per individual prize entry.
           </DialogDescription>
         </DialogHeader>
 
@@ -105,7 +105,7 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
 
           <div className="rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/30 space-y-1">
             <p><strong>Rules are configured in the UI.</strong> After import, set/adjust category rules in Tournament Setup.</p>
-            <p><strong>Team Prizes are configured in the Team Prizes section/tab.</strong> They are not the main focus of this default guide flow.</p>
+            <p><strong>Team Prizes are configured in the Team Prizes section/tab.</strong> The default v2 template path does not configure Team Prizes.</p>
           </div>
         </div>
       </DialogContent>

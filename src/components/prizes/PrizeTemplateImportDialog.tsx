@@ -77,7 +77,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            Use the recommended/simple template path to import categories + individual prizes. Configure category rules in the UI after import if needed. Team Prizes are configured in the Team Prizes section/tab. Legacy advanced import remains available if needed. Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
+            Use the default recommended/simple v2 template path to import categories + individual prizes. Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab. Legacy advanced import remains available as a secondary path if needed. Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
             <button type="button" className="underline" onClick={() => setTemplateGuideOpen(true)}>
               Template guide (recommended/simple)
             </button>
@@ -95,8 +95,8 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
 
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-            <p><strong>Recommended/simple:</strong> Imports categories + individual prizes from one sheet.</p>
-            <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes are configured in the Team Prizes section/tab.</p>
+            <p><strong>Recommended/simple (default v2):</strong> Imports categories + individual prizes from one sheet only.</p>
+            <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab (manual flow).</p>
             <p><strong>Legacy advanced:</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
             <p className="text-muted-foreground">Advanced allocation rules are still configured in the UI.</p>
           </div>
@@ -123,7 +123,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
               {draft.team_groups.length > 0 && (
                 <label className="flex items-center gap-2">
                   <Checkbox checked={includeTeamGroups} onCheckedChange={(v) => setIncludeTeamGroups(!!v)} />
-                  <Label>Include team groups/prizes</Label>
+                  <Label>Include legacy team groups/prizes from file (advanced)</Label>
                 </label>
               )}
 
