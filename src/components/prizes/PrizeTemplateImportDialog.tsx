@@ -59,7 +59,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
       const verifiedTeamGroups = new Set<number>(draft.team_groups.map((_, i) => i));
       const applyResult = await applyDraftAddOnly(tournamentId, draft, includeTeamGroups, verifiedTeamGroups);
       setReport(applyResult);
-      toast.success("Template applied. Existing prizes were kept; new prizes were added.");
+      toast.success("Import complete. Your existing prizes stayed the same, and new prizes were added.");
       onApplied?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to apply template");
@@ -77,9 +77,9 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
+          <DialogTitle>Import Prizes from Template</DialogTitle>
           <DialogDescription>
-            Import with the recommended simple v2 template (default path), then review and apply. {" "}
+            Use the recommended simple v2 template, then review and apply. {" "}
             <button type="button" className="underline" onClick={() => setTemplateGuideOpen(true)}>
               Template guide
             </button>
@@ -90,8 +90,8 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
             <p><strong>Recommended/simple (default v2):</strong> Imports categories + individual prizes from one sheet only.</p>
             <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab (manual flow).</p>
-            <p><strong>Legacy advanced (optional):</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
-            <p className="text-muted-foreground">Use only when needed. Advanced allocation rules are still configured in the UI.</p>
+            <p><strong>Legacy advanced (optional):</strong> Multi-sheet format for older or advanced setups, including legacy team import behavior.</p>
+            <p className="text-muted-foreground">Only use this if your file requires it. Advanced allocation rules are still configured in the UI.</p>
           </div>
 
           {hasTeamTemplateContent && (
@@ -159,13 +159,13 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
 
           {report && (
             <div className="space-y-1 rounded-md border p-3 text-sm">
-              <p className="font-medium">Apply Result</p>
-              <p>Categories created: {report.categories_created}; reused: {report.categories_reused}</p>
-              <p>Prizes added: {report.prizes_created}; already in your tournament: {report.prizes_skipped_existing}; duplicate rows in this file (added once): {report.prizes_skipped_duplicate_in_draft}</p>
+              <p className="font-medium">Import summary</p>
+              <p>Categories added: {report.categories_created}; already in tournament: {report.categories_reused}</p>
+              <p>Prizes added: {report.prizes_created}; already in tournament: {report.prizes_skipped_existing}; duplicate rows in file: {report.prizes_skipped_duplicate_in_draft}</p>
               {shouldShowTeamResultCounters && (
                 <>
-                  <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
-                  <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
+                  <p>Team groups added: {report.team_groups_created}; already in tournament: {report.team_groups_reused}</p>
+                  <p>Team prizes added: {report.team_prizes_created}; already in tournament: {report.team_prizes_skipped}</p>
                 </>
               )}
             </div>
