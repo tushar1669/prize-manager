@@ -21,6 +21,7 @@ export default function PrizeTemplateGuideDialog({ open, onOpenChange }: PrizeTe
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="font-medium">Supported columns (simple v2 path)</p>
             <p className="mt-1 text-muted-foreground">{PRIZE_TEMPLATE_V2_HEADERS.join(", ")}</p>
+            <p className="mt-1 text-muted-foreground">Place can be a single number (e.g., 1) or a range (e.g., 6-10).</p>
           </div>
 
           <div className="rounded-md border p-3">
