@@ -94,9 +94,11 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
             <p className="text-muted-foreground">Use only when needed. Advanced allocation rules are still configured in the UI.</p>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            If your file includes legacy team-group/team-prize rows, you can choose to include them after upload.
-          </p>
+          {hasTeamTemplateContent && (
+            <p className="text-xs text-muted-foreground">
+              Legacy team-group/team-prize rows detected. You can choose to include them before applying.
+            </p>
+          )}
 
           <Input
             type="file"
@@ -112,7 +114,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline">Categories: {draft.categories.length}</Badge>
                 <Badge variant="outline">Category prizes: {totalCategoryPrizes}</Badge>
-                <Badge variant="outline">Team groups: {draft.team_groups.length}</Badge>
+                {hasTeamTemplateContent && <Badge variant="outline">Team groups: {draft.team_groups.length}</Badge>}
                 <Badge variant="outline">Errors: {errorIssues.length}</Badge>
                 <Badge variant="outline">Warnings: {warningIssues.length}</Badge>
               </div>
@@ -160,13 +162,11 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
               <p className="font-medium">Apply Result</p>
               <p>Categories created: {report.categories_created}; reused: {report.categories_reused}</p>
               <p>Prizes added: {report.prizes_created}; already in your tournament: {report.prizes_skipped_existing}; duplicate rows in this file (added once): {report.prizes_skipped_duplicate_in_draft}</p>
-              {shouldShowTeamResultCounters ? (
+              {shouldShowTeamResultCounters && (
                 <>
                   <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
                   <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
                 </>
-              ) : (
-                <p className="text-muted-foreground">No legacy team-group/team-prize rows were found in this file.</p>
               )}
             </div>
           )}
