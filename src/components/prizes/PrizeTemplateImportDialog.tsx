@@ -77,19 +77,10 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            Use the default recommended/simple v2 template path to import categories + individual prizes. Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab. Legacy advanced import remains available as a secondary path if needed. Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
+            Import with the recommended simple v2 template (default path), then review and apply. {" "}
             <button type="button" className="underline" onClick={() => setTemplateGuideOpen(true)}>
-              Template guide (recommended/simple)
+              Template guide
             </button>
-            {" "}(legacy advanced: {" "}
-            <a
-              href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V1_GUIDE.md"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              legacy advanced guide
-            </a>)
           </DialogDescription>
         </DialogHeader>
 
@@ -97,9 +88,13 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
             <p><strong>Recommended/simple (default v2):</strong> Imports categories + individual prizes from one sheet only.</p>
             <p className="text-muted-foreground">Configure category rules in the UI after import if needed. Team Prizes are configured separately in the Team Prizes section/tab (manual flow).</p>
-            <p><strong>Legacy advanced:</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
-            <p className="text-muted-foreground">Advanced allocation rules are still configured in the UI.</p>
+            <p><strong>Legacy advanced (optional):</strong> Multi-sheet format for advanced setups, including legacy team import behavior.</p>
+            <p className="text-muted-foreground">Use only when needed. Advanced allocation rules are still configured in the UI.</p>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Need legacy advanced details? Use the "Include legacy team groups/prizes" option below after upload.
+          </p>
 
           <Input
             type="file"
@@ -162,9 +157,9 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
             <div className="space-y-1 rounded-md border p-3 text-sm">
               <p className="font-medium">Apply Result</p>
               <p>Categories created: {report.categories_created}; reused: {report.categories_reused}</p>
-              <p>Prizes created: {report.prizes_created}; skipped existing: {report.prizes_skipped_existing}; skipped duplicate in draft: {report.prizes_skipped_duplicate_in_draft}</p>
+              <p>Prizes created: {report.prizes_created}; skipped existing: {report.prizes_skipped_existing}; not re-added from repeated rows in this file: {report.prizes_skipped_duplicate_in_draft}</p>
               <p>Team groups created: {report.team_groups_created}; reused: {report.team_groups_reused}</p>
-              <p>Team prizes created: {report.team_prizes_created}; skipped: {report.team_prizes_skipped}</p>
+              <p>Team prizes created: {report.team_prizes_created}; not added (already existed): {report.team_prizes_skipped}</p>
             </div>
           )}
         </div>
@@ -172,7 +167,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>Close</Button>
           <Button onClick={handleApply} disabled={!canApply || parsing || applying}>
-            {applying ? "Applying…" : "Apply (Add-only)"}
+            {applying ? "Applying…" : "Apply Import"}
           </Button>
         </DialogFooter>
       </DialogContent>
