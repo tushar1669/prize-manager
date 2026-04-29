@@ -44,6 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
 import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
+import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
 
 // Flip to true only when debugging
@@ -126,6 +127,7 @@ export default function TournamentSetup() {
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
   const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
+  const [templateGuideOpen, setTemplateGuideOpen] = useState(false);
 
   // Criteria validation errors (for blocking save)
   const [criteriaErrors, setCriteriaErrors] = useState<{ ageRange?: string; ratingRange?: string }>({});
@@ -1977,14 +1979,13 @@ export default function TournamentSetup() {
                                   <Download className="h-4 w-4" />
                                   Legacy Template (advanced)
                                 </Button>
-                                <Button size="sm" variant="link" asChild className="px-1">
-                                  <a
-                                    href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    Template guide (recommended/simple)
-                                  </a>
+                                <Button
+                                  size="sm"
+                                  variant="link"
+                                  className="px-1"
+                                  onClick={() => setTemplateGuideOpen(true)}
+                                >
+                                  Template guide (recommended/simple)
                                 </Button>
                               </div>
                             </div>
@@ -1994,6 +1995,7 @@ export default function TournamentSetup() {
                               tournamentId={id!}
                               onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                             />
+                            <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
                             <Button
                               size="sm"
                               variant="ghost"

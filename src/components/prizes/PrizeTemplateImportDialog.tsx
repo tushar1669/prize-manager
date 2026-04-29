@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
   const [draft, setDraft] = useState<Awaited<ReturnType<typeof parsePrizeTemplateFile>>["draft"] | null>(null);
   const [report, setReport] = useState<ApplyReport | null>(null);
   const [includeTeamGroups, setIncludeTeamGroups] = useState(true);
+  const [templateGuideOpen, setTemplateGuideOpen] = useState(false);
 
   const totalCategoryPrizes = useMemo(() => {
     if (!draft) return 0;
@@ -75,15 +77,10 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         <DialogHeader>
           <DialogTitle>Import Prizes from XLSX Template</DialogTitle>
           <DialogDescription>
-            Use the recommended/simple template path to import categories + individual prizes. Configure category rules in the UI after import if needed. Team Prizes are configured in the Team Prizes section/tab. Legacy advanced import remains available if needed. Upload an Excel template, review valid rows and errors, then apply add-only.{" "}
-            <a
-              href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V2_GUIDE.md"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
+            Use the recommended/simple template path to import categories + individual prizes. Configure category rules in the UI after import if needed. Team Prizes are configured in the Team Prizes section/tab. Legacy advanced import remains available if needed. Upload an Excel template, review valid rows and errors, then apply add-only. {" "}
+            <button type="button" className="underline" onClick={() => setTemplateGuideOpen(true)}>
               Template guide (recommended/simple)
-            </a>
+            </button>
             {" "}(legacy advanced: {" "}
             <a
               href="https://github.com/tushar1669/prize-manager/blob/main/docs/PRIZE_TEMPLATE_V1_GUIDE.md"
@@ -179,6 +176,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           </Button>
         </DialogFooter>
       </DialogContent>
+      <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
     </Dialog>
   );
 }
