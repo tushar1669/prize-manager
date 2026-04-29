@@ -12,7 +12,7 @@ v2 is a **single-sheet, simple import format** for:
 
 - creating/reusing prize categories,
 - importing individual prize rows (cash/trophy/medal/gift), and
-- quickly setting common category criteria from the same row set.
+- importing quickly without rule-related columns in the default sheet.
 
 In short: v2 imports **categories + individual prizes**.
 
@@ -23,7 +23,8 @@ v2 is intentionally limited so operators can import quickly, then finish advance
 After v2 import, keep configuring these manually in the app:
 
 1. **Team Prizes** in the **Team Prizes section/tab** (team prizes are not imported from v2).
-2. **Advanced allocation/rule configuration** (strict comparisons, cutoff strategy/details, priority/tie behavior, and other advanced controls).
+2. **Category rules/eligibility criteria** (gender, age/rating bounds, unrated flags, allowed states/cities/clubs).
+3. **Advanced allocation/rule configuration** (strict comparisons, cutoff strategy/details, priority/tie behavior, and other advanced controls).
 
 ---
 
@@ -46,17 +47,9 @@ Only `Prizes` rows are parsed for import.
 | `Medal` | No | Boolean: `yes/no`, `y/n`, `true/false`, `1/0`. |
 | `Gift Name` | No | Free text gift label (example `Chess Clock`). |
 | `Gift Qty` | No | Whole number `>= 0`. If provided with `Gift Name`, gift is repeated that many times. |
-| `Gender` | No | `F`, `M`, or `OPEN` (case-insensitive input accepted). |
-| `Min Age` | No | Number. |
-| `Max Age` | No | Number. |
-| `Min Rating` | No | Number. |
-| `Max Rating` | No | Number. |
-| `Include Unrated` | No | Boolean: `yes/no`, `y/n`, `true/false`, `1/0`. |
-| `Unrated Only` | No | Boolean: `yes/no`, `y/n`, `true/false`, `1/0`. |
-| `Allowed States` | No | Comma-separated list (example `MH, GJ`). |
-| `Allowed Cities` | No | Comma-separated list. |
-| `Allowed Clubs` | No | Comma-separated list. |
 | `Notes` | No | Optional note field; not used in prize creation logic. |
+
+> Older v2 files that still contain legacy criteria columns are still tolerated for backward compatibility.
 
 ## Place ranges
 
@@ -83,11 +76,10 @@ Any other non-empty value causes a validation error.
 
 ## Repeated category row rules
 
-In v2, category rows are expected to repeat (one row per prize/place). For a repeated category:
+In default v2, category rows are expected to repeat (one row per prize/place). For a repeated category:
 
 - `Is Main` must not conflict across rows.
-- Criteria fields (`Gender`, ages, ratings, unrated flags, allowed lists) must stay consistent.
-- If a row omits criteria columns, previously established criteria for that category remain in effect.
+- Older v2 files with legacy criteria columns are still accepted and validated for consistency.
 
 ## What causes validation errors
 
@@ -95,19 +87,18 @@ Common blocking errors include:
 
 - missing `Category` or missing/invalid `Place`,
 - invalid boolean values in `Is Main`, `Trophy`, `Medal`, `Include Unrated`, `Unrated Only`,
-- invalid number values (`Cash Amount`, age/rating fields),
-- invalid `Gender` (must be `F`, `M`, or `OPEN`),
+- invalid number values (`Cash Amount`),
 - invalid `Gift Qty` (must be whole number `>= 0`),
 - conflicting repeated category configuration (`Is Main` or criteria mismatch),
 - duplicate place within same category (for example two rows resulting in `Women` place `1`).
 
 ## Realistic sample rows
 
-| Category | Is Main | Place | Cash Amount | Trophy | Medal | Gift Name | Gift Qty | Gender | Min Age | Max Age | Min Rating | Max Rating | Include Unrated | Unrated Only | Allowed States | Allowed Cities | Allowed Clubs | Notes |
-|---|---|---|---:|---|---|---|---:|---|---:|---:|---:|---:|---|---|---|---|---|---|
-| Main Prize | yes | 1 | 10000 | yes | yes | Chess Clock | 1 | OPEN |  |  |  |  | no | no |  |  |  | Overall champion |
-| Main Prize | yes | 2-5 | 2500 | yes | no |  |  | OPEN |  |  |  |  | no | no |  |  |  | Main runner-up range |
-| Women | no | 1 | 3000 | yes | yes | Gift Voucher | 2 | F |  |  |  |  | no | no | MH, GJ | Mumbai, Pune |  | Category prize |
+| Category | Is Main | Place | Cash Amount | Trophy | Medal | Gift Name | Gift Qty | Notes |
+|---|---|---|---:|---|---|---|---:|---|
+| Main Prize | yes | 1 | 10000 | yes | yes | Chess Clock | 1 | Overall champion |
+| Main Prize | yes | 2-5 | 2500 | yes | no |  |  | Main runner-up range |
+| Women | no | 1 | 3000 | yes | yes | Gift Voucher | 2 | Category prize |
 
 ## Recommended operator flow
 
