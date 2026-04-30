@@ -68,7 +68,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
       const verifiedTeamGroups = new Set<number>(draft.team_groups.map((_, i) => i));
       const applyResult = await applyDraftAddOnly(tournamentId, draft, includeTeamGroups, verifiedTeamGroups);
       setReport(applyResult);
-      toast.success("Import complete. Your existing prizes stayed the same, and new prizes were added.");
+      toast.success("Import complete. Your current prizes were kept, and new prizes were added from your template.");
       onApplied?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to apply template");
@@ -155,8 +155,8 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
 
           {(errorIssues.length > 0 || warningIssues.length > 0) && (
             <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-              <p className="text-sm font-medium">Validation Issues</p>
-              <p className="text-xs text-muted-foreground">Errors must be fixed in the spreadsheet and then re-uploaded. Warnings should be reviewed and may still allow import.</p>
+              <p className="text-sm font-medium">Review before importing</p>
+              <p className="text-xs text-muted-foreground">Errors mean those rows cannot be imported until you fix the file and upload again. Warnings are for review and may still be okay to continue.</p>
               <ul className="text-xs space-y-1">
                 {issues.map((issue, idx) => (
                   <li key={`${issue.sheet}-${issue.row}-${idx}`}>
@@ -169,13 +169,13 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
 
           {report && (
             <div className="space-y-1 rounded-md border p-3 text-sm">
-              <p className="font-medium">Import summary</p>
-              <p>Categories added: {report.categories_created}; already in tournament: {report.categories_reused}</p>
-              <p>Prizes added: {report.prizes_created}; already in tournament: {report.prizes_skipped_existing}; duplicate rows in file: {report.prizes_skipped_duplicate_in_draft}</p>
+              <p className="font-medium">Import results</p>
+              <p>Categories added: {report.categories_created}; already in your tournament: {report.categories_reused}</p>
+              <p>Prizes added: {report.prizes_created}; already in your tournament: {report.prizes_skipped_existing}; duplicate rows in your file: {report.prizes_skipped_duplicate_in_draft}</p>
               {shouldShowTeamResultCounters && (
                 <>
-                  <p>Team groups added: {report.team_groups_created}; already in tournament: {report.team_groups_reused}</p>
-                  <p>Team prizes added: {report.team_prizes_created}; already in tournament: {report.team_prizes_skipped}</p>
+                  <p>Team groups added: {report.team_groups_created}; already in your tournament: {report.team_groups_reused}</p>
+                  <p>Team prizes added: {report.team_prizes_created}; already in your tournament: {report.team_prizes_skipped}</p>
                 </>
               )}
             </div>
@@ -183,7 +183,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         </div>
 
         <DialogFooter>
-          <div className="mr-auto text-xs text-muted-foreground">{applyDisabledReason ?? "You can apply with warnings after reviewing them."}</div>
+          <div className="mr-auto text-xs text-muted-foreground">{applyDisabledReason ?? "Warnings do not always block import—review them before continuing."}</div>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>Close</Button>
           <Button onClick={handleApply} disabled={!canApply || parsing || applying} title={applyDisabledReason ?? undefined}>
             {applying ? "Applying…" : "Apply Import"}
