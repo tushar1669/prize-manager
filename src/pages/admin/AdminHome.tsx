@@ -7,14 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
-const quickLinks = [
-  { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, legacy organizer exceptions, and access moderation exceptions." },
-  { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
-  { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
-  { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
-  { to: "/admin/audit", title: "Audit Logs", description: "View error events, runtime diagnostics, and user-facing error references." },
-  { to: "/admin/team-snapshots", title: "Team Snapshots", description: "Detect and backfill missing team allocation snapshots for published tournaments." },
-];
+import { ADMIN_SECTIONS } from "@/components/admin/adminSections";
 
 export default function AdminHome() {
   const { data: publishDriftRows, isLoading: publishDriftLoading } = useQuery({
@@ -46,11 +39,11 @@ export default function AdminHome() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {quickLinks.map((link) => (
+        {ADMIN_SECTIONS.filter((link) => link.to !== "/admin").map((link) => (
           <Link key={link.to} to={link.to}>
             <Card className="h-full transition-colors hover:border-primary/50">
               <CardHeader>
-                <CardTitle className="text-lg">{link.title}</CardTitle>
+                <CardTitle className="text-lg">{link.label}</CardTitle>
                 <CardDescription>{link.description}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-primary">Open section →</CardContent>

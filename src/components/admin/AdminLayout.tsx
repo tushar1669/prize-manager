@@ -2,15 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { AppNav } from "@/components/AppNav";
 import { cn } from "@/lib/utils";
 
-const adminLinks = [
-  { to: "/admin", label: "Overview", end: true },
-  { to: "/admin/users", label: "Users & Access" },
-  { to: "/admin/martech", label: "Martech" },
-  { to: "/admin/tournaments", label: "Tournaments" },
-  { to: "/admin/coupons", label: "Coupons" },
-  { to: "/admin/audit", label: "Audit Logs" },
-  { to: "/admin/team-snapshots", label: "Team Snapshots" },
-];
+import { ADMIN_SECTIONS } from "@/components/admin/adminSections";
 
 const buildStamp = `${__BUILD_COMMIT__} · ${__BUILD_TIME__}`;
 
@@ -27,7 +19,7 @@ export function AdminLayout() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
           <aside className="rounded-lg border border-border bg-card p-3 h-fit">
             <nav className="flex flex-col gap-1">
-              {adminLinks.map((link) => (
+              {ADMIN_SECTIONS.map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
