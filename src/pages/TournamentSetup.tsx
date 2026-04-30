@@ -594,6 +594,15 @@ export default function TournamentSetup() {
 
   const deepLinkedDualFilterSet = useMemo(() => new Set(deepLinkedDualFilterIds), [deepLinkedDualFilterIds]);
 
+  const mainPrizeCategories = useMemo(
+    () => sortedCategories.filter((category) => category.is_main),
+    [sortedCategories]
+  );
+  const categoryPrizeCategories = useMemo(
+    () => sortedCategories.filter((category) => !category.is_main),
+    [sortedCategories]
+  );
+
   const handleCollapseAllCategories = useCallback((collapsed: boolean) => {
     setCollapsedCategories(() => {
       const next: Record<string, boolean> = {};
@@ -2024,55 +2033,117 @@ export default function TournamentSetup() {
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                       </div>
                     ) : categories && categories.length > 0 ? (
-                      <div className="space-y-4">
-                        {sortedCategories.map((cat) => (
-                          <div
-                            key={cat.id}
-                            id={`category-${cat.id}`}
-                            data-category-id={cat.id}
-                            className={cn(
-                              deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
-                                ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
-                                : undefined
-                            )}
-                          >
-                            <CategoryPrizesEditor
-                              ref={getEditorRef(cat.id)}
-                              category={{
-                                ...cat,
-                                criteria_json: asCriteriaJson(cat.criteria_json),
-                                prizes: (cat.prizes || []).map(p => ({
-                                  ...p,
-                                  gift_items: coerceGiftItems(p.gift_items),
-                                })),
-                              }}
-                              collapsed={!!collapsedCategories[cat.id]}
-                              onToggleCollapse={(categoryId) => {
-                                setCollapsedCategories((prev) => ({
-                                  ...prev,
-                                  [categoryId]: !prev[categoryId],
-                                }));
-                              }}
-                              onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
-                              onSave={(categoryId, delta) => 
-                                saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
-                              }
-                              onToggleCategory={toggleCategoryActive}
-                              isOrganizer={isOrganizer}
-                              onDeleteCategory={(category) => {
-                                setCatDelete({ 
-                                  open: true, 
-                                  id: category.id, 
-                                  name: category.name, 
-                                  prizeCount: category.prizes?.length ?? 0 
-                                });
-                              }}
-                              onDuplicateCategory={(category) => {
-                                setDupDialog({ open: true, sourceId: category.id });
-                              }}
-                            />
-                          </div>
-                        ))}
+                      <div className="space-y-6">
+                        {mainPrizeCategories.length > 0 && (
+                          <section className="space-y-3">
+                            <h3 className="text-sm font-semibold">Main Prize</h3>
+                            <div className="space-y-4">
+                              {mainPrizeCategories.map((cat) => (
+                                <div
+                                  key={cat.id}
+                                  id={`category-${cat.id}`}
+                                  data-category-id={cat.id}
+                                  className={cn(
+                                    deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
+                                      ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
+                                      : undefined
+                                  )}
+                                >
+                                  <CategoryPrizesEditor
+                                    ref={getEditorRef(cat.id)}
+                                    category={{
+                                      ...cat,
+                                      criteria_json: asCriteriaJson(cat.criteria_json),
+                                      prizes: (cat.prizes || []).map(p => ({
+                                        ...p,
+                                        gift_items: coerceGiftItems(p.gift_items),
+                                      })),
+                                    }}
+                                    collapsed={!!collapsedCategories[cat.id]}
+                                    onToggleCollapse={(categoryId) => {
+                                      setCollapsedCategories((prev) => ({
+                                        ...prev,
+                                        [categoryId]: !prev[categoryId],
+                                      }));
+                                    }}
+                                    onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
+                                    onSave={(categoryId, delta) => 
+                                      saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
+                                    }
+                                    onToggleCategory={toggleCategoryActive}
+                                    isOrganizer={isOrganizer}
+                                    onDeleteCategory={(category) => {
+                                      setCatDelete({ 
+                                        open: true, 
+                                        id: category.id, 
+                                        name: category.name, 
+                                        prizeCount: category.prizes?.length ?? 0 
+                                      });
+                                    }}
+                                    onDuplicateCategory={(category) => {
+                                      setDupDialog({ open: true, sourceId: category.id });
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                        {categoryPrizeCategories.length > 0 && (
+                          <section className="space-y-3">
+                            <h3 className="text-sm font-semibold">Category Prizes</h3>
+                            <div className="space-y-4">
+                              {categoryPrizeCategories.map((cat) => (
+                                <div
+                                  key={cat.id}
+                                  id={`category-${cat.id}`}
+                                  data-category-id={cat.id}
+                                  className={cn(
+                                    deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
+                                      ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
+                                      : undefined
+                                  )}
+                                >
+                                  <CategoryPrizesEditor
+                                    ref={getEditorRef(cat.id)}
+                                    category={{
+                                      ...cat,
+                                      criteria_json: asCriteriaJson(cat.criteria_json),
+                                      prizes: (cat.prizes || []).map(p => ({
+                                        ...p,
+                                        gift_items: coerceGiftItems(p.gift_items),
+                                      })),
+                                    }}
+                                    collapsed={!!collapsedCategories[cat.id]}
+                                    onToggleCollapse={(categoryId) => {
+                                      setCollapsedCategories((prev) => ({
+                                        ...prev,
+                                        [categoryId]: !prev[categoryId],
+                                      }));
+                                    }}
+                                    onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
+                                    onSave={(categoryId, delta) => 
+                                      saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
+                                    }
+                                    onToggleCategory={toggleCategoryActive}
+                                    isOrganizer={isOrganizer}
+                                    onDeleteCategory={(category) => {
+                                      setCatDelete({ 
+                                        open: true, 
+                                        id: category.id, 
+                                        name: category.name, 
+                                        prizeCount: category.prizes?.length ?? 0 
+                                      });
+                                    }}
+                                    onDuplicateCategory={(category) => {
+                                      setDupDialog({ open: true, sourceId: category.id });
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        )}
                       </div>
                     ) : (
                       <p className="text-center text-muted-foreground py-8">
