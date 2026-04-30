@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 
 const quickLinks = [
-  { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, verification state, and moderation actions." },
+  { to: "/admin/users", title: "Users & Access", description: "Manage organizer access, legacy organizer exceptions, and access moderation exceptions." },
   { to: "/admin/martech", title: "Martech", description: "View organizer growth, activation funnels, and revenue proxy analytics." },
   { to: "/admin/tournaments", title: "Tournaments", description: "Search and moderate tournaments across the platform." },
   { to: "/admin/coupons", title: "Coupons", description: "Manage coupon codes and view coupon analytics." },
