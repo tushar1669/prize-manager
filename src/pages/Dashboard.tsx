@@ -242,7 +242,7 @@ export default function Dashboard() {
         {authzStatus === 'ready' && role === 'organizer' && !is_verified && (
           <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              This organizer profile is marked as a legacy account state. Dashboard access remains available while this flag is reviewed.
+              This organizer profile carries a legacy access moderation exception flag. You can continue using the dashboard while admin performs legacy drift cleanup if needed.
             </p>
           </div>
         )}
