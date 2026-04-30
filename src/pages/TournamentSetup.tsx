@@ -172,6 +172,20 @@ export default function TournamentSetup() {
   ), [tid]);
   const [mainPrizesRestore, setMainPrizesRestore] = useState<null | { data: PrizeRow[]; ageMs: number }>(null);
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
+  const { data: activeTeamPrizeGroupCount = 0 } = useQuery({
+    queryKey: ['team-prize-group-count', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('institution_prize_groups')
+        .select('id', { count: 'exact', head: true })
+        .eq('tournament_id', id)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
 
   // Helper to get/create editor refs
   const getEditorRef = useCallback((catId: string): React.RefObject<CategoryPrizesEditorHandle> => {
@@ -1761,12 +1775,17 @@ export default function TournamentSetup() {
                 <button
                   type="button"
                   className={cn(
-                    "px-4 py-1.5 text-sm rounded-md transition-colors",
+                    "px-4 py-1.5 text-sm rounded-md transition-colors flex items-center gap-2",
                     prizeMode === 'team' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   )}
                   onClick={() => setPrizeMode('team')}
                 >
                   Team Prizes
+                  {activeTeamPrizeGroupCount > 0 && (
+                    <span className="text-xs opacity-90">
+                      ({activeTeamPrizeGroupCount} group{activeTeamPrizeGroupCount !== 1 ? 's' : ''})
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -1775,6 +1794,9 @@ export default function TournamentSetup() {
               <TeamPrizesEditor tournamentId={id || ''} isOrganizer={isOrganizer} />
             ) : (
               <>
+                <p className="text-sm text-muted-foreground">
+                  Need school/academy/city awards? Use the <strong>Team Prizes</strong> toggle above to add them manually.
+                </p>
                 {mainPrizesRestore && activeTab === 'prizes' && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
