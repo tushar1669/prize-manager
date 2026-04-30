@@ -23,21 +23,29 @@ interface AccessRow {
 
 const FUNCTION_MISSING_CODES = ['42883', 'PGRST202'];
 
+function parseErrorMeta(err: unknown): { code: string; message: string } {
+  if (!err || typeof err !== 'object') return { code: '', message: '' };
+  const maybeErr = err as { code?: unknown; message?: unknown };
+  return {
+    code: typeof maybeErr.code === 'string' ? maybeErr.code : '',
+    message: typeof maybeErr.message === 'string' ? maybeErr.message.toLowerCase() : '',
+  };
+}
+
 export function useTournamentAccess(tournamentId?: string): TournamentAccessState {
   const { data, isLoading, error } = useQuery({
     queryKey: ['tournament-access', tournamentId],
     enabled: !!tournamentId,
     staleTime: 60_000,
-    retry: (failureCount, err: any) => {
+    retry: (failureCount, err: unknown) => {
       // Don't retry if the function simply doesn't exist
-      const code = err?.code ?? '';
+      const { code, message } = parseErrorMeta(err);
       if (FUNCTION_MISSING_CODES.includes(code)) return false;
-      const msg = String(err?.message ?? '').toLowerCase();
-      if (msg.includes('function') && msg.includes('does not exist')) return false;
+      if (message.includes('function') && message.includes('does not exist')) return false;
       return failureCount < 2;
     },
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as Function)(
+      const { data, error } = await supabase.rpc(
         'get_tournament_access_state',
         { tournament_id: tournamentId }
       );
@@ -53,8 +61,7 @@ export function useTournamentAccess(tournamentId?: string): TournamentAccessStat
   // Derive errorCode from the query error
   let errorCode: string | null = null;
   if (error) {
-    const pgCode = (error as any)?.code ?? '';
-    const msg = String((error as any)?.message ?? '').toLowerCase();
+    const { code: pgCode, message: msg } = parseErrorMeta(error);
     if (
       FUNCTION_MISSING_CODES.includes(pgCode) ||
       (msg.includes('function') && msg.includes('does not exist'))
