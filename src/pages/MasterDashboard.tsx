@@ -92,7 +92,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
 
   if (roleLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className={embeddedInAdmin ? undefined : "min-h-screen bg-background"}>
         {!embeddedInAdmin && <AppNav />}
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-center py-12">
@@ -109,7 +109,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={embeddedInAdmin ? undefined : "min-h-screen bg-background"}>
       {!embeddedInAdmin && <AppNav />}
       
       <div className={embeddedInAdmin ? "px-0 py-0 max-w-6xl" : "container mx-auto px-6 py-8 max-w-6xl"}>
@@ -128,24 +128,24 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <CardTitle>Legacy Organizer Exceptions (Access Moderation Exception)</CardTitle>
+                  <CardTitle>Organizer Access Exceptions</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                    {pendingCount} legacy drift cleanup item{pendingCount !== 1 ? 's' : ''}
+                    {pendingCount} account review item{pendingCount !== 1 ? 's' : ''}
                   </Badge>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => refetchPending()}
                     disabled={pendingLoading}
-                    title="Refresh legacy organizer exceptions"
+                    title="Refresh organizer access exceptions"
                   >
                     <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
               </div>
-              <CardDescription>Rare legacy organizer exceptions for drift cleanup and access moderation updates.</CardDescription>
+              <CardDescription>Rare organizer accounts that need manual access review and update.</CardDescription>
             </CardHeader>
             <CardContent>
               {pendingLoading ? (
