@@ -1977,8 +1977,33 @@ export default function TournamentSetup() {
                                   <Upload className="h-4 w-4" />
                                   Import from Template
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="link"
+                                  className="px-1"
+                                  onClick={() => setTemplateGuideOpen(true)}
+                                >
+                                  Template Guide
+                                </Button>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="gap-2 text-muted-foreground"
+                                  disabled={!tournament?.brochure_url}
+                                  title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
+                                  onClick={() => setBrochureDraftOpen(true)}
+                                >
+                                  <Upload className="h-4 w-4" />
+                                  Generate from Brochure
+                                </Button>
+                              </div>
+                              <details className="rounded-md border border-border/50 bg-background/60 px-2 py-1">
+                                <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                                  Legacy advanced options (v1)
+                                </summary>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1988,15 +2013,8 @@ export default function TournamentSetup() {
                                   <Download className="h-4 w-4" />
                                   Legacy Template (advanced)
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="link"
-                                  className="px-1"
-                                  onClick={() => setTemplateGuideOpen(true)}
-                                >
-                                  Template guide (recommended/simple)
-                                </Button>
-                              </div>
+                                </div>
+                              </details>
                             </div>
                             <PrizeTemplateImportDialog
                               open={templateImportOpen}
@@ -2005,17 +2023,6 @@ export default function TournamentSetup() {
                               onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                             />
                             <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="gap-2"
-                              disabled={!tournament?.brochure_url}
-                              title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
-                              onClick={() => setBrochureDraftOpen(true)}
-                            >
-                              <Upload className="h-4 w-4" />
-                              Generate from Brochure
-                            </Button>
                             <BrochurePrizeDraftDialog
                               open={brochureDraftOpen}
                               onOpenChange={setBrochureDraftOpen}
