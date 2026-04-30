@@ -2014,11 +2014,11 @@ export default function TournamentSetup() {
                                   variant="ghost"
                                   className="gap-2 text-muted-foreground"
                                   disabled={!tournament?.brochure_url}
-                                  title={tournament?.brochure_url ? "Generate draft prize structure from brochure" : "Upload a brochure on the Details tab first"}
+                                  title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
                                   onClick={() => setBrochureDraftOpen(true)}
                                 >
                                   <Upload className="h-4 w-4" />
-                                  Generate from Brochure
+                                  Generate Draft from Brochure
                                 </Button>
                               </div>
                               <details className="rounded-md border border-border/50 bg-background/60 px-2 py-1">
