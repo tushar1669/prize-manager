@@ -124,34 +124,42 @@ export default function Dashboard() {
     }
   });
 
-  // Delete mutation (master only)
+  // Archive mutation (master only)
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('tournaments')
-        .delete()
+        .update({
+          is_archived: true,
+          is_published: false,
+          deleted_at: new Date().toISOString(),
+        })
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, is_master] });
       console.log('[dashboard] query invalidated after mutation');
-      toast.success('Tournament deleted');
+      toast.success('Draft moved to trash');
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Failed to delete tournament';
+      const message = error instanceof Error ? error.message : 'Failed to archive tournament';
       if (message.includes('row-level security')) {
-        toast.error('You do not have permission to delete this tournament');
+        toast.error('You do not have permission to archive this tournament');
       } else {
-        toast.error('Failed to delete tournament: ' + message);
+        toast.error('Failed to archive tournament: ' + message);
       }
     }
   });
 
-  const filteredTournaments = (tournaments || []).filter((t: DashboardTournament) => 
-    t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.city?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTournaments = (tournaments || []).filter((t: DashboardTournament) =>
+    !t.is_archived &&
+    !t.deleted_at &&
+    (
+      t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.city?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
 
   const handleResume = (id: string, status: string) => {
@@ -328,9 +336,9 @@ export default function Dashboard() {
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog(s => ({ ...s, open }))}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete draft "{deleteDialog.title}"?</AlertDialogTitle>
+            <AlertDialogTitle>Move draft "{deleteDialog.title}" to trash?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the draft tournament and its data. This action cannot be undone.
+              This will move the draft out of your active dashboard list. You can restore it from Admin.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -346,7 +354,7 @@ export default function Dashboard() {
                 });
               }}
             >
-              Delete
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
