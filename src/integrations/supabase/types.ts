@@ -1491,6 +1491,10 @@ export type Database = {
         }[]
       }
       apply_referral_code: { Args: { referral_code: string }; Returns: Json }
+      archive_own_draft_tournament: {
+        Args: { _tournament_id: string }
+        Returns: number
+      }
       bootstrap_master: { Args: never; Returns: Json }
       claim_profile_completion_reward: { Args: never; Returns: Json }
       coupon_origin_from_code: { Args: { code: string }; Returns: string }
@@ -1631,6 +1635,10 @@ export type Database = {
       submit_tournament_payment_claim: {
         Args: { p_amount_inr: number; p_tournament_id: string; p_utr: string }
         Returns: string
+      }
+      unpublish_tournament: {
+        Args: { tournament_id: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -16,7 +16,7 @@ type PublicManualPrize = Pick<
 >;
 
 type PublicTournament = Pick<
-  Database["public"]["Tables"]["published_tournaments"]["Row"],
+  Database["public"]["Views"]["published_tournaments"]["Row"],
   | "id"
   | "title"
   | "start_date"

@@ -3,7 +3,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 type SupabaseClientLike = Pick<SupabaseClient<Database>, "from">;
 
-type PublishedTournamentRow = Database["public"]["Tables"]["published_tournaments"]["Row"];
+type PublishedTournamentRow = Database["public"]["Views"]["published_tournaments"]["Row"];
 
 export type PublicTournamentLookup = Pick<
   PublishedTournamentRow,
