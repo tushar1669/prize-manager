@@ -124,18 +124,12 @@ export default function Dashboard() {
     }
   });
 
-  // Archive mutation (master only)
+  // Archive mutation (organizer own draft or master)
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('tournaments')
-        .update({
-          is_archived: true,
-          is_published: false,
-          deleted_at: new Date().toISOString(),
-        })
-        .eq('id', id);
+      const { data, error } = await supabase.rpc('archive_own_draft_tournament', { _tournament_id: id });
       if (error) throw error;
+      if (!data) throw new Error('Only active drafts can be moved to trash.');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournaments', user?.id, is_master] });
@@ -144,7 +138,9 @@ export default function Dashboard() {
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Failed to archive tournament';
-      if (message.includes('row-level security')) {
+      if (message === 'Only active drafts can be moved to trash.') {
+        toast.error('Only active drafts can be moved to trash.');
+      } else if (message.includes('row-level security')) {
         toast.error('You do not have permission to archive this tournament');
       } else {
         toast.error('Failed to archive tournament: ' + message);
@@ -302,7 +298,7 @@ export default function Dashboard() {
                         >
                           Resume
                         </Button>
-                        {is_master && tournament.status === 'draft' && (
+                        {tournament.status === 'draft' && !tournament.is_archived && !tournament.deleted_at && !tournament.is_published && (
                           <Button
                             variant="ghost"
                             size="sm"
