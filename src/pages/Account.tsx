@@ -329,8 +329,12 @@ export default function Account() {
   return (
     <div className="min-h-screen bg-background">
       <AppNav />
-      <div className="container mx-auto px-6 py-8 max-w-2xl space-y-6">
+      <div className="container mx-auto px-6 py-8 max-w-2xl lg:max-w-3xl space-y-6">
         <h1 className="text-3xl font-bold text-foreground mb-2">Account Settings</h1>
+
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1">
+          Profile
+        </h2>
 
         {/* Account Info */}
         <Card>
