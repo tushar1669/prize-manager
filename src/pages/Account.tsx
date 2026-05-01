@@ -591,6 +591,20 @@ export default function Account() {
             {(myReferrals ?? []).length > 0 ? (
               <div className="space-y-2 pt-1">
                 <p className="text-sm font-medium text-muted-foreground">Referred Users</p>
+                {(myReferrals ?? []).some((r) => {
+                  const rw = rewardsByTriggerUser.get(r.referred_id);
+                  return !(rw && rw.length > 0);
+                }) && (
+                  <div className="rounded-md border border-dashed bg-muted/30 p-3 space-y-1">
+                    <p className="text-xs font-medium text-foreground">How they upgrade (so you earn rewards):</p>
+                    <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+                      <li>Create a tournament</li>
+                      <li>Open "Upgrade to Pro"</li>
+                      <li>Pay via UPI + submit UTR, or apply a coupon</li>
+                      <li>Wait for master approval (if UPI)</li>
+                    </ol>
+                  </div>
+                )}
                 {(myReferrals ?? []).map((ref) => {
                   const rewards = rewardsByTriggerUser.get(ref.referred_id);
                   const hasUpgraded = !!rewards && rewards.length > 0;
