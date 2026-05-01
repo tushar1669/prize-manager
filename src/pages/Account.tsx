@@ -89,7 +89,7 @@ export default function Account() {
       queryClient.invalidateQueries({ queryKey: ["organizer-profile"] });
       queryClient.invalidateQueries({ queryKey: ["my-coupons"] });
       if (result.already_claimed) {
-        toast.info("Reward already claimed.");
+        toast.info("Loaded your existing profile reward coupon.");
       } else {
         toast.success("🎉 Free tournament coupon issued!");
       }
@@ -289,6 +289,21 @@ export default function Account() {
     },
   });
 
+  const profileCompletionCoupon = useMemo(() => {
+    return (myCoupons ?? []).find((coupon) => (
+      coupon.code.startsWith("PROFILE-")
+      && coupon.applies_to === "tournament_upgrade"
+      && coupon.discount_type === "percent"
+      && coupon.discount_value === 100
+    )) ?? null;
+  }, [myCoupons]);
+
+  useEffect(() => {
+    if (rewardClaimed && profileCompletionCoupon && !claimedCouponCode) {
+      setClaimedCouponCode(profileCompletionCoupon.code);
+    }
+  }, [rewardClaimed, profileCompletionCoupon, claimedCouponCode]);
+
   const discountLabel = (c: { discount_type: string; discount_value: number }) => {
     if (c.discount_type === "percent") return `${c.discount_value}% off`;
     if (c.discount_type === "amount") return `₹${c.discount_value} off`;
@@ -433,7 +448,7 @@ export default function Account() {
                           {claimRewardMutation.isPending ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                           ) : null}
-                          Show my coupon code
+                          Retrieve claimed coupon
                         </Button>
                       )}
                     </>
