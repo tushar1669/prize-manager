@@ -126,7 +126,7 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
             <CardContent><p className="text-xs text-muted-foreground">Verified: {metrics.kpis.verifiedOrganizers.toLocaleString()}</p></CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardDescription>Legacy unverified organizers</CardDescription><CardTitle>{metrics.kpis.pendingApprovals.toLocaleString()}</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardDescription>Organizer access exceptions</CardDescription><CardTitle>{metrics.kpis.pendingApprovals.toLocaleString()}</CardTitle></CardHeader>
             <CardContent><p className="text-xs text-muted-foreground">Exception metric only; new organizer signups should be verified by default.</p></CardContent>
           </Card>
           <Card>
