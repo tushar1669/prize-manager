@@ -661,7 +661,7 @@ export default function Account() {
                                     {coupon && (
                                       <div className="flex items-center gap-1">
                                         <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{coupon.code}</code>
-                                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(coupon.code, "Coupon"); }}>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="Copy coupon code" onClick={(e) => { e.stopPropagation(); copyToClipboard(coupon.code, "Coupon"); }}>
                                           <Copy className="h-3 w-3" />
                                         </Button>
                                       </div>
