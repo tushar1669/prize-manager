@@ -21,7 +21,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
   const { isMaster, loading: roleLoading } = useUserRole();
   const queryClient = useQueryClient();
 
-  // Legacy unverified organizer exceptions
+  // Pending organizer access reviews
   const {
     pendingUsers,
     pendingCount,
@@ -128,24 +128,24 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <CardTitle>Organizer Access Exceptions</CardTitle>
+                  <CardTitle>Organizer Access Reviews</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
-                    {pendingCount} account review item{pendingCount !== 1 ? 's' : ''}
+                    {pendingCount} access review item{pendingCount !== 1 ? 's' : ''}
                   </Badge>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => refetchPending()}
                     disabled={pendingLoading}
-                    title="Refresh organizer access exceptions"
+                    title="Refresh organizer access reviews"
                   >
                     <RefreshCw className={`h-4 w-4 ${pendingLoading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
               </div>
-              <CardDescription>Rare organizer accounts that need manual access review and update.</CardDescription>
+              <CardDescription>Organizer accounts that need manual access review and update.</CardDescription>
             </CardHeader>
             <CardContent>
               {pendingLoading ? (
