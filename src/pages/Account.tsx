@@ -514,6 +514,8 @@ export default function Account() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="h-8 w-8 p-0"
+                    aria-label="Copy referral code"
                     onClick={() => copyToClipboard(referralCode, "Referral code")}
                   >
                     <Copy className="h-4 w-4" />
