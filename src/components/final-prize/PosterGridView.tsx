@@ -11,14 +11,15 @@ import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/to
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
   tournamentId: string;
+  publicSlug?: string;
   hasFullAccess?: boolean;
   freePlayerThreshold?: number;
 }
 
 type PosterGridPrintMode = 'compact' | 'one-per-page';
 
-export function PosterGridView({ winners, tournamentId, hasFullAccess = true, freePlayerThreshold }: PosterGridViewProps) {
-  const publicUrl = `/t/${tournamentId}/public`;
+export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAccess = true, freePlayerThreshold }: PosterGridViewProps) {
+  const publicUrl = publicSlug ? `/p/${publicSlug}` : `/t/${tournamentId}/public`;
   const [printMode, setPrintMode] = useState<PosterGridPrintMode>('compact');
   const shareLink = useMemo(() => {
     if (typeof window !== 'undefined' && window.location.origin) {
