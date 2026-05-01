@@ -1,6 +1,8 @@
 import { useEffect, lazy, Suspense } from "react";
 import { useApplyPendingReferral } from "@/hooks/useApplyPendingReferral";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useIssueWelcomeOnboardingReward } from "@/hooks/useIssueWelcomeOnboardingReward";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -113,9 +115,11 @@ const LegacyUpgradeRedirect = () => {
 
 const App = () => {
   const { user } = useAuth();
+  const { authzStatus, role } = useUserRole();
 
   // Global referral apply — runs once per session regardless of entry point
   useApplyPendingReferral(user);
+  useIssueWelcomeOnboardingReward({ userId: user?.id, authzStatus, role });
 
   useEffect(() => {
     console.log(
