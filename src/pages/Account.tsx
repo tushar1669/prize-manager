@@ -432,19 +432,26 @@ export default function Account() {
                         Profile completion reward claimed!
                       </p>
                       {claimedCouponCode && (
-                        <div className="flex items-center gap-2">
-                          <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                            {claimedCouponCode}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            aria-label="Copy coupon code"
-                            onClick={() => copyToClipboard(claimedCouponCode, "Coupon code")}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                              {claimedCouponCode}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              aria-label="Copy coupon code"
+                              onClick={() => copyToClipboard(claimedCouponCode, "Coupon code")}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {(myCoupons ?? []).length > 0 && (
+                            <a href="#my-coupons" className="text-xs text-muted-foreground underline underline-offset-2">
+                              View in My Coupons
+                            </a>
+                          )}
                         </div>
                       )}
                       {rewardClaimed && !claimedCouponCode && (
@@ -691,7 +698,7 @@ export default function Account() {
 
         {/* My Coupons */}
         {(myCoupons ?? []).length > 0 && (
-          <Card>
+          <Card id="my-coupons">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Ticket className="h-4 w-4" /> My Coupons

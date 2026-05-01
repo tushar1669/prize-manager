@@ -2024,13 +2024,13 @@ export default function TournamentSetup() {
                                   </Button>
                                 </div>
                                 {!tournament?.brochure_url && (
-                                  <p className="text-[11px] leading-snug text-muted-foreground">
+                                  <p className="text-xs leading-snug text-muted-foreground">
                                     No brochure uploaded yet — add one in the{" "}
                                     <Button
                                       type="button"
                                       variant="link"
                                       size="sm"
-                                      className="h-auto p-0 text-[11px] align-baseline"
+                                      className="h-auto p-0 text-xs align-baseline"
                                       onClick={() => navigate(`/t/${id}/setup?tab=details`)}
                                     >
                                       Details
