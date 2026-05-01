@@ -27,7 +27,7 @@ export default function PublicWinnersPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('published_tournaments')
-        .select('id, title, start_date, end_date, city, brochure_url')
+        .select('id, title, slug, start_date, end_date, city, brochure_url')
         .eq('id', id)
         .maybeSingle();
 
@@ -169,7 +169,7 @@ export default function PublicWinnersPage() {
                 </TabsContent>
 
                 <TabsContent value="poster" className={activeView !== 'poster' ? 'print:hidden' : ''}>
-                  {tournament?.id && <PosterGridView winners={prizeData.winners} tournamentId={tournament.id} />}
+                  {tournament?.id && <PosterGridView winners={prizeData.winners} tournamentId={tournament.id} publicSlug={tournament.slug ?? undefined} />}
                 </TabsContent>
 
                 <TabsContent value="arbiter" className={activeView !== 'arbiter' ? 'print:hidden' : ''}>

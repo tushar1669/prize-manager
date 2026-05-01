@@ -6,12 +6,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { isFeatureEnabled } from "@/utils/featureFlags";
 import { getSafeReturnToPath } from "@/utils/upgradeUrl";
+import { supabase } from "@/integrations/supabase/client";
 
 // Eager load critical public pages
 import Auth from "./pages/Auth";
@@ -58,6 +60,36 @@ const PageLoader = () => (
 const PublicTournamentDetailsRedirect = () => {
   const { slug } = useParams();
   return <Navigate to={`/p/${slug ?? ""}`} replace />;
+};
+
+const LegacyPublicRouteCompat = () => {
+  const { id } = useParams();
+
+  const { data: publication, isLoading } = useQuery({
+    queryKey: ["legacy-public-route", id],
+    queryFn: async (): Promise<{ slug: string | null } | null> => {
+      const { data, error } = await supabase
+        .from("published_tournaments")
+        .select("slug")
+        .eq("id", id as string)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+    staleTime: 60_000,
+  });
+
+  if (publication?.slug) {
+    return <Navigate to={`/p/${publication.slug}`} replace />;
+  }
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  return <PublicWinnersPage />;
 };
 
 const LegacyUpgradeRedirect = () => {
@@ -108,7 +140,7 @@ const App = () => {
                 <Route path="/p/:slug" element={<PublicTournamentDetails />} />
                 <Route path="/p/:slug/results" element={<PublicResults />} />
                 <Route path="/p/:slug/details" element={<PublicTournamentDetailsRedirect />} />
-                <Route path="/t/:id/public" element={<PublicWinnersPage />} />
+                <Route path="/t/:id/public" element={<LegacyPublicRouteCompat />} />
 
                 {/* Auth routes */}
                 <Route path="/auth" element={<Auth />} />
