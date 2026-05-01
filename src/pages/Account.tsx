@@ -625,7 +625,7 @@ export default function Account() {
                             )}
                           </div>
                           {hasUpgraded ? (
-                            <Badge variant="default" className="text-xs shrink-0">Upgraded ✅</Badge>
+                            <Badge variant="default" className="text-xs shrink-0">Upgraded</Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs shrink-0">Not upgraded yet</Badge>
                           )}
