@@ -439,7 +439,8 @@ export default function Account() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2"
+                            className="h-8 w-8 p-0"
+                            aria-label="Copy coupon code"
                             onClick={() => copyToClipboard(claimedCouponCode, "Coupon code")}
                           >
                             <Copy className="h-3.5 w-3.5" />
