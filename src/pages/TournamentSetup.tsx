@@ -2023,6 +2023,21 @@ export default function TournamentSetup() {
                                     Generate Draft from Brochure
                                   </Button>
                                 </div>
+                                {!tournament?.brochure_url && (
+                                  <p className="text-[11px] leading-snug text-muted-foreground">
+                                    No brochure uploaded yet — add one in the{" "}
+                                    <Button
+                                      type="button"
+                                      variant="link"
+                                      size="sm"
+                                      className="h-auto p-0 text-[11px] align-baseline"
+                                      onClick={() => navigate(`/t/${id}/setup?tab=details`)}
+                                    >
+                                      Details
+                                    </Button>{" "}
+                                    tab to enable this.
+                                  </p>
+                                )}
                               </div>
                               <details className="rounded-md border border-border/50 bg-background/60 px-2 py-1">
                                 <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
