@@ -32,8 +32,9 @@ export function useIssueWelcomeOnboardingReward({
     if (calledForUserRef.current === userId) return;
     calledForUserRef.current = userId;
 
-    void supabase
-      .rpc("issue_welcome_onboarding_reward")
+    void (supabase.rpc as unknown as (fn: string) => Promise<{ error: { code?: string; message: string } | null }>)(
+      "issue_welcome_onboarding_reward"
+    )
       .then(({ error }) => {
         if (error) {
           console.warn("[welcome-reward] bootstrap RPC failed", {
