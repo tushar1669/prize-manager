@@ -31,9 +31,14 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
     return draft.categories.reduce((sum, c) => sum + c.prizes.length, 0);
   }, [draft]);
 
-  const canApply = !!draft && (draft.categories.length > 0 || totalCategoryPrizes > 0);
+  const errorIssues = issues.filter((i) => i.severity === "error");
+  const warningIssues = issues.filter((i) => i.severity === "warning");
+  const hasBlockingErrors = errorIssues.length > 0;
+  const canApply = !!draft && !hasBlockingErrors && (draft.categories.length > 0 || totalCategoryPrizes > 0);
   const applyDisabledReason = !draft
     ? "Upload a spreadsheet to preview import details."
+    : hasBlockingErrors
+      ? "Fix error rows in your file and re-upload before importing."
     : !canApply
       ? "No importable categories or prizes were found. Fix the spreadsheet and re-upload."
       : parsing
@@ -77,8 +82,6 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
     }
   };
 
-  const errorIssues = issues.filter((i) => i.severity === "error");
-  const warningIssues = issues.filter((i) => i.severity === "warning");
   const hasTeamTemplateContent = !!draft && draft.team_groups.length > 0;
   const shouldShowTeamResultCounters = hasTeamTemplateContent || (!!report && (report.team_groups_created > 0 || report.team_groups_reused > 0 || report.team_prizes_created > 0 || report.team_prizes_skipped > 0));
 
