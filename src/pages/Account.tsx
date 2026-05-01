@@ -568,7 +568,7 @@ export default function Account() {
             )}
 
             {summaryStats.totalRewards > 0 && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
                 {summaryStats.byLevel[1] > 0 && (
                   <Badge variant="secondary" className="text-xs">L1: {summaryStats.byLevel[1]}</Badge>
                 )}
@@ -579,6 +579,12 @@ export default function Account() {
                   <Badge variant="secondary" className="text-xs">L3: {summaryStats.byLevel[3]}</Badge>
                 )}
               </div>
+            )}
+
+            {(summaryStats.totalReferred > 0 || referralCode) && (
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                L1 = direct signup · L2 = second level · L3 = third level
+              </p>
             )}
 
             {/* Referral List */}
