@@ -172,6 +172,23 @@ const AppInner = () => {
               </Routes>
             </Suspense>
           </BrowserRouter>
+  );
+};
+
+const App = () => {
+  useEffect(() => {
+    console.log(
+      `[flags] HEADER_DETECTION=${isFeatureEnabled('HEADER_DETECTION')} RATING_PRIORITY=${isFeatureEnabled('RATING_PRIORITY')} UNRATED_INFERENCE=${isFeatureEnabled('UNRATED_INFERENCE')}`
+    );
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <DirtyProvider>
+          <Toaster />
+          <Sonner />
+          <AppInner />
         </DirtyProvider>
       </TooltipProvider>
     </QueryClientProvider>
