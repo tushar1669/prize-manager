@@ -411,6 +411,10 @@ export default function Account() {
           </CardContent>
         </Card>
 
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 pt-2">
+          Referrals & Rewards
+        </h2>
+
         {/* Completion Reward */}
         {(alreadyCompleted || complete) && (
           <Card className={rewardClaimed ? "border-muted" : "border-emerald-300 dark:border-emerald-800"}>
