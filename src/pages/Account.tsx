@@ -671,15 +671,9 @@ export default function Account() {
                               })}
                             </div>
                           ) : (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Steps for them to upgrade:</p>
-                              <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-                                <li>Create a tournament</li>
-                                <li>Open "Upgrade to Pro"</li>
-                                <li>Pay via UPI + submit UTR, or apply a coupon</li>
-                                <li>Wait for master approval (if UPI)</li>
-                              </ol>
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              No reward yet — see the upgrade steps above.
+                            </p>
                           )}
                         </div>
                       )}
