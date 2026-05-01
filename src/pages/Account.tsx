@@ -329,8 +329,12 @@ export default function Account() {
   return (
     <div className="min-h-screen bg-background">
       <AppNav />
-      <div className="container mx-auto px-6 py-8 max-w-2xl space-y-6">
+      <div className="container mx-auto px-6 py-8 max-w-2xl lg:max-w-3xl space-y-6">
         <h1 className="text-3xl font-bold text-foreground mb-2">Account Settings</h1>
+
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1">
+          Profile
+        </h2>
 
         {/* Account Info */}
         <Card>
@@ -407,6 +411,10 @@ export default function Account() {
           </CardContent>
         </Card>
 
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b pb-1 pt-2">
+          Referrals & Rewards
+        </h2>
+
         {/* Completion Reward */}
         {(alreadyCompleted || complete) && (
           <Card className={rewardClaimed ? "border-muted" : "border-emerald-300 dark:border-emerald-800"}>
@@ -431,7 +439,8 @@ export default function Account() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2"
+                            className="h-8 w-8 p-0"
+                            aria-label="Copy coupon code"
                             onClick={() => copyToClipboard(claimedCouponCode, "Coupon code")}
                           >
                             <Copy className="h-3.5 w-3.5" />
@@ -505,6 +514,8 @@ export default function Account() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="h-8 w-8 p-0"
+                    aria-label="Copy referral code"
                     onClick={() => copyToClipboard(referralCode, "Referral code")}
                   >
                     <Copy className="h-4 w-4" />
@@ -557,7 +568,7 @@ export default function Account() {
             )}
 
             {summaryStats.totalRewards > 0 && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
                 {summaryStats.byLevel[1] > 0 && (
                   <Badge variant="secondary" className="text-xs">L1: {summaryStats.byLevel[1]}</Badge>
                 )}
@@ -570,10 +581,30 @@ export default function Account() {
               </div>
             )}
 
+            {(summaryStats.totalReferred > 0 || referralCode) && (
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                L1 = direct signup · L2 = second level · L3 = third level
+              </p>
+            )}
+
             {/* Referral List */}
             {(myReferrals ?? []).length > 0 ? (
               <div className="space-y-2 pt-1">
                 <p className="text-sm font-medium text-muted-foreground">Referred Users</p>
+                {(myReferrals ?? []).some((r) => {
+                  const rw = rewardsByTriggerUser.get(r.referred_id);
+                  return !(rw && rw.length > 0);
+                }) && (
+                  <div className="rounded-md border border-dashed bg-muted/30 p-3 space-y-1">
+                    <p className="text-xs font-medium text-foreground">How they upgrade (so you earn rewards):</p>
+                    <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+                      <li>Create a tournament</li>
+                      <li>Open "Upgrade to Pro"</li>
+                      <li>Pay via UPI + submit UTR, or apply a coupon</li>
+                      <li>Wait for master approval (if UPI)</li>
+                    </ol>
+                  </div>
+                )}
                 {(myReferrals ?? []).map((ref) => {
                   const rewards = rewardsByTriggerUser.get(ref.referred_id);
                   const hasUpgraded = !!rewards && rewards.length > 0;
@@ -594,7 +625,7 @@ export default function Account() {
                             )}
                           </div>
                           {hasUpgraded ? (
-                            <Badge variant="default" className="text-xs shrink-0">Upgraded ✅</Badge>
+                            <Badge variant="default" className="text-xs shrink-0">Upgraded</Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs shrink-0">Not upgraded yet</Badge>
                           )}
@@ -630,7 +661,7 @@ export default function Account() {
                                     {coupon && (
                                       <div className="flex items-center gap-1">
                                         <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{coupon.code}</code>
-                                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(coupon.code, "Coupon"); }}>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="Copy coupon code" onClick={(e) => { e.stopPropagation(); copyToClipboard(coupon.code, "Coupon"); }}>
                                           <Copy className="h-3 w-3" />
                                         </Button>
                                       </div>
@@ -640,15 +671,9 @@ export default function Account() {
                               })}
                             </div>
                           ) : (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Steps for them to upgrade:</p>
-                              <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-                                <li>Create a tournament</li>
-                                <li>Open "Upgrade to Pro"</li>
-                                <li>Pay via UPI + submit UTR, or apply a coupon</li>
-                                <li>Wait for master approval (if UPI)</li>
-                              </ol>
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              No reward yet — see the upgrade steps above.
+                            </p>
                           )}
                         </div>
                       )}
@@ -679,7 +704,7 @@ export default function Account() {
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <code className="text-sm font-mono bg-muted px-1.5 py-0.5 rounded">{coupon.code}</code>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => copyToClipboard(coupon.code, "Coupon")}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label="Copy coupon code" onClick={() => copyToClipboard(coupon.code, "Coupon")}>
                           <Copy className="h-3 w-3" />
                         </Button>
                       </div>
