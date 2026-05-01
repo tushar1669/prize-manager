@@ -32,7 +32,7 @@ export default function PublishSuccess() {
         console.error('[publish] error fetching published_tournaments view', error);
         throw error;
       }
-      return data as unknown as { slug: string } | null;
+      return data;
     },
     enabled: !!id && !slugFromState
   });
