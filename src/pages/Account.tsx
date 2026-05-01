@@ -77,7 +77,7 @@ export default function Account() {
 
   const claimRewardMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc("claim_profile_completion_reward" as never);
+      const { data, error } = await supabase.rpc("claim_profile_completion_reward");
       if (error) throw new Error(error.message);
       const result = data as unknown as Record<string, unknown>;
       if (!result?.ok) throw new Error(String(result?.reason ?? "unknown_error"));
@@ -110,7 +110,7 @@ export default function Account() {
 
   const getReferralCodeMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc("get_or_create_my_referral_code" as never);
+      const { data, error } = await supabase.rpc("get_or_create_my_referral_code");
       if (error) throw new Error(error.message);
       const result = data as unknown as Record<string, unknown>;
       if (!result?.ok) throw new Error(String(result?.reason ?? "unknown_error"));
