@@ -19,11 +19,11 @@ export function usePendingApprovals() {
   const { isMaster } = useUserRole();
   const queryClient = useQueryClient();
 
-  // Fetch unverified organizers with their emails (typically empty in production)
+  // Fetch organizer access exceptions (unverified organizer rows) with their emails.
   const { data: pendingUsers, isLoading, error, refetch } = useQuery({
     queryKey: ['pending-approvals'],
     queryFn: async (): Promise<PendingUser[]> => {
-      // First get pending user_roles
+      // First get unverified organizer user_roles
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role, is_verified, created_at')
