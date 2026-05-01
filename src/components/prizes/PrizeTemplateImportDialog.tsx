@@ -186,7 +186,14 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
         </div>
 
         <DialogFooter>
-          <div className="mr-auto text-xs text-muted-foreground">{applyDisabledReason ?? "Warnings do not always block import—review them before continuing."}</div>
+          <div className="mr-auto space-y-1">
+            {hasBlockingErrors && (
+              <p className="text-xs font-medium text-destructive">
+                Fix error rows in your file and re-upload before importing.
+              </p>
+            )}
+            <div className="text-xs text-muted-foreground">{applyDisabledReason ?? "Warnings do not always block import—review them before continuing."}</div>
+          </div>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>Close</Button>
           <Button onClick={handleApply} disabled={!canApply || parsing || applying} title={applyDisabledReason ?? undefined}>
             {applying ? "Applying…" : "Apply Import"}
