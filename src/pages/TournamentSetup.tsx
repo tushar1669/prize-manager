@@ -2008,18 +2008,21 @@ export default function TournamentSetup() {
                                   Template Guide
                                 </Button>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="gap-2 text-muted-foreground"
-                                  disabled={!tournament?.brochure_url}
-                                  title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
-                                  onClick={() => setBrochureDraftOpen(true)}
-                                >
-                                  <Upload className="h-4 w-4" />
-                                  Generate Draft from Brochure
-                                </Button>
+                              <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border/60 bg-background/40 p-2">
+                                <span className="text-[11px] text-muted-foreground">Assistive (best-effort draft, review required)</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="gap-2 text-muted-foreground"
+                                    disabled={!tournament?.brochure_url}
+                                    title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
+                                    onClick={() => setBrochureDraftOpen(true)}
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                    Generate Draft from Brochure
+                                  </Button>
+                                </div>
                               </div>
                               <details className="rounded-md border border-border/50 bg-background/60 px-2 py-1">
                                 <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
