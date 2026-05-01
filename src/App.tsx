@@ -113,7 +113,7 @@ const LegacyUpgradeRedirect = () => {
   return <Navigate to={`/t/${id}/payment?${nextParams.toString()}`} replace />;
 };
 
-const App = () => {
+const AppInner = () => {
   const { user } = useAuth();
   const { authzStatus, role } = useUserRole();
 
@@ -121,19 +121,8 @@ const App = () => {
   useApplyPendingReferral(user);
   useIssueWelcomeOnboardingReward({ userId: user?.id, authzStatus, role });
 
-  useEffect(() => {
-    console.log(
-      `[flags] HEADER_DETECTION=${isFeatureEnabled('HEADER_DETECTION')} RATING_PRIORITY=${isFeatureEnabled('RATING_PRIORITY')} UNRATED_INFERENCE=${isFeatureEnabled('UNRATED_INFERENCE')}`
-    );
-  }, []);
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <DirtyProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+    <BrowserRouter>
             <NavigationGuard />
             <GlobalShortcuts />
             <Suspense fallback={<PageLoader />}>
