@@ -1,0 +1,102 @@
+name: Supabase Migration Guard
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'supabase/migrations/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  migration-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate migration acknowledgement and post sticky comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- supabase-migration-gate -->';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+            const pr = context.payload.pull_request;
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: issue_number,
+              per_page: 100,
+            });
+
+            const migrationFiles = files
+              .map((f) => f.filename)
+              .filter((name) => name.startsWith('supabase/migrations/'));
+            const ledgerTouched = files.some(
+              (f) => f.filename === 'docs/PRODUCTION_MIGRATION_LEDGER.md'
+            );
+
+            const migrationList = migrationFiles.length
+              ? migrationFiles.map((name) => `- \`${name}\``).join('\n')
+              : '- _(No migration files found)_';
+
+            const advisory = ledgerTouched
+              ? 'Ledger file change detected in this PR. ✅'
+              : 'Advisory: `docs/PRODUCTION_MIGRATION_LEDGER.md` is not modified in this PR. This does **not** fail CI, but a ledger entry is still required immediately after production apply.';
+
+            const body = pr.body || '';
+            const ackRegex = /- \[x\]\s+If this PR adds\/changes `supabase\/migrations\/\*`, production migration application \+ verification plan is documented\./i;
+            const checkboxAcknowledged = ackRegex.test(body);
+            const labeledAcknowledged = (pr.labels || []).some(
+              (label) => label.name === 'migration-acknowledged'
+            );
+
+            const commentBody = `${marker}
+            ## Supabase migration CI guard
+
+            This PR changes migration files:
+            ${migrationList}
+
+            Required references:
+            - SOP: `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md`
+            - Production ledger: `docs/PRODUCTION_MIGRATION_LEDGER.md`
+
+            ⚠️ **Warning:** Lovable/frontend publish is blocked until production DB migration verification is complete.
+
+            Reminder: after production migration apply, add/update the required entry in `docs/PRODUCTION_MIGRATION_LEDGER.md`.
+
+            ${advisory}
+            `.split('\n').map((line) => line.trimEnd()).join('\n');
+
+            const existingComments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = existingComments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: commentBody,
+              });
+            }
+
+            if (!checkboxAcknowledged && !labeledAcknowledged) {
+              core.setFailed(
+                'Migration acknowledgement missing. Check the PR template migration checkbox or add the `migration-acknowledged` label.'
+              );
+            }
