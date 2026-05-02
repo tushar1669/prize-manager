@@ -16,9 +16,9 @@ npm run test:smoke
 CI also runs `test:swiss`, `test:alloc`, `test:ux`, and `assert:no-csv` (`.github/workflows/ci.yml`, `package.json`).
 
 ## 2. Apply migrations
-Use Supabase CLI in your target project.
+Follow `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md` for required production migration application and verification steps.
 
-Canonical command in this repo is **UNKNOWN** (team-specific). Verify against your environment and the migration set in `supabase/migrations/`.
+If a release includes files in `supabase/migrations/*`, migration application + verification is a required gate before any frontend publish step.
 
 ## 3. Deploy edge functions
 Functions in scope (`supabase/functions/*`):
@@ -40,6 +40,8 @@ JWT expectations are configured in `supabase/config.toml` and must remain aligne
 
 ## 4. Deploy/publish frontend
 Frontend deploy mechanism is **UNKNOWN** in repo (no single hosting script). Verify with your hosting platform process.
+
+**Do not publish frontend until database migration verification has passed per `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md`.**
 
 ## 5. Post-deploy smoke checks
 - Auth: `/auth` and `/auth/callback` (`src/App.tsx`, `src/pages/AuthCallback.tsx`).
@@ -71,5 +73,7 @@ These are in-product steps for operators using the deployed app.
 
 ## Cross-links
 - `docs/OPERATIONS_RELEASE_TESTING.md`
+- `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md`
+- `docs/PRODUCTION_MIGRATION_LEDGER.md`
 - `docs/PUBLIC_PAGES_QA.md`
 - `docs/TROUBLESHOOTING.md`

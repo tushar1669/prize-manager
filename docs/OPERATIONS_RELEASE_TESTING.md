@@ -7,7 +7,8 @@ See also: [Deploy and Publish Runbook](./DEPLOY_AND_PUBLISH.md) for deployment s
 - **Lint:** `npm run lint` (package.json → scripts.lint).
 - **Unit tests:** `npm run test:unit` (package.json → scripts.test:unit).
 - **Playwright smoke:** `npm run test:smoke` (package.json → scripts.test:smoke). If Playwright browsers are unavailable, record as not executed.
-- **Database migrations:** apply Supabase migrations before deploy (e.g., `supabase db push` or `supabase migration up` for the target project).
+- **Database migrations:** apply and verify production migrations using `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md`.
+- **Migration ledger:** confirm `docs/PRODUCTION_MIGRATION_LEDGER.md` has release entries for applied migrations (or explicit N/A if no migration files changed).
 - **CI e2e subsets:** CI also runs `npm run test:swiss`, `npm run test:alloc`, `npm run test:ux`, plus `npm run assert:no-csv`. (package.json → scripts.*)
 
 ## Local testing commands (quick copy/paste)
