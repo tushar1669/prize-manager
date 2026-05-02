@@ -1387,6 +1387,56 @@ export type Database = {
         }
         Relationships: []
       }
+      welcome_onboarding_rewards: {
+        Row: {
+          coupon_code: string
+          coupon_id: string
+          created_at: string
+          email: string | null
+          email_enqueued_at: string
+          email_error: string | null
+          email_sent_at: string | null
+          email_status: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coupon_code: string
+          coupon_id: string
+          created_at?: string
+          email?: string | null
+          email_enqueued_at?: string
+          email_error?: string | null
+          email_sent_at?: string | null
+          email_status?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coupon_code?: string
+          coupon_id?: string
+          created_at?: string
+          email?: string | null
+          email_enqueued_at?: string
+          email_error?: string | null
+          email_sent_at?: string | null
+          email_status?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welcome_onboarding_rewards_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       profile_completion: {
@@ -1560,6 +1610,7 @@ export type Database = {
         Args: { p_trigger_tournament_id: string; p_trigger_user_id: string }
         Returns: Json
       }
+      issue_welcome_onboarding_reward: { Args: never; Returns: Json }
       list_my_tournaments: {
         Args: { include_all?: boolean }
         Returns: {
