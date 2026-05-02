@@ -56,6 +56,18 @@ supabase migration up
 
 After CLI apply, still run verification SQL and update `docs/PRODUCTION_MIGRATION_LEDGER.md`.
 
+
+## CI migration guard (PR-time)
+A GitHub Actions workflow (`.github/workflows/migration-guard.yml`) runs on pull requests that change files under `supabase/migrations/**`.
+
+To satisfy the acknowledgement gate, either:
+- check the PR template item: `If this PR adds/changes \`supabase/migrations/*\`, production migration application + verification plan is documented.`
+- or apply the PR label `migration-acknowledged`.
+
+This guard does not apply migrations, does not invoke Supabase CLI, and does not touch production. It only enforces acknowledgement and posts a sticky reminder comment.
+
+Ledger tracking is still required after production migration application and verification, and frontend publish remains blocked until verification is complete.
+
 ## Verification checklist (required)
 - [ ] All migration files from the release PR were applied in production.
 - [ ] Required tables/views/functions/RPCs exist after apply.
