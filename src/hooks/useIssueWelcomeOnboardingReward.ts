@@ -10,6 +10,10 @@ interface UseIssueWelcomeOnboardingRewardArgs {
   role: string | null | undefined;
 }
 
+const isEligibleRole = (value: string): value is EligibleRole => {
+  return value === "organizer" || value === "master";
+};
+
 /**
  * Fire-and-forget bootstrap call for welcome onboarding reward.
  * Never blocks app navigation; runs once per authenticated user per tab session.
@@ -24,17 +28,13 @@ export function useIssueWelcomeOnboardingReward({
   useEffect(() => {
     if (!userId) return;
     if (authzStatus !== "ready") return;
-
-    const eligibleRoles: EligibleRole[] = ["organizer", "master"];
-    const currentRole = (role ?? "organizer") as EligibleRole;
-    if (!eligibleRoles.includes(currentRole)) return;
+    if (!role || !isEligibleRole(role)) return;
 
     if (calledForUserRef.current === userId) return;
     calledForUserRef.current = userId;
 
-    void (supabase.rpc as unknown as (fn: string) => Promise<{ error: { code?: string; message: string } | null }>)(
-      "issue_welcome_onboarding_reward"
-    )
+    void supabase
+      .rpc("issue_welcome_onboarding_reward")
       .then(({ error }) => {
         if (error) {
           console.warn("[welcome-reward] bootstrap RPC failed", {
