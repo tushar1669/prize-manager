@@ -15,7 +15,9 @@ const isEligibleRole = (value: string): value is EligibleRole => {
 };
 
 /**
- * Fire-and-forget bootstrap call for welcome onboarding reward.
+ * Fire-and-forget bootstrap for welcome onboarding reward.
+ * 1) Issues the coupon (idempotent server-side).
+ * 2) Triggers the email-sender edge function (idempotent via outbox row).
  * Never blocks app navigation; runs once per authenticated user per tab session.
  */
 export function useIssueWelcomeOnboardingReward({
@@ -33,19 +35,29 @@ export function useIssueWelcomeOnboardingReward({
     if (calledForUserRef.current === userId) return;
     calledForUserRef.current = userId;
 
-    void supabase
-      .rpc("issue_welcome_onboarding_reward")
-      .then(({ error }) => {
+    (async () => {
+      try {
+        const { error } = await supabase.rpc("issue_welcome_onboarding_reward");
         if (error) {
           console.warn("[welcome-reward] bootstrap RPC failed", {
             code: error.code,
             message: error.message,
           });
+          return;
         }
-      })
-      .catch((err: unknown) => {
+        const { error: fnError } = await supabase.functions.invoke(
+          "sendWelcomeOnboardingEmail",
+          { body: {} },
+        );
+        if (fnError) {
+          console.warn("[welcome-reward] email send failed", {
+            message: fnError.message,
+          });
+        }
+      } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "unknown";
-        console.warn("[welcome-reward] bootstrap RPC failed", { message });
-      });
+        console.warn("[welcome-reward] bootstrap failed", { message });
+      }
+    })();
   }, [userId, authzStatus, role]);
 }

@@ -77,6 +77,13 @@ export type Database = {
             foreignKeyName: "allocations_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -170,6 +177,13 @@ export type Database = {
             foreignKeyName: "categories_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "categories_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -256,6 +270,13 @@ export type Database = {
             foreignKeyName: "conflicts_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "conflicts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -318,6 +339,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "published_tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "coupon_redemptions_tournament_id_fkey"
@@ -452,6 +480,13 @@ export type Database = {
             foreignKeyName: "import_logs_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "import_logs_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -504,6 +539,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "published_tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "institution_prize_groups_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "institution_prize_groups_tournament_id_fkey"
@@ -667,6 +709,13 @@ export type Database = {
             foreignKeyName: "players_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "players_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -796,6 +845,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "published_tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publications_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "publications_tournament_id_fkey"
@@ -973,6 +1029,13 @@ export type Database = {
             foreignKeyName: "rule_config_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: true
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "rule_config_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -1020,6 +1083,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "published_tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_allocation_notes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "team_allocation_notes_tournament_id_fkey"
@@ -1096,6 +1166,13 @@ export type Database = {
             foreignKeyName: "team_allocations_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "team_allocations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -1144,8 +1221,22 @@ export type Database = {
             foreignKeyName: "tournament_entitlements_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_entitlements_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_entitlements_tournament_owner_fkey"
+            columns: ["tournament_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id", "owner_id"]
           },
           {
             foreignKeyName: "tournament_entitlements_tournament_owner_fkey"
@@ -1208,6 +1299,13 @@ export type Database = {
             foreignKeyName: "tournament_manual_prizes_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_manual_prizes_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -1257,6 +1355,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "published_tournaments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_payments_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
           },
           {
             foreignKeyName: "tournament_payments_tournament_id_fkey"
@@ -1493,6 +1598,21 @@ export type Database = {
         }
         Relationships: []
       }
+      tournament_publish_state_drift: {
+        Row: {
+          active_publication_count: number | null
+          active_publication_disagrees: boolean | null
+          flags_disagree: boolean | null
+          has_active_publication: boolean | null
+          is_published: boolean | null
+          owner_id: string | null
+          status: string | null
+          tournament_id: string | null
+          tournament_title: string | null
+          workflow_inconsistent: boolean | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_create_coupon: {
@@ -1579,6 +1699,7 @@ export type Database = {
       get_tournament_access_state: {
         Args: { tournament_id: string }
         Returns: {
+          free_player_threshold: number
           has_full_access: boolean
           is_free_small_tournament: boolean
           players_count: number
