@@ -268,18 +268,43 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update tournament status to 'finalized'
+    // Check current publish state to avoid reintroducing publish-state drift.
+    // If the tournament is already published (is_published=true or status='published'),
+    // preserve status='published' instead of overwriting with 'finalized'. This prevents
+    // re-finalize from breaking the invariant enforced by tournament_publish_state_drift.
+    const { data: currentTournament, error: currentTournamentError } = await supabaseClient
+      .from('tournaments')
+      .select('is_published, status')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (currentTournamentError) {
+      console.error('[finalize] current state fetch error:', currentTournamentError.message);
+      throw new Error(`Failed to load tournament state: ${currentTournamentError.message}`);
+    }
+
+    const isAlreadyPublished =
+      currentTournament?.is_published === true || currentTournament?.status === 'published';
+
+    const tournamentUpdate: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (!isAlreadyPublished) {
+      tournamentUpdate.status = 'finalized';
+    }
+
     const { error: updateError } = await supabaseClient
       .from('tournaments')
-      .update({ 
-        status: 'finalized',
-        updated_at: new Date().toISOString()
-      })
+      .update(tournamentUpdate)
       .eq('id', tournamentId);
 
     if (updateError) {
       console.error('[finalize] update error:', updateError.message);
       throw new Error(`Failed to update tournament: ${updateError.message}`);
+    }
+
+    if (isAlreadyPublished) {
+      console.log('[finalize] preserved status=published (drift guard) for', tournamentId);
     }
 
     // Clear any open conflicts
