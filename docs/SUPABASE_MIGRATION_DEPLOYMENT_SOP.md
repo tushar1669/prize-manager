@@ -57,6 +57,17 @@ supabase migration up
 After CLI apply, still run verification SQL and update `docs/PRODUCTION_MIGRATION_LEDGER.md`.
 
 
+## Manual migration-history reconciliation
+Use this only after production object verification has passed for the migration effects (for example: referral attribution lock, 150-player access resolver, publish-state drift view, imports bucket, archive/unpublish RPCs, verified organizer onboarding, and welcome onboarding reward table/RPC).
+
+1. Inspect the shape of `supabase_migrations.schema_migrations` first and confirm `version` is `text not null` with nullable metadata columns.
+2. Insert only missing `version` rows for migrations whose production object-state effects are already verified.
+3. Use idempotent inserts (for example, `on conflict do nothing`) when reconciling manually through SQL Editor.
+4. Record each reconciliation action in `docs/PRODUCTION_MIGRATION_LEDGER.md`.
+5. Never use reconciliation rows to imply an unapplied migration was applied.
+
+If future manual SQL repairs are required, do **not** run `supabase db push` blindly afterward; re-verify production object state first and reconcile history deliberately.
+
 ## CI migration guard (PR-time)
 A GitHub Actions workflow (`.github/workflows/migration-guard.yml`) runs on pull requests that change files under `supabase/migrations/**`.
 
