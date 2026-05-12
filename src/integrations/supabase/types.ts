@@ -929,27 +929,21 @@ export type Database = {
           created_at: string
           id: string
           referral_code_id: string
-          referred_email: string | null
           referred_id: string
-          referred_label: string | null
           referrer_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           referral_code_id: string
-          referred_email?: string | null
           referred_id: string
-          referred_label?: string | null
           referrer_id: string
         }
         Update: {
           created_at?: string
           id?: string
           referral_code_id?: string
-          referred_email?: string | null
           referred_id?: string
-          referred_label?: string | null
           referrer_id?: string
         }
         Relationships: [
@@ -1724,9 +1718,7 @@ export type Database = {
           inserted_count: number
         }[]
       }
-      is_master:
-        | { Args: never; Returns: boolean }
-        | { Args: { uid: string }; Returns: boolean }
+      is_master: { Args: never; Returns: boolean }
       issue_referral_rewards: {
         Args: { p_trigger_tournament_id: string; p_trigger_user_id: string }
         Returns: Json
