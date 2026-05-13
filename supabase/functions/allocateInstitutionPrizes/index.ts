@@ -415,7 +415,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error('[allocateInstitutionPrizes] Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'internal_server_error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
