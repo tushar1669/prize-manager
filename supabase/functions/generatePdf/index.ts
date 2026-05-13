@@ -82,6 +82,16 @@ const GROUP_BY_LABELS: Record<string, string> = {
   type_label: 'Swiss Type',
 };
 
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function isMissingAccessStateRpc(error: unknown): boolean {
   const message = error instanceof Error
     ? error.message
