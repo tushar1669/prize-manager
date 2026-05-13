@@ -935,7 +935,9 @@ Deno.serve(async (req) => {
     const status = statusForErrorMessage(message);
     const errorCode = status === 400 ? "bad_request" : "internal_error";
     logImport("error", errorCode);
-    return new Response(JSON.stringify({ error: message }), {
+    // Only expose detail for client-fixable validation errors (400). Mask 500s.
+    const body = status === 400 ? { error: message } : { error: "internal_server_error" };
+    return new Response(JSON.stringify(body), {
       status,
       headers: responseHeaders
     });

@@ -319,10 +319,7 @@ Deno.serve(async (req: Request) => {
     } satisfies BackfillResponse);
   } catch (error) {
     console.error(`[${FUNCTION_NAME}] Error:`, error);
-    return jsonResp(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      500
-    );
+    return jsonResp({ error: "internal_server_error" }, 500);
   }
 });
 

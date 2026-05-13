@@ -1283,9 +1283,8 @@ Deno.serve(async (req) => {
 
   } catch (e: unknown) {
     console.error('[allocatePrizes] fatal', e);
-    const errMsg = e instanceof Error ? e.message : String(e);
     return new Response(
-      JSON.stringify({ error: errMsg }),
+      JSON.stringify({ error: 'internal_server_error' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

@@ -338,8 +338,8 @@ Deno.serve(async (req) => {
       stack: errStack
     });
     return new Response(
-      JSON.stringify({ 
-        error: errMsg || 'Internal server error',
+      JSON.stringify({
+        error: 'internal_server_error',
         hint: 'Check edge function logs for details'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
