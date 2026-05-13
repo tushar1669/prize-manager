@@ -392,7 +392,7 @@ function generateHtmlReport(
       <div style="page-break-before: always;"></div>
       <h2>Team / Institution Prizes</h2>
       <p class="meta" style="color: #c53030;">
-        Team prizes could not be included due to an error: ${teamPrizeError}<br>
+        Team prizes could not be included due to an error: ${escapeHtml(teamPrizeError)}<br>
         Please check the online Team Prizes view.
       </p>
     `;
@@ -404,7 +404,7 @@ function generateHtmlReport(
       ${teamPrizes.groups.map(group => {
         const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
         const groupByLabel = GROUP_BY_LABELS[group.config.group_by] || group.config.group_by;
-        
+
         let genderReq = '';
         if (group.config.female_slots > 0 || group.config.male_slots > 0) {
           const parts = [];
@@ -414,9 +414,9 @@ function generateHtmlReport(
         }
 
         return `
-          <h3>${group.name}</h3>
+          <h3>${escapeHtml(group.name)}</h3>
           <p class="meta">
-            ${groupByLabel} • Teams of ${group.config.team_size}${genderReq}
+            ${escapeHtml(groupByLabel)} • Teams of ${group.config.team_size}${escapeHtml(genderReq)}
             • ${group.eligible_institutions} eligible institution${group.eligible_institutions !== 1 ? 's' : ''}
           </p>
           ${filledPrizes.length > 0 ? `
@@ -437,18 +437,18 @@ function generateHtmlReport(
                     prize.has_trophy ? '🏆' : '',
                     prize.has_medal ? '🥇' : '',
                   ].filter(Boolean).join(' ') || '—';
-                  
+
                   return `
                     <tr>
                       <td>${getPlaceOrdinal(prize.place)}</td>
                       <td>
-                        <strong>${winner.label}</strong>
+                        <strong>${escapeHtml(winner.label)}</strong>
                         <div style="font-size: 11px; color: #666;">
-                          ${winner.players.map(p => `${p.name} (#${p.rank})`).join(', ')}
+                          ${winner.players.map(p => `${escapeHtml(p.name)} (#${p.rank})`).join(', ')}
                         </div>
                       </td>
                       <td>${winner.total_points}</td>
-                      <td>${prizeText}</td>
+                      <td>${escapeHtml(prizeText)}</td>
                     </tr>
                   `;
                 }).join('')}
@@ -466,7 +466,7 @@ function generateHtmlReport(
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${tournament.title} - Prize Allocations v${version}</title>
+  <title>${escapeHtml(tournament.title)} - Prize Allocations v${version}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
     h1 { color: #1F6E5B; }
@@ -484,13 +484,13 @@ function generateHtmlReport(
   </style>
 </head>
 <body>
-  <h1>${tournament.title}</h1>
+  <h1>${escapeHtml(tournament.title)}</h1>
   <div class="meta">
-    <p><strong>Date:</strong> ${tournament.start_date} to ${tournament.end_date}</p>
-    <p><strong>Venue:</strong> ${tournament.venue || 'N/A'}</p>
+    <p><strong>Date:</strong> ${escapeHtml(tournament.start_date)} to ${escapeHtml(tournament.end_date)}</p>
+    <p><strong>Venue:</strong> ${escapeHtml(tournament.venue || 'N/A')}</p>
     <p><strong>Version:</strong> ${version}</p>
   </div>
-  
+
   <h2>Individual Prize Allocations</h2>
   <table>
     <thead>
@@ -507,20 +507,20 @@ function generateHtmlReport(
     <tbody>
       ${allocations.map(a => `
         <tr>
-          <td>${a.players?.rank || 'N/A'}</td>
-          <td>${a.players?.name || 'N/A'}</td>
-          <td>${a.prizes?.categories?.name || 'N/A'}</td>
-          <td>Place ${a.prizes?.place || 'N/A'}</td>
-          <td>₹${a.prizes?.cash_amount || 0}</td>
+          <td>${escapeHtml(a.players?.rank ?? 'N/A')}</td>
+          <td>${escapeHtml(a.players?.name || 'N/A')}</td>
+          <td>${escapeHtml(a.prizes?.categories?.name || 'N/A')}</td>
+          <td>Place ${escapeHtml(a.prizes?.place ?? 'N/A')}</td>
+          <td>₹${Number(a.prizes?.cash_amount || 0)}</td>
           <td>${a.prizes?.has_trophy ? '✓' : '—'}</td>
           <td>${a.prizes?.has_medal ? '✓' : '—'}</td>
         </tr>
       `).join('')}
     </tbody>
   </table>
-  
+
   ${teamPrizesHtml}
-  
+
   <p class="meta">Generated on ${new Date().toLocaleDateString()}</p>
 </body>
 </html>
