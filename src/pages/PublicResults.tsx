@@ -10,6 +10,7 @@ import { BrochureLink } from "@/components/public/BrochureLink";
 import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { Seo } from "@/components/seo/Seo";
 import { fetchPublishedTournamentBySlug, type PublicTournamentLookup } from "@/utils/publicTournamentLookup";
 
 interface PublicResultRow {
@@ -98,8 +99,15 @@ export default function PublicResults() {
 
   return (
     <>
+      <Seo
+        title={`${tournament.title} – Final Results | Prize Manager`.slice(0, 70)}
+        description={`Final results and prize winners for ${tournament.title}. Category-wise rankings, cash prizes, trophies, and team standings.`.slice(0, 160)}
+        path={`/p/${slug}/results`}
+        type="article"
+      />
       <div className="min-h-screen bg-background">
         <PublicHeader />
+        <main>
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-4xl mx-auto">
@@ -192,6 +200,7 @@ export default function PublicResults() {
             )}
           </div>
         </div>
+    </main>
     </div>
     </>
   );
