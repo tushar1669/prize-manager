@@ -280,6 +280,7 @@ export default function PublicHome() {
             </div>
           )}
         </div>
+        </main>
       </div>
     </>
   );
