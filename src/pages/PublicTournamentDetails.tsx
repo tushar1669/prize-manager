@@ -11,6 +11,7 @@ import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { formatCurrencyINR } from "@/utils/currency";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { Seo } from "@/components/seo/Seo";
 import {
   fetchPublicTournamentDetails,
   getPublicTournamentDetailsErrorMessage,
@@ -69,10 +70,42 @@ export default function PublicTournamentDetails() {
     );
   }
 
+  const seoTitle = t?.title
+    ? `${t.title} – Chess Tournament Details | Prize Manager`.slice(0, 70)
+    : "Tournament Details | Prize Manager";
+  const seoDesc = t
+    ? `${t.title}${t.city ? " in " + t.city : ""}${t.start_date ? " on " + formatDateRange(t.start_date, t.end_date) : ""}. View dates, venue, format, and prize details.`.slice(0, 160)
+    : "Chess tournament details, dates, venue, format, and prize information.";
+  const eventJsonLd = t
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        name: t.title,
+        startDate: t.start_date ?? undefined,
+        endDate: t.end_date ?? undefined,
+        eventStatus: "https://schema.org/EventScheduled",
+        eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+        location: {
+          "@type": "Place",
+          name: t.venue || t.city || "TBA",
+          address: [t.venue, t.city].filter(Boolean).join(", ") || undefined,
+        },
+        url: `https://prize-manager.com/p/${slug}`,
+      }
+    : undefined;
+
   return (
     <>
+      <Seo
+        title={seoTitle}
+        description={seoDesc}
+        path={`/p/${slug ?? ""}`}
+        type="event"
+        jsonLd={eventJsonLd}
+      />
       <div className="min-h-screen bg-background">
         <PublicHeader />
+        <main>
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border print:bg-white print:border-black/30">
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-5xl mx-auto space-y-6">
@@ -267,6 +300,7 @@ export default function PublicTournamentDetails() {
             </Card>
           </div>
         </div>
+        </main>
       </div>
     </>
   );

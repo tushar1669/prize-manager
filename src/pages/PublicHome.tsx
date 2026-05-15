@@ -9,6 +9,7 @@ import { Calendar, MapPin, Timer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { Seo } from "@/components/seo/Seo";
 
 type PublicManualPrize = Pick<
   Database["public"]["Tables"]["tournament_manual_prizes"]["Row"],
@@ -165,8 +166,14 @@ export default function PublicHome() {
 
   return (
     <>
+      <Seo
+        title="Chess Tournament Results & Prize Lists | Prize Manager"
+        description="Browse published chess tournament results, category-wise prize winners, and team standings from organizers across India."
+        path="/public"
+      />
       <div className="min-h-screen bg-background">
         <PublicHeader />
+        <main>
         <div className="bg-gradient-to-br from-primary/20 via-secondary/10 to-background border-b border-border">
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-4xl mx-auto text-center">
@@ -273,6 +280,7 @@ export default function PublicHome() {
             </div>
           )}
         </div>
+        </main>
       </div>
     </>
   );
