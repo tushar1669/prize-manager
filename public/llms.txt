@@ -1,0 +1,20 @@
+# Prize Manager
+
+> Prize Manager is a chess tournament prize-allocation platform. Organizers configure prize structures, import player lists, allocate prizes deterministically, and publish public results for players and parents to view.
+
+## Pages
+
+- [Home](/): Public directory of published chess tournaments with results.
+- [Public tournaments](/public): Browse all published tournament results.
+- [Organizer sign in](/auth): Tournament organizers sign in or create an account.
+
+## Tournament pages
+
+Each published tournament has two public pages:
+
+- `/p/{slug}` — Tournament details: dates, venue, format, time control, brochure.
+- `/p/{slug}/results` — Final results with category-wise winners, prizes, and team standings.
+
+## Optional
+
+- [Reset password](/reset-password): Account recovery for organizers.
