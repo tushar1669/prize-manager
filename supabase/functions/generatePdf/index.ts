@@ -349,9 +349,8 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('[generatePdf] Error:', error);
-    const errMsg = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: errMsg }),
+      JSON.stringify({ error: 'internal_server_error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
