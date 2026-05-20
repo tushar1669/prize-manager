@@ -59,7 +59,8 @@ async function ensureTournamentAccess(
     .maybeSingle();
 
   if (tErr) {
-    return { accessDenied: jsonResponse({ error: "db_error", message: tErr.message }, 500), tournament: null };
+    console.error('[parseBrochurePrizes] DB error:', tErr.message);
+    return { accessDenied: jsonResponse({ error: "internal_server_error" }, 500), tournament: null };
   }
   if (!tournament) {
     return { accessDenied: jsonResponse({ error: "tournament_not_found" }, 404), tournament: null };
@@ -69,7 +70,8 @@ async function ensureTournamentAccess(
     .rpc("has_role", { _user_id: userId, _role: "master" });
 
   if (roleErr) {
-    return { accessDenied: jsonResponse({ error: "role_check_failed", message: roleErr.message }, 500), tournament: null };
+    console.error('[parseBrochurePrizes] Role check error:', roleErr.message);
+    return { accessDenied: jsonResponse({ error: "internal_server_error" }, 500), tournament: null };
   }
   if (tournament.owner_id !== userId && !isMaster) {
     return { accessDenied: jsonResponse({ error: "forbidden", message: "Not authorized for tournament" }, 403), tournament: null };
