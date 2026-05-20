@@ -231,6 +231,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response(JSON.stringify({ groups: responseGroups, players_loaded: teamPlayers.length, max_rank: 0, hasTeamPrizes: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    console.error('[publicTeamPrizes] Error:', error);
+    return new Response(JSON.stringify({ error: 'internal_server_error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
