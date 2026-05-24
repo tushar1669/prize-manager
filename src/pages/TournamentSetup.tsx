@@ -1247,37 +1247,70 @@ export default function TournamentSetup() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const inputEl = e.target;
+    const file = inputEl.files?.[0];
     if (!file) return;
 
-    setUploading(true);
-    const filePath = `${id}/${Date.now()}_${file.name}`;
-    const { path, error } = await uploadFile('brochures', filePath, file);
-    
-    if (error) {
-      toast.error('Upload failed: ' + error.message);
-    } else if (path) {
-      detailsForm.setValue('brochure_url', path);
-      // Generate signed URL for display
-      const { url } = await getSignedUrl('brochures', path);
-      if (url) setBrochureSignedUrl(url);
+    const MAX_BROCHURE_BYTES = 50 * 1024 * 1024; // 50 MB
+    const TOO_LARGE_MSG = 'Brochure is too large. Please upload a file under 50 MB or compress it.';
 
-      // Auto-save brochure_url to DB so parseBrochurePrizes works
-      // even if user doesn't manually save the Details form
-      const { error: dbErr } = await supabase
-        .from('tournaments')
-        .update({ brochure_url: path })
-        .eq('id', id!);
+    // Always allow re-selecting the same file after an error
+    const resetInput = () => {
+      try { inputEl.value = ''; } catch { /* noop */ }
+    };
 
-      if (dbErr) {
-        toast.error('Brochure uploaded to storage but failed to save reference. Please save Details manually.');
-        console.error('[brochure] DB save failed', dbErr);
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['tournament', id] });
-        toast.success('Brochure uploaded');
-      }
+    if (file.size > MAX_BROCHURE_BYTES) {
+      toast.error(TOO_LARGE_MSG);
+      resetInput();
+      return;
     }
-    setUploading(false);
+
+    setUploading(true);
+    try {
+      const filePath = `${id}/${Date.now()}_${file.name}`;
+      const { path, error } = await uploadFile('brochures', filePath, file);
+
+      if (error) {
+        const raw = (error as { message?: string; statusCode?: string | number })?.message ?? '';
+        const code = String((error as { statusCode?: string | number })?.statusCode ?? '');
+        const isTooLarge =
+          code === '413' ||
+          /\b413\b/.test(raw) ||
+          /payload too large/i.test(raw) ||
+          /exceeded the maximum allowed size/i.test(raw) ||
+          /maximum allowed size/i.test(raw);
+        toast.error(isTooLarge ? TOO_LARGE_MSG : `Upload failed: ${raw || 'Unknown error'}`);
+        resetInput();
+        return;
+      }
+
+      if (path) {
+        detailsForm.setValue('brochure_url', path);
+        const { url } = await getSignedUrl('brochures', path);
+        if (url) setBrochureSignedUrl(url);
+
+        // Auto-save brochure_url to DB so parseBrochurePrizes works
+        // even if user doesn't manually save the Details form
+        const { error: dbErr } = await supabase
+          .from('tournaments')
+          .update({ brochure_url: path })
+          .eq('id', id!);
+
+        if (dbErr) {
+          toast.error('Brochure uploaded to storage but failed to save reference. Please save Details manually.');
+          console.error('[brochure] DB save failed', dbErr);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+          toast.success(`Brochure uploaded: ${file.name}`);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Upload failed: ${msg}`);
+    } finally {
+      setUploading(false);
+      resetInput();
+    }
   };
 
   const onDetailsSubmit = (values: TournamentDetailsForm) => {
