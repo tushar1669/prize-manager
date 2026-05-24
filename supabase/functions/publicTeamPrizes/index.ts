@@ -54,9 +54,14 @@ Deno.serve(async (req: Request) => {
 
     let publication: PublicationRow | null = null;
     if (slug) {
-      const { data } = await supabase.from('publications').select('tournament_id, is_active, version').eq('slug', slug).maybeSingle();
+      const { data } = await supabase
+        .from('publications')
+        .select('tournament_id, is_active, version')
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .maybeSingle();
       publication = data as PublicationRow | null;
-      tournamentId = tournamentId ?? publication?.tournament_id;
+      tournamentId = publication?.tournament_id;
     }
 
     if (!tournamentId) {
