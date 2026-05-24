@@ -224,7 +224,7 @@ export default function Dashboard() {
         {authzStatus === 'ready' && role === 'organizer' && !is_verified && (
           <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              An admin needs to review your organizer access. You can keep using the dashboard while this is being checked.
+              Your organizer access needs attention. You can keep using the dashboard while this is checked.
             </p>
           </div>
         )}
