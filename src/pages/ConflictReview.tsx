@@ -752,16 +752,27 @@ export default function ConflictReview() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-amber-950">
-                You can review all categories and totals now. Upgrade to Pro to reveal all winner names and enable exports.
+                This tournament has <strong>{summaryCounts.players} players</strong>, which is above the free limit of 150.
+                Upgrade to Pro to reveal all winner names and enable exports. You can review all categories and totals now.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button className="font-semibold" size="lg" onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
-                <Button className="border-amber-700 text-amber-950 hover:bg-amber-200" variant="outline" onClick={() => navigate(couponPath)}>Apply Coupon</Button>
+                <Button
+                  size="lg"
+                  className="bg-white text-amber-950 border-2 border-amber-700 font-semibold hover:bg-amber-50"
+                  variant="outline"
+                  onClick={() => navigate(couponPath)}
+                >
+                  Apply Coupon
+                </Button>
               </div>
-              <p className="text-xs text-amber-900">Pay via UPI or apply a coupon code to unlock Pro features.</p>
+              <p className="text-xs text-amber-900">
+                Have a welcome or referral coupon? Click <strong>Apply Coupon</strong> to enter your code. Otherwise, pay via UPI on the Upgrade page.
+              </p>
             </CardContent>
           </Card>
         )}
+
 
         {id && <ImportQualityNotes tournamentId={id} />}
 
