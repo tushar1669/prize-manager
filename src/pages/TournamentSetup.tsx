@@ -1827,9 +1827,12 @@ export default function TournamentSetup() {
               <TeamPrizesEditor tournamentId={id || ''} isOrganizer={isOrganizer} />
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">
-                  Need school/academy/city awards? Use the <strong>Team Prizes</strong> toggle above to add them manually.
-                </p>
+                {/* Helper row */}
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Need school, academy, city, or team awards? Use{" "}
+                  <strong className="text-foreground">Team Prizes</strong> to add them manually.
+                </div>
+
                 {mainPrizesRestore && activeTab === 'prizes' && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -1868,246 +1871,264 @@ export default function TournamentSetup() {
                   </div>
                 )}
 
-                <Card>
-                  <CardHeader>
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <CardTitle>Category Prizes</CardTitle>
-                        <CardDescription>Age, rating, and special categories</CardDescription>
-                      </div>
-                      <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
-                        {(() => {
-                          const allCollapsed = sortedCategories.length > 0 && sortedCategories.every(c => collapsedCategories[c.id]);
-                          return (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={!sortedCategories.length}
-                              onClick={() => handleCollapseAllCategories(!allCollapsed)}
-                            >
-                              {allCollapsed ? (
-                                <><ChevronsUpDown className="h-4 w-4 mr-2" />Expand all</>
-                              ) : (
-                                <><ChevronsDownUp className="h-4 w-4 mr-2" />Collapse all</>
-                              )}
-                            </Button>
-                          );
-                        })()}
-                        {isOrganizer && (
-                          <>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              disabled={savingAll || !categories?.some(c => !c.is_main)}
-                              onClick={handleSaveAllCategories}
-                              title="Saves all edited category prizes in one go"
-                            >
-                              {savingAll ? (
-                                <>
-                                  <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
-                                    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
-                                  </svg>
-                                  Saving All…
-                                </>
-                              ) : (
-                                <>
-                                  <Save className="h-4 w-4 mr-2" />
-                                  {(() => {
-                                    const dirtyCount = Array.from(editorRefs.current.values())
-                                      .filter(ref => ref.current?.hasDirty())
-                                      .length;
-                                    return dirtyCount > 0 
-                                      ? `Save All Categories (${dirtyCount})` 
-                                      : 'Save All Categories';
-                                  })()}
-                                </>
-                              )}
-                            </Button>
-                            <div className="flex w-full flex-col gap-2 rounded-md border border-border/60 bg-muted/20 p-2 md:w-auto md:min-w-[22rem]">
-                              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Category actions</span>
-                              <div className="flex flex-wrap gap-2">
-                                <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                                  <DialogTrigger asChild>
-                                    <Button size="sm" variant="outline" className="gap-2">
-                                      <Plus className="h-4 w-4" />
-                                      Add Category
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent>
-                                    <DialogHeader>
-                                      <DialogTitle>Add Category</DialogTitle>
-                                      <DialogDescription>Create a new prize category</DialogDescription>
-                                    </DialogHeader>
-                                    <Form {...categoryForm}>
-                                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
-                                        <FormField
-                                          control={categoryForm.control}
-                                          name="name"
-                                          render={({ field }) => (
-                                            <FormItem>
-                                              <FormLabel>Category Name</FormLabel>
-                                              <FormControl>
-                                                <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
-                                              </FormControl>
-                                              <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                        <div>
-                                          <Label htmlFor="copy-from">Copy prize structure from</Label>
-                                          <select
-                                            id="copy-from"
-                                            className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
-                                            value={copyFromCategoryId || ''}
-                                            onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
-                                          >
-                                            <option value="">Do not copy</option>
-                                            {Array.isArray(categories) &&
-                                              categories.map((c) => (
-                                                <option key={c.id} value={c.id}>
-                                                  {c.name} ({c.prizes?.length || 0} prizes)
-                                                </option>
-                                              ))}
-                                          </select>
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            Optional. Saves time when multiple categories share the same prize structure.
-                                          </p>
-                                          {copyFromCategoryId && (
-                                            <div className="flex items-center gap-2 mt-3">
-                                              <Checkbox 
-                                                checked={includeCriteriaOnCopy}
-                                                onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
-                                              />
-                                              <Label htmlFor="copy-criteria-checkbox">
-                                                Include Rules (criteria)
-                                              </Label>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <DialogFooter>
-                                          <Button type="submit" disabled={createCategoryMutation.isPending}>
-                                            {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
-                                          </Button>
-                                        </DialogFooter>
-                                      </form>
-                                    </Form>
-                                  </DialogContent>
-                                </Dialog>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-2"
-                                  onClick={() => setCopyFromTournamentOpen(true)}
+                {/* Section header */}
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <h2 className="text-2xl font-semibold leading-none tracking-tight">Prize Structure</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Configure main prizes, category prizes, templates, and brochure-assisted drafts.
+                    </p>
+                  </div>
+                  {isOrganizer && (
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                      {(() => {
+                        const allCollapsed = sortedCategories.length > 0 && sortedCategories.every(c => collapsedCategories[c.id]);
+                        return (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!sortedCategories.length}
+                            onClick={() => handleCollapseAllCategories(!allCollapsed)}
+                          >
+                            {allCollapsed ? (
+                              <><ChevronsUpDown className="h-4 w-4 mr-2" />Expand all</>
+                            ) : (
+                              <><ChevronsDownUp className="h-4 w-4 mr-2" />Collapse all</>
+                            )}
+                          </Button>
+                        );
+                      })()}
+                      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Add Category
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add Category</DialogTitle>
+                            <DialogDescription>Create a new prize category</DialogDescription>
+                          </DialogHeader>
+                          <Form {...categoryForm}>
+                            <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
+                              <FormField
+                                control={categoryForm.control}
+                                name="name"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Category Name</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="e.g., Under 13, Female, U1800" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <div>
+                                <Label htmlFor="copy-from">Copy prize structure from</Label>
+                                <select
+                                  id="copy-from"
+                                  className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
+                                  value={copyFromCategoryId || ''}
+                                  onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
                                 >
-                                  <Copy className="h-4 w-4" />
-                                  Copy from Tournament
-                                </Button>
-                              </div>
-                            </div>
-                            <CopyFromTournamentDialog
-                              tournamentId={id!}
-                              open={copyFromTournamentOpen}
-                              onOpenChange={setCopyFromTournamentOpen}
-                              onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
-                            />
-                            <div className="flex w-full flex-col gap-2 rounded-md border border-border/60 bg-muted/20 p-2 md:w-auto md:min-w-[22rem]">
-                              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Template workflow</span>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-2"
-                                  onClick={downloadPrizeTemplateXlsx}
-                                >
-                                  <Download className="h-4 w-4" />
-                                  Download Template
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-2"
-                                  onClick={() => setTemplateImportOpen(true)}
-                                >
-                                  <Upload className="h-4 w-4" />
-                                  Import from Template
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="link"
-                                  className="px-1"
-                                  onClick={() => setTemplateGuideOpen(true)}
-                                >
-                                  Template Guide
-                                </Button>
-                              </div>
-                              <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border/60 bg-background/40 p-2">
-                                <span className="text-[11px] text-muted-foreground">Assistive (best-effort draft, review required)</span>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="gap-2 text-muted-foreground"
-                                    disabled={!tournament?.brochure_url}
-                                    title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
-                                    onClick={() => setBrochureDraftOpen(true)}
-                                  >
-                                    <Upload className="h-4 w-4" />
-                                    Generate Draft from Brochure
-                                  </Button>
-                                </div>
-                                {!tournament?.brochure_url && (
-                                  <p className="text-xs leading-snug text-muted-foreground">
-                                    No brochure uploaded yet — add one in the{" "}
-                                    <Button
-                                      type="button"
-                                      variant="link"
-                                      size="sm"
-                                      className="h-auto p-0 text-xs align-baseline"
-                                      onClick={() => navigate(`/t/${id}/setup?tab=details`)}
-                                    >
-                                      Details
-                                    </Button>{" "}
-                                    tab to enable this.
-                                  </p>
+                                  <option value="">Do not copy</option>
+                                  {Array.isArray(categories) &&
+                                    categories.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.name} ({c.prizes?.length || 0} prizes)
+                                      </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Optional. Saves time when multiple categories share the same prize structure.
+                                </p>
+                                {copyFromCategoryId && (
+                                  <div className="flex items-center gap-2 mt-3">
+                                    <Checkbox
+                                      checked={includeCriteriaOnCopy}
+                                      onCheckedChange={(checked) => setIncludeCriteriaOnCopy(!!checked)}
+                                    />
+                                    <Label htmlFor="copy-criteria-checkbox">
+                                      Include Rules (criteria)
+                                    </Label>
+                                  </div>
                                 )}
                               </div>
-                              <details className="rounded-md border border-border/50 bg-background/60 px-2 py-1">
-                                <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                                  Legacy advanced options (v1)
-                                </summary>
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="gap-2 text-muted-foreground"
-                                  onClick={downloadPrizeTemplateV1Xlsx}
-                                >
-                                  <Download className="h-4 w-4" />
-                                  Legacy Template (advanced)
+                              <DialogFooter>
+                                <Button type="submit" disabled={createCategoryMutation.isPending}>
+                                  {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
                                 </Button>
-                                </div>
-                              </details>
-                            </div>
-                            <PrizeTemplateImportDialog
-                              open={templateImportOpen}
-                              onOpenChange={setTemplateImportOpen}
-                              tournamentId={id!}
-                              onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
-                            />
-                            <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
-                            <BrochurePrizeDraftDialog
-                              open={brochureDraftOpen}
-                              onOpenChange={setBrochureDraftOpen}
-                              tournamentId={id!}
-                              onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
-                            />
+                              </DialogFooter>
+                            </form>
+                          </Form>
+                        </DialogContent>
+                      </Dialog>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setCopyFromTournamentOpen(true)}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy from Tournament
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={savingAll || !categories?.some(c => !c.is_main)}
+                        onClick={handleSaveAllCategories}
+                        title="Saves all edited category prizes in one go"
+                      >
+                        {savingAll ? (
+                          <>
+                            <svg className="h-4 w-4 mr-2 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                              <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" opacity="0.75"/>
+                            </svg>
+                            Saving All…
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            {(() => {
+                              const dirtyCount = Array.from(editorRefs.current.values())
+                                .filter(ref => ref.current?.hasDirty())
+                                .length;
+                              return dirtyCount > 0
+                                ? `Save All Categories (${dirtyCount})`
+                                : 'Save All Categories';
+                            })()}
                           </>
                         )}
-                      </div>
+                      </Button>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  )}
+                </div>
+
+                {/* Template Workflow */}
+                {isOrganizer && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Template Workflow</CardTitle>
+                      <CardDescription>
+                        Use the v2 spreadsheet template to bulk-load categories and prizes.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={downloadPrizeTemplateXlsx}
+                        >
+                          <Download className="h-4 w-4" />
+                          Download Template
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => setTemplateImportOpen(true)}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Import from Template
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="link"
+                          className="px-1 sm:ml-auto"
+                          onClick={() => setTemplateGuideOpen(true)}
+                        >
+                          Template Guide
+                        </Button>
+                      </div>
+
+                      <div className="rounded-md border border-dashed border-border/60 bg-background/40 p-3 space-y-2">
+                        <div>
+                          <p className="text-sm font-medium">Assistive brochure draft</p>
+                          <p className="text-xs text-muted-foreground">
+                            Best-effort extraction. Review before applying.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-2 text-muted-foreground"
+                          disabled={!tournament?.brochure_url}
+                          title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
+                          onClick={() => setBrochureDraftOpen(true)}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Generate Draft from Brochure
+                        </Button>
+                        {!tournament?.brochure_url && (
+                          <p className="text-xs leading-snug text-muted-foreground">
+                            No brochure uploaded yet — add one in the{" "}
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs align-baseline"
+                              onClick={() => navigate(`/t/${id}/setup?tab=details`)}
+                            >
+                              Details
+                            </Button>{" "}
+                            tab to enable this.
+                          </p>
+                        )}
+                      </div>
+
+                      <details className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
+                        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                          Legacy advanced options (v1)
+                        </summary>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-2 text-muted-foreground"
+                            onClick={downloadPrizeTemplateV1Xlsx}
+                          >
+                            <Download className="h-4 w-4" />
+                            Legacy Template (advanced)
+                          </Button>
+                        </div>
+                      </details>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Dialog mounts (unchanged behavior) */}
+                {isOrganizer && (
+                  <>
+                    <CopyFromTournamentDialog
+                      tournamentId={id!}
+                      open={copyFromTournamentOpen}
+                      onOpenChange={setCopyFromTournamentOpen}
+                      onComplete={() => queryClient.invalidateQueries({ queryKey: ['categories', id] })}
+                    />
+                    <PrizeTemplateImportDialog
+                      open={templateImportOpen}
+                      onOpenChange={setTemplateImportOpen}
+                      tournamentId={id!}
+                      onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
+                    />
+                    <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
+                    <BrochurePrizeDraftDialog
+                      open={brochureDraftOpen}
+                      onOpenChange={setBrochureDraftOpen}
+                      tournamentId={id!}
+                      onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
+                    />
+                  </>
+                )}
+
+                {/* Prize editors */}
+                <Card>
+                  <CardContent className="pt-6">
                     {categoriesLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -2147,17 +2168,17 @@ export default function TournamentSetup() {
                                       }));
                                     }}
                                     onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
-                                    onSave={(categoryId, delta) => 
+                                    onSave={(categoryId, delta) =>
                                       saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
                                     }
                                     onToggleCategory={toggleCategoryActive}
                                     isOrganizer={isOrganizer}
                                     onDeleteCategory={(category) => {
-                                      setCatDelete({ 
-                                        open: true, 
-                                        id: category.id, 
-                                        name: category.name, 
-                                        prizeCount: category.prizes?.length ?? 0 
+                                      setCatDelete({
+                                        open: true,
+                                        id: category.id,
+                                        name: category.name,
+                                        prizeCount: category.prizes?.length ?? 0
                                       });
                                     }}
                                     onDuplicateCategory={(category) => {
@@ -2202,17 +2223,17 @@ export default function TournamentSetup() {
                                       }));
                                     }}
                                     onEditRules={(category) => setCriteriaSheet({ open: true, category: category as CriteriaCategory })}
-                                    onSave={(categoryId, delta) => 
+                                    onSave={(categoryId, delta) =>
                                       saveCategoryPrizesMutation.mutateAsync({ categoryId, delta })
                                     }
                                     onToggleCategory={toggleCategoryActive}
                                     isOrganizer={isOrganizer}
                                     onDeleteCategory={(category) => {
-                                      setCatDelete({ 
-                                        open: true, 
-                                        id: category.id, 
-                                        name: category.name, 
-                                        prizeCount: category.prizes?.length ?? 0 
+                                      setCatDelete({
+                                        open: true,
+                                        id: category.id,
+                                        name: category.name,
+                                        prizeCount: category.prizes?.length ?? 0
                                       });
                                     }}
                                     onDuplicateCategory={(category) => {
@@ -2226,9 +2247,12 @@ export default function TournamentSetup() {
                         )}
                       </div>
                     ) : (
-                      <p className="text-center text-muted-foreground py-8">
-                        No categories added yet
-                      </p>
+                      <div className="py-10 text-center space-y-1">
+                        <p className="text-sm font-medium text-foreground">No prize categories yet</p>
+                        <p className="text-sm text-muted-foreground">
+                          Add a category, copy from another tournament, or import from a template above.
+                        </p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
