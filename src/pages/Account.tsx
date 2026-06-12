@@ -152,14 +152,16 @@ export default function Account() {
       };
       const { data, error } = await unsafeSupabase
         .from("referrals")
-        .select("id,referred_id,created_at,referred_email,referred_label")
+        .select("id,referred_id,created_at")
         .eq("referrer_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string; referred_email: string | null; referred_label: string | null }>;
+      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string }>;
     },
+    retry: false,
   });
+
 
   const referredIds = useMemo(() => (myReferrals ?? []).map((r) => r.referred_id), [myReferrals]);
 
@@ -315,16 +317,13 @@ export default function Account() {
   const [expandedReferral, setExpandedReferral] = useState<string | null>(null);
 
   function getReferredLabel(userId: string): { primary: string; secondary: string | null } {
-    const ref = (myReferrals ?? []).find((r) => r.referred_id === userId);
-    const snapLabel = ref?.referred_label;
-    const snapEmail = ref?.referred_email;
     const p = profileMap.get(userId);
-
-    const primary = snapLabel || snapEmail || p?.display_name || p?.email || `User …${userId.slice(-6)}`;
-    // Show email as secondary when primary is a name (not already the email)
-    const secondary = primary !== snapEmail && snapEmail ? snapEmail : null;
+    const primary = p?.display_name || p?.email || `User …${userId.slice(-6)}`;
+    // Show email as secondary when primary is a display name (not the email itself)
+    const secondary = p?.display_name && p?.email ? p.email : null;
     return { primary, secondary };
   }
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -646,14 +645,10 @@ export default function Account() {
 
                       {isExpanded && (
                         <div className="mt-3 pl-1 space-y-2">
-                          {ref.referred_email && (
-                            <p className="text-xs text-muted-foreground">
-                              Email: <span className="text-foreground">{ref.referred_email}</span>
-                            </p>
-                          )}
                           <p className="text-xs text-muted-foreground">
                             Joined {new Date(ref.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </p>
+
 
                           {hasUpgraded ? (
                             <div className="space-y-1.5">
