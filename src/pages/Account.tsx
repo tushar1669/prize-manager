@@ -317,16 +317,13 @@ export default function Account() {
   const [expandedReferral, setExpandedReferral] = useState<string | null>(null);
 
   function getReferredLabel(userId: string): { primary: string; secondary: string | null } {
-    const ref = (myReferrals ?? []).find((r) => r.referred_id === userId);
-    const snapLabel = ref?.referred_label;
-    const snapEmail = ref?.referred_email;
     const p = profileMap.get(userId);
-
-    const primary = snapLabel || snapEmail || p?.display_name || p?.email || `User …${userId.slice(-6)}`;
-    // Show email as secondary when primary is a name (not already the email)
-    const secondary = primary !== snapEmail && snapEmail ? snapEmail : null;
+    const primary = p?.display_name || p?.email || `User …${userId.slice(-6)}`;
+    // Show email as secondary when primary is a display name (not the email itself)
+    const secondary = p?.display_name && p?.email ? p.email : null;
     return { primary, secondary };
   }
+
 
   return (
     <div className="min-h-screen bg-background">
