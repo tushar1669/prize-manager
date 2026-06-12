@@ -152,14 +152,16 @@ export default function Account() {
       };
       const { data, error } = await unsafeSupabase
         .from("referrals")
-        .select("id,referred_id,created_at,referred_email,referred_label")
+        .select("id,referred_id,created_at")
         .eq("referrer_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string; referred_email: string | null; referred_label: string | null }>;
+      return (data ?? []) as Array<{ id: string; referred_id: string; created_at: string }>;
     },
+    retry: false,
   });
+
 
   const referredIds = useMemo(() => (myReferrals ?? []).map((r) => r.referred_id), [myReferrals]);
 
