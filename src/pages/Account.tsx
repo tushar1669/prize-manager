@@ -645,14 +645,10 @@ export default function Account() {
 
                       {isExpanded && (
                         <div className="mt-3 pl-1 space-y-2">
-                          {ref.referred_email && (
-                            <p className="text-xs text-muted-foreground">
-                              Email: <span className="text-foreground">{ref.referred_email}</span>
-                            </p>
-                          )}
                           <p className="text-xs text-muted-foreground">
                             Joined {new Date(ref.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </p>
+
 
                           {hasUpgraded ? (
                             <div className="space-y-1.5">
