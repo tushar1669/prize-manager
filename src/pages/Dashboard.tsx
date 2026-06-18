@@ -57,7 +57,7 @@ export default function Dashboard() {
 
           if (rpcMissing) {
             console.warn('[dashboard] tournament list RPC unavailable; migrations/schema cache update required');
-            throw new Error('Tournament list service is unavailable. Please apply database migrations and reload Supabase schema cache.');
+            throw new Error('Tournament list service is unavailable. Please refresh. If this continues, database migrations may need to be applied.');
           }
 
           console.error('[dashboard] rpc error', error);
@@ -187,7 +187,7 @@ export default function Dashboard() {
         <AppNav />
         <div className="container mx-auto px-6 py-8">
           <div className="text-center py-12">
-            <p className="text-destructive">{error instanceof Error && error.message === 'Tournament list service is unavailable. Please apply database migrations and reload Supabase schema cache.' ? error.message : 'Error loading tournaments. Please try again.'}</p>
+            <p className="text-destructive">{error instanceof Error && error.message === 'Tournament list service is unavailable. Please refresh. If this continues, database migrations may need to be applied.' ? error.message : 'Error loading tournaments. Please try again.'}</p>
           </div>
         </div>
       </div>
