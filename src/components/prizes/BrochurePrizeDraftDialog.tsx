@@ -226,6 +226,7 @@ export default function BrochurePrizeDraftDialog({
     : 0;
 
   const hasCategories = draft && draft.categories.length > 0;
+  const safety = validateDraftSafety(draft ?? null);
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
