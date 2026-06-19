@@ -289,7 +289,7 @@ export default function BrochurePrizeDraftDialog({
           <ErrorCard
             icon={<ScanSearch className="h-6 w-6" />}
             title="Scanned / image-only PDF"
-            description="This PDF contains only scanned images with no extractable text. Upload a text-based PDF, use Import from Template, or copy from a previous tournament."
+            description="This brochure appears to be scanned or image-only. The current in-app parser cannot read it reliably. Use the v2 template or the upcoming standalone parser/OCR workflow."
           />
         )}
 
