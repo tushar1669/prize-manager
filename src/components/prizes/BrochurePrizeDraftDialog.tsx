@@ -10,6 +10,7 @@ import { AlertTriangle, CheckCircle, Copy, ChevronDown, ChevronRight, FileWarnin
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { applyDraftAddOnly, ApplyReport, DraftResult } from "@/utils/prizeApplyDraft";
+import { validateDraftSafety } from "@/utils/brochureDraftSafety";
 
 /** Map raw machine warning keys to human-friendly copy */
 const WARNING_COPY: Record<string, string> = {
@@ -77,6 +78,8 @@ export default function BrochurePrizeDraftDialog({
   const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
   const [includeTeamGroups, setIncludeTeamGroups] = useState(false);
   const [verifiedTeamGroups, setVerifiedTeamGroups] = useState<Set<number>>(new Set());
+  // Safety gate: explicit acknowledgement required for MEDIUM-confidence drafts.
+  const [reviewAck, setReviewAck] = useState(false);
 
   const callFunction = useCallback(
     async (selectedEvent?: string | null) => {
@@ -144,6 +147,7 @@ export default function BrochurePrizeDraftDialog({
         setApplying(false);
         setIncludeTeamGroups(false);
         setVerifiedTeamGroups(new Set());
+        setReviewAck(false);
       }
       onOpenChange(nextOpen);
     },
@@ -222,6 +226,7 @@ export default function BrochurePrizeDraftDialog({
     : 0;
 
   const hasCategories = draft && draft.categories.length > 0;
+  const safety = validateDraftSafety(draft ?? null);
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -247,9 +252,9 @@ export default function BrochurePrizeDraftDialog({
             <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-4">
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium text-sm">Multiple events detected</p>
+                <p className="font-medium text-sm">Multiple sections/events detected</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  This brochure contains prizes for multiple events. Select which event to parse:
+                  Select the section to preview. Names below come from the brochure text and may not represent truly separate events.
                 </p>
               </div>
             </div>
@@ -284,7 +289,7 @@ export default function BrochurePrizeDraftDialog({
           <ErrorCard
             icon={<ScanSearch className="h-6 w-6" />}
             title="Scanned / image-only PDF"
-            description="This PDF contains only scanned images with no extractable text. Upload a text-based PDF, use Import from Template, or copy from a previous tournament."
+            description="This brochure appears to be scanned or image-only. The current in-app parser cannot read it reliably. Use the v2 template or the upcoming standalone parser/OCR workflow."
           />
         )}
 
@@ -366,6 +371,7 @@ export default function BrochurePrizeDraftDialog({
                     setExpandedCategories(new Set());
                     setIncludeTeamGroups(false);
                     setVerifiedTeamGroups(new Set());
+                    setReviewAck(false);
                   }}
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
@@ -519,79 +525,129 @@ export default function BrochurePrizeDraftDialog({
               )}
             </div>
 
-            {/* Apply controls */}
-            {hasCategories && totalPrizes > 0 && (
-              <div className="space-y-3 border-t pt-4">
-                {/* Low confidence warning */}
-                {draft.overall_confidence === "LOW" && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3">
-                    <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                      Low confidence extraction — carefully verify each category and prize amount before applying.
-                    </p>
-                  </div>
-                )}
-                {/* Team groups opt-in */}
-                {draft.team_groups.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="include-teams"
-                        checked={includeTeamGroups}
-                        onCheckedChange={setIncludeTeamGroups}
-                        disabled={applying}
-                      />
-                      <Label htmlFor="include-teams" className="text-sm">
-                        Include team groups (LOW confidence)
-                      </Label>
-                    </div>
-                    {includeTeamGroups && (
-                      <div className="ml-6 space-y-1.5">
-                        {draft.team_groups.map((tg, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`verify-team-${idx}`}
-                              checked={verifiedTeamGroups.has(idx)}
-                              onCheckedChange={() => toggleTeamGroupVerified(idx)}
-                              disabled={applying}
-                            />
-                            <Label htmlFor={`verify-team-${idx}`} className="text-sm text-muted-foreground">
-                              I verified "{tg.name}"
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <Button
-                  onClick={handleApply}
-                  disabled={applying}
-                  variant={applyReport ? "outline" : "default"}
-                  className="w-full gap-2"
-                >
-                  {applying ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Applying…
-                    </>
-                  ) : applyReport ? (
-                    <>
-                      <CheckCircle className="h-4 w-4 text-emerald-600" />
-                      Re-apply (safe — add-only, idempotent)
-                    </>
-                  ) : (
-                    "Apply (Add-only)"
+            {/* Apply controls (always render so safety messaging shows even when prizes==0) */}
+            <div className="space-y-3 border-t pt-4">
+              {/* Safety gate — UNSAFE */}
+              {safety.level === "UNSAFE" && (
+                <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30 p-3 space-y-1">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    This draft is not safe to apply. Use the v2 template or wait for the standalone parser.
+                  </p>
+                  {safety.reasons.length > 0 && (
+                    <ul className="ml-6 list-disc text-xs text-red-700 dark:text-red-400">
+                      {safety.reasons.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                      {safety.badCategoryNames.length > 0 && (
+                        <li>Non-prize sections detected: {safety.badCategoryNames.join(", ")}</li>
+                      )}
+                    </ul>
                   )}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  {applyReport
-                    ? "Already applied this session. Re-applying will safely skip existing rows."
-                    : "Existing categories and prizes will not be modified or deleted."}
+                </div>
+              )}
+
+              {/* Safety gate — MEDIUM: structurally valid but review required */}
+              {safety.level === "SAFE_MEDIUM" && hasCategories && totalPrizes > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    Medium-confidence extraction — verify categories and amounts before applying.
+                  </p>
+                </div>
+              )}
+
+              {/* Safety gate — HIGH */}
+              {safety.level === "SAFE_HIGH" && hasCategories && totalPrizes > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Review before applying. Existing categories and prizes will not be modified or deleted.
                 </p>
-              </div>
-            )}
+              )}
+
+              {/* Team groups opt-in (only when there's something to apply) */}
+              {hasCategories && totalPrizes > 0 && draft.team_groups.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="include-teams"
+                      checked={includeTeamGroups}
+                      onCheckedChange={setIncludeTeamGroups}
+                      disabled={applying || safety.level === "UNSAFE"}
+                    />
+                    <Label htmlFor="include-teams" className="text-sm">
+                      Include team groups (LOW confidence)
+                    </Label>
+                  </div>
+                  {includeTeamGroups && (
+                    <div className="ml-6 space-y-1.5">
+                      {draft.team_groups.map((tg, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`verify-team-${idx}`}
+                            checked={verifiedTeamGroups.has(idx)}
+                            onCheckedChange={() => toggleTeamGroupVerified(idx)}
+                            disabled={applying || safety.level === "UNSAFE"}
+                          />
+                          <Label htmlFor={`verify-team-${idx}`} className="text-sm text-muted-foreground">
+                            I verified "{tg.name}"
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Medium-confidence review acknowledgement */}
+              {safety.level === "SAFE_MEDIUM" && hasCategories && totalPrizes > 0 && (
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="review-ack"
+                    checked={reviewAck}
+                    onCheckedChange={(v) => setReviewAck(v === true)}
+                    disabled={applying}
+                  />
+                  <Label htmlFor="review-ack" className="text-sm text-muted-foreground leading-snug">
+                    I reviewed this draft and understand it may be incomplete.
+                  </Label>
+                </div>
+              )}
+
+              {hasCategories && totalPrizes > 0 && (
+                <>
+                  <Button
+                    onClick={handleApply}
+                    disabled={
+                      applying ||
+                      safety.level === "UNSAFE" ||
+                      (safety.level === "SAFE_MEDIUM" && !reviewAck)
+                    }
+                    variant={applyReport ? "outline" : "default"}
+                    className="w-full gap-2"
+                  >
+                    {applying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Applying…
+                      </>
+                    ) : applyReport ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        Re-apply (safe — add-only, idempotent)
+                      </>
+                    ) : (
+                      "Apply (Add-only)"
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {applyReport
+                      ? "Already applied this session. Re-applying will safely skip existing rows."
+                      : "Existing categories and prizes will not be modified or deleted."}
+                  </p>
+                </>
+              )}
+            </div>
+
           </div>
         )}
       </DialogContent>
