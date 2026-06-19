@@ -1306,7 +1306,16 @@ export default function TournamentSetup() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(`Upload failed: ${msg}`);
+      const status = String((err as { status?: number | string; statusCode?: number | string })?.status
+        ?? (err as { statusCode?: number | string })?.statusCode ?? '');
+      const isTooLarge =
+        status === '413' ||
+        /\b413\b/.test(msg) ||
+        /payload too large/i.test(msg) ||
+        /too large/i.test(msg) ||
+        /exceeded/i.test(msg) ||
+        /maximum allowed size/i.test(msg);
+      toast.error(isTooLarge ? TOO_LARGE_MSG : `Upload failed: ${msg}`);
     } finally {
       setUploading(false);
       resetInput();
