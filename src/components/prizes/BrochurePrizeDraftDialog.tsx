@@ -252,9 +252,9 @@ export default function BrochurePrizeDraftDialog({
             <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-4">
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium text-sm">Multiple events detected</p>
+                <p className="font-medium text-sm">Multiple sections/events detected</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  This brochure contains prizes for multiple events. Select which event to parse:
+                  Select the section to preview. Names below come from the brochure text and may not represent truly separate events.
                 </p>
               </div>
             </div>
