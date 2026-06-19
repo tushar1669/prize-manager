@@ -78,6 +78,8 @@ export default function BrochurePrizeDraftDialog({
   const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
   const [includeTeamGroups, setIncludeTeamGroups] = useState(false);
   const [verifiedTeamGroups, setVerifiedTeamGroups] = useState<Set<number>>(new Set());
+  // Safety gate: explicit acknowledgement required for MEDIUM-confidence drafts.
+  const [reviewAck, setReviewAck] = useState(false);
 
   const callFunction = useCallback(
     async (selectedEvent?: string | null) => {
