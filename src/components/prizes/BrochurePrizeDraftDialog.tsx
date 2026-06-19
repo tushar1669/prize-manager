@@ -371,6 +371,7 @@ export default function BrochurePrizeDraftDialog({
                     setExpandedCategories(new Set());
                     setIncludeTeamGroups(false);
                     setVerifiedTeamGroups(new Set());
+                    setReviewAck(false);
                   }}
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
