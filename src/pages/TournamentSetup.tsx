@@ -1042,99 +1042,102 @@ export default function TournamentSetup() {
   // Save All Categories handler
   const handleSaveAllCategories = useCallback(async () => {
     clearError();
-    setSavingAll(true);
-    
+
     const nonMainCats = categories?.filter(c => !c.is_main) || [];
     if (!nonMainCats.length) {
       toast.info('No categories to save');
-      setSavingAll(false);
       return;
     }
 
+    // Primary truth: DirtyContext `sources` keyed by `cat-<id>` (reactive, set by each
+    // CategoryPrizesEditor). Fall back to the imperative ref read in case the source flag
+    // hasn't propagated yet (e.g., very-fast click after a keystroke).
+    const dirtyCats = nonMainCats.filter(cat => {
+      const sourceDirty = !!sources[`cat-${cat.id}`];
+      const refDirty = !!getEditorRef(cat.id).current?.hasDirty();
+      return sourceDirty || refDirty;
+    });
+
+    if (!dirtyCats.length) {
+      toast.info('No unsaved category changes');
+      return;
+    }
+
+    setSavingAll(true);
     const results: Array<{ ok: boolean; categoryId: string; categoryName: string; error?: string }> = [];
-    
-    for (const cat of nonMainCats) {
-      const editorRef = getEditorRef(cat.id);
-      if (!editorRef.current?.hasDirty()) {
-        console.log('[prizes-cat] skip clean', { cat: cat.name });
-        continue;
+
+    try {
+      for (const cat of dirtyCats) {
+        const handle = getEditorRef(cat.id).current;
+        if (!handle) {
+          console.warn('[prizes-cat] save all: missing editor handle', { catId: cat.id });
+          continue;
+        }
+
+        const delta = handle.computeDelta();
+        if (!delta.inserts.length && !delta.updates.length && !delta.deletes.length) {
+          console.log('[prizes-cat] save all: empty delta', { cat: cat.name });
+          continue;
+        }
+
+        try {
+          console.log('[prizes-cat] save all: saving', {
+            cat: cat.name,
+            inserts: delta.inserts.length,
+            updates: delta.updates.length,
+            deletes: delta.deletes.length,
+          });
+
+          // Reuse the existing mutation (already handles delete→update→insert + constraint errors)
+          await saveCategoryPrizesMutation.mutateAsync({ categoryId: cat.id, delta });
+
+          // Mark saved on the editor handle immediately so its draft baseline matches DB and
+          // subsequent refetches inside the loop won't clobber unrelated dirty editors.
+          handle.markSaved?.();
+
+          console.log('[prizes-cat] save all: ok', { categoryId: cat.id });
+          results.push({ ok: true, categoryId: cat.id, categoryName: cat.name });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          console.error('[prizes-cat] save all: fail', { cat: cat.name, message });
+          results.push({ ok: false, categoryId: cat.id, categoryName: cat.name, error: message });
+        }
       }
 
-      const delta = editorRef.current.computeDelta();
-      if (!delta.inserts.length && !delta.updates.length && !delta.deletes.length) {
-        console.log('[prizes-cat] skip empty delta', { cat: cat.name });
-        continue;
+      const succeeded = results.filter(r => r.ok);
+      const failed = results.filter(r => !r.ok);
+
+      if (succeeded.length && !failed.length) {
+        toast.success(
+          succeeded.length === 1
+            ? '1 category saved'
+            : `${succeeded.length} categories saved`,
+        );
+      } else if (succeeded.length && failed.length) {
+        const failedNames = failed.map(f => f.categoryName).join(', ');
+        toast.warning(`Saved ${succeeded.length}, failed ${failed.length}: ${failedNames}`);
+        const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
+        showError({ title: 'Some categories failed to save', message: errorMsg });
+      } else if (failed.length) {
+        const failedNames = failed.map(f => f.categoryName).join(', ');
+        toast.error(`Failed to save: ${failedNames}`);
+        const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
+        showError({ title: 'Categories failed to save', message: errorMsg });
+      } else {
+        // dirtyCats existed but every delta was empty — surface this rather than going silent.
+        toast.info('No changes to save');
       }
 
       try {
-        console.log('[prizes-cat] saving', { 
-          cat: cat.name, 
-          inserts: delta.inserts.length,
-          updates: delta.updates.length,
-          deletes: delta.deletes.length 
-        });
-        
-        // Reuse the existing mutation (already handles delete→update→insert + constraint errors)
-        await saveCategoryPrizesMutation.mutateAsync({ categoryId: cat.id, delta });
-        
-        console.log('[prizes-cat] save all ok', { categoryId: cat.id });
-        results.push({ ok: true, categoryId: cat.id, categoryName: cat.name });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error('[prizes-cat] save all fail', { cat: cat.name, message });
-        results.push({ 
-          ok: false, 
-          categoryId: cat.id, 
-          categoryName: cat.name, 
-          error: message 
-        });
-        continue;
+        await queryClient.invalidateQueries({ queryKey: ['categories', id] });
+        await queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+      } catch (err) {
+        console.error('[prizes-cat] save all: invalidate err', err);
       }
+    } finally {
+      setSavingAll(false);
     }
-
-    setSavingAll(false);
-
-    const succeeded = results.filter(r => r.ok);
-    const failed = results.filter(r => !r.ok);
-
-    if (succeeded.length && !failed.length) {
-      toast.success('All categories saved');
-      for (const s of succeeded) {
-        const ref = getEditorRef(s.categoryId);
-        ref.current?.markSaved();
-      }
-      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
-    } else if (succeeded.length && failed.length) {
-      const failedNames = failed.map(f => f.categoryName).join(', ');
-      toast.warning(`Saved ${succeeded.length}, failed ${failed.length}: ${failedNames}`);
-      for (const s of succeeded) {
-        const ref = getEditorRef(s.categoryId);
-        ref.current?.markSaved();
-      }
-      await queryClient.invalidateQueries({ queryKey: ['categories', id] });
-      
-      const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
-      showError({
-        title: 'Some categories failed to save',
-        message: errorMsg
-      });
-    } else if (failed.length) {
-      const failedNames = failed.map(f => f.categoryName).join(', ');
-      toast.error(`Failed to save: ${failedNames}`);
-      
-      const errorMsg = failed.map(f => `${f.categoryName}: ${f.error}`).join('\n');
-      showError({
-        title: 'Categories failed to save',
-        message: errorMsg
-      });
-    }
-
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['tournament', id] });
-    } catch (err) {
-      console.error('[prizes-cat] save all err', err);
-    }
-  }, [categories, showError, clearError, queryClient, id, saveCategoryPrizesMutation, getEditorRef]);
+  }, [categories, sources, showError, clearError, queryClient, id, saveCategoryPrizesMutation, getEditorRef]);
 
   // Keep latest values in refs so handler stays stable
   const prizesRef = useRef(prizes);
