@@ -2005,8 +2005,8 @@ export default function TournamentSetup() {
                           <>
                             <Save className="h-4 w-4 mr-2" />
                             {(() => {
-                              const dirtyCount = Array.from(editorRefs.current.values())
-                                .filter(ref => ref.current?.hasDirty())
+                              const dirtyCount = Object.keys(sources)
+                                .filter(k => k.startsWith('cat-'))
                                 .length;
                               return dirtyCount > 0
                                 ? `Save All Categories (${dirtyCount})`
