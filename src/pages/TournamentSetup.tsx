@@ -895,6 +895,9 @@ export default function TournamentSetup() {
       // Clear draft and reset dirty state
       clearDraft(mainPrizesDraftKey);
       resetDirty('main-prizes');
+      // Clear any stale restore banner for this section
+      setMainPrizesRestore(null);
+      setHasPendingDraft(false);
       
       // Refetch categories to sync local state with DB
       await queryClient.invalidateQueries({ queryKey: ['categories', id] });
