@@ -1990,9 +1990,10 @@ export default function TournamentSetup() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={savingAll || !categories?.some(c => !c.is_main)}
+                        className="gap-2"
+                        disabled={savingAll || prizesDirtyCount === 0}
                         onClick={handleSaveAllCategories}
-                        title="Saves all edited category prizes in one go"
+                        title="Saves Main Prize and every edited category prize section in one go"
                       >
                         {savingAll ? (
                           <>
@@ -2005,14 +2006,9 @@ export default function TournamentSetup() {
                         ) : (
                           <>
                             <Save className="h-4 w-4 mr-2" />
-                            {(() => {
-                              const dirtyCount = Object.keys(sources)
-                                .filter(k => k.startsWith('cat-'))
-                                .length;
-                              return dirtyCount > 0
-                                ? `Save All Categories (${dirtyCount})`
-                                : 'Save All Categories';
-                            })()}
+                            {prizesDirtyCount > 0
+                              ? `Save All Prize Sections (${prizesDirtyCount})`
+                              : 'Save All Prize Sections'}
                           </>
                         )}
                       </Button>
