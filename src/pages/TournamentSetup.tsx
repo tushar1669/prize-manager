@@ -2442,7 +2442,6 @@ export default function TournamentSetup() {
                       onClick={() => {
                         if (opt.disabled) return;
                         setCategoryTypeSelection(opt.value);
-                        setDirty();
                       }}
                     >
                       {opt.label}
