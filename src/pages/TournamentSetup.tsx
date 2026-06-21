@@ -2415,113 +2415,46 @@ export default function TournamentSetup() {
           </SheetHeader>
 
           <div className="space-y-6 py-6">
-            {/* Preset Chips */}
+            {/* Special Category */}
             <div className="border-b pb-4 mb-4">
-              <Label className="mb-2 block">Quick Presets</Label>
+              <Label className="mb-2 block">Special Category</Label>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
-                    if (el) el.value = 'F';
-                  }}
-                >
-                  Girls Only
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
-                    if (el) el.value = 'M_OR_UNKNOWN';
-                  }}
-                >
-                  Boys (not F)
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-gender') as HTMLSelectElement;
-                    if (el) el.value = '';
-                  }}
-                >
-                  Any Gender
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
-                    if (el) el.checked = true;
-                  }}
-                >
-                  Include Unrated
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-include-unrated') as HTMLInputElement;
-                    if (el) el.checked = false;
-                  }}
-                >
-                  Exclude Unrated
-                </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700"
-                  onClick={() => {
-                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
-                    if (el) el.value = '9';
-                    setCriteriaMaxAgeInput('9');
-                  }}
-                >
-                  U-9
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={() => {
-                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
-                    if (el) el.value = '11';
-                    setCriteriaMaxAgeInput('11');
-                  }}
-                >
-                  U-11
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={() => {
-                    const el = document.getElementById('criteria-max-age') as HTMLInputElement;
-                    if (el) el.value = '13';
-                    setCriteriaMaxAgeInput('13');
-                  }}
-                >
-                  U-13
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={() => {
-                    const el = document.getElementById('criteria-min-age') as HTMLInputElement;
-                    if (el) el.value = '60';
-                    setCriteriaMinAgeInput('60');
-                  }}
-                >
-                  Veteran 60+
-                </Button>
+                {([
+                  { value: 'standard', label: 'Standard', disabled: false },
+                  { value: 'youngest_male', label: 'Youngest Boy', disabled: false },
+                  { value: 'youngest_female', label: 'Youngest Girl', disabled: false },
+                  { value: 'oldest_male', label: 'Oldest Boy', disabled: true },
+                  { value: 'oldest_female', label: 'Oldest Girl', disabled: true },
+                ] as const).map((opt) => {
+                  const isActive = categoryTypeSelection === opt.value
+                    || (opt.value === 'standard' && (!categoryTypeSelection || categoryTypeSelection === 'standard'));
+                  return (
+                    <Button
+                      key={opt.value}
+                      type="button"
+                      size="sm"
+                      variant={isActive ? 'default' : 'outline'}
+                      disabled={opt.disabled}
+                      title={opt.disabled
+                        ? 'Oldest categories require allocator support and will be enabled in the next engine update.'
+                        : undefined}
+                      aria-pressed={isActive}
+                      onClick={() => {
+                        if (opt.disabled) return;
+                        setCategoryTypeSelection(opt.value);
+                        setDirty();
+                      }}
+                    >
+                      {opt.label}
+                    </Button>
+                  );
+                })}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Click a preset to quickly fill fields. You can adjust values after clicking.
+                Special categories use DOB-based allocator behavior. Category names alone do not control this behavior.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Oldest categories require allocator support and will be enabled in the next engine update.
               </p>
             </div>
 
