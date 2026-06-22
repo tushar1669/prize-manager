@@ -216,12 +216,13 @@ export function downloadPlayersXlsx(
 export function downloadPlayersTemplateXlsx() {
   // === SHEET 1: PLAYERS ===
   const headers = [
-    'Rank', 'SNo.', 'Name', 'Rtg', 'Unrated', 'Birth', 'Gender', 
-    'Fide-No.', 'Federation', 'State', 'City', 'Club'
+    'Rank', 'SNo.', 'Name', 'Rtg', 'Unrated', 'Birth', 'Gender',
+    'Fide-No.', 'Federation', 'State', 'City', 'Club',
+    'Type', 'Disability', 'Ident', 'Gr'
   ];
-  
+
   const sample = [
-    [1, 57, 'Aditi Sharma', 1850, 'No', '2007/00/00', 'F', '35012345', 'IND', 'MH', 'Pune', 'XYZ Chess'],
+    [1, 57, 'Aditi Sharma', 1850, 'No', '2007/00/00', 'F', '35012345', 'IND', 'MH', 'Pune', 'XYZ Chess', '', '', '', ''],
   ];
 
   const wsPlayers = XLSX.utils.aoa_to_sheet([headers, ...sample]);
@@ -244,12 +245,17 @@ export function downloadPlayersTemplateXlsx() {
     { wch: 10 }, // Federation
     { wch: 12 }, // State
     { wch: 14 }, // City
-    { wch: 20 }  // Club
+    { wch: 20 }, // Club
+    { wch: 12 }, // Type
+    { wch: 12 }, // Disability
+    { wch: 10 }, // Ident
+    { wch: 8 }   // Gr
   ];
 
   // Freeze top row and enable filter
   playersWorksheet['!freeze'] = { xSplit: 0, ySplit: 1 };
-  playersWorksheet['!autofilter'] = { ref: 'A1:L1' };
+  playersWorksheet['!autofilter'] = { ref: 'A1:P1' };
+
 
   // === SHEET 2: README ===
   const readmeContent = [
@@ -272,6 +278,11 @@ export function downloadPlayersTemplateXlsx() {
     ['State', 'No', 'State/province. Optional.'],
     ['City', 'No', 'City name. Optional.'],
     ['Club', 'No', 'Chess club or academy. Optional.'],
+    ['Type', 'No', 'Optional Swiss-Manager type/category label. Useful for PC, age-band, section, or special category tagging. Examples: PC, U15, S60, Section A.'],
+    ['Disability', 'No', 'Optional accessibility/disability marker. Examples: PC, PWD, PH. Leave blank if not applicable.'],
+    ['Ident', 'No', 'Optional Swiss-Manager Ident field. Can help preserve state/identity labels from exports.'],
+    ['Gr', 'No', 'Optional group/section label. Useful for group-based category eligibility.'],
+
     [''],
     ['HOW TO EXPORT FROM SWISS-MANAGER'],
     ['1. Open your tournament in Swiss-Manager.'],
