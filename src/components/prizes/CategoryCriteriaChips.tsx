@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Crown, Users, Star, Baby, Zap } from 'lucide-react';
+import { Crown, Users, Star, Baby, Zap, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CriteriaJson {
@@ -64,6 +64,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
 
   // 1. Determine basis type (Main/Open, Age, Rating, Youngest)
   const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
+  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male';
   const hasAge = c.min_age != null || c.max_age != null;
   const hasRating = c.min_rating != null || c.max_rating != null || c.unrated_only;
 
@@ -77,6 +78,19 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
         {...interactiveProps}
       >
         <Baby className="h-3 w-3" />
+        {label}
+      </Badge>
+    );
+  } else if (isOldest) {
+    const label = categoryType === 'oldest_female' ? 'Oldest Woman' : 'Oldest Man';
+    chips.push(
+      <Badge
+        key="oldest"
+        variant="outline"
+        className={cn("bg-violet-500/10 text-violet-700 border-violet-300 gap-1", interactiveClassName)}
+        {...interactiveProps}
+      >
+        <UserRound className="h-3 w-3" />
         {label}
       </Badge>
     );
@@ -112,7 +126,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
   }
 
   // Rating chip (can coexist with age)
-  if (hasRating && !isYoungest) {
+  if (hasRating && !isYoungest && !isOldest) {
     let ratingLabel = 'Rating';
     if (c.unrated_only) {
       ratingLabel = 'Unrated Only';

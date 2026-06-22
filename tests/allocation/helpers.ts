@@ -93,8 +93,11 @@ export function runAllocation(
     }
 
     const isYoungest = allocator.isYoungestCategory(cat);
+    const isOldest = allocator.isOldestCategory(cat);
     if (isYoungest) {
       eligible.sort(allocator.compareYoungestEligible);
+    } else if (isOldest) {
+      eligible.sort(allocator.compareOldestEligible);
     } else {
       eligible.sort((a, b) => allocator.compareEligibleByRankRatingName(a, b, rules.tie_break_strategy));
     }

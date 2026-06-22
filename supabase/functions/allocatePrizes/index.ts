@@ -858,6 +858,7 @@ Deno.serve(async (req) => {
       if (overrides.find(o => o.prizeId === p.id)) continue;
 
       const youngestCategory = isYoungestCategory(cat);
+      const oldestCategory = isOldestCategory(cat);
 
       // Track eligibility BEFORE prize-cap exclusion
       const eligibleBeforeOnePrize: Array<{ player: PlayerRow; passCodes: string[]; warnCodes: string[] }> = [];
@@ -977,6 +978,8 @@ Deno.serve(async (req) => {
       // Deterministic tie-breaking based on configured strategy
       if (youngestCategory) {
         eligible.sort(compareYoungestEligible);
+      } else if (oldestCategory) {
+        eligible.sort(compareOldestEligible);
       } else {
         eligible.sort((a, b) => compareEligibleByRankRatingName(a, b, tieBreakFields));
       }
@@ -986,7 +989,7 @@ Deno.serve(async (req) => {
       let tieBreak: 'none' | TieBreakField | 'rank' = 'none';
       let dobTiePlayerIds: string[] = [];
       if (eligible.length > 1) {
-        if (youngestCategory) {
+        if (youngestCategory || oldestCategory) {
           const first = eligible[0].player;
           const second = eligible[1].player;
           const dobFirst = first.dob ? new Date(first.dob).getTime() : Number.NEGATIVE_INFINITY;
@@ -1003,7 +1006,7 @@ Deno.serve(async (req) => {
             
             if (DEBUG && dobTiePlayerIds.length > 1) {
               console.log(
-                `[alloc.youngest.dob_tie] prize=${p.id} tie_count=${dobTiePlayerIds.length} player_ids=${dobTiePlayerIds.join(',')}`
+                `[alloc.${youngestCategory ? 'youngest' : 'oldest'}.dob_tie] prize=${p.id} tie_count=${dobTiePlayerIds.length} player_ids=${dobTiePlayerIds.join(',')}`
               );
             }
             
@@ -1046,7 +1049,7 @@ Deno.serve(async (req) => {
       recordAssignment(assignments, winner.player.id, { category: cat, prize: p });
       const reasonSet = new Set<string>([
         'auto',
-        youngestCategory ? 'youngest' : 'rank',
+        youngestCategory ? 'youngest' : oldestCategory ? 'oldest' : 'rank',
         'max_cash_priority',
         ...winner.passCodes,
         ...winner.warnCodes
@@ -1504,6 +1507,7 @@ export const evaluateEligibility = (
   };
   const categoryType = (cat.category_type as string) || 'standard';
   const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
+  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male';
   const failCodes = new Set<string>();
   const passCodes = new Set<string>();
   const warnCodes = new Set<string>();
@@ -1512,8 +1516,8 @@ export const evaluateEligibility = (
   // Unified logic: 'M' and 'M_OR_UNKNOWN' both mean "not F" (boys + unknown)
   // This ensures backwards compatibility with old configs using gender='M'
   const reqG = (() => {
-    if (isYoungest) {
-      return categoryType === 'youngest_female' ? 'F' : 'M_OR_UNKNOWN';
+    if (isYoungest || isOldest) {
+      return categoryType === 'youngest_female' || categoryType === 'oldest_female' ? 'F' : 'M_OR_UNKNOWN';
     }
     return c.gender?.toUpperCase?.() || null;
   })();
@@ -1543,7 +1547,7 @@ export const evaluateEligibility = (
     passCodes.add('gender_open');
   }
 
-  if (isYoungest && !player.dob) {
+  if ((isYoungest || isOldest) && !player.dob) {
     failCodes.add('dob_missing');
   }
 
@@ -1930,6 +1934,11 @@ export const isYoungestCategory = (category: { category_type?: string | null }):
   return type === 'youngest_female' || type === 'youngest_male';
 };
 
+export const isOldestCategory = (category: { category_type?: string | null }): boolean => {
+  const type = getCategoryType(category);
+  return type === 'oldest_female' || type === 'oldest_male';
+};
+
 /**
  * Deterministic comparator for eligible players (youngest categories).
  * 
@@ -1943,6 +1952,31 @@ export const isYoungestCategory = (category: { category_type?: string | null }):
  * 3. Rating (descending - higher = better)
  * 4. Name (alphabetical, for final stability)
  */
+/**
+ * Deterministic comparator for eligible players (oldest categories).
+ * Winner is the earliest DOB eligible player. Ties: rank → rating → name.
+ */
+export function compareOldestEligible(
+  a: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
+  b: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
+): number {
+  const dobA = a.player.dob ? new Date(a.player.dob).getTime() : Number.POSITIVE_INFINITY;
+  const dobB = b.player.dob ? new Date(b.player.dob).getTime() : Number.POSITIVE_INFINITY;
+  if (dobA !== dobB) return dobA - dobB;
+
+  const rankA = a.player.rank ?? Number.MAX_SAFE_INTEGER;
+  const rankB = b.player.rank ?? Number.MAX_SAFE_INTEGER;
+  if (rankA !== rankB) return rankA - rankB;
+
+  const ratingA = a.player.rating ?? 0;
+  const ratingB = b.player.rating ?? 0;
+  if (ratingA !== ratingB) return ratingB - ratingA;
+
+  const nameA = (a.player.name ?? '').toString();
+  const nameB = (b.player.name ?? '').toString();
+  return nameA.localeCompare(nameB);
+}
+
 export function compareYoungestEligible(
   a: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
   b: { player: { dob?: string | null; rank?: number | null; rating?: number | null; name?: string | null } },
