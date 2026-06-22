@@ -2425,8 +2425,8 @@ export default function TournamentSetup() {
                   { value: 'standard', label: 'Standard', disabled: false },
                   { value: 'youngest_male', label: 'Youngest Boy', disabled: false },
                   { value: 'youngest_female', label: 'Youngest Girl', disabled: false },
-                  { value: 'oldest_male', label: 'Oldest Boy', disabled: true },
-                  { value: 'oldest_female', label: 'Oldest Girl', disabled: true },
+                  { value: 'oldest_male', label: 'Oldest Man', disabled: false },
+                  { value: 'oldest_female', label: 'Oldest Woman', disabled: false },
                 ] as const).map((opt) => {
                   const isActive = categoryTypeSelection === opt.value
                     || (opt.value === 'standard' && (!categoryTypeSelection || categoryTypeSelection === 'standard'));
@@ -2437,12 +2437,8 @@ export default function TournamentSetup() {
                       size="sm"
                       variant={isActive ? 'default' : 'outline'}
                       disabled={opt.disabled}
-                      title={opt.disabled
-                        ? 'Oldest categories require allocator support and will be enabled in the next engine update.'
-                        : undefined}
                       aria-pressed={isActive}
                       onClick={() => {
-                        if (opt.disabled) return;
                         setCategoryTypeSelection(opt.value);
                       }}
                     >
@@ -2453,9 +2449,6 @@ export default function TournamentSetup() {
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Special categories use DOB-based allocator behavior. Category names alone do not control this behavior.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Oldest categories require allocator support and will be enabled in the next engine update.
               </p>
             </div>
 
@@ -2477,7 +2470,7 @@ export default function TournamentSetup() {
                 allowed_types?: string[];
                 max_age_inclusive?: boolean;
               };
-              const youngestCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male';
+              const dobSpecialCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male' || categoryTypeSelection === 'oldest_female' || categoryTypeSelection === 'oldest_male';
               const maxAgeOverrideActive = criteriaMaxAgeInclusiveOverride != null;
               const effectiveMaxAgeInclusive = criteriaMaxAgeInclusiveOverride ?? ((ruleConfig as { max_age_inclusive?: boolean })?.max_age_inclusive ?? true);
               const effectiveMaxAgeSymbol = effectiveMaxAgeInclusive ? '≤' : '<';
@@ -2493,7 +2486,7 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.max_age ?? ''}
                         placeholder="e.g., 9, 11, 13"
-                        disabled={youngestCategory}
+                        disabled={dobSpecialCategory}
                         className={criteriaErrors.ageRange ? 'border-destructive' : ''}
                         onChange={(e) => {
                           setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }));
@@ -2509,7 +2502,7 @@ export default function TournamentSetup() {
                           Meaning: age {effectiveMaxAgeSymbol} {criteriaMaxAgeInput} on {getAgeCutoffDescription()} ({maxAgeSourceLabel})
                         </p>
                       )}
-                      {!youngestCategory && (
+                      {!dobSpecialCategory && (
                         <div className="mt-3 rounded-md border border-zinc-700/60 bg-zinc-900/40 p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div>
@@ -2552,7 +2545,7 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.min_age ?? ''}
                         placeholder="e.g., 60"
-                        disabled={youngestCategory}
+                        disabled={dobSpecialCategory}
                         className={criteriaErrors.ageRange ? 'border-destructive' : ''}
                         onChange={(e) => {
                           setCriteriaErrors(prev => ({ ...prev, ageRange: undefined }));
@@ -2580,7 +2573,7 @@ export default function TournamentSetup() {
                       <Checkbox
                         id="criteria-unrated-only"
                         defaultChecked={criteria?.unrated_only ?? false}
-                        disabled={youngestCategory}
+                        disabled={dobSpecialCategory}
                         onCheckedChange={(checked) => {
                           // When toggled, we need to update dependent fields visually
                           const minRatingEl = document.getElementById('criteria-min-rating') as HTMLInputElement;
@@ -2628,9 +2621,9 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.min_rating ?? ''}
                         placeholder="e.g., 1200"
-                        disabled={criteria?.unrated_only === true || youngestCategory}
+                        disabled={criteria?.unrated_only === true || dobSpecialCategory}
                         className={cn(
-                          criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : '',
+                          criteria?.unrated_only === true || dobSpecialCategory ? 'opacity-50' : '',
                           criteriaErrors.ratingRange ? 'border-destructive' : ''
                         )}
                         onChange={() => setCriteriaErrors(prev => ({ ...prev, ratingRange: undefined }))}
@@ -2644,9 +2637,9 @@ export default function TournamentSetup() {
                         min="0"
                         defaultValue={criteria?.max_rating ?? ''}
                         placeholder="e.g., 1800"
-                        disabled={criteria?.unrated_only === true || youngestCategory}
+                        disabled={criteria?.unrated_only === true || dobSpecialCategory}
                         className={cn(
-                          criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : '',
+                          criteria?.unrated_only === true || dobSpecialCategory ? 'opacity-50' : '',
                           criteriaErrors.ratingRange ? 'border-destructive' : ''
                         )}
                         onChange={() => setCriteriaErrors(prev => ({ ...prev, ratingRange: undefined }))}
@@ -2667,12 +2660,12 @@ export default function TournamentSetup() {
                     <Checkbox
                       id="criteria-include-unrated"
                       defaultChecked={criteria?.unrated_only === true ? true : (criteria?.include_unrated ?? true)}
-                      disabled={criteria?.unrated_only === true || youngestCategory}
-                      className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50 cursor-not-allowed' : ''}
+                      disabled={criteria?.unrated_only === true || dobSpecialCategory}
+                      className={criteria?.unrated_only === true || dobSpecialCategory ? 'opacity-50 cursor-not-allowed' : ''}
                     />
                     <Label 
                       htmlFor="criteria-include-unrated"
-                      className={criteria?.unrated_only === true || youngestCategory ? 'opacity-50' : ''}
+                      className={criteria?.unrated_only === true || dobSpecialCategory ? 'opacity-50' : ''}
                     >
                       Include unrated players
                     </Label>
@@ -2697,7 +2690,7 @@ export default function TournamentSetup() {
                         // Normalize legacy 'M' to 'M_OR_UNKNOWN' for display
                         criteria?.gender === 'M' ? 'M_OR_UNKNOWN' : (criteria?.gender || '')
                       }
-                      disabled={youngestCategory}
+                      disabled={dobSpecialCategory}
                       onChange={(e) => setCriteriaGenderSelection(e.target.value)}
                     >
                       <option value="">Any – No gender restriction</option>
@@ -2814,7 +2807,7 @@ export default function TournamentSetup() {
             <Button
               onClick={() => {
                 const categoryType = categoryTypeSelection || 'standard';
-                const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
+                const isDobSpecial = categoryType === 'youngest_female' || categoryType === 'youngest_male' || categoryType === 'oldest_female' || categoryType === 'oldest_male';
 
                 // Age fields (min_age/max_age)
                 const maxAgeRaw = (document.getElementById('criteria-max-age') as HTMLInputElement)?.value;
@@ -2870,7 +2863,7 @@ export default function TournamentSetup() {
 
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
-                const unratedOnly = !isYoungest && unratedOnlyEl?.getAttribute('data-state') === 'checked';
+                const unratedOnly = !isDobSpecial && unratedOnlyEl?.getAttribute('data-state') === 'checked';
 
                 // === VALIDATION GUARDRAILS ===
                 const validationErrors: { ageRange?: string; ratingRange?: string } = {};
@@ -2898,7 +2891,7 @@ export default function TournamentSetup() {
                 const criteria: Record<string, unknown> = {};
 
                 // Age fields (used by allocator)
-                if (!isYoungest) {
+                if (!isDobSpecial) {
                   if (maxAge != null && !isNaN(maxAge)) criteria.max_age = maxAge;
                   if (minAge != null && !isNaN(minAge)) criteria.min_age = minAge;
                   if (criteriaMaxAgeInclusiveOverride != null) {
@@ -2907,17 +2900,17 @@ export default function TournamentSetup() {
                 }
 
                 // Only save rating fields if not unrated-only mode
-                if (!isYoungest && !unratedOnly) {
+                if (!isDobSpecial && !unratedOnly) {
                   if (minRating != null && !isNaN(minRating)) criteria.min_rating = minRating;
                   if (maxRating != null && !isNaN(maxRating)) criteria.max_rating = maxRating;
                   criteria.include_unrated = includeUnrated;
                 }
 
                 // Save unrated_only flag
-                if (!isYoungest) criteria.unrated_only = unratedOnly;
+                if (!isDobSpecial) criteria.unrated_only = unratedOnly;
 
-                if (isYoungest) {
-                  criteria.gender = categoryType === 'youngest_female' ? 'F' : 'M_OR_UNKNOWN';
+                if (isDobSpecial) {
+                  criteria.gender = categoryType === 'youngest_female' || categoryType === 'oldest_female' ? 'F' : 'M_OR_UNKNOWN';
                 } else if (gender) {
                   criteria.gender = gender;
                 }
