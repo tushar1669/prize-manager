@@ -244,12 +244,16 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
     markSaved: () => {
       const cleaned = draft
         .filter(p => p._status !== 'deleted')
-        .map(p => ({ ...p, _status: 'clean' as const }));
+        .map(p => ({ ...p, _status: 'clean' as const, _error: undefined }));
       setDraft(cleaned);
       setLastSaved(cleaned);
       resetDirty(`cat-${category.id}`);
+      // Clear local autosave draft + any stale Restore banner so reload
+      // doesn't resurrect data already persisted to the DB (Save All path).
+      clearDraft(draftKey);
+      setRestore(null);
     },
-  }), [category.id, computeDelta, draft, resetDirty, validationError]);
+  }), [category.id, computeDelta, draft, draftKey, resetDirty, validationError]);
 
   const nextPlace = useMemo(() => {
     const places = draft.filter(p => p._status !== 'deleted').map(p => Number(p.place) || 0);
