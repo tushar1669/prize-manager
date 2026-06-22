@@ -48,6 +48,42 @@ export interface PrizeDelta {
   deletes: string[];
 }
 
+// Stable normalization for prize-row equality checks.
+// Compares only the persisted fields shown in the editor, coercing numeric/string
+// differences (e.g. 7781 vs "7781.00") so equal-to-DB drafts are recognized as stale.
+type AnyPrizeLike = Partial<PrizeRow> & { gift_items?: unknown };
+const normalizeGiftItems = (gifts: unknown): { name: string; qty: number }[] => {
+  if (!Array.isArray(gifts)) return [];
+  return gifts
+    .map((g) => {
+      const obj = (g || {}) as { name?: unknown; qty?: unknown };
+      return { name: String(obj.name ?? '').trim(), qty: Number(obj.qty) || 0 };
+    })
+    .filter((g) => g.name.length > 0 || g.qty > 0)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.qty - b.qty);
+};
+const normalizePrizeRowForCompare = (row: AnyPrizeLike) => ({
+  place: Number(row.place) || 0,
+  cash_amount: Number(row.cash_amount) || 0,
+  has_trophy: !!row.has_trophy,
+  has_medal: !!row.has_medal,
+  is_active: row.is_active ?? true,
+  gift_items: normalizeGiftItems(row.gift_items),
+});
+export function arePrizeRowsEquivalent(
+  a: AnyPrizeLike[] | null | undefined,
+  b: AnyPrizeLike[] | null | undefined,
+): boolean {
+  const aa = Array.isArray(a) ? a.filter((r) => (r?._status ?? 'clean') !== 'deleted') : [];
+  const bb = Array.isArray(b) ? b.filter((r) => (r?._status ?? 'clean') !== 'deleted') : [];
+  if (aa.length !== bb.length) return false;
+  const sort = (rows: AnyPrizeLike[]) =>
+    rows
+      .map(normalizePrizeRowForCompare)
+      .sort((x, y) => x.place - y.place || x.cash_amount - y.cash_amount);
+  return JSON.stringify(sort(aa)) === JSON.stringify(sort(bb));
+}
+
 export interface CategoryPrizesEditorHandle {
   categoryId: string;
   computeDelta: () => PrizeDelta;
@@ -83,10 +119,21 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   const draftKey = makeKey(`cat:${category.id}:prizes`);
   const [restore, setRestore] = useState<null | { data: PrizeRow[]; ageMs: number }>(null);
 
-  // Check for draft on mount or category change
+  // Check for draft on mount or category change.
+  // Silently discard drafts that match (after normalization) what's already in the DB
+  // for this category — those are stale autosaves from a prior session/save.
   useEffect(() => {
     const saved = getDraft<PrizeRow[]>(draftKey, 1);
-    if (saved) setRestore(saved);
+    if (!saved) return;
+    const serverRows = category.prizes || [];
+    if (arePrizeRowsEquivalent(saved.data, serverRows)) {
+      clearDraft(draftKey);
+      setRestore(null);
+      return;
+    }
+    setRestore(saved);
+    // Only react to category change; server rows comparison is intentionally a snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
   // initialize/refresh from props (also when prizes list changes on refetch)

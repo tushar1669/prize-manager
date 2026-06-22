@@ -31,7 +31,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
-import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle, CategoryRow } from '@/components/prizes/CategoryPrizesEditor';
+import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle, CategoryRow, arePrizeRowsEquivalent } from '@/components/prizes/CategoryPrizesEditor';
 import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext.shared";
@@ -351,19 +351,9 @@ export default function TournamentSetup() {
     version: 1,
   });
 
-  // Check for Main Prizes draft when opening Prizes tab (only when we have a valid key)
-  useEffect(() => {
-    if (activeTab !== 'prizes' || !mainPrizesDraftKey || !id) return;
-    
-    const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
-    if (draft) {
-      // Show banner for manual restore (no more silent auto-restore)
-      setMainPrizesRestore(draft);
-      setHasPendingDraft(true);
-    } else {
-      setHasPendingDraft(false);
-    }
-  }, [activeTab, mainPrizesDraftKey, id]);
+  // Note: legacy main-prizes draft hydration + banner decision now lives in the
+  // categories-aware hydration effect below (it can compare drafts against DB rows
+  // using arePrizeRowsEquivalent and silently drop stale/equal drafts).
 
   // Track if we've hydrated prizes from DB (to guard autosave)
   const [hasHydratedPrizes, setHasHydratedPrizes] = useState(false);
@@ -649,8 +639,13 @@ export default function TournamentSetup() {
     const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
     
     if (draft) {
-      // Draft exists - check if it's recent (within last 5 minutes)
-      if (draft.ageMs < 300000) { // 5 minutes
+      const dbRowsForCompare = (mainCat?.prizes || []) as unknown as PrizeRow[];
+      // Silently drop drafts that already match the DB-loaded main prizes
+      // (e.g. lingering autosaves from a prior successful save).
+      if (arePrizeRowsEquivalent(draft.data, dbRowsForCompare)) {
+        console.log('[setup] draft matches DB, clearing silently', { ageMs: draft.ageMs });
+        clearDraft(mainPrizesDraftKey);
+      } else if (draft.ageMs < 300000) { // 5 minutes
         console.log('[setup] recent draft found, showing restore banner', { ageMs: draft.ageMs });
         setHasPendingDraft(true);
         setMainPrizesRestore(draft);
