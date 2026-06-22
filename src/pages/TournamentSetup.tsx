@@ -1046,7 +1046,11 @@ export default function TournamentSetup() {
   const handleSaveAllCategories = useCallback(async () => {
     clearError();
 
-    const nonMainCats = categories?.filter(c => !c.is_main) || [];
+    // Include is_main categories: the visible "Main Prize" panel is a CategoryPrizesEditor
+    // for the is_main=true category and registers its dirty state as `cat-<id>`, saving
+    // through saveCategoryPrizesMutation like any other category. The legacy `main-prizes`
+    // flat editor below remains as a safety fallback but is not rendered in the current UI.
+    const nonMainCats = categories || [];
 
     // Primary truth: DirtyContext `sources`. Ref fallback covers a very-fast click before propagation.
     const dirtyCats = nonMainCats.filter(cat => {
