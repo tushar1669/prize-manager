@@ -351,28 +351,9 @@ export default function TournamentSetup() {
     version: 1,
   });
 
-  // Check for Main Prizes draft when opening Prizes tab (only when we have a valid key)
-  useEffect(() => {
-    if (activeTab !== 'prizes' || !mainPrizesDraftKey || !id) return;
-
-    const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
-    if (!draft) {
-      setHasPendingDraft(false);
-      return;
-    }
-    // Silently drop drafts that already match the DB-loaded main prizes.
-    const mainCat = categories?.find((c) => c.is_main);
-    const dbRows = (mainCat?.prizes || []) as unknown as PrizeRow[];
-    if (arePrizeRowsEquivalent(draft.data, dbRows)) {
-      clearDraft(mainPrizesDraftKey);
-      setMainPrizesRestore(null);
-      setHasPendingDraft(false);
-      return;
-    }
-    // Show banner for manual restore (no more silent auto-restore)
-    setMainPrizesRestore(draft);
-    setHasPendingDraft(true);
-  }, [activeTab, mainPrizesDraftKey, id, categories]);
+  // Note: legacy main-prizes draft hydration + banner decision now lives in the
+  // categories-aware hydration effect below (it can compare drafts against DB rows
+  // using arePrizeRowsEquivalent and silently drop stale/equal drafts).
 
   // Track if we've hydrated prizes from DB (to guard autosave)
   const [hasHydratedPrizes, setHasHydratedPrizes] = useState(false);
