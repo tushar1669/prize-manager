@@ -83,10 +83,21 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
   const draftKey = makeKey(`cat:${category.id}:prizes`);
   const [restore, setRestore] = useState<null | { data: PrizeRow[]; ageMs: number }>(null);
 
-  // Check for draft on mount or category change
+  // Check for draft on mount or category change.
+  // Silently discard drafts that match (after normalization) what's already in the DB
+  // for this category — those are stale autosaves from a prior session/save.
   useEffect(() => {
     const saved = getDraft<PrizeRow[]>(draftKey, 1);
-    if (saved) setRestore(saved);
+    if (!saved) return;
+    const serverRows = category.prizes || [];
+    if (arePrizeRowsEquivalent(saved.data, serverRows)) {
+      clearDraft(draftKey);
+      setRestore(null);
+      return;
+    }
+    setRestore(saved);
+    // Only react to category change; server rows comparison is intentionally a snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
   // initialize/refresh from props (also when prizes list changes on refetch)
