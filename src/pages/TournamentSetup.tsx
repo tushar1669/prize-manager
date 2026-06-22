@@ -639,8 +639,13 @@ export default function TournamentSetup() {
     const draft = getDraft<PrizeRow[]>(mainPrizesDraftKey, 1);
     
     if (draft) {
-      // Draft exists - check if it's recent (within last 5 minutes)
-      if (draft.ageMs < 300000) { // 5 minutes
+      const dbRowsForCompare = (mainCat?.prizes || []) as unknown as PrizeRow[];
+      // Silently drop drafts that already match the DB-loaded main prizes
+      // (e.g. lingering autosaves from a prior successful save).
+      if (arePrizeRowsEquivalent(draft.data, dbRowsForCompare)) {
+        console.log('[setup] draft matches DB, clearing silently', { ageMs: draft.ageMs });
+        clearDraft(mainPrizesDraftKey);
+      } else if (draft.ageMs < 300000) { // 5 minutes
         console.log('[setup] recent draft found, showing restore banner', { ageMs: draft.ageMs });
         setHasPendingDraft(true);
         setMainPrizesRestore(draft);
