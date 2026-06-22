@@ -31,7 +31,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { BackBar } from "@/components/BackBar";
 import ErrorPanel from "@/components/ui/ErrorPanel";
 import { useErrorPanel } from "@/hooks/useErrorPanel";
-import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle, CategoryRow } from '@/components/prizes/CategoryPrizesEditor';
+import CategoryPrizesEditor, { PrizeDelta, PrizeRow, CategoryPrizesEditorHandle, CategoryRow, arePrizeRowsEquivalent } from '@/components/prizes/CategoryPrizesEditor';
 import { prepareCategoryPrizeUpsertRows } from '@/components/prizes/prizeDeltaUtils';
 import { TournamentProgressBreadcrumbs } from '@/components/TournamentProgressBreadcrumbs';
 import { useDirty } from "@/contexts/DirtyContext.shared";
