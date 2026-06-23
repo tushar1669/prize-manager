@@ -877,12 +877,20 @@ Deno.serve(async (req) => {
         }
         if (evaluation.eligible) {
           eligibleBeforeOnePrize.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
-          const canTakePrize = canPlayerTakePrize({
-            policy: multiPrizePolicy,
-            category: cat,
-            playerId: player.id,
-            assignments,
-          });
+          const isDobSpecialCategory = youngestCategory || oldestCategory;
+          const allowDuplicateForDobSpecial =
+            isDobSpecialCategory &&
+            cat.criteria_json?.allow_duplicate_winner_for_dob_special === true;
+          const sameCategoryAlready =
+            (assignments.get(player.id) ?? []).some((a) => a.category.id === cat.id);
+          const canTakePrize = allowDuplicateForDobSpecial
+            ? !sameCategoryAlready
+            : canPlayerTakePrize({
+                policy: multiPrizePolicy,
+                category: cat,
+                playerId: player.id,
+                assignments,
+              });
 
           if (canTakePrize) {
             eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });

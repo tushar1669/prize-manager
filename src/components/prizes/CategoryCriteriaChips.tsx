@@ -16,6 +16,7 @@ interface CriteriaJson {
   allowed_cities?: string[];
   allowed_groups?: string[];
   allowed_types?: string[];
+  allow_duplicate_winner_for_dob_special?: boolean;
 }
 
 interface Props {
@@ -67,6 +68,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
   const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male';
   const hasAge = c.min_age != null || c.max_age != null;
   const hasRating = c.min_rating != null || c.max_rating != null || c.unrated_only;
+  const allowDuplicateForDobSpecial = (isYoungest || isOldest) && c.allow_duplicate_winner_for_dob_special === true;
 
   if (isYoungest) {
     const label = categoryType === 'youngest_female' ? 'Youngest Girl' : 'Youngest Boy';
@@ -94,7 +96,23 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
         {label}
       </Badge>
     );
-  } else if (isMain) {
+  }
+
+  if (allowDuplicateForDobSpecial) {
+    chips.push(
+      <Badge
+        key="duplicate-dob-special"
+        variant="outline"
+        className={cn("bg-amber-500/10 text-amber-700 border-amber-300 gap-1", interactiveClassName)}
+        {...interactiveProps}
+      >
+        <Users className="h-3 w-3" />
+        Duplicate winner allowed
+      </Badge>
+    );
+  }
+
+  if (!isYoungest && !isOldest && isMain) {
     // Main category chips are read-only (no onEditRules for main)
     chips.push(
       <Badge key="main" variant="outline" className="bg-primary/10 text-primary border-primary/30 gap-1">
@@ -102,7 +120,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
         Main Open
       </Badge>
     );
-  } else if (hasAge) {
+  } else if (!isYoungest && !isOldest && hasAge) {
     // Age-based category
     let ageLabel = 'Age';
     if (c.max_age != null && c.min_age == null) {

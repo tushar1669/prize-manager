@@ -2469,6 +2469,7 @@ export default function TournamentSetup() {
                 allowed_groups?: string[];
                 allowed_types?: string[];
                 max_age_inclusive?: boolean;
+                allow_duplicate_winner_for_dob_special?: boolean;
               };
               const dobSpecialCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male' || categoryTypeSelection === 'oldest_female' || categoryTypeSelection === 'oldest_male';
               const maxAgeOverrideActive = criteriaMaxAgeInclusiveOverride != null;
@@ -2565,6 +2566,28 @@ export default function TournamentSetup() {
                   </div>
                   {criteriaErrors.ageRange && (
                     <p className="text-sm text-destructive font-medium">{criteriaErrors.ageRange}</p>
+                  )}
+
+                  {dobSpecialCategory && (
+                    <div className="rounded-md border border-zinc-700/60 bg-zinc-900/40 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <Label htmlFor="criteria-allow-duplicate-dob-special">
+                            Award true youngest/oldest even if already won another prize
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Off by default. When off, the system follows one-prize-one-player and moves to the next eligible player.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Applies only to this special category.
+                          </p>
+                        </div>
+                        <Switch
+                          id="criteria-allow-duplicate-dob-special"
+                          defaultChecked={criteria?.allow_duplicate_winner_for_dob_special === true}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {/* Unrated-only Category */}
@@ -2864,6 +2887,8 @@ export default function TournamentSetup() {
                 // Read unrated-only checkbox
                 const unratedOnlyEl = document.getElementById('criteria-unrated-only');
                 const unratedOnly = !isDobSpecial && unratedOnlyEl?.getAttribute('data-state') === 'checked';
+                const allowDuplicateForDobSpecialEl = document.getElementById('criteria-allow-duplicate-dob-special');
+                const allowDuplicateForDobSpecial = isDobSpecial && allowDuplicateForDobSpecialEl?.getAttribute('data-state') === 'checked';
 
                 // === VALIDATION GUARDRAILS ===
                 const validationErrors: { ageRange?: string; ratingRange?: string } = {};
@@ -2911,6 +2936,9 @@ export default function TournamentSetup() {
 
                 if (isDobSpecial) {
                   criteria.gender = categoryType === 'youngest_female' || categoryType === 'oldest_female' ? 'F' : 'M_OR_UNKNOWN';
+                  if (allowDuplicateForDobSpecial) {
+                    criteria.allow_duplicate_winner_for_dob_special = true;
+                  }
                 } else if (gender) {
                   criteria.gender = gender;
                 }

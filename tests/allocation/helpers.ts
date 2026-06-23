@@ -75,12 +75,23 @@ export function runAllocation(
       const evaluation = allocator.evaluateEligibility(player, cat as unknown, rules, startDate);
       if (!evaluation.eligible) continue;
 
-      const canTake = allocator.canPlayerTakePrize({
-        policy: rules.multi_prize_policy ?? 'single',
-        category: cat as unknown,
-        playerId: player.id,
-        assignments: assignments as unknown,
-      });
+      const isYoungest = allocator.isYoungestCategory(cat);
+      const isOldest = allocator.isOldestCategory(cat);
+      const criteriaJson = (cat.criteria_json && typeof cat.criteria_json === 'object' && !Array.isArray(cat.criteria_json))
+        ? cat.criteria_json as Record<string, unknown>
+        : {};
+      const allowDuplicateForDobSpecial =
+        (isYoungest || isOldest) &&
+        criteriaJson.allow_duplicate_winner_for_dob_special === true;
+      const sameCategoryAlready = (assignments.get(player.id) ?? []).some((a) => a.category.id === cat.id);
+      const canTake = allowDuplicateForDobSpecial
+        ? !sameCategoryAlready
+        : allocator.canPlayerTakePrize({
+            policy: rules.multi_prize_policy ?? 'single',
+            category: cat as unknown,
+            playerId: player.id,
+            assignments: assignments as unknown,
+          });
 
       if (canTake) {
         eligible.push({ player, passCodes: evaluation.passCodes, warnCodes: evaluation.warnCodes });
