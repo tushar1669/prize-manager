@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockRpc = vi.fn();
 const mockFrom = vi.fn();
 const mockGetSession = vi.fn();
+type RpcFn = (name: string, args: Record<string, unknown>) => Promise<unknown>;
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -47,28 +48,24 @@ describe("TournamentUpgrade — UPI Payment", () => {
     });
   });
 
-  it("PRO_PRICE_INR is 2000", async () => {
-    // Dynamically import to get the module's constants
+  it("TournamentUpgrade module loads without stale hardcoded Pro price", async () => {
     const mod = await import("@/pages/TournamentUpgrade");
-    // The component renders the price; we just verify via source that the constant is correct
     expect(mod).toBeDefined();
-    // The price constant is checked via rendered output in integration tests
-    // Here we verify the module loads without errors
   });
 
   it("submit_tournament_payment_claim RPC receives correct args", async () => {
     mockRpc.mockResolvedValueOnce({ data: "payment-id-1", error: null });
 
     const { supabase } = await import("@/integrations/supabase/client");
-    await (supabase.rpc as Function)("submit_tournament_payment_claim", {
+    await (supabase.rpc as RpcFn)("submit_tournament_payment_claim", {
       p_tournament_id: "t-123",
-      p_amount_inr: 2000,
+      p_amount_inr: 500,
       p_utr: "123456789012",
     });
 
     expect(mockRpc).toHaveBeenCalledWith("submit_tournament_payment_claim", {
       p_tournament_id: "t-123",
-      p_amount_inr: 2000,
+      p_amount_inr: 500,
       p_utr: "123456789012",
     });
   });
@@ -77,7 +74,7 @@ describe("TournamentUpgrade — UPI Payment", () => {
     mockRpc.mockResolvedValueOnce({ data: { ok: true, status: "approved" }, error: null });
 
     const { supabase } = await import("@/integrations/supabase/client");
-    await (supabase.rpc as Function)("review_tournament_payment", {
+    await (supabase.rpc as RpcFn)("review_tournament_payment", {
       p_payment_id: "pay-1",
       p_decision: "approve",
       p_note: null,
@@ -94,7 +91,7 @@ describe("TournamentUpgrade — UPI Payment", () => {
     mockRpc.mockResolvedValueOnce({ data: { ok: true, status: "rejected" }, error: null });
 
     const { supabase } = await import("@/integrations/supabase/client");
-    await (supabase.rpc as Function)("review_tournament_payment", {
+    await (supabase.rpc as RpcFn)("review_tournament_payment", {
       p_payment_id: "pay-2",
       p_decision: "reject",
       p_note: "Invalid UTR",

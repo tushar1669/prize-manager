@@ -1700,6 +1700,16 @@ export type Database = {
           preview_main_limit: number
         }[]
       }
+      get_tournament_pro_price: {
+        Args: { tournament_id: string }
+        Returns: {
+          amount_inr: number
+          free_player_threshold: number
+          is_free_small_tournament: boolean
+          players_count: number
+          tier_label: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
