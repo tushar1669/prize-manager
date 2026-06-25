@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppNav } from "@/components/AppNav";
@@ -18,11 +18,18 @@ import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
 
-const PRO_PRICE_INR = 2000;
 const UPI_ID = "9559161414-5@ybl";
 const PAYEE_NAME = "Tushar Saraswat";
 
 type RedeemCouponResponse = { amount_after: number; discount_amount: number; reason: string };
+
+type ProPriceRow = {
+  players_count: number;
+  is_free_small_tournament: boolean;
+  amount_inr: number;
+  tier_label: string;
+  free_player_threshold: number;
+};
 
 function getCouponErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "");
@@ -53,11 +60,31 @@ export default function TournamentUpgrade() {
   const [couponCode, setCouponCode] = useState("");
   const [utrValue, setUtrValue] = useState("");
   const [upiCopied, setUpiCopied] = useState(false);
-  const [amountDue, setAmountDue] = useState(PRO_PRICE_INR);
+  const [amountDue, setAmountDue] = useState(0);
   const { user } = useAuth();
 
   const { hasFullAccess, isLoading: accessLoading, errorCode: accessErrorCode } = useTournamentAccess(id);
   const hasBackendMigrationIssue = accessErrorCode === "backend_migration_missing";
+
+
+  const { data: proPrice, isLoading: pricingLoading } = useQuery({
+    queryKey: ["tournament-pro-price", id],
+    enabled: !!id && !hasBackendMigrationIssue,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_tournament_pro_price", { tournament_id: id! });
+      if (error) throw error;
+      const row: ProPriceRow | null = Array.isArray(data) ? data[0] ?? null : data;
+      if (!row) throw new Error("Pricing response missing");
+      return row;
+    },
+  });
+
+  useEffect(() => {
+    if (proPrice) setAmountDue(proPrice.amount_inr);
+  }, [proPrice]);
+
+  const baseAmount = proPrice?.amount_inr ?? 0;
+  const isFreeTier = proPrice?.is_free_small_tournament ?? false;
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ["tournament-upgrade", id],
@@ -103,7 +130,7 @@ export default function TournamentUpgrade() {
       const { data, error } = await supabase.rpc('redeem_coupon_for_tournament' as never, {
         code: normalizedCode,
         tournament_id: id,
-        amount_before: PRO_PRICE_INR,
+        amount_before: baseAmount,
       } as never);
 
       if (error) throw new Error(error.message);
@@ -135,7 +162,14 @@ export default function TournamentUpgrade() {
       navigate(returnTo, { replace: true, state: { upgraded: true } });
     },
     onError: (error) => {
-      toast.error(getCouponErrorMessage(error));
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg === "already_free") {
+        toast.error("This tournament is already within the free tier.");
+      } else if (msg === "amount_before_mismatch") {
+        toast.error("Tournament pricing changed. Please refresh and try again.");
+      } else {
+        toast.error(getCouponErrorMessage(error));
+      }
     },
   });
 
@@ -226,7 +260,12 @@ export default function TournamentUpgrade() {
               <li>Unlock Poster Grid and Arbiter Sheet views on finalize.</li>
               <li>Enable XLSX export and print actions from finalize.</li>
             </ul>
-            <p className="pt-1 font-medium text-foreground">Pro plan price: ₹{PRO_PRICE_INR}</p>
+            <div className="pt-1 space-y-1 font-medium text-foreground">
+              <p>0–150 players: Free</p>
+              <p>151–500 players: ₹500</p>
+              <p>501+ players: ₹1000</p>
+              {proPrice && <p>Current tournament: {proPrice.players_count} players · {isFreeTier ? "Free" : `₹${baseAmount}`}</p>}
+            </div>
           </CardContent>
         </Card>
         )}
@@ -238,6 +277,17 @@ export default function TournamentUpgrade() {
               <p className="text-sm text-emerald-700 dark:text-emerald-300">This tournament already has Pro access.</p>
               <Button className="mt-3" onClick={() => navigate(returnTo)}>
                 Return
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {!accessLoading && !hasFullAccess && isFreeTier && (
+          <Card className="border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+            <CardContent className="pt-6">
+              <p className="text-sm text-emerald-700 dark:text-emerald-300">This tournament is within the free tier.</p>
+              <Button className="mt-3" onClick={() => navigate(returnTo)}>
+                Continue
               </Button>
             </CardContent>
           </Card>
@@ -283,7 +333,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* Coupon section — preserved exactly */}
-        {!hasBackendMigrationIssue && (
+        {!hasBackendMigrationIssue && !pricingLoading && !isFreeTier && (
         <Card className={couponHighlighted ? "border-primary/60" : ""}>
           <CardHeader>
             <CardTitle>Apply Coupon</CardTitle>
@@ -302,7 +352,7 @@ export default function TournamentUpgrade() {
             </div>
             <Button
               onClick={() => applyCouponMutation.mutate(couponCode)}
-              disabled={!couponCode.trim() || applyCouponMutation.isPending || hasFullAccess || tournamentLoading}
+              disabled={!couponCode.trim() || applyCouponMutation.isPending || hasFullAccess || tournamentLoading || pricingLoading || baseAmount <= 0}
             >
               {applyCouponMutation.isPending ? (
                 <span className="inline-flex items-center gap-2">
@@ -317,7 +367,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* UPI Payment section — new */}
-        {!hasBackendMigrationIssue && !hasFullAccess && (
+        {!hasBackendMigrationIssue && !hasFullAccess && !pricingLoading && !isFreeTier && (
           <Card>
             <CardHeader>
               <CardTitle>Pay via UPI</CardTitle>
@@ -356,9 +406,9 @@ export default function TournamentUpgrade() {
                 </div>
               </div>
 
-              {amountDue < PRO_PRICE_INR && (
+              {amountDue < baseAmount && (
                 <p className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
-                  Pay exactly ₹{amountDue} (after coupon discount). Paying ₹{PRO_PRICE_INR} may cause your claim to be rejected.
+                  Pay exactly ₹{amountDue} (after coupon discount). Paying ₹{baseAmount} may cause your claim to be rejected.
                 </p>
               )}
 
