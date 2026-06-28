@@ -12,6 +12,8 @@ import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { Seo } from "@/components/seo/Seo";
 import { fetchPublishedTournamentBySlug, type PublicTournamentLookup } from "@/utils/publicTournamentLookup";
+import { coerceGiftItems } from "@/lib/utils";
+import { formatGiftItems } from "@/utils/giftItems";
 
 interface PublicResultRow {
   prize_id: string;
@@ -25,6 +27,7 @@ interface PublicResultRow {
   cash_amount: number;
   has_trophy: boolean;
   has_medal: boolean;
+  gift_items?: unknown;
   has_full_access?: boolean;
   other_categories_locked?: boolean;
 }
@@ -65,6 +68,7 @@ export default function PublicResults() {
         cashAmount: row.cash_amount || 0,
         hasTrophy: !!row.has_trophy,
         hasMedal: !!row.has_medal,
+        giftItems: coerceGiftItems(row.gift_items),
       }));
 
       return {
@@ -158,27 +162,35 @@ export default function PublicResults() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {results.rows.map((result, idx) => (
-                          <TableRow key={idx} className="border-border">
-                            <TableCell className="font-medium">{result.categoryName}</TableCell>
-                            <TableCell className="font-bold text-lg">{result.place}</TableCell>
-                            <TableCell className="font-medium text-foreground">{result.playerName}</TableCell>
-                            <TableCell className="text-muted-foreground">{result.rank}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {result.rating ?? 'N/A'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">{result.state || '-'}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {result.cashAmount > 0 && (
-                                  <span className="font-medium text-accent">₹{result.cashAmount}</span>
-                                )}
-                                {result.hasTrophy && <Trophy className="h-4 w-4 text-yellow-500" />}
-                                {result.hasMedal && <Medal className="h-4 w-4 text-gray-400" />}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {results.rows.map((result, idx) => {
+                          const giftText = formatGiftItems(result.giftItems);
+                          return (
+                            <TableRow key={idx} className="border-border">
+                              <TableCell className="font-medium">{result.categoryName}</TableCell>
+                              <TableCell className="font-bold text-lg">{result.place}</TableCell>
+                              <TableCell className="font-medium text-foreground">{result.playerName}</TableCell>
+                              <TableCell className="text-muted-foreground">{result.rank}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {result.rating ?? 'N/A'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{result.state || '-'}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {result.cashAmount > 0 && (
+                                    <span className="font-medium text-accent">₹{result.cashAmount}</span>
+                                  )}
+                                  {giftText && (
+                                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">
+                                      Gift: {giftText}
+                                    </span>
+                                  )}
+                                  {result.hasTrophy && <Trophy className="h-4 w-4 text-yellow-500" />}
+                                  {result.hasMedal && <Medal className="h-4 w-4 text-gray-400" />}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

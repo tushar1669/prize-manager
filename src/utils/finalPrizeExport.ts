@@ -1,5 +1,6 @@
 import type { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { stripAwardMarkers } from '@/utils/prizeAwards';
+import { formatGiftItems } from '@/utils/giftItems';
 
 export type FinalPrizeExportRow = {
   'Category Order': number;
@@ -15,19 +16,6 @@ export type FinalPrizeExportRow = {
   'Club/Institution': string;
   State: string;
 };
-
-function formatGiftItems(items: Array<{ name?: string; qty?: number }> | undefined): string {
-  if (!Array.isArray(items) || items.length === 0) return '';
-  return items
-    .map((item) => {
-      const name = String(item?.name ?? '').trim();
-      if (!name) return '';
-      const qty = Number(item?.qty) || 1;
-      return `${name} x${qty}`;
-    })
-    .filter(Boolean)
-    .join('; ');
-}
 
 export function buildFinalPrizeExportRows(winners: FinalPrizeWinnerRow[]): FinalPrizeExportRow[] {
   return winners.map((winner, index) => ({

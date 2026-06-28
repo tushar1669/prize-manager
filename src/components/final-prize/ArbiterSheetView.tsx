@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Medal, Trophy, Lock } from 'lucide-react';
 import { FinalPrizeWinnerRow, useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
+import { formatGiftItems } from '@/utils/giftItems';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
 
@@ -16,6 +17,7 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
   const queryTournamentId = providedWinners?.length ? undefined : tournamentId;
   const { data, isLoading } = useFinalPrizeData(queryTournamentId);
   const winners = useMemo(() => providedWinners ?? data?.winners ?? [], [providedWinners, data?.winners]);
+  const showGiftColumn = useMemo(() => winners.some(winner => formatGiftItems(winner.giftItems).length > 0), [winners]);
 
   if (!hasFullAccess) {
     return (
@@ -47,6 +49,9 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
                 <TableHead className="font-bold text-foreground print:text-black">Player</TableHead>
                 <TableHead className="font-bold text-foreground print:text-black">Rank</TableHead>
                 <TableHead className="text-right font-bold text-foreground print:text-black">Amount</TableHead>
+                {showGiftColumn && (
+                  <TableHead className="font-bold text-foreground print:text-black">Gift</TableHead>
+                )}
                 <TableHead className="w-20 text-center font-bold text-foreground print:text-black">Trophy</TableHead>
                 <TableHead className="w-20 text-center font-bold text-foreground print:text-black">Medal</TableHead>
                 <TableHead className="w-24 font-bold text-foreground print:text-black">Sign</TableHead>
@@ -62,6 +67,9 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
                   </TableCell>
                   <TableCell className="text-muted-foreground print:text-black/70">{winner.rank || '—'}</TableCell>
                   <TableCell className="text-right font-bold text-success print:text-black">{formatCurrencyINR(winner.amount)}</TableCell>
+                  {showGiftColumn && (
+                    <TableCell className="font-medium text-foreground print:text-black">{formatGiftItems(winner.giftItems) || '—'}</TableCell>
+                  )}
                   <TableCell className="text-center text-muted-foreground print:text-black/70">
                     {winner.hasTrophy ? <Trophy className="mx-auto h-4 w-4 text-accent print:text-black" /> : '—'}
                   </TableCell>
@@ -75,7 +83,7 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
               ))}
               {winners.length === 0 && !isLoading && (
                 <TableRow className="border-border print:border-black">
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground print:text-black/70">
+                  <TableCell colSpan={showGiftColumn ? 9 : 8} className="py-10 text-center text-sm text-muted-foreground print:text-black/70">
                     No prize allocations found yet.
                   </TableCell>
                 </TableRow>

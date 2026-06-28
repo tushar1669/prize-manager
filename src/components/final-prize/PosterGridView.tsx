@@ -5,6 +5,7 @@ import { formatCurrencyINR } from '@/utils/currency';
 import { Trophy, Medal, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeAwards';
+import { formatGiftItems } from '@/utils/giftItems';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
 
@@ -107,6 +108,7 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
               const awardFlags = getAwardFlagsForPrizeRow(winner);
               const trophyDisplay = getAwardDisplayClasses('trophy');
               const medalDisplay = getAwardDisplayClasses('medal');
+              const giftText = formatGiftItems(winner.giftItems);
 
               return (
                 <div
@@ -126,10 +128,17 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
                     {winner.playerName}
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 pt-4 print:pt-2">
-                    <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
-                      {formatCurrencyINR(winner.amount)}
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-4 print:pt-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
+                        {formatCurrencyINR(winner.amount)}
+                      </span>
+                      {giftText && (
+                        <span className="rounded-full bg-success/10 px-4 py-1.5 text-sm font-semibold text-success print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-xs print:text-black">
+                          Gift: {giftText}
+                        </span>
+                      )}
+                    </div>
                     {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
                       <span className="inline-flex items-center gap-2 print:text-black">
                         {awardFlags.hasTrophy && (
