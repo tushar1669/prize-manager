@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import type { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 
@@ -55,5 +55,35 @@ describe('CategoryCardsView print layout', () => {
     cards.forEach(card => {
       expect(card.classList.contains('pm-print-avoid-break')).toBe(true);
     });
+  });
+
+  it('renders a gift column when category winners include gifts', () => {
+    const groups: FinalPrizeCategoryGroup[] = [
+      {
+        category: { id: 'main', name: 'Main', is_main: true, order_idx: 0 },
+        winners: [
+          {
+            prizeId: 'p1',
+            place: 1,
+            amount: 0,
+            categoryId: 'main',
+            categoryName: 'Main',
+            categoryOrder: 0,
+            isMain: true,
+            hasTrophy: false,
+            hasMedal: false,
+            hasGift: true,
+            giftItems: [{ name: 'Chess Book', qty: 2 }],
+            playerId: 'pl1',
+            playerName: 'Alice',
+          },
+        ],
+      },
+    ];
+
+    render(React.createElement(CategoryCardsView, { groups }));
+
+    expect(screen.getByRole('columnheader', { name: 'Gift' })).toBeTruthy();
+    expect(screen.getByText('Chess Book ×2')).toBeTruthy();
   });
 });

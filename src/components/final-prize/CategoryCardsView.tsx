@@ -4,6 +4,7 @@ import { Medal, Trophy, Lock } from 'lucide-react';
 import { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 import { formatCurrencyINR } from '@/utils/currency';
 import { getAwardDisplayClasses, getAwardFlagsForPrizeRow, stripAwardMarkers } from '@/utils/prizeAwards';
+import { formatGiftItems } from '@/utils/giftItems';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface CategoryCardsViewProps {
@@ -31,13 +32,14 @@ function LockedCategoryCard({ categoryName }: { categoryName: string }) {
   );
 }
 
-function SkeletonRow() {
+function SkeletonRow({ showGiftColumn = false }: { showGiftColumn?: boolean }) {
   return (
     <tr className="align-top">
       <td className="py-2 pr-3"><Skeleton className="h-4 w-8" /></td>
       <td className="py-2 pr-3"><Skeleton className="h-4 w-32" /></td>
       <td className="py-2 pr-3"><Skeleton className="h-4 w-10" /></td>
       <td className="py-2 pr-3"><Skeleton className="h-4 w-16" /></td>
+      {showGiftColumn && <td className="py-2 pr-3"><Skeleton className="h-4 w-20" /></td>}
       <td className="py-2 pr-3 text-center"><Skeleton className="h-4 w-6 mx-auto" /></td>
       <td className="py-2 text-center"><Skeleton className="h-4 w-6 mx-auto" /></td>
     </tr>
@@ -62,6 +64,7 @@ export function CategoryCardsView({ groups, hasFullAccess = true, previewMainLim
         const lockedCount = (!hasFullAccess && category.is_main)
           ? Math.max(0, winners.length - previewMainLimit)
           : 0;
+        const showGiftColumn = visibleWinners.some(winner => formatGiftItems(winner.giftItems).length > 0);
 
         return (
           <Card
@@ -86,6 +89,9 @@ export function CategoryCardsView({ groups, hasFullAccess = true, previewMainLim
                       <th className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Player Name</th>
                       <th className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Rank</th>
                       <th className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Amount</th>
+                      {showGiftColumn && (
+                        <th className="py-2 pr-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Gift</th>
+                      )}
                       <th className="py-2 pr-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Trophy</th>
                       <th className="py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground print:text-[10px] print:text-black">Medal</th>
                     </tr>
@@ -96,6 +102,7 @@ export function CategoryCardsView({ groups, hasFullAccess = true, previewMainLim
                       const trophyDisplay = getAwardDisplayClasses('trophy');
                       const medalDisplay = getAwardDisplayClasses('medal');
                       const playerName = stripAwardMarkers(winner.playerName);
+                      const giftText = formatGiftItems(winner.giftItems);
 
                       return (
                         <tr key={winner.prizeId} className="align-top">
@@ -116,6 +123,9 @@ export function CategoryCardsView({ groups, hasFullAccess = true, previewMainLim
                           </td>
                           <td className="py-2 pr-3 text-muted-foreground print:text-black">{winner.rank ?? '—'}</td>
                           <td className="py-2 pr-3 font-semibold text-success print:text-black">{formatCurrencyINR(winner.amount)}</td>
+                          {showGiftColumn && (
+                            <td className="py-2 pr-3 font-medium text-foreground print:text-black">{giftText || '—'}</td>
+                          )}
                           <td className="py-2 pr-3 text-center">
                             {awardFlags.hasTrophy ? (
                               <span className={`inline-flex items-center justify-center ${trophyDisplay.iconClass}`}>
@@ -138,7 +148,7 @@ export function CategoryCardsView({ groups, hasFullAccess = true, previewMainLim
                       );
                     })}
                     {lockedCount > 0 && Array.from({ length: Math.min(lockedCount, 4) }).map((_, i) => (
-                      <SkeletonRow key={`locked-${i}`} />
+                      <SkeletonRow key={`locked-${i}`} showGiftColumn={showGiftColumn} />
                     ))}
                   </tbody>
                 </table>

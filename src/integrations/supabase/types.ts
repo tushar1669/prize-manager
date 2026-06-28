@@ -1676,6 +1676,7 @@ export type Database = {
         Returns: {
           cash_amount: number
           category_name: string
+          gift_items: Json
           has_full_access: boolean
           has_medal: boolean
           has_trophy: boolean
