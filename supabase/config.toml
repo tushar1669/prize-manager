@@ -18,6 +18,10 @@ verify_jwt = true
 [functions.parseBrochurePrizes]
 verify_jwt = true
 
+
+[functions.parseBrochurePrizesV2]
+verify_jwt = true
+
 [functions.parseWorkbook]
 verify_jwt = true
 
