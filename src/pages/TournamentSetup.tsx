@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
-import { uploadFile, getSignedUrl } from "@/lib/storage";
+import { getSignedUrl } from "@/lib/storage";
+import { uploadFileAuthenticated } from "@/lib/storageAuthenticated";
 import { requireSupabaseSession } from "@/lib/auth/requireSupabaseSession";
 import { tournamentDetailsSchema, TournamentDetailsForm, categorySchema, CategoryForm } from "@/lib/validations";
 import { classifyTimeControl } from "@/utils/timeControl";
@@ -1282,7 +1283,7 @@ export default function TournamentSetup() {
     setUploading(true);
     try {
       const filePath = `${id}/${Date.now()}_${file.name}`;
-      const { path, error } = await uploadFile('brochures', filePath, file);
+      const { path, error } = await uploadFileAuthenticated('brochures', filePath, file, sessionResult.accessToken);
 
       if (error) {
         const raw = (error as { message?: string; statusCode?: string | number })?.message ?? '';
