@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
+import { requireSupabaseSession } from "@/lib/auth/requireSupabaseSession";
 import { tournamentDetailsSchema, TournamentDetailsForm, categorySchema, CategoryForm } from "@/lib/validations";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { cn, coerceGiftItems } from "@/lib/utils";
@@ -1267,6 +1268,13 @@ export default function TournamentSetup() {
 
     if (file.size > MAX_BROCHURE_BYTES) {
       toast.error(TOO_LARGE_MSG);
+      resetInput();
+      return;
+    }
+
+    const sessionResult = await requireSupabaseSession();
+    if (!sessionResult.ok) {
+      toast.error(sessionResult.message);
       resetInput();
       return;
     }
