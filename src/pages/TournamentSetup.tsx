@@ -1274,7 +1274,7 @@ export default function TournamentSetup() {
     }
 
     const sessionResult = await requireSupabaseSession();
-    if (!sessionResult.ok) {
+    if (sessionResult.ok !== true) {
       toast.error(sessionResult.message);
       resetInput();
       return;
