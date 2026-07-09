@@ -3,8 +3,8 @@ import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
 import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
 import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel, parseFallbackModels, parseRetryAfterSeconds } from "./geminiProvider.ts";
-import { parseProviderChain, type ParserProvider } from "./providerChain.ts";
-import { extractOpenAIResponseText, normalizeOpenAIModel, openaiHttpErrorCode, openaiResponsesUrl } from "./openaiProvider.ts";
+
+type ParserProvider = "gemini";
 
 const BUILD_VERSION = "2026-07-07T00:00:00Z";
 const FUNCTION_NAME = "parseBrochurePrizesV2";
@@ -43,9 +43,8 @@ class SafeParserError extends Error {
   retryAfterSeconds?: number | null;
   attemptedModels?: string[];
   provider?: ParserProvider;
-  attemptedProviders?: ParserProvider[];
 
-  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider; attemptedProviders?: ParserProvider[] } = {}) {
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider } = {}) {
     super(code);
     this.name = "SafeParserError";
     this.code = code;
@@ -56,7 +55,6 @@ class SafeParserError extends Error {
     this.retryAfterSeconds = options.retryAfterSeconds;
     this.attemptedModels = options.attemptedModels;
     this.provider = options.provider;
-    this.attemptedProviders = options.attemptedProviders;
   }
 }
 
@@ -119,7 +117,7 @@ const parserResultSchema = z.object({
   status: z.enum(["ok_draft", "blocked_low_confidence", "parser_error"]),
   source: z.object({
     type: z.literal("pdf"),
-    provider: z.enum(["gemini", "openai"]),
+    provider: z.literal("gemini"),
     model: z.string().min(1).max(120),
     file_path: z.string().min(1),
     page_count: z.number().int().positive().max(500).nullable(),
@@ -168,10 +166,6 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
     ...(typeof error.providerStatus === "number" ? { provider_status: error.providerStatus } : {}),
     ...(error.modelId ? { model_id: error.modelId } : {}),
   };
-  if (error.attemptedProviders && error.attemptedProviders.length > 0) {
-    body.attempted_provider_count = error.attemptedProviders.length;
-    body.attempted_providers = error.attemptedProviders;
-  }
   if (error.attemptedModels && error.attemptedModels.length > 0) {
     body.attempted_model_count = error.attemptedModels.length;
     body.attempted_models = error.attemptedModels;
@@ -179,9 +173,10 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
   if (error.code === "provider_rate_limited") {
     body.retry_after_seconds = typeof error.retryAfterSeconds === "number" ? error.retryAfterSeconds : null;
     body.rate_limit_scope = "provider";
-    if (error.retryAfterSeconds == null) {
-      body.message = "Gemini rate limit reached. Try again later or use a different API key/quota.";
-    }
+    body.message = "Gemini provider is temporarily unavailable or rate-limited. Please retry later or adjust GEMINI_MODEL/GEMINI_MODEL_FALLBACKS.";
+  }
+  if (error.code === "provider_unavailable") {
+    body.message = "Gemini provider is temporarily unavailable or rate-limited. Please retry later or adjust GEMINI_MODEL/GEMINI_MODEL_FALLBACKS.";
   }
   return body;
 }
@@ -302,87 +297,6 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
   }
 }
 
-async function callOpenAI(pdfBytes: Uint8Array, filePath: string, model: string, repairInput?: string): Promise<string> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) throw new SafeParserError("provider_not_configured", "provider_request_build", { provider: "openai", modelId: model });
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45_000);
-  try {
-    let body: string;
-    try {
-      const prompt = repairInput
-        ? `${extractionPrompt(filePath)}\nRepair this invalid JSON/schema output. Return only valid JSON. Invalid output/errors:\n${repairInput.slice(0, 12000)}`
-        : extractionPrompt(filePath);
-      const content = repairInput
-        ? [{ type: "input_text", text: prompt }]
-        : [
-            { type: "input_text", text: prompt },
-            { type: "input_file", filename: "brochure.pdf", file_data: `data:application/pdf;base64,${bytesToBase64(pdfBytes)}` },
-          ];
-      body = JSON.stringify({
-        model,
-        input: [{ role: "user", content }],
-        temperature: 0,
-        text: { format: { type: "json_object" } },
-      });
-    } catch (_) {
-      throw new SafeParserError("pdf_processing_failed", "provider_request_build", { provider: "openai", modelId: model });
-    }
-    let res: Response;
-    try {
-      safeLog({ provider: "openai", stage: "provider_fetch", model_id: model, endpoint: "api.openai.com/v1/responses" });
-      res = await fetch(openaiResponsesUrl(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        signal: controller.signal,
-        body,
-      });
-    } catch (_) {
-      throw new SafeParserError("provider_request_failed", "provider_fetch", { provider: "openai", modelId: model });
-    }
-    if (!res.ok) {
-      try { await res.body?.cancel(); } catch (_) { /* ignore */ }
-      throw new SafeParserError(openaiHttpErrorCode(res.status), "provider_fetch", { provider: "openai", providerStatus: res.status, modelId: model });
-    }
-    let data: unknown;
-    try {
-      data = await res.json();
-    } catch (_) {
-      throw new SafeParserError("provider_response_invalid", "provider_response_parse", { provider: "openai", providerStatus: res.status, modelId: model });
-    }
-    const text = extractOpenAIResponseText(data);
-    if (!text) throw new SafeParserError("provider_response_invalid", "provider_response_parse", { provider: "openai", providerStatus: res.status, modelId: model });
-    return text;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function tryOpenAIModel(pdfBytes: Uint8Array, filePath: string, model: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string }> {
-  const first = await callOpenAI(pdfBytes, filePath, model);
-  const parsed = parseModelJson(first, filePath, model);
-  if (parsed.success) return { result: parsed.data, repairAttempted: false };
-  const repairedText = await callOpenAI(pdfBytes, filePath, model, `${parsed.error}\n${first}`);
-  const repaired = parseModelJson(repairedText, filePath, model);
-  if (repaired.success) return { result: repaired.data, repairAttempted: true };
-  return { result: null, repairAttempted: true, error: repaired.code };
-}
-
-async function extractWithOpenAIPdf(pdfBytes: Uint8Array, filePath: string): Promise<ExtractOutcome> {
-  const model = normalizeOpenAIModel(Deno.env.get("OPENAI_MODEL"));
-  try {
-    const outcome = await tryOpenAIModel(pdfBytes, filePath, model);
-    if (outcome.result) return { result: outcome.result, repairAttempted: outcome.repairAttempted, attemptedModels: [model], rateLimited: false, lastRateLimitRetryAfter: null };
-    return { result: null, repairAttempted: outcome.repairAttempted, attemptedModels: [model], rateLimited: false, lastRateLimitRetryAfter: null, error: outcome.error };
-  } catch (err) {
-    const fatalError = err instanceof SafeParserError ? err : new SafeParserError("unexpected_internal_error", "provider_fetch", { provider: "openai", modelId: model });
-    fatalError.provider = "openai";
-    fatalError.attemptedModels = [model];
-    return { result: null, repairAttempted: false, attemptedModels: [model], rateLimited: fatalError.code === "provider_rate_limited", lastRateLimitRetryAfter: null, fatalError };
-  }
-}
-
-const PROVIDER_FALLBACK_CODES = new Set(["provider_rate_limited", "provider_unavailable", "provider_http_error", "provider_model_not_found"]);
 
 type ExtractOutcome = {
   result: ParserResult | null;
@@ -409,9 +323,9 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Pro
   const fallbacks = parseFallbackModels(Deno.env.get("GEMINI_MODEL_FALLBACKS"), primary);
   const chain = [primary, ...fallbacks];
   const attempted: string[] = [];
-  let rateLimited = false;
+  let retryableProviderError: SafeParserError | undefined;
   let lastRetryAfter: number | null = null;
-  let lastNonRateLimitError: SafeParserError | undefined;
+  let lastNonRetryableError: SafeParserError | undefined;
   let lastOutputError: string | undefined;
   let repairAttempted = false;
 
@@ -427,37 +341,42 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Pro
       // Schema/output failure — do not blindly fall over to other models.
       break;
     } catch (err) {
-      if (err instanceof SafeParserError && err.code === "provider_rate_limited") {
-        rateLimited = true;
+      if (err instanceof SafeParserError && (err.code === "provider_rate_limited" || err.code === "provider_unavailable")) {
+        retryableProviderError = err;
         lastRetryAfter = err.retryAfterSeconds ?? lastRetryAfter;
         safeLog({
           provider: "gemini",
           stage: "provider_fetch",
           model_id: model,
           provider_status: err.providerStatus ?? null,
-          status: "provider_rate_limited",
+          status: err.code,
           retry_after_seconds: lastRetryAfter,
         });
         continue; // try next fallback
       }
-      // Non-rate-limit provider error: stop and surface.
+      // Non-retryable provider error: stop and surface.
       if (err instanceof SafeParserError) {
-        lastNonRateLimitError = err;
+        lastNonRetryableError = err;
       } else {
-        lastNonRateLimitError = new SafeParserError("unexpected_internal_error", "provider_fetch", { modelId: model });
+        lastNonRetryableError = new SafeParserError("unexpected_internal_error", "provider_fetch", { modelId: model });
       }
       break;
     }
   }
 
-  if (lastNonRateLimitError) {
-    lastNonRateLimitError.attemptedModels = attempted;
-    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, fatalError: lastNonRateLimitError };
+  if (lastNonRetryableError) {
+    lastNonRetryableError.attemptedModels = attempted;
+    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, fatalError: lastNonRetryableError };
   }
 
-  if (rateLimited && attempted.length > 0) {
-    const err = new SafeParserError("provider_rate_limited", "provider_fetch", { providerStatus: 429, retryAfterSeconds: lastRetryAfter, attemptedModels: attempted });
-    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: true, lastRateLimitRetryAfter: lastRetryAfter, fatalError: err };
+  if (retryableProviderError && attempted.length > 0) {
+    const err = new SafeParserError(retryableProviderError.code, "provider_fetch", {
+      providerStatus: retryableProviderError.providerStatus,
+      modelId: retryableProviderError.modelId,
+      retryAfterSeconds: lastRetryAfter,
+      attemptedModels: attempted,
+    });
+    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: retryableProviderError.code === "provider_rate_limited", lastRateLimitRetryAfter: lastRetryAfter, fatalError: err };
   }
 
   return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, error: lastOutputError };
@@ -469,7 +388,7 @@ function parseModelJson(text: string, filePath: string, model: string): { succes
     raw.schema_version = SCHEMA_VERSION;
     raw.requires_review = true;
     raw.team_groups = [];
-    raw.source = { ...(raw.source ?? {}), type: "pdf", provider: model.startsWith("gpt-") || model.startsWith("o") ? "openai" : "gemini", model, file_path: filePath };
+    raw.source = { ...(raw.source ?? {}), type: "pdf", provider: "gemini", model, file_path: filePath };
     const checked = parserResultSchema.safeParse(raw);
     if (!checked.success) return { success: false, error: checked.error.message, code: "provider_output_invalid" };
     return { success: true, data: checked.data };
@@ -572,10 +491,7 @@ Deno.serve(async (req: Request) => {
     stage = "allowlist";
     if (!allowlisted(user, isMaster)) return jsonResponse(withJob({ error: "forbidden", code: "BROCHURE_PARSER_V2_NOT_ALLOWLISTED" }, jobId, stage), 403);
     stage = "provider_request_build";
-    const providerChain = parseProviderChain(Deno.env.get("BROCHURE_PARSER_V2_PROVIDER_CHAIN"));
-    if (providerChain.length === 0) return jsonResponse(parserErrorBody(new SafeParserError("provider_not_configured", stage), jobId), 200);
-    const configuredProviderChain = providerChain.filter((provider) => provider === "gemini" ? !!Deno.env.get("GEMINI_API_KEY") : !!Deno.env.get("OPENAI_API_KEY"));
-    if (configuredProviderChain.length === 0) return jsonResponse(parserErrorBody(new SafeParserError("provider_not_configured", stage, { attemptedProviders: providerChain }), jobId), 200);
+    if (!Deno.env.get("GEMINI_API_KEY")) return jsonResponse(parserErrorBody(new SafeParserError("provider_not_configured", stage), jobId), 200);
     stage = "brochure_lookup";
     const brochurePath = typeof body.brochure_path === "string" && body.brochure_path.trim() ? body.brochure_path.trim() : tournament?.brochure_url;
     if (!brochurePath) return jsonResponse(withJob({ status: "no_brochure", error: "missing_brochure", message: "No brochure file is available for this tournament." }, jobId, stage), 200);
@@ -599,42 +515,21 @@ Deno.serve(async (req: Request) => {
       throw new SafeParserError("storage_download_failed", "storage_download");
     }
     stage = "provider_fetch";
-    const attemptedProviders: ParserProvider[] = [];
-    let extracted: ExtractOutcome | null = null;
-    let providerUsed: ParserProvider = configuredProviderChain[0];
-    let lastFatal: SafeParserError | undefined;
-    for (const provider of configuredProviderChain) {
-      attemptedProviders.push(provider);
-      providerUsed = provider;
-      extracted = provider === "gemini" ? await extractWithGeminiPdf(pdfBytes, storagePath) : await extractWithOpenAIPdf(pdfBytes, storagePath);
-      if (extracted.result) {
-        lastFatal = undefined;
-        break;
-      }
-      if (extracted.fatalError) {
-        lastFatal = extracted.fatalError;
-        lastFatal.provider = provider;
-        lastFatal.attemptedProviders = [...attemptedProviders];
-        const canFallback = provider !== configuredProviderChain[configuredProviderChain.length - 1] && lastFatal.stage === "provider_fetch" && PROVIDER_FALLBACK_CODES.has(lastFatal.code);
-        if (canFallback) continue;
-      }
-      break;
-    }
-    if (!extracted) throw new SafeParserError("provider_not_configured", "provider_request_build", { attemptedProviders });
+    const providerUsed: ParserProvider = "gemini";
+    const extracted = await extractWithGeminiPdf(pdfBytes, storagePath);
     if (extracted.fatalError) {
       const fe = extracted.fatalError;
-      fe.attemptedProviders = attemptedProviders;
+      fe.provider = "gemini";
       safeLog({
         job_id: jobId,
         tournament_id: tournamentId,
         requester_user_id: requester,
-        provider: fe.provider ?? providerUsed,
+        provider: "gemini",
         stage: fe.stage,
         duration_ms: Date.now() - started,
         status: fe.code,
         provider_status: fe.providerStatus ?? null,
         model_id: fe.modelId ?? null,
-        attempted_provider_count: attemptedProviders.length,
         attempted_model_count: extracted.attemptedModels.length,
         retry_after_seconds: extracted.lastRateLimitRetryAfter,
       });
@@ -642,7 +537,7 @@ Deno.serve(async (req: Request) => {
     }
     stage = extracted.error === "provider_response_invalid" ? "provider_response_parse" : "provider_output_validation";
     if (!extracted.result) {
-      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage, { provider: providerUsed, attemptedModels: extracted.attemptedModels, attemptedProviders });
+      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage, { provider: providerUsed, attemptedModels: extracted.attemptedModels });
       safeLog({
         job_id: jobId,
         tournament_id: tournamentId,
@@ -652,7 +547,6 @@ Deno.serve(async (req: Request) => {
         duration_ms: Date.now() - started,
         status: outputError.code,
         provider_status: null,
-        attempted_provider_count: attemptedProviders.length,
         attempted_model_count: extracted.attemptedModels.length,
         category_count: 0,
         warning_count: 0,
