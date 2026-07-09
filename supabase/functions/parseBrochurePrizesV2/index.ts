@@ -505,9 +505,26 @@ Deno.serve(async (req: Request) => {
     }
     stage = "provider_fetch";
     const extracted = await extractWithGeminiPdf(pdfBytes, storagePath);
+    if (extracted.fatalError) {
+      const fe = extracted.fatalError;
+      safeLog({
+        job_id: jobId,
+        tournament_id: tournamentId,
+        requester_user_id: requester,
+        provider: "gemini",
+        stage: fe.stage,
+        duration_ms: Date.now() - started,
+        status: fe.code,
+        provider_status: fe.providerStatus ?? null,
+        model_id: fe.modelId ?? null,
+        attempted_model_count: extracted.attemptedModels.length,
+        retry_after_seconds: extracted.lastRateLimitRetryAfter,
+      });
+      return jsonResponse(parserErrorBody(fe, jobId), 200);
+    }
     stage = extracted.error === "provider_response_invalid" ? "provider_response_parse" : "provider_output_validation";
     if (!extracted.result) {
-      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage);
+      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage, { attemptedModels: extracted.attemptedModels });
       safeLog({
         job_id: jobId,
         tournament_id: tournamentId,
@@ -517,11 +534,13 @@ Deno.serve(async (req: Request) => {
         duration_ms: Date.now() - started,
         status: outputError.code,
         provider_status: null,
+        attempted_model_count: extracted.attemptedModels.length,
         category_count: 0,
         warning_count: 0,
       });
       return jsonResponse({ ...parserErrorBody(outputError, jobId), repair_attempted: extracted.repairAttempted }, 200);
     }
+
     let rich: ParserResult;
     try {
       stage = "safety_checks";
