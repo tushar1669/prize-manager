@@ -38,8 +38,10 @@ class SafeParserError extends Error {
   providerStatus?: number;
   modelId?: string;
   httpStatus: number;
+  retryAfterSeconds?: number | null;
+  attemptedModels?: string[];
 
-  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number } = {}) {
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[] } = {}) {
     super(code);
     this.name = "SafeParserError";
     this.code = code;
@@ -47,6 +49,8 @@ class SafeParserError extends Error {
     this.providerStatus = options.providerStatus;
     this.modelId = options.modelId;
     this.httpStatus = options.httpStatus ?? 200;
+    this.retryAfterSeconds = options.retryAfterSeconds;
+    this.attemptedModels = options.attemptedModels;
   }
 }
 
