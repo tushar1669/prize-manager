@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
 import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
-import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel } from "./geminiProvider.ts";
+import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel, parseFallbackModels, parseRetryAfterSeconds } from "./geminiProvider.ts";
 
 const BUILD_VERSION = "2026-07-07T00:00:00Z";
 const FUNCTION_NAME = "parseBrochurePrizesV2";
