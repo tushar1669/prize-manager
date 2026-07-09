@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
-import { hasPingQueryParam, pingResponse, CORS_HEADERS } from "../_shared/health.ts";
+import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
 
 const BUILD_VERSION = "2026-07-07T00:00:00Z";
 const FUNCTION_NAME = "parseBrochurePrizesV2";
@@ -15,6 +15,38 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 type Confidence = "HIGH" | "MEDIUM" | "LOW";
+type ParserStage =
+  | "auth"
+  | "parse_body"
+  | "tournament_lookup"
+  | "feature_flag"
+  | "allowlist"
+  | "brochure_lookup"
+  | "storage_download"
+  | "pdf_read"
+  | "provider_request_build"
+  | "provider_fetch"
+  | "provider_response_parse"
+  | "provider_output_validation"
+  | "safety_checks"
+  | "draft_mapping"
+  | "success";
+
+class SafeParserError extends Error {
+  code: string;
+  stage: ParserStage;
+  providerStatus?: number;
+  httpStatus: number;
+
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; httpStatus?: number } = {}) {
+    super(code);
+    this.name = "SafeParserError";
+    this.code = code;
+    this.stage = stage;
+    this.providerStatus = options.providerStatus;
+    this.httpStatus = options.httpStatus ?? 200;
+  }
+}
 
 type TournamentAccess = {
   accessDenied: Response | null;
@@ -109,6 +141,22 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }
 
+function withJob(body: Record<string, unknown>, jobId: string, stage: ParserStage): Record<string, unknown> {
+  return { ...body, job_id: jobId, request_id: jobId, stage };
+}
+
+function parserErrorBody(error: SafeParserError, jobId: string): Record<string, unknown> {
+  return {
+    status: "parser_error",
+    code: error.code,
+    stage: error.stage,
+    job_id: jobId,
+    request_id: jobId,
+    provider: "gemini",
+    ...(typeof error.providerStatus === "number" ? { provider_status: error.providerStatus } : {}),
+  };
+}
+
 function safeLog(fields: Record<string, string | number | boolean | null>): void {
   console.log(`[${FUNCTION_NAME}] ${Object.entries(fields).map(([k, v]) => `${k}=${String(v)}`).join(" ")}`);
 }
@@ -175,24 +223,53 @@ function extractionPrompt(filePath: string): string {
 
 async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string, repairInput?: string): Promise<string> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) throw new Error("PARSER_PROVIDER_NOT_CONFIGURED");
+  if (!apiKey) throw new SafeParserError("provider_not_configured", "provider_request_build");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
-    const parts = repairInput
-      ? [{ text: `${extractionPrompt(filePath)}\nRepair this invalid JSON/schema output. Return only valid JSON. Invalid output/errors:\n${repairInput.slice(0, 12000)}` }]
-      : [{ text: extractionPrompt(filePath) }, { inline_data: { mime_type: "application/pdf", data: bytesToBase64(pdfBytes) } }];
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
+    let body: string;
+    try {
+      const parts = repairInput
+        ? [{ text: `${extractionPrompt(filePath)}\nRepair this invalid JSON/schema output. Return only valid JSON. Invalid output/errors:\n${repairInput.slice(0, 12000)}` }]
+        : [{ text: extractionPrompt(filePath) }, { inline_data: { mime_type: "application/pdf", data: bytesToBase64(pdfBytes) } }];
+      body = JSON.stringify({
         contents: [{ role: "user", parts }],
         generationConfig: { temperature: 0, response_mime_type: "application/json" },
-      }),
-    });
-    if (!res.ok) throw new Error(`provider_http_${res.status}`);
-    const data = await res.json();
+      });
+    } catch (_) {
+      throw new SafeParserError("pdf_processing_failed", "provider_request_build");
+    }
+    let res: Response;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body,
+      });
+    } catch (_) {
+      throw new SafeParserError("provider_request_failed", "provider_fetch");
+    }
+    if (!res.ok) {
+      const code = res.status === 400
+        ? "provider_request_invalid"
+        : res.status === 401
+          ? "provider_auth_failed"
+          : res.status === 403
+            ? "provider_forbidden"
+            : res.status === 429
+              ? "provider_rate_limited"
+              : res.status >= 500 && res.status <= 599
+                ? "provider_unavailable"
+                : "provider_http_error";
+      throw new SafeParserError(code, "provider_fetch", { providerStatus: res.status });
+    }
+    let data: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    try {
+      data = await res.json();
+    } catch (_) {
+      throw new SafeParserError("provider_response_invalid", "provider_response_parse", { providerStatus: res.status });
+    }
     return data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   } finally {
     clearTimeout(timeout);
@@ -207,10 +284,10 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Pro
   const repairedText = await callGemini(pdfBytes, filePath, model, `${parsed.error}\n${first}`);
   const repaired = parseModelJson(repairedText, filePath, model);
   if (repaired.success) return { result: repaired.data, repairAttempted: true };
-  return { result: null, repairAttempted: true, error: repaired.error };
+  return { result: null, repairAttempted: true, error: repaired.code };
 }
 
-function parseModelJson(text: string, filePath: string, model: string): { success: true; data: ParserResult } | { success: false; error: string } {
+function parseModelJson(text: string, filePath: string, model: string): { success: true; data: ParserResult } | { success: false; error: string; code: string } {
   try {
     const raw = JSON.parse(text.trim().replace(/^```json\s*/i, "").replace(/```$/i, ""));
     raw.schema_version = SCHEMA_VERSION;
@@ -218,10 +295,10 @@ function parseModelJson(text: string, filePath: string, model: string): { succes
     raw.team_groups = [];
     raw.source = { ...(raw.source ?? {}), type: "pdf", provider: "gemini", model, file_path: filePath };
     const checked = parserResultSchema.safeParse(raw);
-    if (!checked.success) return { success: false, error: checked.error.message };
+    if (!checked.success) return { success: false, error: checked.error.message, code: "provider_output_invalid" };
     return { success: true, data: checked.data };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "invalid_json" };
+    return { success: false, error: err instanceof Error ? err.message : "invalid_json", code: "provider_response_invalid" };
   }
 }
 
@@ -290,43 +367,108 @@ function toExistingDraftCompat(result: ParserResult) {
 Deno.serve(async (req: Request) => {
   const started = Date.now();
   const jobId = crypto.randomUUID();
+  let stage: ParserStage = "auth";
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
-  if (hasPingQueryParam(req)) return pingResponse(FUNCTION_NAME, BUILD_VERSION);
+  if (hasPingQueryParam(req)) return jsonResponse(withJob({ function: FUNCTION_NAME, status: "ok", buildVersion: BUILD_VERSION }, jobId, stage));
   let tournamentId = "unknown";
   let requester = "unknown";
   try {
     const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "missing_auth" }, 401);
+    if (!authHeader.startsWith("Bearer ")) return jsonResponse(withJob({ error: "missing_auth" }, jobId, stage), 401);
     const supabaseAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: userErr } = await supabaseAuth.auth.getUser();
-    if (userErr || !user) return jsonResponse({ error: "unauthorized" }, 401);
+    if (userErr || !user) return jsonResponse(withJob({ error: "unauthorized" }, jobId, stage), 401);
     requester = user.id;
+    stage = "parse_body";
     const body = await req.json().catch(() => ({}));
     tournamentId = body.tournament_id;
-    if (!tournamentId || typeof tournamentId !== "string") return jsonResponse({ error: "missing_tournament_id" }, 400);
-    if (body.mode !== "draft") return jsonResponse({ error: "unsupported_mode", message: "parseBrochurePrizesV2 only supports draft mode" }, 400);
+    if (!tournamentId || typeof tournamentId !== "string") return jsonResponse(withJob({ error: "missing_tournament_id" }, jobId, stage), 400);
+    if (body.mode !== "draft") return jsonResponse(withJob({ error: "unsupported_mode", message: "parseBrochurePrizesV2 only supports draft mode" }, jobId, stage), 400);
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    stage = "tournament_lookup";
     const { accessDenied, tournament, isMaster } = await ensureTournamentAccess(supabase, user.id, tournamentId);
-    if (accessDenied) return accessDenied;
-    if (!flagEnabled()) return jsonResponse({ status: "not_enabled", code: "BROCHURE_PARSER_V2_NOT_ENABLED" }, 200);
-    if (!allowlisted(user, isMaster)) return jsonResponse({ error: "forbidden", code: "BROCHURE_PARSER_V2_NOT_ALLOWLISTED" }, 403);
-    if (!Deno.env.get("GEMINI_API_KEY")) return jsonResponse({ status: "parser_error", code: "PARSER_PROVIDER_NOT_CONFIGURED" }, 200);
+    if (accessDenied) {
+      const accessBody = await accessDenied.clone().json().catch(() => ({ error: "access_denied" }));
+      return jsonResponse(withJob(accessBody, jobId, stage), accessDenied.status);
+    }
+    stage = "feature_flag";
+    if (!flagEnabled()) return jsonResponse(withJob({ status: "not_enabled", code: "BROCHURE_PARSER_V2_NOT_ENABLED" }, jobId, stage), 200);
+    stage = "allowlist";
+    if (!allowlisted(user, isMaster)) return jsonResponse(withJob({ error: "forbidden", code: "BROCHURE_PARSER_V2_NOT_ALLOWLISTED" }, jobId, stage), 403);
+    stage = "provider_request_build";
+    if (!Deno.env.get("GEMINI_API_KEY")) return jsonResponse(parserErrorBody(new SafeParserError("provider_not_configured", stage), jobId), 200);
+    stage = "brochure_lookup";
     const brochurePath = typeof body.brochure_path === "string" && body.brochure_path.trim() ? body.brochure_path.trim() : tournament?.brochure_url;
-    if (!brochurePath) return jsonResponse({ status: "no_brochure", error: "missing_brochure", message: "No brochure file is available for this tournament." }, 200);
+    if (!brochurePath) return jsonResponse(withJob({ status: "no_brochure", error: "missing_brochure", message: "No brochure file is available for this tournament." }, jobId, stage), 200);
     const storagePath = storagePathFromInput(brochurePath);
-    if (getExtension(storagePath) !== ".pdf") return jsonResponse({ status: "unsupported_file_type", error: "Only PDF brochures are supported by this parser." }, 200);
-    const { data: blob, error: downloadError } = await supabase.storage.from("brochures").download(storagePath);
-    if (downloadError || !blob) return jsonResponse({ error: "download_failed", message: "Could not read brochure file." }, 500);
-    if (blob.size > MAX_PDF_BYTES) return jsonResponse({ status: "parser_error", code: "PDF_TOO_LARGE", max_bytes: MAX_PDF_BYTES }, 413);
-    const pdfBytes = new Uint8Array(await blob.arrayBuffer());
+    if (getExtension(storagePath) !== ".pdf") return jsonResponse(withJob({ status: "unsupported_file_type", error: "Only PDF brochures are supported by this parser." }, jobId, stage), 200);
+    stage = "storage_download";
+    let blob: Blob;
+    try {
+      const { data, error: downloadError } = await supabase.storage.from("brochures").download(storagePath);
+      if (downloadError || !data) throw new SafeParserError("storage_download_failed", stage);
+      blob = data;
+    } catch (err) {
+      throw err instanceof SafeParserError ? err : new SafeParserError("storage_download_failed", stage);
+    }
+    if (blob.size > MAX_PDF_BYTES) return jsonResponse(parserErrorBody(new SafeParserError("pdf_processing_failed", "pdf_read", { httpStatus: 413 }), jobId), 413);
+    stage = "pdf_read";
+    let pdfBytes: Uint8Array;
+    try {
+      pdfBytes = new Uint8Array(await blob.arrayBuffer());
+    } catch (_) {
+      throw new SafeParserError("storage_download_failed", "storage_download");
+    }
+    stage = "provider_fetch";
     const extracted = await extractWithGeminiPdf(pdfBytes, storagePath);
-    if (!extracted.result) return jsonResponse({ status: "parser_error", code: "PARSER_OUTPUT_INVALID", repair_attempted: extracted.repairAttempted }, 200);
-    const rich = applySafetyChecks(extracted.result);
-    safeLog({ job_id: jobId, tournament_id: tournamentId, requester_user_id: requester, provider: "gemini", duration_ms: Date.now() - started, status: rich.status, category_count: rich.categories.length, warning_count: rich.warnings.length });
-    return jsonResponse({ status: rich.status, schema_version: SCHEMA_VERSION, requires_review: true, blocked: rich.blocked, parser_result: rich, draft: toExistingDraftCompat(rich), existing_draft_compat: toExistingDraftCompat(rich), repair_attempted: extracted.repairAttempted });
+    stage = extracted.error === "provider_response_invalid" ? "provider_response_parse" : "provider_output_validation";
+    if (!extracted.result) {
+      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage);
+      safeLog({
+        job_id: jobId,
+        tournament_id: tournamentId,
+        requester_user_id: requester,
+        provider: "gemini",
+        stage: outputError.stage,
+        duration_ms: Date.now() - started,
+        status: outputError.code,
+        provider_status: null,
+        category_count: 0,
+        warning_count: 0,
+      });
+      return jsonResponse({ ...parserErrorBody(outputError, jobId), repair_attempted: extracted.repairAttempted }, 200);
+    }
+    let rich: ParserResult;
+    try {
+      stage = "safety_checks";
+      rich = applySafetyChecks(extracted.result);
+    } catch (_) {
+      throw new SafeParserError("safety_check_failed", stage);
+    }
+    let draft: ReturnType<typeof toExistingDraftCompat>;
+    try {
+      stage = "draft_mapping";
+      draft = toExistingDraftCompat(rich);
+    } catch (_) {
+      throw new SafeParserError("draft_mapping_failed", stage);
+    }
+    stage = "success";
+    safeLog({ job_id: jobId, tournament_id: tournamentId, requester_user_id: requester, provider: "gemini", stage, duration_ms: Date.now() - started, status: rich.status, category_count: rich.categories.length, warning_count: rich.warnings.length });
+    return jsonResponse(withJob({ status: rich.status, schema_version: SCHEMA_VERSION, requires_review: true, blocked: rich.blocked, parser_result: rich, draft, existing_draft_compat: draft, repair_attempted: extracted.repairAttempted }, jobId, stage));
   } catch (err) {
-    const code = err instanceof Error && err.message === "PARSER_PROVIDER_NOT_CONFIGURED" ? "PARSER_PROVIDER_NOT_CONFIGURED" : "internal_error";
-    safeLog({ job_id: jobId, tournament_id: tournamentId, requester_user_id: requester, provider: "gemini", duration_ms: Date.now() - started, status: code, category_count: 0, warning_count: 0 });
-    return jsonResponse({ status: "parser_error", code }, code === "internal_error" ? 500 : 200);
+    const safeError = err instanceof SafeParserError ? err : new SafeParserError("unexpected_internal_error", stage, { httpStatus: 500 });
+    safeLog({
+      job_id: jobId,
+      tournament_id: tournamentId,
+      requester_user_id: requester,
+      provider: "gemini",
+      stage: safeError.stage,
+      duration_ms: Date.now() - started,
+      status: safeError.code,
+      provider_status: safeError.providerStatus ?? null,
+      category_count: 0,
+      warning_count: 0,
+    });
+    return jsonResponse(parserErrorBody(safeError, jobId), safeError.httpStatus);
   }
 });
