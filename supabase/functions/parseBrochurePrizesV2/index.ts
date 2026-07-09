@@ -152,7 +152,7 @@ function withJob(body: Record<string, unknown>, jobId: string, stage: ParserStag
 }
 
 function parserErrorBody(error: SafeParserError, jobId: string): Record<string, unknown> {
-  return {
+  const body: Record<string, unknown> = {
     status: "parser_error",
     code: error.code,
     stage: error.stage,
@@ -162,6 +162,18 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
     ...(typeof error.providerStatus === "number" ? { provider_status: error.providerStatus } : {}),
     ...(error.modelId ? { model_id: error.modelId } : {}),
   };
+  if (error.attemptedModels && error.attemptedModels.length > 0) {
+    body.attempted_model_count = error.attemptedModels.length;
+    body.attempted_models = error.attemptedModels;
+  }
+  if (error.code === "provider_rate_limited") {
+    body.retry_after_seconds = typeof error.retryAfterSeconds === "number" ? error.retryAfterSeconds : null;
+    body.rate_limit_scope = "provider";
+    if (error.retryAfterSeconds == null) {
+      body.message = "Gemini rate limit reached. Try again later or use a different API key/quota.";
+    }
+  }
+  return body;
 }
 
 function safeLog(fields: Record<string, string | number | boolean | null>): void {
