@@ -2,11 +2,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
 import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
+import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel } from "./geminiProvider.ts";
 
 const BUILD_VERSION = "2026-07-07T00:00:00Z";
 const FUNCTION_NAME = "parseBrochurePrizesV2";
 const SCHEMA_VERSION = "prize_parser.v1";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_CATEGORIES = 80;
 const MAX_PRIZES = 600;
@@ -36,14 +36,16 @@ class SafeParserError extends Error {
   code: string;
   stage: ParserStage;
   providerStatus?: number;
+  modelId?: string;
   httpStatus: number;
 
-  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; httpStatus?: number } = {}) {
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number } = {}) {
     super(code);
     this.name = "SafeParserError";
     this.code = code;
     this.stage = stage;
     this.providerStatus = options.providerStatus;
+    this.modelId = options.modelId;
     this.httpStatus = options.httpStatus ?? 200;
   }
 }
@@ -154,6 +156,7 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
     request_id: jobId,
     provider: "gemini",
     ...(typeof error.providerStatus === "number" ? { provider_status: error.providerStatus } : {}),
+    ...(error.modelId ? { model_id: error.modelId } : {}),
   };
 }
 
@@ -241,7 +244,13 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
     }
     let res: Response;
     try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      safeLog({
+        provider: "gemini",
+        stage: "provider_fetch",
+        model_id: model,
+        endpoint: "generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+      });
+      res = await fetch(geminiGenerateContentUrl(model, apiKey), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
@@ -251,18 +260,7 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
       throw new SafeParserError("provider_request_failed", "provider_fetch");
     }
     if (!res.ok) {
-      const code = res.status === 400
-        ? "provider_request_invalid"
-        : res.status === 401
-          ? "provider_auth_failed"
-          : res.status === 403
-            ? "provider_forbidden"
-            : res.status === 429
-              ? "provider_rate_limited"
-              : res.status >= 500 && res.status <= 599
-                ? "provider_unavailable"
-                : "provider_http_error";
-      throw new SafeParserError(code, "provider_fetch", { providerStatus: res.status });
+      throw new SafeParserError(geminiHttpErrorCode(res.status), "provider_fetch", { providerStatus: res.status, modelId: model });
     }
     let data: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     try {
@@ -277,7 +275,7 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
 }
 
 async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string }> {
-  const model = Deno.env.get("GEMINI_MODEL") ?? DEFAULT_GEMINI_MODEL;
+  const model = normalizeGeminiModel(Deno.env.get("GEMINI_MODEL"));
   const first = await callGemini(pdfBytes, filePath, model);
   const parsed = parseModelJson(first, filePath, model);
   if (parsed.success) return { result: parsed.data, repairAttempted: false };
