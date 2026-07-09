@@ -261,16 +261,18 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
         body,
       });
     } catch (_) {
-      throw new SafeParserError("provider_request_failed", "provider_fetch");
+      throw new SafeParserError("provider_request_failed", "provider_fetch", { modelId: model });
     }
     if (!res.ok) {
-      throw new SafeParserError(geminiHttpErrorCode(res.status), "provider_fetch", { providerStatus: res.status, modelId: model });
+      const retryAfter = parseRetryAfterSeconds(res.headers.get("retry-after"));
+      try { await res.body?.cancel(); } catch (_) { /* ignore */ }
+      throw new SafeParserError(geminiHttpErrorCode(res.status), "provider_fetch", { providerStatus: res.status, modelId: model, retryAfterSeconds: retryAfter });
     }
     let data: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     try {
       data = await res.json();
     } catch (_) {
-      throw new SafeParserError("provider_response_invalid", "provider_response_parse", { providerStatus: res.status });
+      throw new SafeParserError("provider_response_invalid", "provider_response_parse", { providerStatus: res.status, modelId: model });
     }
     return data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   } finally {
@@ -278,8 +280,17 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
   }
 }
 
-async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string }> {
-  const model = normalizeGeminiModel(Deno.env.get("GEMINI_MODEL"));
+type ExtractOutcome = {
+  result: ParserResult | null;
+  repairAttempted: boolean;
+  error?: string;
+  attemptedModels: string[];
+  rateLimited: boolean;
+  lastRateLimitRetryAfter: number | null;
+  fatalError?: SafeParserError;
+};
+
+async function tryOneModel(pdfBytes: Uint8Array, filePath: string, model: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string }> {
   const first = await callGemini(pdfBytes, filePath, model);
   const parsed = parseModelJson(first, filePath, model);
   if (parsed.success) return { result: parsed.data, repairAttempted: false };
@@ -287,6 +298,65 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Pro
   const repaired = parseModelJson(repairedText, filePath, model);
   if (repaired.success) return { result: repaired.data, repairAttempted: true };
   return { result: null, repairAttempted: true, error: repaired.code };
+}
+
+async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string): Promise<ExtractOutcome> {
+  const primary = normalizeGeminiModel(Deno.env.get("GEMINI_MODEL"));
+  const fallbacks = parseFallbackModels(Deno.env.get("GEMINI_MODEL_FALLBACKS"), primary);
+  const chain = [primary, ...fallbacks];
+  const attempted: string[] = [];
+  let rateLimited = false;
+  let lastRetryAfter: number | null = null;
+  let lastNonRateLimitError: SafeParserError | undefined;
+  let lastOutputError: string | undefined;
+  let repairAttempted = false;
+
+  for (const model of chain) {
+    attempted.push(model);
+    try {
+      const outcome = await tryOneModel(pdfBytes, filePath, model);
+      if (outcome.repairAttempted) repairAttempted = true;
+      if (outcome.result) {
+        return { result: outcome.result, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null };
+      }
+      lastOutputError = outcome.error;
+      // Schema/output failure — do not blindly fall over to other models.
+      break;
+    } catch (err) {
+      if (err instanceof SafeParserError && err.code === "provider_rate_limited") {
+        rateLimited = true;
+        lastRetryAfter = err.retryAfterSeconds ?? lastRetryAfter;
+        safeLog({
+          provider: "gemini",
+          stage: "provider_fetch",
+          model_id: model,
+          provider_status: err.providerStatus ?? null,
+          status: "provider_rate_limited",
+          retry_after_seconds: lastRetryAfter,
+        });
+        continue; // try next fallback
+      }
+      // Non-rate-limit provider error: stop and surface.
+      if (err instanceof SafeParserError) {
+        lastNonRateLimitError = err;
+      } else {
+        lastNonRateLimitError = new SafeParserError("unexpected_internal_error", "provider_fetch", { modelId: model });
+      }
+      break;
+    }
+  }
+
+  if (lastNonRateLimitError) {
+    lastNonRateLimitError.attemptedModels = attempted;
+    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, fatalError: lastNonRateLimitError };
+  }
+
+  if (rateLimited && attempted.length > 0) {
+    const err = new SafeParserError("provider_rate_limited", "provider_fetch", { providerStatus: 429, retryAfterSeconds: lastRetryAfter, attemptedModels: attempted });
+    return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: true, lastRateLimitRetryAfter: lastRetryAfter, fatalError: err };
+  }
+
+  return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, error: lastOutputError };
 }
 
 function parseModelJson(text: string, filePath: string, model: string): { success: true; data: ParserResult } | { success: false; error: string; code: string } {
