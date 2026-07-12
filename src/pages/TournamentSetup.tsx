@@ -48,6 +48,7 @@ import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDial
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
 import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
+import { BROCHURE_PARSER_V2_ENABLED } from "@/utils/featureFlags";
 
 // Flip to true only when debugging
 const DEBUG = false;
