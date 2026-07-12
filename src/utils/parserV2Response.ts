@@ -41,6 +41,8 @@ export interface ParserV2ErrorResult {
 export type ParserV2Result = ParserV2SuccessResult | ParserV2ErrorResult;
 
 const USER_FACING_ERROR_COPY: Record<string, string> = {
+  parser_v2_disabled:
+    "AI Parser V2 is currently disabled. Use the existing parser or manual setup.",
   provider_unavailable:
     "AI parsing is temporarily unavailable. Try again later or use the existing parser or manual setup.",
   provider_rate_limited:
@@ -193,9 +195,11 @@ export function normalizeParserV2Response(payload: unknown): ParserV2Result {
   if (rec.status && rec.status !== "ok_draft" && rec.status !== "blocked_low_confidence") {
     const statusStr = String(rec.status);
     const code =
-      statusStr === "no_brochure"
-        ? "storage_download_failed"
-        : "provider_response_invalid";
+      isNonEmptyString(rec.code)
+        ? rec.code
+        : statusStr === "no_brochure"
+          ? "storage_download_failed"
+          : "provider_response_invalid";
     return {
       ok: false,
       code,

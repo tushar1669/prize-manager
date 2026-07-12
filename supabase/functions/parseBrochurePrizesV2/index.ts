@@ -21,6 +21,7 @@ type ParserStage =
   | "auth"
   | "parse_body"
   | "tournament_lookup"
+  | "feature_gate"
   | "feature_flag"
   | "allowlist"
   | "brochure_lookup"
@@ -203,6 +204,28 @@ async function ensureTournamentAccess(supabase: SupabaseClient, userId: string, 
 
 function flagEnabled(): boolean {
   return ["1", "true", "yes", "on"].includes((Deno.env.get("BROCHURE_PARSER_V2_ENABLED") ?? "").toLowerCase());
+}
+
+function parserV2DisabledResponse(jobId: string): Response {
+  return jsonResponse(withJob({ status: "not_enabled", code: "parser_v2_disabled" }, jobId, "feature_gate"), 200);
+}
+
+async function runtimeRolloutEnabled(supabase: SupabaseClient, jobId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("platform_feature_flags")
+      .select("enabled")
+      .eq("key", "brochure_parser_v2")
+      .maybeSingle();
+    if (error) {
+      safeLog({ job_id: jobId, stage: "feature_gate", status: "runtime_rollout_read_error" });
+      return false;
+    }
+    return data?.enabled === true;
+  } catch (_) {
+    safeLog({ job_id: jobId, stage: "feature_gate", status: "runtime_rollout_read_exception" });
+    return false;
+  }
 }
 
 function allowlisted(user: User, isMaster: boolean): boolean {
@@ -480,14 +503,15 @@ Deno.serve(async (req: Request) => {
     if (!tournamentId || typeof tournamentId !== "string") return jsonResponse(withJob({ error: "missing_tournament_id" }, jobId, stage), 400);
     if (body.mode !== "draft") return jsonResponse(withJob({ error: "unsupported_mode", message: "parseBrochurePrizesV2 only supports draft mode" }, jobId, stage), 400);
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    stage = "feature_gate";
+    if (!flagEnabled()) return parserV2DisabledResponse(jobId);
+    if (!(await runtimeRolloutEnabled(supabase, jobId))) return parserV2DisabledResponse(jobId);
     stage = "tournament_lookup";
     const { accessDenied, tournament, isMaster } = await ensureTournamentAccess(supabase, user.id, tournamentId);
     if (accessDenied) {
       const accessBody = await accessDenied.clone().json().catch(() => ({ error: "access_denied" }));
       return jsonResponse(withJob(accessBody, jobId, stage), accessDenied.status);
     }
-    stage = "feature_flag";
-    if (!flagEnabled()) return jsonResponse(withJob({ status: "not_enabled", code: "BROCHURE_PARSER_V2_NOT_ENABLED" }, jobId, stage), 200);
     stage = "allowlist";
     if (!allowlisted(user, isMaster)) return jsonResponse(withJob({ error: "forbidden", code: "BROCHURE_PARSER_V2_NOT_ALLOWLISTED" }, jobId, stage), 403);
     stage = "provider_request_build";
