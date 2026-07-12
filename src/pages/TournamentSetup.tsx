@@ -2158,6 +2158,15 @@ export default function TournamentSetup() {
                       tournamentId={id!}
                       onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                     />
+                    {BROCHURE_PARSER_V2_ENABLED && (
+                      <BrochurePrizeDraftDialog
+                        open={brochureDraftV2Open}
+                        onOpenChange={setBrochureDraftV2Open}
+                        tournamentId={id!}
+                        parserMode="v2"
+                        onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
+                      />
+                    )}
                   </>
                 )}
 
