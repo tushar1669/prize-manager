@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { applyDraftAddOnly, ApplyReport, DraftResult } from "@/utils/prizeApplyDraft";
 import { validateDraftSafety } from "@/utils/brochureDraftSafety";
+import {
+  normalizeParserV2Response,
+  shortSupportRef,
+  type ParserV2Metadata,
+} from "@/utils/parserV2Response";
 
 /** Map raw machine warning keys to human-friendly copy */
 const WARNING_COPY: Record<string, string> = {
