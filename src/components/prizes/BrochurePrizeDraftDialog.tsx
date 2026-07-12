@@ -304,9 +304,16 @@ export default function BrochurePrizeDraftDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Draft Prize Structure</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Draft Prize Structure
+            {parserMode === "v2" && (
+              <Badge variant="secondary" className="text-xs">AI Parser V2 · Beta</Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            Best-effort extraction from brochure — always review before applying
+            {parserMode === "v2"
+              ? "Creates review-only suggestions. Nothing is saved until you review and apply them."
+              : "Best-effort extraction from brochure — always review before applying"}
           </DialogDescription>
         </DialogHeader>
 
