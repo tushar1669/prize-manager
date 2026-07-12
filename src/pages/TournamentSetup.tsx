@@ -2086,6 +2086,19 @@ export default function TournamentSetup() {
                           <Upload className="h-4 w-4" />
                           Generate Draft from Brochure
                         </Button>
+                        {BROCHURE_PARSER_V2_ENABLED && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-2 text-muted-foreground"
+                            disabled={!tournament?.brochure_url}
+                            title={tournament?.brochure_url ? "AI-powered brochure parser (beta) — review required before applying" : "Upload a brochure on the Details tab first"}
+                            onClick={() => setBrochureDraftV2Open(true)}
+                          >
+                            <Upload className="h-4 w-4" />
+                            Parse with AI Parser V2 (Beta)
+                          </Button>
+                        )}
                         {!tournament?.brochure_url && (
                           <p className="text-xs leading-snug text-muted-foreground">
                             No brochure uploaded yet — add one in the{" "}
