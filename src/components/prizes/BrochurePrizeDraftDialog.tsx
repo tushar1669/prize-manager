@@ -121,7 +121,7 @@ export default function BrochurePrizeDraftDialog({
             return;
           }
           const normalized = normalizeParserV2Response(data);
-          if (!normalized.ok) {
+          if (normalized.ok !== true) {
             setStatus("error");
             const parts: string[] = [normalized.message];
             if (normalized.retryAfterSeconds && normalized.retryAfterSeconds > 0) {
