@@ -396,11 +396,34 @@ export default function BrochurePrizeDraftDialog({
         )}
 
         {status === "error" && (
-          <ErrorCard
-            icon={<AlertTriangle className="h-6 w-6" />}
-            title="Parsing failed"
-            description={response?.message ?? "An unexpected error occurred. Try again or enter prizes manually."}
-          />
+          <div className="space-y-2">
+            <ErrorCard
+              icon={<AlertTriangle className="h-6 w-6" />}
+              title={parserMode === "v2" ? "AI parser could not build a safe draft" : "Parsing failed"}
+              description={response?.message ?? "An unexpected error occurred. Try again or enter prizes manually."}
+            />
+            {parserMode === "v2" && v2ErrorRef?.ref && (
+              <div className="flex items-center gap-2 px-1">
+                <p className="text-xs text-muted-foreground">
+                  Support reference: <span className="font-mono">{v2ErrorRef.ref}</span>
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 text-xs"
+                  onClick={() => {
+                    if (v2ErrorRef.ref) {
+                      navigator.clipboard.writeText(v2ErrorRef.ref);
+                      toast.success("Support reference copied");
+                    }
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ok_draft — summary + collapsible detail + apply */}
