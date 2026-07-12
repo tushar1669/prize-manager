@@ -73,12 +73,18 @@ export default function BrochurePrizeDraftDialog({
   onOpenChange,
   tournamentId,
   onApplied,
+  parserMode = "legacy",
 }: BrochurePrizeDraftDialogProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [expandedJson, setExpandedJson] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [v2Meta, setV2Meta] = useState<ParserV2Metadata | null>(null);
+  const [v2ErrorRef, setV2ErrorRef] = useState<{
+    ref: string | null;
+    retryAfterSeconds?: number | null;
+  } | null>(null);
 
   // Apply state
   const [applying, setApplying] = useState(false);
