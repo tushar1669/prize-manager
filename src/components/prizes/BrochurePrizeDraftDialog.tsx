@@ -220,6 +220,8 @@ export default function BrochurePrizeDraftDialog({
         setIncludeTeamGroups(false);
         setVerifiedTeamGroups(new Set());
         setReviewAck(false);
+        setV2Meta(null);
+        setV2ErrorRef(null);
       }
       onOpenChange(nextOpen);
     },
