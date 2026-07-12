@@ -98,6 +98,65 @@ export default function BrochurePrizeDraftDialog({
     async (selectedEvent?: string | null) => {
       setStatus("loading");
       setApplyReport(null);
+      setV2ErrorRef(null);
+
+      if (parserMode === "v2") {
+        try {
+          const { data, error } = await supabase.functions.invoke(
+            "parseBrochurePrizesV2",
+            {
+              body: {
+                tournament_id: tournamentId,
+                mode: "draft",
+              },
+            },
+          );
+          if (error) {
+            setStatus("error");
+            setResponse({
+              status: "error",
+              message:
+                "The AI parser could not be reached. Try again or use manual setup.",
+            });
+            return;
+          }
+          const normalized = normalizeParserV2Response(data);
+          if (!normalized.ok) {
+            setStatus("error");
+            const parts: string[] = [normalized.message];
+            if (normalized.retryAfterSeconds && normalized.retryAfterSeconds > 0) {
+              parts.push(
+                `You can retry in about ${Math.max(1, Math.round(normalized.retryAfterSeconds))}s.`,
+              );
+            }
+            setResponse({
+              status: "error",
+              message: parts.join(" "),
+            });
+            setV2ErrorRef({
+              ref: shortSupportRef(normalized.requestId ?? normalized.jobId),
+              retryAfterSeconds: normalized.retryAfterSeconds ?? null,
+            });
+            setV2Meta(null);
+            return;
+          }
+          setV2Meta(normalized.parserMetadata);
+          setResponse({ status: "ok_draft", draft: normalized.draft });
+          setStatus("ok_draft");
+          return;
+        } catch (err) {
+          setStatus("error");
+          setResponse({
+            status: "error",
+            message:
+              err instanceof Error
+                ? "The AI parser encountered an unexpected error. Please try again later."
+                : "The brochure could not be parsed safely. No changes were made.",
+          });
+          return;
+        }
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke("parseBrochurePrizes", {
           body: {
@@ -138,7 +197,7 @@ export default function BrochurePrizeDraftDialog({
         setResponse({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
       }
     },
-    [tournamentId],
+    [tournamentId, parserMode],
   );
 
   // Trigger parse when dialog opens and status is idle
