@@ -28,6 +28,8 @@ interface BrochurePrizeDraftDialogProps {
   onOpenChange: (open: boolean) => void;
   tournamentId: string;
   onApplied?: () => void;
+  /** Which backend parser to invoke. Defaults to legacy. */
+  parserMode?: "legacy" | "v2";
 }
 
 type Status =
