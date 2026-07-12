@@ -228,7 +228,14 @@ export default function BrochurePrizeDraftDialog({
     [onOpenChange],
   );
 
+  const serverBlocked = parserMode === "v2" && v2Meta?.blocked === true;
+
   const handleApply = useCallback(async () => {
+    if (serverBlocked) {
+      toast.error("This Parser V2 draft is blocked and cannot be applied.");
+      return;
+    }
+
     const draft = response?.draft;
     if (!draft || applying) return;
 
@@ -267,7 +274,7 @@ export default function BrochurePrizeDraftDialog({
     } finally {
       setApplying(false);
     }
-  }, [response?.draft, applying, tournamentId, includeTeamGroups, verifiedTeamGroups, onApplied]);
+  }, [serverBlocked, response?.draft, applying, tournamentId, includeTeamGroups, verifiedTeamGroups, onApplied]);
 
   const handleCopyJson = () => {
     if (response?.draft) {
@@ -635,6 +642,19 @@ export default function BrochurePrizeDraftDialog({
 
             {/* Apply controls (always render so safety messaging shows even when prizes==0) */}
             <div className="space-y-3 border-t pt-4">
+
+              {serverBlocked && (
+                <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30 p-3 space-y-1">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    Parser V2 blocked this draft
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    The AI parser marked this extraction as unsafe or too uncertain to apply. Review it for reference, then use the existing parser, Excel template, or manual setup.
+                  </p>
+                </div>
+              )}
+
               {/* Safety gate — UNSAFE */}
               {safety.level === "UNSAFE" && (
                 <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30 p-3 space-y-1">
@@ -727,6 +747,7 @@ export default function BrochurePrizeDraftDialog({
                     onClick={handleApply}
                     disabled={
                       applying ||
+                      serverBlocked ||
                       safety.level === "UNSAFE" ||
                       (safety.level === "SAFE_MEDIUM" && !reviewAck)
                     }

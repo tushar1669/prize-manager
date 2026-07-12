@@ -170,6 +170,8 @@ export function normalizeParserV2Response(payload: unknown): ParserV2Result {
     };
   }
   const rec = payload as Record<string, unknown>;
+  const backendBlocked =
+    rec.status === "blocked_low_confidence" || rec.blocked === true;
 
   // HTTP 200 safe parser failure — must not be treated as success.
   if (rec.status === "parser_error") {
@@ -232,7 +234,7 @@ export function normalizeParserV2Response(payload: unknown): ParserV2Result {
       schemaVersion: isNonEmptyString(rec.schema_version)
         ? rec.schema_version
         : undefined,
-      blocked: rec.blocked === true,
+      blocked: backendBlocked,
       requiresReview: rec.requires_review === true,
     },
   };
