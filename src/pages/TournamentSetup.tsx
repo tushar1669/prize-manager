@@ -128,6 +128,7 @@ export default function TournamentSetup() {
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
   const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
+  const [brochureDraftV2Open, setBrochureDraftV2Open] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [templateGuideOpen, setTemplateGuideOpen] = useState(false);
 
