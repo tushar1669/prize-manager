@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { applyDraftAddOnly, ApplyReport, DraftResult } from "@/utils/prizeApplyDraft";
 import { validateDraftSafety } from "@/utils/brochureDraftSafety";
+import {
+  normalizeParserV2Response,
+  shortSupportRef,
+  type ParserV2Metadata,
+} from "@/utils/parserV2Response";
 
 /** Map raw machine warning keys to human-friendly copy */
 const WARNING_COPY: Record<string, string> = {
@@ -23,6 +28,8 @@ interface BrochurePrizeDraftDialogProps {
   onOpenChange: (open: boolean) => void;
   tournamentId: string;
   onApplied?: () => void;
+  /** Which backend parser to invoke. Defaults to legacy. */
+  parserMode?: "legacy" | "v2";
 }
 
 type Status =
@@ -66,12 +73,18 @@ export default function BrochurePrizeDraftDialog({
   onOpenChange,
   tournamentId,
   onApplied,
+  parserMode = "legacy",
 }: BrochurePrizeDraftDialogProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [expandedJson, setExpandedJson] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [v2Meta, setV2Meta] = useState<ParserV2Metadata | null>(null);
+  const [v2ErrorRef, setV2ErrorRef] = useState<{
+    ref: string | null;
+    retryAfterSeconds?: number | null;
+  } | null>(null);
 
   // Apply state
   const [applying, setApplying] = useState(false);
@@ -85,6 +98,65 @@ export default function BrochurePrizeDraftDialog({
     async (selectedEvent?: string | null) => {
       setStatus("loading");
       setApplyReport(null);
+      setV2ErrorRef(null);
+
+      if (parserMode === "v2") {
+        try {
+          const { data, error } = await supabase.functions.invoke(
+            "parseBrochurePrizesV2",
+            {
+              body: {
+                tournament_id: tournamentId,
+                mode: "draft",
+              },
+            },
+          );
+          if (error) {
+            setStatus("error");
+            setResponse({
+              status: "error",
+              message:
+                "The AI parser could not be reached. Try again or use manual setup.",
+            });
+            return;
+          }
+          const normalized = normalizeParserV2Response(data);
+          if (normalized.ok !== true) {
+            setStatus("error");
+            const parts: string[] = [normalized.message];
+            if (normalized.retryAfterSeconds && normalized.retryAfterSeconds > 0) {
+              parts.push(
+                `You can retry in about ${Math.max(1, Math.round(normalized.retryAfterSeconds))}s.`,
+              );
+            }
+            setResponse({
+              status: "error",
+              message: parts.join(" "),
+            });
+            setV2ErrorRef({
+              ref: shortSupportRef(normalized.requestId ?? normalized.jobId),
+              retryAfterSeconds: normalized.retryAfterSeconds ?? null,
+            });
+            setV2Meta(null);
+            return;
+          }
+          setV2Meta(normalized.parserMetadata);
+          setResponse({ status: "ok_draft", draft: normalized.draft });
+          setStatus("ok_draft");
+          return;
+        } catch (err) {
+          setStatus("error");
+          setResponse({
+            status: "error",
+            message:
+              err instanceof Error
+                ? "The AI parser encountered an unexpected error. Please try again later."
+                : "The brochure could not be parsed safely. No changes were made.",
+          });
+          return;
+        }
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke("parseBrochurePrizes", {
           body: {
@@ -125,7 +197,7 @@ export default function BrochurePrizeDraftDialog({
         setResponse({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
       }
     },
-    [tournamentId],
+    [tournamentId, parserMode],
   );
 
   // Trigger parse when dialog opens and status is idle
@@ -148,6 +220,8 @@ export default function BrochurePrizeDraftDialog({
         setIncludeTeamGroups(false);
         setVerifiedTeamGroups(new Set());
         setReviewAck(false);
+        setV2Meta(null);
+        setV2ErrorRef(null);
       }
       onOpenChange(nextOpen);
     },
@@ -232,9 +306,16 @@ export default function BrochurePrizeDraftDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Draft Prize Structure</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Draft Prize Structure
+            {parserMode === "v2" && (
+              <Badge variant="secondary" className="text-xs">AI Parser V2 · Beta</Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            Best-effort extraction from brochure — always review before applying
+            {parserMode === "v2"
+              ? "Creates review-only suggestions. Nothing is saved until you review and apply them."
+              : "Best-effort extraction from brochure — always review before applying"}
           </DialogDescription>
         </DialogHeader>
 
@@ -242,7 +323,11 @@ export default function BrochurePrizeDraftDialog({
         {status === "loading" && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            <p className="text-sm text-muted-foreground">Parsing brochure…</p>
+            <p className="text-sm text-muted-foreground">
+              {parserMode === "v2"
+                ? "Reading brochure and preparing a review draft…"
+                : "Parsing brochure…"}
+            </p>
           </div>
         )}
 
@@ -313,11 +398,34 @@ export default function BrochurePrizeDraftDialog({
         )}
 
         {status === "error" && (
-          <ErrorCard
-            icon={<AlertTriangle className="h-6 w-6" />}
-            title="Parsing failed"
-            description={response?.message ?? "An unexpected error occurred. Try again or enter prizes manually."}
-          />
+          <div className="space-y-2">
+            <ErrorCard
+              icon={<AlertTriangle className="h-6 w-6" />}
+              title={parserMode === "v2" ? "AI parser could not build a safe draft" : "Parsing failed"}
+              description={response?.message ?? "An unexpected error occurred. Try again or enter prizes manually."}
+            />
+            {parserMode === "v2" && v2ErrorRef?.ref && (
+              <div className="flex items-center gap-2 px-1">
+                <p className="text-xs text-muted-foreground">
+                  Support reference: <span className="font-mono">{v2ErrorRef.ref}</span>
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 text-xs"
+                  onClick={() => {
+                    if (v2ErrorRef.ref) {
+                      navigator.clipboard.writeText(v2ErrorRef.ref);
+                      toast.success("Support reference copied");
+                    }
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ok_draft — summary + collapsible detail + apply */}

@@ -48,6 +48,7 @@ import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDial
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
 import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
+import { BROCHURE_PARSER_V2_ENABLED } from "@/utils/featureFlags";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -128,6 +129,7 @@ export default function TournamentSetup() {
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
   const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
+  const [brochureDraftV2Open, setBrochureDraftV2Open] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [templateGuideOpen, setTemplateGuideOpen] = useState(false);
 
@@ -2084,6 +2086,19 @@ export default function TournamentSetup() {
                           <Upload className="h-4 w-4" />
                           Generate Draft from Brochure
                         </Button>
+                        {BROCHURE_PARSER_V2_ENABLED && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-2 text-muted-foreground"
+                            disabled={!tournament?.brochure_url}
+                            title={tournament?.brochure_url ? "AI-powered brochure parser (beta) — review required before applying" : "Upload a brochure on the Details tab first"}
+                            onClick={() => setBrochureDraftV2Open(true)}
+                          >
+                            <Upload className="h-4 w-4" />
+                            Parse with AI Parser V2 (Beta)
+                          </Button>
+                        )}
                         {!tournament?.brochure_url && (
                           <p className="text-xs leading-snug text-muted-foreground">
                             No brochure uploaded yet — add one in the{" "}
@@ -2143,6 +2158,15 @@ export default function TournamentSetup() {
                       tournamentId={id!}
                       onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                     />
+                    {BROCHURE_PARSER_V2_ENABLED && (
+                      <BrochurePrizeDraftDialog
+                        open={brochureDraftV2Open}
+                        onOpenChange={setBrochureDraftV2Open}
+                        tournamentId={id!}
+                        parserMode="v2"
+                        onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
+                      />
+                    )}
                   </>
                 )}
 
