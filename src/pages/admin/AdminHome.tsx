@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
+import { ParserV2RolloutControl } from "@/components/admin/ParserV2RolloutControl";
 
 import { ADMIN_SECTIONS } from "@/components/admin/adminSections";
 
@@ -37,6 +38,8 @@ export default function AdminHome() {
           <CardDescription>Choose a section to manage platform operations.</CardDescription>
         </CardHeader>
       </Card>
+
+      <ParserV2RolloutControl />
 
       <div className="grid gap-4 md:grid-cols-2">
         {ADMIN_SECTIONS.filter((link) => link.to !== "/admin").map((link) => (

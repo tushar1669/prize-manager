@@ -48,7 +48,7 @@ import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDial
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
 import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
-import { BROCHURE_PARSER_V2_ENABLED } from "@/utils/featureFlags";
+import { useBrochureParserV2Rollout } from "@/hooks/useBrochureParserV2Rollout";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -72,6 +72,7 @@ const asCriteriaJson = (val: unknown): CriteriaJson => {
 
 
 export default function TournamentSetup() {
+  const parserV2Rollout = useBrochureParserV2Rollout();
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -2086,7 +2087,7 @@ export default function TournamentSetup() {
                           <Upload className="h-4 w-4" />
                           Generate Draft from Brochure
                         </Button>
-                        {BROCHURE_PARSER_V2_ENABLED && (
+                        {parserV2Rollout.enabled && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -2158,7 +2159,7 @@ export default function TournamentSetup() {
                       tournamentId={id!}
                       onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                     />
-                    {BROCHURE_PARSER_V2_ENABLED && (
+                    {parserV2Rollout.enabled && (
                       <BrochurePrizeDraftDialog
                         open={brochureDraftV2Open}
                         onOpenChange={setBrochureDraftV2Open}
