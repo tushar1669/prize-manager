@@ -13,6 +13,15 @@ export const ALLOC_VERBOSE_LOGS = allocVerboseFlag === 'true';
 const dedupFlag = import.meta.env?.VITE_IMPORT_DEDUP_ENABLED;
 export const IMPORT_DEDUP_ENABLED = dedupFlag ? dedupFlag === "true" : true;
 
+/**
+ * Frontend-only feature flag for the V2 (Gemini) brochure parser UI action.
+ * Defaults to false when the env var is absent. Do NOT reuse the server-side
+ * BROCHURE_PARSER_V2_ENABLED secret in frontend code.
+ */
+const brochureParserV2Flag = import.meta.env?.VITE_BROCHURE_PARSER_V2_ENABLED;
+export const BROCHURE_PARSER_V2_ENABLED: boolean =
+  brochureParserV2Flag === "true";
+
 export const IMPORT_MERGE_POLICY_DEFAULTS = {
   fillBlanks: true as boolean,
   preferNewerRating: true as boolean,
