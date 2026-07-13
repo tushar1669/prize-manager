@@ -612,6 +612,30 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_feature_flags: {
+        Row: {
+          description: string | null
+          enabled: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          description?: string | null
+          enabled?: boolean
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       players: {
         Row: {
           city: string | null
@@ -1670,6 +1694,12 @@ export type Database = {
           tournament_title: string
         }[]
       }
+      get_brochure_parser_v2_rollout_state: {
+        Args: never
+        Returns: {
+          enabled: boolean
+        }[]
+      }
       get_or_create_my_referral_code: { Args: never; Returns: Json }
       get_public_tournament_results: {
         Args: { tournament_id: string }
@@ -1806,6 +1836,12 @@ export type Database = {
       review_tournament_payment: {
         Args: { p_decision: string; p_note?: string; p_payment_id: string }
         Returns: Json
+      }
+      set_brochure_parser_v2_rollout_state: {
+        Args: { p_enabled: boolean }
+        Returns: {
+          enabled: boolean
+        }[]
       }
       submit_tournament_payment_claim: {
         Args: { p_amount_inr: number; p_tournament_id: string; p_utr: string }
