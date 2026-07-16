@@ -11,14 +11,16 @@ const schema = PARSER_RESULT_RESPONSE_JSON_SCHEMA as SchemaNode;
 const stringify = (value: unknown) => JSON.stringify(value);
 
 describe("Parser V2 Gemini structured output", () => {
-  it("sends exactly one provider JSON Schema with the documented responseFormat text shape", () => {
+  it("sends the Gemini-compatible response MIME type and JSON schema fields", () => {
     const requestBlock = source.slice(source.indexOf("body = JSON.stringify"), source.indexOf("let res: Response"));
-    expect(requestBlock).toContain("responseFormat");
-    expect(requestBlock).toContain("text:");
-    expect(requestBlock).toContain('mimeType: "application/json"');
-    expect(requestBlock).toContain("schema: PARSER_RESULT_RESPONSE_JSON_SCHEMA");
+    expect(requestBlock).toContain('responseMimeType: "application/json"');
+    expect(requestBlock).toContain("responseJsonSchema: PARSER_RESULT_RESPONSE_JSON_SCHEMA");
+    expect(requestBlock).not.toContain("responseFormat");
+    expect(requestBlock).not.toContain("responseSchema");
+    expect(requestBlock).not.toContain("_responseJsonSchema");
     expect(requestBlock).not.toContain("response_mime_type");
-    expect(requestBlock.match(/schema: PARSER_RESULT_RESPONSE_JSON_SCHEMA/g)).toHaveLength(1);
+    expect(requestBlock).not.toContain("response_json_schema");
+    expect(requestBlock.match(/responseJsonSchema: PARSER_RESULT_RESPONSE_JSON_SCHEMA/g)).toHaveLength(1);
   });
 
   it("includes required category, prize, gift item, and criteria fields", () => {
@@ -83,16 +85,21 @@ describe("Parser V2 Gemini structured output", () => {
     expect(source).toContain("parserResultSchema.safeParse(raw)");
   });
 
-  it("keeps repair schema-bound, one-shot, PDF-free, and inside the total deadline", () => {
+  it("keeps initial and repair requests on the same schema-bound builder path", () => {
     expect(source.match(/callGemini\(pdfBytes, filePath, model, extractionDeadlineMs/g)).toHaveLength(2);
+    expect(source.match(/body = JSON.stringify/g)).toHaveLength(1);
+    expect(source.match(/responseJsonSchema: PARSER_RESULT_RESPONSE_JSON_SCHEMA/g)).toHaveLength(1);
     expect(source).toContain("repairInputForProvider(parsed, first)");
     expect(source).toContain("Invalid output follows (truncated):");
     expect(source).toContain("invalidOutput.slice(0, 12000)");
     expect(source).toContain("ensureGeminiBudget(extractionDeadlineMs, model);");
     expect(source).toContain("const GEMINI_TOTAL_EXTRACTION_TIMEOUT_MS = 50_000");
     const repairBranch = source.slice(source.indexOf("? [{ text:"), source.indexOf(": [{ text: extractionPrompt"));
+    const initialBranch = source.slice(source.indexOf(": [{ text: extractionPrompt"), source.indexOf("body = JSON.stringify"));
     expect(repairBranch).toContain("? [{ text:");
     expect(repairBranch).not.toContain("inline_data");
+    expect(initialBranch).toContain("inline_data");
+    expect(initialBranch).toContain('mime_type: "application/pdf"');
   });
 
   it("returns only capped safe output diagnostics for invalid JSON and schema mismatches", () => {

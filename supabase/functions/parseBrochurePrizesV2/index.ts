@@ -327,12 +327,8 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
         contents: [{ role: "user", parts }],
         generationConfig: {
           temperature: 0,
-          responseFormat: {
-            text: {
-              mimeType: "application/json",
-              schema: PARSER_RESULT_RESPONSE_JSON_SCHEMA,
-            },
-          },
+          responseMimeType: "application/json",
+          responseJsonSchema: PARSER_RESULT_RESPONSE_JSON_SCHEMA,
         },
       });
     } catch (_) {
