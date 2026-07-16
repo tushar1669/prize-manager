@@ -3,6 +3,7 @@ import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
 import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
 import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel, parseFallbackModels, parseRetryAfterSeconds } from "./geminiProvider.ts";
+import { PARSER_RESULT_RESPONSE_JSON_SCHEMA } from "./parserResultResponseSchema.ts";
 
 type ParserProvider = "gemini";
 
@@ -49,8 +50,11 @@ class SafeParserError extends Error {
   provider?: ParserProvider;
   timeoutMs?: number;
   timeoutScope?: "provider_request" | "total_extraction";
+  outputFailureKind?: "invalid_json" | "schema_mismatch";
+  schemaIssueCount?: number;
+  schemaIssuePaths?: string[];
 
-  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider; timeoutMs?: number; timeoutScope?: "provider_request" | "total_extraction" } = {}) {
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider; timeoutMs?: number; timeoutScope?: "provider_request" | "total_extraction"; outputFailureKind?: "invalid_json" | "schema_mismatch"; schemaIssueCount?: number; schemaIssuePaths?: string[] } = {}) {
     super(code);
     this.name = "SafeParserError";
     this.code = code;
@@ -63,6 +67,9 @@ class SafeParserError extends Error {
     this.provider = options.provider;
     this.timeoutMs = options.timeoutMs;
     this.timeoutScope = options.timeoutScope;
+    this.outputFailureKind = options.outputFailureKind;
+    this.schemaIssueCount = options.schemaIssueCount;
+    this.schemaIssuePaths = options.schemaIssuePaths;
   }
 }
 
@@ -175,6 +182,9 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
     ...(error.modelId ? { model_id: error.modelId } : {}),
     ...(error.code === "provider_timeout" && error.timeoutScope ? { timeout_scope: error.timeoutScope } : {}),
     ...(error.code === "provider_timeout" && typeof error.timeoutMs === "number" ? { timeout_ms: error.timeoutMs } : {}),
+    ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && error.outputFailureKind ? { output_failure_kind: error.outputFailureKind } : {}),
+    ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && typeof error.schemaIssueCount === "number" ? { schema_issue_count: Math.min(error.schemaIssueCount, 100) } : {}),
+    ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && error.schemaIssuePaths ? { schema_issue_paths: error.schemaIssuePaths.slice(0, 10) } : {}),
   };
   if (error.attemptedModels && error.attemptedModels.length > 0) {
     body.attempted_model_count = error.attemptedModels.length;
@@ -311,11 +321,19 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
     let body: string;
     try {
       const parts = repairInput
-        ? [{ text: `${extractionPrompt(filePath)}\nRepair this invalid JSON/schema output. Return only valid JSON. Invalid output/errors:\n${repairInput.slice(0, 12000)}` }]
+        ? [{ text: `${extractionPrompt(filePath)}\nRepair this invalid JSON/schema output. Return only valid JSON. Safe validation summary and bounded invalid output:\n${repairInput.slice(0, 12000)}` }]
         : [{ text: extractionPrompt(filePath) }, { inline_data: { mime_type: "application/pdf", data: bytesToBase64(pdfBytes) } }];
       body = JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: 0, response_mime_type: "application/json" },
+        generationConfig: {
+          temperature: 0,
+          responseFormat: {
+            text: {
+              mimeType: "application/json",
+              schema: PARSER_RESULT_RESPONSE_JSON_SCHEMA,
+            },
+          },
+        },
       });
     } catch (_) {
       throw new SafeParserError("pdf_processing_failed", "provider_request_build");
@@ -395,25 +413,38 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
 }
 
 
+type OutputDiagnostics = {
+  outputFailureKind: "invalid_json" | "schema_mismatch";
+  schemaIssueCount: number;
+  schemaIssuePaths: string[];
+};
+
+type ParseFailure = OutputDiagnostics & {
+  success: false;
+  error: string;
+  code: string;
+};
+
 type ExtractOutcome = {
   result: ParserResult | null;
   repairAttempted: boolean;
   error?: string;
+  outputDiagnostics?: OutputDiagnostics;
   attemptedModels: string[];
   rateLimited: boolean;
   lastRateLimitRetryAfter: number | null;
   fatalError?: SafeParserError;
 };
 
-async function tryOneModel(pdfBytes: Uint8Array, filePath: string, model: string, extractionDeadlineMs: number, attemptIndex: number, extractionStartedMs: number, jobId: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string }> {
+async function tryOneModel(pdfBytes: Uint8Array, filePath: string, model: string, extractionDeadlineMs: number, attemptIndex: number, extractionStartedMs: number, jobId: string): Promise<{ result: ParserResult | null; repairAttempted: boolean; error?: string; outputDiagnostics?: OutputDiagnostics }> {
   const first = await callGemini(pdfBytes, filePath, model, extractionDeadlineMs, attemptIndex, extractionStartedMs, jobId);
   const parsed = parseModelJson(first, filePath, model);
   if (parsed.success) return { result: parsed.data, repairAttempted: false };
   ensureGeminiBudget(extractionDeadlineMs, model);
-  const repairedText = await callGemini(pdfBytes, filePath, model, extractionDeadlineMs, attemptIndex, extractionStartedMs, jobId, `${parsed.error}\n${first}`);
+  const repairedText = await callGemini(pdfBytes, filePath, model, extractionDeadlineMs, attemptIndex, extractionStartedMs, jobId, repairInputForProvider(parsed, first));
   const repaired = parseModelJson(repairedText, filePath, model);
   if (repaired.success) return { result: repaired.data, repairAttempted: true };
-  return { result: null, repairAttempted: true, error: repaired.code };
+  return { result: null, repairAttempted: true, error: repaired.code, outputDiagnostics: repaired };
 }
 
 async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string, jobId: string): Promise<ExtractOutcome> {
@@ -426,6 +457,7 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string, jobI
   let lastNonRetryableError: SafeParserError | undefined;
   let lastOutputError: string | undefined;
   let repairAttempted = false;
+  let outputDiagnostics: OutputDiagnostics | undefined;
   const extractionStartedMs = Date.now();
   const extractionDeadlineMs = extractionStartedMs + GEMINI_TOTAL_EXTRACTION_TIMEOUT_MS;
 
@@ -442,6 +474,7 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string, jobI
         return { result: outcome.result, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null };
       }
       lastOutputError = outcome.error;
+      outputDiagnostics = outcome.outputDiagnostics;
       // Schema/output failure — do not blindly fall over to other models.
       break;
     } catch (err) {
@@ -491,10 +524,19 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string, jobI
     return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: retryableProviderError.code === "provider_rate_limited", lastRateLimitRetryAfter: lastRetryAfter, fatalError: err };
   }
 
-  return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, error: lastOutputError };
+  return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: false, lastRateLimitRetryAfter: null, error: lastOutputError, outputDiagnostics };
 }
 
-function parseModelJson(text: string, filePath: string, model: string): { success: true; data: ParserResult } | { success: false; error: string; code: string } {
+function safeSchemaIssuePath(path: Array<string | number>): string {
+  return path.map((segment) => String(segment).replace(/[^A-Za-z0-9_-]/g, "_")).join(".");
+}
+
+function repairInputForProvider(parsed: ParseFailure, invalidOutput: string): string {
+  const issuePaths = parsed.schemaIssuePaths.length > 0 ? ` Issue paths: ${parsed.schemaIssuePaths.join(", ")}.` : "";
+  return `Validation failure kind: ${parsed.outputFailureKind}. Issue count: ${parsed.schemaIssueCount}.${issuePaths} Invalid output follows (truncated):\n${invalidOutput.slice(0, 12000)}`;
+}
+
+function parseModelJson(text: string, filePath: string, model: string): { success: true; data: ParserResult } | ParseFailure {
   try {
     const raw = JSON.parse(text.trim().replace(/^```json\s*/i, "").replace(/```$/i, ""));
     raw.schema_version = SCHEMA_VERSION;
@@ -502,10 +544,13 @@ function parseModelJson(text: string, filePath: string, model: string): { succes
     raw.team_groups = [];
     raw.source = { ...(raw.source ?? {}), type: "pdf", provider: "gemini", model, file_path: filePath };
     const checked = parserResultSchema.safeParse(raw);
-    if (!checked.success) return { success: false, error: checked.error.message, code: "provider_output_invalid" };
+    if (!checked.success) {
+      const issuePaths = checked.error.issues.map((issue) => safeSchemaIssuePath(issue.path)).filter(Boolean).slice(0, 10);
+      return { success: false, error: "schema_mismatch", code: "provider_output_invalid", outputFailureKind: "schema_mismatch", schemaIssueCount: Math.min(checked.error.issues.length, 100), schemaIssuePaths: issuePaths };
+    }
     return { success: true, data: checked.data };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "invalid_json", code: "provider_response_invalid" };
+    return { success: false, error: "invalid_json", code: "provider_response_invalid", outputFailureKind: "invalid_json", schemaIssueCount: 0, schemaIssuePaths: [] };
   }
 }
 
@@ -650,7 +695,7 @@ Deno.serve(async (req: Request) => {
     }
     stage = extracted.error === "provider_response_invalid" ? "provider_response_parse" : "provider_output_validation";
     if (!extracted.result) {
-      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage, { provider: providerUsed, attemptedModels: extracted.attemptedModels });
+      const outputError = new SafeParserError(extracted.error ?? "provider_output_invalid", stage, { provider: providerUsed, attemptedModels: extracted.attemptedModels, outputFailureKind: extracted.outputDiagnostics?.outputFailureKind, schemaIssueCount: extracted.outputDiagnostics?.schemaIssueCount, schemaIssuePaths: extracted.outputDiagnostics?.schemaIssuePaths });
       safeLog({
         job_id: jobId,
         tournament_id: tournamentId,
