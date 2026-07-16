@@ -49,6 +49,8 @@ const USER_FACING_ERROR_COPY: Record<string, string> = {
     "The AI parser timed out while reading the brochure. Try again later or use the existing parser or manual setup.",
   provider_rate_limited:
     "The AI parser is temporarily busy. Please wait and try again.",
+  provider_request_invalid:
+    "The AI parser request was rejected by the provider. No changes were made. Please contact support with the reference shown below.",
   provider_model_not_found:
     "The AI parser model is unavailable. Please use the existing parser or manual setup.",
   provider_auth_failed:

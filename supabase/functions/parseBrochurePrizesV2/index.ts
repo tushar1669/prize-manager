@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient, User } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
 import { hasPingQueryParam, CORS_HEADERS } from "../_shared/health.ts";
-import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel, parseFallbackModels, parseRetryAfterSeconds } from "./geminiProvider.ts";
+import { DEFAULT_GEMINI_MODEL, geminiGenerateContentUrl, geminiHttpErrorCode, normalizeGeminiModel, parseFallbackModels, parseProviderErrorDiagnostics, parseRetryAfterSeconds, readProviderErrorBodyCapped, type ProviderErrorDiagnostics } from "./geminiProvider.ts";
 import { PARSER_RESULT_RESPONSE_JSON_SCHEMA } from "./parserResultResponseSchema.ts";
 
 type ParserProvider = "gemini";
@@ -53,8 +53,9 @@ class SafeParserError extends Error {
   outputFailureKind?: "invalid_json" | "schema_mismatch";
   schemaIssueCount?: number;
   schemaIssuePaths?: string[];
+  providerErrorDiagnostics?: ProviderErrorDiagnostics;
 
-  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider; timeoutMs?: number; timeoutScope?: "provider_request" | "total_extraction"; outputFailureKind?: "invalid_json" | "schema_mismatch"; schemaIssueCount?: number; schemaIssuePaths?: string[] } = {}) {
+  constructor(code: string, stage: ParserStage, options: { providerStatus?: number; modelId?: string; httpStatus?: number; retryAfterSeconds?: number | null; attemptedModels?: string[]; provider?: ParserProvider; timeoutMs?: number; timeoutScope?: "provider_request" | "total_extraction"; outputFailureKind?: "invalid_json" | "schema_mismatch"; schemaIssueCount?: number; schemaIssuePaths?: string[]; providerErrorDiagnostics?: ProviderErrorDiagnostics } = {}) {
     super(code);
     this.name = "SafeParserError";
     this.code = code;
@@ -70,6 +71,7 @@ class SafeParserError extends Error {
     this.outputFailureKind = options.outputFailureKind;
     this.schemaIssueCount = options.schemaIssueCount;
     this.schemaIssuePaths = options.schemaIssuePaths;
+    this.providerErrorDiagnostics = options.providerErrorDiagnostics;
   }
 }
 
@@ -185,6 +187,9 @@ function parserErrorBody(error: SafeParserError, jobId: string): Record<string, 
     ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && error.outputFailureKind ? { output_failure_kind: error.outputFailureKind } : {}),
     ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && typeof error.schemaIssueCount === "number" ? { schema_issue_count: Math.min(error.schemaIssueCount, 100) } : {}),
     ...((error.code === "provider_output_invalid" || error.code === "provider_response_invalid") && error.schemaIssuePaths ? { schema_issue_paths: error.schemaIssuePaths.slice(0, 10) } : {}),
+    ...(error.code === "provider_request_invalid" && error.providerErrorDiagnostics?.providerErrorStatus ? { provider_error_status: error.providerErrorDiagnostics.providerErrorStatus } : {}),
+    ...(error.code === "provider_request_invalid" && error.providerErrorDiagnostics?.providerErrorCategory ? { provider_error_category: error.providerErrorDiagnostics.providerErrorCategory } : {}),
+    ...(error.code === "provider_request_invalid" && error.providerErrorDiagnostics?.providerErrorFields ? { provider_error_fields: error.providerErrorDiagnostics.providerErrorFields } : {}),
   };
   if (error.attemptedModels && error.attemptedModels.length > 0) {
     body.attempted_model_count = error.attemptedModels.length;
@@ -371,7 +376,10 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
     if (!res.ok) {
       const retryAfter = parseRetryAfterSeconds(res.headers.get("retry-after"));
       const code = geminiHttpErrorCode(res.status);
-      try { await res.body?.cancel(); } catch (_) { /* ignore */ }
+      const providerErrorDiagnostics = res.status === 400 ? parseProviderErrorDiagnostics(await readProviderErrorBodyCapped(res)) : undefined;
+      if (res.status !== 400) {
+        try { await res.body?.cancel(); } catch (_) { /* ignore */ }
+      }
       safeLog({
         job_id: jobId,
         provider: "gemini",
@@ -382,8 +390,11 @@ async function callGemini(pdfBytes: Uint8Array, filePath: string, model: string,
         total_elapsed_ms: Date.now() - extractionStartedMs,
         status: code,
         provider_status: res.status,
+        provider_error_status: providerErrorDiagnostics?.providerErrorStatus ?? null,
+        provider_error_category: providerErrorDiagnostics?.providerErrorCategory ?? null,
+        provider_error_field_count: providerErrorDiagnostics?.providerErrorFields?.length ?? 0,
       });
-      throw new SafeParserError(code, "provider_fetch", { providerStatus: res.status, modelId: model, retryAfterSeconds: retryAfter });
+      throw new SafeParserError(code, "provider_fetch", { providerStatus: res.status, modelId: model, retryAfterSeconds: retryAfter, providerErrorDiagnostics });
     }
     let data: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     try {
@@ -516,6 +527,7 @@ async function extractWithGeminiPdf(pdfBytes: Uint8Array, filePath: string, jobI
       attemptedModels: attempted,
       timeoutScope: retryableProviderError.timeoutScope,
       timeoutMs: retryableProviderError.timeoutMs,
+      providerErrorDiagnostics: retryableProviderError.providerErrorDiagnostics,
     });
     return { result: null, repairAttempted, attemptedModels: attempted, rateLimited: retryableProviderError.code === "provider_rate_limited", lastRateLimitRetryAfter: lastRetryAfter, fatalError: err };
   }
