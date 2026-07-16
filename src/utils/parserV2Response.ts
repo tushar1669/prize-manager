@@ -45,6 +45,8 @@ const USER_FACING_ERROR_COPY: Record<string, string> = {
     "AI Parser V2 is currently disabled. Use the existing parser or manual setup.",
   provider_unavailable:
     "AI parsing is temporarily unavailable. Try again later or use the existing parser or manual setup.",
+  provider_timeout:
+    "The AI parser timed out while reading the brochure. Try again later or use the existing parser or manual setup.",
   provider_rate_limited:
     "The AI parser is temporarily busy. Please wait and try again.",
   provider_model_not_found:
