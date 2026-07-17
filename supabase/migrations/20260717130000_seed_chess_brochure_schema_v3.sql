@@ -27,6 +27,7 @@ SELECT
       "city": { "type": "string" },
       "state": { "type": "string" },
       "venue": { "type": "string" },
+      "event_code": { "type": "string", "description": "Official event/registration code as printed, e.g. 412442/RJ/2025" },
       "rounds": { "type": "integer", "description": "Number of rounds" },
       "website": { "type": "string" },
       "end_date": { "type": "string", "format": "date", "description": "YYYY-MM-DD" },
@@ -100,7 +101,7 @@ SELECT
       "registration_deadline": { "type": "string", "format": "date" }
     }
   }'::jsonb,
-  'Chess brochure v3 - adds criteria.city (city vs state) and prize rank_from/rank_to (grouped ranks without invented places)',
+  'Chess brochure v3 - adds criteria.city (city vs state), prize rank_from/rank_to (grouped ranks without invented places), and event_code',
   true
 WHERE NOT EXISTS (
   SELECT 1 FROM public.extraction_schemas WHERE doc_type = 'chess_brochure' AND version = 3
