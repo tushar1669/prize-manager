@@ -29,3 +29,6 @@ test-results/
 # Generated preview artifacts
 public/previews/*
 !public/previews/.keep
+
+# Local test fixtures (not for commit)
+test-brochures/

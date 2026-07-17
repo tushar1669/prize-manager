@@ -1,0 +1,218 @@
+/**
+ * The trust layer: "the model proposes, the document decides."
+ *
+ * Deterministic TypeScript, never a model. Pass 2 proposes a payload; this decides which
+ * values survive by checking each against the pass-1 transcription. A model asked to grade its
+ * own output can be argued out of its answer by the document; this cannot.
+ */
+
+import {
+  extractDateTokens,
+  extractNumericTokens,
+  groundDate,
+  groundDigits,
+  groundKeyword,
+  groundNumber,
+  groundString,
+  normalizeText,
+  type GroundingHit,
+} from "./grounding.ts";
+
+export type FieldFlag = {
+  field: string;
+  reason: "ungrounded" | "sum_mismatch";
+  severity: "high" | "medium" | "low";
+  expected?: number;
+  stated?: number;
+};
+
+export type GroundingMap = Record<string, GroundingHit>;
+
+export type TrustResult = {
+  payload: Record<string, unknown>;
+  grounding: GroundingMap;
+  flags: FieldFlag[];
+  confidence: number;
+};
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Booleans assert something no literal in the text can confirm, so they are grounded by the
+ * keyword that would have to be present for the claim to be true.
+ */
+const KEYWORD_PATTERNS: Record<string, RegExp> = {
+  fide_rated: /fide[\s\-]*rat/i,
+  aicf_rated: /aicf[\s\-]*rat/i,
+  has_trophy: /troph/i,
+  has_medal: /medal/i,
+};
+
+const EXEMPT_LEAVES = new Set(["is_main", "currency"]);
+
+function leafName(path: string): string {
+  const last = path.split(".").pop() ?? path;
+  return last.replace(/\[\d+\]$/, "");
+}
+
+/**
+ * Structural values, not claims about the document. Grounding them would flag correct
+ * extractions and push every document into review, making `auto_ok` unreachable.
+ */
+function exemption(path: string, value: unknown): GroundingHit | null {
+  const leaf = leafName(path);
+  if (EXEMPT_LEAVES.has(leaf)) return { grounded: true, method: "exempt", evidence: null };
+  // "any" is the neutral default of the gender enum, not something a brochure ever prints.
+  if (leaf === "gender" && value === "any") return { grounded: true, method: "exempt", evidence: null };
+  // A false boolean asserts nothing, so there is nothing to find.
+  if (value === false) return { grounded: true, method: "exempt", evidence: null };
+  return null;
+}
+
+type Context = {
+  text: string;
+  normalized: string;
+  numericTokens: Map<number, number>;
+  dateTokens: Map<string, number>;
+};
+
+function groundLeaf(path: string, value: string | number | boolean, ctx: Context): GroundingHit {
+  const exempt = exemption(path, value);
+  if (exempt) return exempt;
+
+  const leaf = leafName(path);
+
+  if (typeof value === "boolean") {
+    const pattern = KEYWORD_PATTERNS[leaf];
+    if (!pattern) return { grounded: false, method: "keyword", evidence: null };
+    return groundKeyword(pattern, ctx.text);
+  }
+
+  if (typeof value === "number") {
+    return groundNumber(value, ctx.text, ctx.numericTokens);
+  }
+
+  const trimmed = value.trim();
+  if (ISO_DATE_RE.test(trimmed)) return groundDate(trimmed, ctx.text, ctx.dateTokens);
+  if (leaf === "contact_phone") return groundDigits(trimmed, ctx.text);
+  return groundString(trimmed, ctx.text, ctx.normalized);
+}
+
+/**
+ * Walks every leaf of the payload. Ungrounded leaves are blanked and flagged; leaves that are
+ * already null are "absent" — the brochure simply did not say — and pass without a flag.
+ */
+export function runTrustCheck(rawPayload: Record<string, unknown>, transcription: string): TrustResult {
+  const payload = structuredClone(rawPayload);
+  const ctx: Context = {
+    text: transcription,
+    normalized: normalizeText(transcription),
+    numericTokens: extractNumericTokens(transcription),
+    dateTokens: extractDateTokens(transcription),
+  };
+
+  const grounding: GroundingMap = {};
+  const flags: FieldFlag[] = [];
+
+  const visit = (container: Record<string | number, unknown>, key: string | number, path: string): void => {
+    const value = container[key];
+
+    // Absent: nothing was claimed, so nothing to verify.
+    if (value === null || value === undefined || value === "") {
+      if (value === "") container[key] = null;
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((_, index) => visit(value as unknown as Record<number, unknown>, index, `${path}[${index}]`));
+      return;
+    }
+
+    if (typeof value === "object") {
+      const child = value as Record<string, unknown>;
+      for (const childKey of Object.keys(child)) visit(child, childKey, `${path}.${childKey}`);
+      return;
+    }
+
+    const hit = groundLeaf(path, value as string | number | boolean, ctx);
+    grounding[path] = hit;
+    if (!hit.grounded) {
+      container[key] = null;
+      flags.push({ field: path, reason: "ungrounded", severity: "high" });
+    }
+  };
+
+  for (const key of Object.keys(payload)) visit(payload, key, key);
+
+  const checked = Object.values(grounding).filter((hit) => hit.method !== "exempt");
+  const groundedCount = checked.filter((hit) => hit.grounded).length;
+  const confidence = checked.length === 0 ? 0 : Math.round((groundedCount / checked.length) * 100) / 100;
+
+  return { payload, grounding, flags, confidence };
+}
+
+export type ArithmeticResult = {
+  sum: number;
+  prizeCount: number;
+  within: boolean;
+  flag: FieldFlag | null;
+};
+
+export const SUM_TOLERANCE_INR = 100;
+
+/**
+ * Cross-checks the stated prize fund against the sum of every cash prize. Runs on the
+ * post-trust payload, so values already blanked as ungrounded cannot prop up the total.
+ */
+export function runArithmeticCheck(payload: Record<string, unknown>): ArithmeticResult {
+  const categories = Array.isArray(payload.prize_categories) ? payload.prize_categories : [];
+  let sum = 0;
+  let prizeCount = 0;
+
+  for (const category of categories) {
+    const prizes = Array.isArray((category as Record<string, unknown>)?.prizes)
+      ? ((category as Record<string, unknown>).prizes as unknown[])
+      : [];
+    for (const prize of prizes) {
+      const amount = (prize as Record<string, unknown>)?.cash_amount;
+      if (typeof amount === "number" && Number.isFinite(amount)) {
+        sum += amount;
+        prizeCount += 1;
+      }
+    }
+  }
+
+  const fund = payload.total_prize_fund;
+  // No stated fund (or nothing to compare) means there is no claim to contradict.
+  if (typeof fund !== "number" || !Number.isFinite(fund) || prizeCount === 0) {
+    return { sum, prizeCount, within: true, flag: null };
+  }
+
+  if (Math.abs(sum - fund) > SUM_TOLERANCE_INR) {
+    return {
+      sum,
+      prizeCount,
+      within: false,
+      flag: { field: "total_prize_fund", reason: "sum_mismatch", severity: "high", expected: sum, stated: fund },
+    };
+  }
+
+  return { sum, prizeCount, within: true, flag: null };
+}
+
+/**
+ * `auto_ok` demands every required field present *and* grounded, arithmetic within tolerance,
+ * and no flags of any kind. Anything less is a human's problem.
+ */
+export function decideStatus(
+  payload: Record<string, unknown>,
+  grounding: GroundingMap,
+  flags: FieldFlag[],
+  requiredFields: string[],
+  arithmeticWithin: boolean,
+): "auto_ok" | "needs_review" {
+  const requiredOk = requiredFields.every(
+    (field) => payload[field] !== null && payload[field] !== undefined && grounding[field]?.grounded === true,
+  );
+  return requiredOk && arithmeticWithin && flags.length === 0 ? "auto_ok" : "needs_review";
+}
