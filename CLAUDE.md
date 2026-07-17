@@ -15,20 +15,30 @@ Prize Manager (prize-manager.com) is a live SaaS tool for chess tournament organ
 - Storage: Supabase Storage
 - Hosting: Lovable (preview) + custom domain
 
-## Current work: Extraction Engine (Phase 1)
-We are building a universal document extraction engine that:
-1. Accepts PDF/image uploads of chess tournament brochures
-2. Runs OCR (Mistral OCR primary, Gemini Flash fallback)
-3. Extracts structured data against a versioned JSON schema
-4. Applies trust checks (grounding verification + arithmetic cross-checks)
-5. Routes to auto-commit or human review queue
-6. Links approved extractions to existing tournaments/categories/prizes tables
+## Current work: Extraction Engine (Gate 2 — feature integration)
+Gate 1 (engine validation) is complete: `/extract` runs two-pass Gemini extraction with a
+deterministic trust layer, validated end-to-end on the Jaipur reference brochure (14 categories,
+sum ₹11,50,000 exact, clean grounding audit). See `docs/extraction-engine/TESTING.md` for the
+validation record, including the Delhi pdf-mode RECITATION limitation.
 
-### New tables (already created in Supabase):
-- extraction_schemas — versioned JSON schemas per doc_type
+Gate 2 (this branch) builds the user path on top of it:
+1. "Import from brochure" on the Dashboard (behind the `brochure_import` platform flag, default off)
+2. Upload → `extraction-uploads/{uid}/` → `extraction_documents` row → `/extract` with session JWT
+3. Review screen at `/import/brochure/:extractionId` — side-by-side PDF + editable fields, flags shown
+4. Approve → `/commit-extraction` → `commit_extraction_transaction` RPC writes
+   tournaments + categories + prizes in one transaction, idempotent via `linked_tournament_id`
+
+### Extraction tables (in Supabase, captured in migrations):
+- extraction_schemas — versioned JSON schemas per doc_type; **v3 active** (city criteria,
+  rank_from/rank_to grouped ranks, event_code)
 - extraction_documents — uploaded files with OCR text
 - extractions — extracted payloads with grounding evidence and flags
 - extraction_review_queue — view for human review UI
+
+### Vocabulary note (easy to get wrong):
+The extraction payload speaks `age_min`/`state`/`gender:"female"`; the allocation engine reads
+`min_age`/`allowed_states[]`/`gender:"F"` from `categories.criteria_json`. The commit-extraction
+mapper translates — never store extraction vocabulary in criteria_json.
 
 ### Key design principles:
 - "The model proposes, the document decides" — every extracted value must be grounded in OCR text
