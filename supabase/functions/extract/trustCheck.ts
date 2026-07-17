@@ -174,10 +174,19 @@ export function runArithmeticCheck(payload: Record<string, unknown>): Arithmetic
       ? ((category as Record<string, unknown>).prizes as unknown[])
       : [];
     for (const prize of prizes) {
-      const amount = (prize as Record<string, unknown>)?.cash_amount;
+      const row = prize as Record<string, unknown>;
+      const amount = row?.cash_amount;
       if (typeof amount === "number" && Number.isFinite(amount)) {
-        sum += amount;
-        prizeCount += 1;
+        // A grouped row ("11 to 15" at 6500) states one amount paid at each place in the span,
+        // so it contributes span × amount — that is what the brochure's total is summing.
+        const from = row.rank_from;
+        const to = row.rank_to;
+        const span = typeof from === "number" && typeof to === "number" &&
+            Number.isFinite(from) && Number.isFinite(to) && to >= from
+          ? to - from + 1
+          : 1;
+        sum += amount * span;
+        prizeCount += span;
       }
     }
   }
