@@ -35,10 +35,17 @@ Gate 2 (this branch) builds the user path on top of it:
 - extractions — extracted payloads with grounding evidence and flags
 - extraction_review_queue — view for human review UI
 
-### Vocabulary note (easy to get wrong):
-The extraction payload speaks `age_min`/`state`/`gender:"female"`; the allocation engine reads
-`min_age`/`allowed_states[]`/`gender:"F"` from `categories.criteria_json`. The commit-extraction
-mapper translates — never store extraction vocabulary in criteria_json.
+### Categories are committed STRUCTURE ONLY:
+Brochure-committed categories carry name, is_main, order_idx and prize rows; `criteria_json` is
+always `{}`, same as the manual creation flow. The extraction payload may carry criteria
+(`age_min`/`state`/`gender:"female"`) for accuracy and review display, but they are never
+written to the categories table — eligibility rules are configured by the organizer in the app.
+
+## Do Not Touch
+The allocation engine (allocations, rule_config, conflicts, the allocation algorithm, and
+player-to-prize matching logic) must NEVER be read-modified or written to by any
+extraction/brochure feature, and must not be touched by any future work unless the user
+explicitly names it. The brochure feature writes ONLY to tournaments, categories, and prizes.
 
 ### Key design principles:
 - "The model proposes, the document decides" — every extracted value must be grounded in OCR text

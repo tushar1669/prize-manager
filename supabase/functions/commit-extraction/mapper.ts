@@ -3,13 +3,14 @@
  *
  * Pure and dependency-free on purpose: vitest imports this file directly (like the trust-layer
  * tests do for grounding.ts), so everything decidable — rank expansion, trophy-only handling,
- * criteria vocabulary, malformed-row policy — is testable without a database or Deno.
+ * malformed-row policy — is testable without a database or Deno.
  *
- * The criteria translation is the part that looks redundant and is not: the extraction schema
- * speaks `age_min`/`state`/`gender:"female"`, but the allocation engine reads
- * `min_age`/`allowed_states[]`/`gender:"F"` (see importSchema.extractRuleUsedFields). Storing the
- * extraction vocabulary verbatim would commit criteria the engine silently ignores — prizes would
- * allocate as if the category had no eligibility rules at all.
+ * Committed categories are STRUCTURE ONLY: name, is_main, order_idx, prizes. criteria_json is
+ * always `{}`, exactly what the manual tournament-creation flow leaves it as. The extractor still
+ * reads criteria internally (they sharpen Pass 2 and the review display of the payload), but
+ * eligibility rules feed the allocation engine, and that engine is configured by the organizer in
+ * the app — never by a brochure import. Do not "improve" this by translating extraction criteria
+ * into criteria_json; that decision was made deliberately and reversed once already.
  */
 
 export type PayloadPrize = {
@@ -122,35 +123,6 @@ function finiteNumber(value: unknown): number | null {
 function positiveInt(value: unknown): number | null {
   const n = finiteNumber(value);
   return n !== null && Number.isInteger(n) && n > 0 ? n : null;
-}
-
-/** Extraction criteria vocabulary → the allocation engine's criteria_json vocabulary. */
-export function mapCriteria(criteria: PayloadCriteria | null | undefined): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  if (!criteria) return out;
-
-  const gender = cleanString(criteria.gender)?.toLowerCase();
-  if (gender === "female") out.gender = "F";
-  else if (gender === "male") out.gender = "M";
-  // "any" is the schema's neutral default; the engine treats a missing gender as open.
-
-  const minAge = positiveInt(criteria.age_min);
-  const maxAge = positiveInt(criteria.age_max);
-  if (minAge !== null) out.min_age = minAge;
-  if (maxAge !== null) out.max_age = maxAge;
-
-  const minRating = positiveInt(criteria.rating_min);
-  const maxRating = positiveInt(criteria.rating_max);
-  if (minRating !== null) out.min_rating = minRating;
-  if (maxRating !== null) out.max_rating = maxRating;
-
-  const state = cleanString(criteria.state);
-  if (state) out.allowed_states = [state];
-
-  const city = cleanString(criteria.city);
-  if (city) out.allowed_cities = [city];
-
-  return out;
 }
 
 /**
@@ -267,7 +239,8 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     categories.push({
       name,
       is_main: category?.is_main === true,
-      criteria_json: mapCriteria(category?.criteria),
+      // Structure only — see the module comment. The RPC hardcodes '{}' as well.
+      criteria_json: {},
       order_idx: categories.length,
       prizes,
     });

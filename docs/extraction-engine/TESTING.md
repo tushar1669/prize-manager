@@ -63,7 +63,7 @@ Run with `npx vitest run`.
 | File | Covers |
 |---|---|
 | `tests/extraction-grounding.spec.ts` (24) | numeric/date normalization, grounding methods, arithmetic invariants incl. rank spans, status gate |
-| `tests/commit-extraction-mapper.spec.ts` (17) | rank expansion (11–15 → 5 rows), trophy-only rows, gift_items shape, criteria vocabulary translation (city/state/age/rating/gender), malformed-row policy, determinism, Jaipur-shaped payload → 100 rows summing to fund |
+| `tests/commit-extraction-mapper.spec.ts` (15) | rank expansion (11–15 → 5 rows), trophy-only rows, gift_items shape, structure-only categories (criteria_json always `{}`), malformed-row policy, determinism, Jaipur-shaped payload → 100 rows summing to fund |
 
 Pre-existing, unrelated failures (3) in `conflict-utils` and `martech-metrics` fail identically
 with and without extraction changes — tracked in ARCHITECTURE.md §6, out of scope here.

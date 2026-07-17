@@ -83,20 +83,6 @@ function prizeLabel(prize: PrizeRow): string {
   return typeof prize.place === "number" ? String(prize.place) : "?";
 }
 
-function criteriaSummary(criteria: Record<string, unknown> | null | undefined): string {
-  if (!criteria) return "Open";
-  const parts: string[] = [];
-  if (criteria.city) parts.push(`City: ${criteria.city}`);
-  if (criteria.state) parts.push(`State: ${criteria.state}`);
-  if (typeof criteria.age_max === "number") parts.push(`Under ${criteria.age_max}`);
-  if (typeof criteria.age_min === "number") parts.push(`${criteria.age_min}+`);
-  if (typeof criteria.rating_min === "number" || typeof criteria.rating_max === "number") {
-    parts.push(`Rating ${criteria.rating_min ?? "…"}–${criteria.rating_max ?? "…"}`);
-  }
-  if (criteria.gender && criteria.gender !== "any") parts.push(String(criteria.gender));
-  return parts.length > 0 ? parts.join(" · ") : "Open";
-}
-
 export default function BrochureReview() {
   const { extractionId } = useParams<{ extractionId: string }>();
   const navigate = useNavigate();
@@ -377,9 +363,6 @@ export default function BrochureReview() {
                         <span className="flex items-center gap-2">
                           {category?.name ?? "Unnamed"}
                           {category?.is_main && <Badge variant="secondary">Main</Badge>}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {criteriaSummary(category?.criteria)}
-                          </span>
                         </span>
                       </AccordionTrigger>
                       <AccordionContent>

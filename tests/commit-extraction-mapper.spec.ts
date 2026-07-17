@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   expandPrize,
-  mapCriteria,
   mapPayloadToTables,
   MappingError,
   type ExtractionPayload,
@@ -65,23 +64,37 @@ describe("trophy-only and blank prizes", () => {
   });
 });
 
-describe("criteria vocabulary translation", () => {
-  it("maps city and state to the allocation engine's allowed_* lists", () => {
-    expect(mapCriteria({ city: "Jaipur" })).toEqual({ allowed_cities: ["Jaipur"] });
-    expect(mapCriteria({ state: "Rajasthan" })).toEqual({ allowed_states: ["Rajasthan"] });
-  });
-
-  it("maps age and rating bounds to min_/max_ keys", () => {
-    expect(mapCriteria({ age_min: 55 })).toEqual({ min_age: 55 });
-    expect(mapCriteria({ age_max: 16 })).toEqual({ max_age: 16 });
-    expect(mapCriteria({ rating_min: 1401, rating_max: 1650 })).toEqual({ min_rating: 1401, max_rating: 1650 });
-  });
-
-  it("maps gender female/male to F/M and omits the neutral any", () => {
-    expect(mapCriteria({ gender: "female" })).toEqual({ gender: "F" });
-    expect(mapCriteria({ gender: "male" })).toEqual({ gender: "M" });
-    expect(mapCriteria({ gender: "any" })).toEqual({});
-    expect(mapCriteria(null)).toEqual({});
+describe("committed categories are structure only", () => {
+  // Eligibility rules are the organizer's to configure in the app; a brochure import must leave
+  // criteria_json exactly as the manual creation flow does — empty.
+  it("emits empty criteria_json even when the payload carries rich criteria", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Best Jaipur", criteria: { city: "Jaipur" }, prizes: [{ place: 1, cash_amount: 8000 }] },
+          { name: "Best Rajasthan", criteria: { state: "Rajasthan" }, prizes: [{ place: 1, cash_amount: 8000 }] },
+          { name: "Best Female", criteria: { gender: "female" }, prizes: [{ place: 1, cash_amount: 8000 }] },
+          {
+            name: "Rating 1401-1650",
+            criteria: { rating_min: 1401, rating_max: 1650, age_min: 10, age_max: 60 },
+            prizes: [{ place: 1, cash_amount: 8000 }],
+          },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories).toHaveLength(4);
+    for (const category of result.categories) {
+      expect(category.criteria_json).toEqual({});
+    }
+    // The structure itself survives untouched.
+    expect(result.categories.map((c) => c.name)).toEqual([
+      "Best Jaipur",
+      "Best Rajasthan",
+      "Best Female",
+      "Rating 1401-1650",
+    ]);
+    expect(result.categories.every((c) => c.prizes[0].cash_amount === 8000)).toBe(true);
   });
 });
 
@@ -227,5 +240,6 @@ describe("Jaipur-shaped end-to-end mapping", () => {
     expect(rows).toHaveLength(100);
     expect(rows.reduce((sum, row) => sum + row.cash_amount, 0)).toBe(1150000);
     expect(result.categories[0].prizes.map((p) => p.place).slice(-10)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(result.categories.every((c) => Object.keys(c.criteria_json).length === 0)).toBe(true);
   });
 });

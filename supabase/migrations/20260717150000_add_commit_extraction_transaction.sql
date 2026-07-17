@@ -74,12 +74,15 @@ BEGIN
 
   FOR v_category IN SELECT * FROM jsonb_array_elements(p_categories)
   LOOP
+    -- criteria_json is deliberately '{}' regardless of what the caller sends: brochure-committed
+    -- categories are structure only, matching the manual creation flow. Eligibility rules are
+    -- configured by the organizer in the app, never written by an import.
     INSERT INTO public.categories (tournament_id, name, is_main, criteria_json, order_idx)
     VALUES (
       v_tournament_id,
       v_category->>'name',
       COALESCE((v_category->>'is_main')::boolean, false),
-      COALESCE(v_category->'criteria_json', '{}'::jsonb),
+      '{}'::jsonb,
       COALESCE((v_category->>'order_idx')::integer, 0)
     )
     RETURNING id INTO v_category_id;
