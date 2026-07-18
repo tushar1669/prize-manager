@@ -127,10 +127,37 @@ describe("trust check", () => {
     expect(flags).toHaveLength(0);
   });
 
-  it("flags a boolean whose supporting keyword is absent", () => {
+  it("downgrades an unfounded rated boolean to null without a flag (owner rule from batch eval)", () => {
+    // No false data (blanked) and no false flag: an inferred rated=true from logos/aegis text is
+    // an inference, not a document value, and flagging it on every brochure made auto_ok unreachable.
     const { payload, flags } = runTrustCheck({ fide_rated: true }, "A friendly club tournament.");
     expect(payload.fide_rated).toBeNull();
-    expect(flags[0]).toMatchObject({ field: "fide_rated", reason: "ungrounded" });
+    expect(flags).toHaveLength(0);
+  });
+
+  it("still grounds a rated boolean when the document actually claims it", () => {
+    const { payload, flags } = runTrustCheck({ fide_rated: true }, "A FIDE Rated open tournament.");
+    expect(payload.fide_rated).toBe(true);
+    expect(flags).toHaveLength(0);
+  });
+
+  it("grounds a normalized label word-wise but still fails an absent one", () => {
+    const text = "ENTRY FEE FOR OPEN PLAYERS: Rs 1300. Time control 90 minutes + 30 seconds.";
+    const ok = runTrustCheck({ entry_fees: [{ category: "Open Players", amount_inr: 1300 }] }, text);
+    expect(ok.flags).toHaveLength(0);
+    const absent = runTrustCheck({ entry_fees: [{ category: "Veterans Discount", amount_inr: 1300 }] }, text);
+    expect(absent.flags.some((flag) => flag.field.endsWith("category"))).toBe(true);
+  });
+
+  it("grounds time_control.category via classification of the stated base time", () => {
+    const text = "Time control 90 minutes + 30 seconds increment.";
+    const classical = runTrustCheck({ time_control: { category: "classical", base_minutes: 90 } }, text);
+    expect(classical.payload.time_control).toMatchObject({ category: "classical" });
+    expect(classical.flags).toHaveLength(0);
+    // A classification that contradicts the stated base time still fails.
+    const wrong = runTrustCheck({ time_control: { category: "blitz", base_minutes: 90 } }, text);
+    expect((wrong.payload.time_control as Record<string, unknown>).category).toBeNull();
+    expect(wrong.flags.some((flag) => flag.field.endsWith("category"))).toBe(true);
   });
 
   it("reports confidence as the grounded share of checked values", () => {

@@ -28,8 +28,17 @@ export function normalizeText(input: string): string {
 }
 
 function evidenceAround(haystack: string, index: number, length: number): string {
-  const start = Math.max(0, index - EVIDENCE_RADIUS);
-  const end = Math.min(haystack.length, index + length + EVIDENCE_RADIUS);
+  let start = Math.max(0, index - EVIDENCE_RADIUS);
+  let end = Math.min(haystack.length, index + length + EVIDENCE_RADIUS);
+  // A window boundary that lands between the halves of a surrogate pair (emoji are common in
+  // brochures: 🏆 medals and trophies) would leave a lone surrogate in the excerpt — which is
+  // invalid JSON downstream and failed a whole extraction insert once. Snap outward off a pair.
+  const isLowSurrogate = (i: number) => {
+    const code = haystack.charCodeAt(i);
+    return code >= 0xDC00 && code <= 0xDFFF;
+  };
+  if (start > 0 && isLowSurrogate(start)) start -= 1;
+  if (end < haystack.length && isLowSurrogate(end)) end += 1;
   return `${start > 0 ? "…" : ""}${haystack.slice(start, end).replace(/\s+/g, " ").trim()}${end < haystack.length ? "…" : ""}`;
 }
 

@@ -144,6 +144,42 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * OCR of decorative glyphs can emit C0 control characters — most damagingly the NUL character (\\u0000), which
+ * Postgres jsonb rejects outright, failing the whole extraction insert ("Empty or invalid
+ * json"). Strip everything below 0x20 except tab/newline/CR wherever model text enters the
+ * pipeline.
+ */
+function stripControlChars(text: string): string {
+  return (
+    text
+      // deno-lint-ignore no-control-regex
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+      // An unpaired UTF-16 surrogate (OCR of decorative glyphs can produce them) survives
+      // JSON.stringify as an escape sequence that PostgREST rejects as invalid JSON — the same
+      // failure mode as NUL, from a different character class.
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+      .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+  );
+}
+
+/** stripControlChars over every string leaf of a parsed payload, in place. */
+function deepStripControlChars(node: unknown): void {
+  if (Array.isArray(node)) {
+    node.forEach((value, index) => {
+      if (typeof value === "string") node[index] = stripControlChars(value);
+      else deepStripControlChars(value);
+    });
+  } else if (node && typeof node === "object") {
+    const record = node as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      const value = record[key];
+      if (typeof value === "string") record[key] = stripControlChars(value);
+      else deepStripControlChars(value);
+    }
+  }
+}
+
 /** Markdown syntax carries no information for the review UI's plain-text field. */
 function stripMarkdown(markdown: string): string {
   return markdown
@@ -159,7 +195,35 @@ function stripMarkdown(markdown: string): string {
 
 type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
 
+/** Backoff before the single retry of a 5xx'd Gemini call. */
+const PROVIDER_5XX_RETRY_DELAY_MS = 2_500;
+
+/**
+ * One automatic retry on a provider 5xx, for both passes. The batch eval showed transient 503s
+ * killing documents *after* OCR had already succeeded — a class of failure where a second attempt
+ * seconds later almost always works. Exactly one retry: a provider that is actually down should
+ * produce the honest error, not a stall.
+ */
 async function callGemini(
+  parts: GeminiPart[],
+  generationConfig: Record<string, unknown>,
+  model: string,
+  apiKey: string,
+  deadlineMs: number,
+): Promise<{ text: string; usage: Usage; diagnostics: CallDiagnostics }> {
+  try {
+    return await callGeminiOnce(parts, generationConfig, model, apiKey, deadlineMs);
+  } catch (err) {
+    const transient = err instanceof ExtractError && err.code === "provider_unavailable";
+    const budgetLeft = deadlineMs - Date.now() - PROVIDER_5XX_RETRY_DELAY_MS > 5_000;
+    if (!transient || !budgetLeft) throw err;
+    safeLog({ stage: "provider_5xx_retry", model_id: model, delay_ms: PROVIDER_5XX_RETRY_DELAY_MS });
+    await new Promise((resolve) => setTimeout(resolve, PROVIDER_5XX_RETRY_DELAY_MS));
+    return await callGeminiOnce(parts, generationConfig, model, apiKey, deadlineMs);
+  }
+}
+
+async function callGeminiOnce(
   parts: GeminiPart[],
   generationConfig: Record<string, unknown>,
   model: string,
@@ -335,10 +399,14 @@ Rules:
 - Use ONLY the transcription below. Never infer, calculate or fill in from outside knowledge.
 - If the brochure does not state a value, return null for it. A null is always better than a guess — invented values are detected and discarded downstream.
 - Copy amounts as plain numbers (₹1,00,000 -> 100000). Dates as YYYY-MM-DD.
+- fide_rated / aicf_rated: set true ONLY when the transcription contains an explicit rated claim (e.g. "FIDE Rated", "AICF rated event"). A federation logo, affiliation, aegis line or event code is NOT a rated claim — in that case return null, not true.
 
 CRITICAL — completeness. A partial extraction is a wrong extraction:
+- Prize categories appear in MANY layouts, often mixed in one brochure: one table with a column per category, SEPARATE stacked tables, separate sections on later pages, or plain lists. You must find ALL of them wherever they appear. The main/open prize table is usually only the FIRST of several.
+- Scan the ENTIRE transcription from first line to last before answering. Look specifically for every section of these kinds that is present: main/open prizes; rating-band categories (e.g. Below 1600, 1401-1650, Unrated); age/junior categories (Under-7/8/9/10/11/12/13/14/15/16/17, Boys/Girls variants); special categories (Best Female, Best Veteran/Senior, Best <state>, Best <city>/local, Divyang/Differently-abled, Best Academy/School, Best Coach). Extract every one that is present; never add one that is not.
 - EVERY column of EVERY prize table is its own category. A prize table whose columns are "Rank | Group A | Group B | Group C" yields THREE categories — one per column — not one.
-- Walk every prize table in the transcription and emit every category you find. Never stop early, never sample a few, never summarize. Emit them all, however many there are.
+- Emit every category you find. Never stop early, never sample a few, never summarize. Before you finish, re-scan the transcription once more for any prize section you have not yet emitted; if the document names N distinct prize groups, prize_categories must have N entries.
+- Every category MUST have a name taken from its heading or column label. If a fragment of prizes truly has no name anywhere near it, skip that fragment entirely — never emit a category with name null.
 - A grouped rank stays ONE prize row: a row labelled "7 to 9" worth 1000 becomes {"rank_from": 7, "rank_to": 9, "cash_amount": 1000} with place null. Never expand a range into separate rows and never invent the places in between — the document does not state them. A single place stays {"place": 7} with rank_from/rank_to null.
 - A cell that is blank, or that states no amount, is not a prize — omit it rather than inventing a zero.
 - A prize may be cash, a trophy, a medal, a gift, or a combination. Set cash_amount only when cash is stated; use has_trophy / has_medal / gift_description for the rest. A trophy-only prize has cash_amount null.
@@ -652,6 +720,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    transcription = stripControlChars(transcription);
     const ocrDurationMs = Date.now() - ocrStartedMs;
 
     await supabase
@@ -682,10 +751,16 @@ Deno.serve(async (req: Request) => {
     usage.input += pass2.usage.input;
     usage.output += pass2.usage.output;
 
-    const proposed = parseModelJson(pass2.text);
+    const proposed = parseModelJson(stripControlChars(pass2.text));
+    // A control char written as a JSON escape (backslash-u0000) passes stripControlChars on the
+    // raw text and only becomes a real control char after parsing — hence the deep pass.
+    deepStripControlChars(proposed);
 
     // --------------------------------------------------- trust + arithmetic checks
     const trust = runTrustCheck(proposed, transcription);
+    // Backstop for the evidence excerpts: they are built after the payload sanitization pass, so
+    // any stray lone surrogate or control char in them gets the same cleanup before insert.
+    deepStripControlChars(trust.grounding);
     const arithmetic = runArithmeticCheck(trust.payload);
     const flags: FieldFlag[] = [...trust.flags, ...(arithmetic.flag ? [arithmetic.flag] : [])];
 
@@ -710,7 +785,28 @@ Deno.serve(async (req: Request) => {
       })
       .select("id")
       .single<{ id: string }>();
-    if (insErr) throw new ExtractError("extraction_insert_failed", insErr.message, 500);
+    if (insErr) {
+      // The generic "Empty or invalid json" hides which layer refused the row and why. Surface
+      // PostgREST's code/details/hint plus a scan for the character classes that poison JSON
+      // (lone surrogates, stray control chars) so the failing document diagnoses itself.
+      const raw = JSON.stringify({ payload: trust.payload, grounding: trust.grounding, flags });
+      // Lone surrogates leave JSON.stringify as six-ASCII-char escapes (\ud800), so scan the
+      // serialized text for escape *sequences*, not character codes.
+      const escapeHit = raw.match(/\\u(?:d[89ab][0-9a-f]{2}|dc[0-9a-f]{2}|d[def][0-9a-f]{2}|0000)/i);
+      const suspect = escapeHit
+        ? `${escapeHit[0]}@${escapeHit.index} ctx=${JSON.stringify(raw.slice(Math.max(0, (escapeHit.index ?? 0) - 40), (escapeHit.index ?? 0) + 46))}`
+        : "none";
+      const pgDetail = [
+        (insErr as { code?: string }).code,
+        (insErr as { details?: string }).details,
+        (insErr as { hint?: string }).hint,
+      ].filter(Boolean).join(" | ");
+      throw new ExtractError(
+        "extraction_insert_failed",
+        `${insErr.message} [pg: ${pgDetail || "none"}] [bytes=${raw.length} suspect=${suspect}]`,
+        500,
+      );
+    }
 
     await supabase
       .from("extraction_documents")

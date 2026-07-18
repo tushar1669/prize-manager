@@ -44,8 +44,10 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const KEYWORD_PATTERNS: Record<string, RegExp> = {
   fide_rated: /fide[\s\-]*rat/i,
   aicf_rated: /aicf[\s\-]*rat/i,
-  has_trophy: /troph/i,
-  has_medal: /medal/i,
+  // Brochures frequently denote trophies/medals with the symbol instead of the word — a printed
+  // trophy emoji IS the document's claim. A boolean set with neither word nor symbol still fails.
+  has_trophy: /troph|\u{1F3C6}/iu,
+  has_medal: /medal|[\u{1F3C5}\u{1F947}-\u{1F949}]/iu,
 };
 
 const EXEMPT_LEAVES = new Set(["is_main", "currency"]);
@@ -76,7 +78,56 @@ type Context = {
   dateTokens: Map<string, number>;
 };
 
-function groundLeaf(path: string, value: string | number | boolean, ctx: Context): GroundingHit {
+/**
+ * The `category` leaves (entry_fees[].category, time_control.category) are labels, not document
+ * values: brochures print "ENTRY FEE — OPEN PLAYERS Rs 1300" and the model faithfully writes
+ * category "Open Players". Exact-substring grounding flags every such normalization, which is why
+ * these two leaves produced 35 of the 82 flags in the 26-brochure eval. Labels are grounded
+ * word-wise instead: every content word of the label must appear somewhere in the text. A label
+ * whose words are genuinely absent still fails — this is looser matching, not an exemption.
+ */
+function groundLabel(value: string, ctx: Context): GroundingHit {
+  const exact = groundString(value, ctx.text, ctx.normalized);
+  if (exact.grounded) return exact;
+  const words = normalizeText(value).split(" ").filter((word) => word.length >= 3);
+  if (words.length === 0) return exact;
+  const textWords = new Set(ctx.normalized.split(" "));
+  if (words.every((word) => textWords.has(word))) {
+    return { grounded: true, method: "keyword", evidence: `label words present: ${words.join(" ")}` };
+  }
+  return { grounded: false, method: "keyword", evidence: null };
+}
+
+/**
+ * time_control.category is a classification, not a quotation — brochures state "90 min + 30 sec"
+ * and rarely print the word "classical". The label is grounded if the word itself appears, or if
+ * it is the correct FIDE-style classification of the base time the document does state (and which
+ * numeric grounding has already checked). A category that contradicts the stated base time still
+ * fails.
+ */
+function groundTimeControlCategory(
+  value: string,
+  container: Record<string | number, unknown>,
+  ctx: Context,
+): GroundingHit {
+  const worded = groundLabel(value, ctx);
+  if (worded.grounded) return worded;
+  const base = container["base_minutes"];
+  if (typeof base === "number" && Number.isFinite(base) && base > 0) {
+    const classified = base < 3 ? "bullet" : base <= 10 ? "blitz" : base < 60 ? "rapid" : "classical";
+    if (value.trim().toLowerCase() === classified) {
+      return { grounded: true, method: "keyword", evidence: `classified from base_minutes=${base}` };
+    }
+  }
+  return { grounded: false, method: "keyword", evidence: null };
+}
+
+function groundLeaf(
+  path: string,
+  value: string | number | boolean,
+  ctx: Context,
+  container: Record<string | number, unknown>,
+): GroundingHit {
   const exempt = exemption(path, value);
   if (exempt) return exempt;
 
@@ -95,6 +146,11 @@ function groundLeaf(path: string, value: string | number | boolean, ctx: Context
   const trimmed = value.trim();
   if (ISO_DATE_RE.test(trimmed)) return groundDate(trimmed, ctx.text, ctx.dateTokens);
   if (leaf === "contact_phone") return groundDigits(trimmed, ctx.text);
+  if (leaf === "category") {
+    return path.endsWith("time_control.category")
+      ? groundTimeControlCategory(trimmed, container, ctx)
+      : groundLabel(trimmed, ctx);
+  }
   return groundString(trimmed, ctx.text, ctx.normalized);
 }
 
@@ -134,10 +190,17 @@ export function runTrustCheck(rawPayload: Record<string, unknown>, transcription
       return;
     }
 
-    const hit = groundLeaf(path, value as string | number | boolean, ctx);
+    const hit = groundLeaf(path, value as string | number | boolean, ctx, container);
     grounding[path] = hit;
     if (!hit.grounded) {
       container[key] = null;
+      // Product rule (owner decision, batch-eval follow-up): a rated boolean the model set true
+      // without a textual "rated" claim is an *inference from logos/aegis lines*, not a document
+      // value. It is downgraded to null — no false data committed — but not flagged, because 26/26
+      // eval documents flagging on it made auto_ok unreachable while catching nothing real. The
+      // extraction prompt also instructs the model to emit null in exactly this case; this branch
+      // is the backstop for when it doesn't listen.
+      if (leafName(path) === "aicf_rated" || leafName(path) === "fide_rated") return;
       flags.push({ field: path, reason: "ungrounded", severity: "high" });
     }
   };
