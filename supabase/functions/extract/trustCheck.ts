@@ -33,7 +33,53 @@ export type TrustResult = {
   grounding: GroundingMap;
   flags: FieldFlag[];
   confidence: number;
+  /** Structural defects removed before grounding — diagnostics, not field flags. */
+  namelessCategoriesDropped: number;
+  emptyCategoriesDropped: number;
 };
+
+/**
+ * Removes categories that are structurally not categories, before any grounding runs.
+ *
+ * These are prompt-instruction failures the model keeps making despite being told not to
+ * ("never emit name:null" held for zero of six affected eval files), so the guarantee moves into
+ * code: a nameless fragment or a category that awards nothing (no cash, no trophy, no medal, no
+ * gift on any row) is dropped here and can never reach review or commit. Deliberately NOT a
+ * field_flag: nothing was extracted-then-unverified — the entry was never a category at all.
+ * Runs before the grounding walk so flag paths index the payload the reviewer actually sees.
+ */
+function pruneStructuralNoise(payload: Record<string, unknown>): { nameless: number; empty: number } {
+  const categories = payload.prize_categories;
+  if (!Array.isArray(categories)) return { nameless: 0, empty: 0 };
+
+  let nameless = 0;
+  let empty = 0;
+  const kept = categories.filter((entry) => {
+    const category = entry as Record<string, unknown> | null;
+    const name = category?.name;
+    if (typeof name !== "string" || name.trim() === "") {
+      nameless += 1;
+      return false;
+    }
+    const prizes = Array.isArray(category?.prizes) ? (category.prizes as Record<string, unknown>[]) : [];
+    const awardsSomething = prizes.some((prize) => {
+      const cash = prize?.cash_amount;
+      const gift = prize?.gift_description;
+      return (typeof cash === "number" && Number.isFinite(cash) && cash > 0) ||
+        prize?.has_trophy === true ||
+        prize?.has_medal === true ||
+        (typeof gift === "string" && gift.trim() !== "");
+    });
+    if (!awardsSomething) {
+      empty += 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (nameless > 0 || empty > 0) payload.prize_categories = kept;
+  return { nameless, empty };
+}
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -160,6 +206,7 @@ function groundLeaf(
  */
 export function runTrustCheck(rawPayload: Record<string, unknown>, transcription: string): TrustResult {
   const payload = structuredClone(rawPayload);
+  const pruned = pruneStructuralNoise(payload);
   const ctx: Context = {
     text: transcription,
     normalized: normalizeText(transcription),
@@ -211,7 +258,14 @@ export function runTrustCheck(rawPayload: Record<string, unknown>, transcription
   const groundedCount = checked.filter((hit) => hit.grounded).length;
   const confidence = checked.length === 0 ? 0 : Math.round((groundedCount / checked.length) * 100) / 100;
 
-  return { payload, grounding, flags, confidence };
+  return {
+    payload,
+    grounding,
+    flags,
+    confidence,
+    namelessCategoriesDropped: pruned.nameless,
+    emptyCategoriesDropped: pruned.empty,
+  };
 }
 
 export type ArithmeticResult = {

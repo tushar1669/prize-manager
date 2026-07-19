@@ -32,3 +32,6 @@ public/previews/*
 
 # Local test fixtures (not for commit)
 test-brochures/
+
+# Supabase CLI local state
+supabase/.temp/
