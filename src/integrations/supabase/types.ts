@@ -413,6 +413,202 @@ export type Database = {
         }
         Relationships: []
       }
+      extraction_documents: {
+        Row: {
+          created_at: string
+          doc_type: Database["public"]["Enums"]["doc_type"]
+          error_message: string | null
+          file_hash: string
+          file_name: string
+          file_path: string
+          file_size_bytes: number | null
+          id: string
+          mime_type: string | null
+          ocr_duration_ms: number | null
+          ocr_markdown: string | null
+          ocr_provider: string | null
+          ocr_text: string | null
+          privacy_class: Database["public"]["Enums"]["privacy_class"]
+          status: Database["public"]["Enums"]["extraction_status"]
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          doc_type?: Database["public"]["Enums"]["doc_type"]
+          error_message?: string | null
+          file_hash: string
+          file_name: string
+          file_path: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          ocr_duration_ms?: number | null
+          ocr_markdown?: string | null
+          ocr_provider?: string | null
+          ocr_text?: string | null
+          privacy_class?: Database["public"]["Enums"]["privacy_class"]
+          status?: Database["public"]["Enums"]["extraction_status"]
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          doc_type?: Database["public"]["Enums"]["doc_type"]
+          error_message?: string | null
+          file_hash?: string
+          file_name?: string
+          file_path?: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          ocr_duration_ms?: number | null
+          ocr_markdown?: string | null
+          ocr_provider?: string | null
+          ocr_text?: string | null
+          privacy_class?: Database["public"]["Enums"]["privacy_class"]
+          status?: Database["public"]["Enums"]["extraction_status"]
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
+      extraction_schemas: {
+        Row: {
+          created_at: string
+          description: string | null
+          doc_type: Database["public"]["Enums"]["doc_type"]
+          id: string
+          is_active: boolean
+          schema_json: Json
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          doc_type: Database["public"]["Enums"]["doc_type"]
+          id?: string
+          is_active?: boolean
+          schema_json: Json
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          doc_type?: Database["public"]["Enums"]["doc_type"]
+          id?: string
+          is_active?: boolean
+          schema_json?: Json
+          version?: number
+        }
+        Relationships: []
+      }
+      extractions: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          document_id: string
+          field_flags: Json
+          grounding: Json
+          id: string
+          linked_tournament_id: string | null
+          llm_duration_ms: number | null
+          llm_model: string | null
+          payload: Json
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          schema_id: string
+          status: Database["public"]["Enums"]["extraction_status"]
+          token_input: number | null
+          token_output: number | null
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          document_id: string
+          field_flags?: Json
+          grounding?: Json
+          id?: string
+          linked_tournament_id?: string | null
+          llm_duration_ms?: number | null
+          llm_model?: string | null
+          payload?: Json
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          schema_id: string
+          status?: Database["public"]["Enums"]["extraction_status"]
+          token_input?: number | null
+          token_output?: number | null
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          document_id?: string
+          field_flags?: Json
+          grounding?: Json
+          id?: string
+          linked_tournament_id?: string | null
+          llm_duration_ms?: number | null
+          llm_model?: string | null
+          payload?: Json
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          schema_id?: string
+          status?: Database["public"]["Enums"]["extraction_status"]
+          token_input?: number | null
+          token_output?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extractions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extractions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_review_queue"
+            referencedColumns: ["document_id"]
+          },
+          {
+            foreignKeyName: "extractions_linked_tournament_id_fkey"
+            columns: ["linked_tournament_id"]
+            isOneToOne: false
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extractions_linked_tournament_id_fkey"
+            columns: ["linked_tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "extractions_linked_tournament_id_fkey"
+            columns: ["linked_tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extractions_schema_id_fkey"
+            columns: ["schema_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_schemas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_logs: {
         Row: {
           accepted_rows: number
@@ -1562,6 +1758,23 @@ export type Database = {
       }
     }
     Views: {
+      extraction_review_queue: {
+        Row: {
+          confidence: number | null
+          created_at: string | null
+          doc_type: Database["public"]["Enums"]["doc_type"] | null
+          document_id: string | null
+          extraction_id: string | null
+          field_flags: Json | null
+          file_name: string | null
+          file_path: string | null
+          flag_count: number | null
+          llm_model: string | null
+          payload: Json | null
+          status: Database["public"]["Enums"]["extraction_status"] | null
+        }
+        Relationships: []
+      }
       profile_completion: {
         Row: {
           filled_count: number | null
@@ -1685,6 +1898,18 @@ export type Database = {
       }
       bootstrap_master: { Args: never; Returns: Json }
       claim_profile_completion_reward: { Args: never; Returns: Json }
+      commit_extraction_transaction: {
+        Args: {
+          p_categories: Json
+          p_extraction_id: string
+          p_reviewer_id: string
+          p_tournament: Json
+        }
+        Returns: {
+          already_committed: boolean
+          tournament_id: string
+        }[]
+      }
       coupon_origin_from_code: { Args: { code: string }; Returns: string }
       detect_missing_team_snapshots: {
         Args: never
@@ -1692,6 +1917,12 @@ export type Database = {
           published_version: number
           tournament_id: string
           tournament_title: string
+        }[]
+      }
+      get_brochure_import_rollout_state: {
+        Args: never
+        Returns: {
+          enabled: boolean
         }[]
       }
       get_brochure_parser_v2_rollout_state: {
@@ -1837,6 +2068,12 @@ export type Database = {
         Args: { p_decision: string; p_note?: string; p_payment_id: string }
         Returns: Json
       }
+      set_brochure_import_rollout_state: {
+        Args: { p_enabled: boolean }
+        Returns: {
+          enabled: boolean
+        }[]
+      }
       set_brochure_parser_v2_rollout_state: {
         Args: { p_enabled: boolean }
         Returns: {
@@ -1854,7 +2091,22 @@ export type Database = {
     }
     Enums: {
       app_role: "master" | "organizer" | "user"
+      doc_type:
+        | "chess_brochure"
+        | "invoice"
+        | "bank_statement"
+        | "photo"
+        | "unknown"
+      extraction_status:
+        | "pending"
+        | "processing"
+        | "auto_ok"
+        | "needs_review"
+        | "approved"
+        | "rejected"
+        | "error"
       payment_status: "pending" | "approved" | "rejected"
+      privacy_class: "public" | "sensitive"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1983,7 +2235,24 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "organizer", "user"],
+      doc_type: [
+        "chess_brochure",
+        "invoice",
+        "bank_statement",
+        "photo",
+        "unknown",
+      ],
+      extraction_status: [
+        "pending",
+        "processing",
+        "auto_ok",
+        "needs_review",
+        "approved",
+        "rejected",
+        "error",
+      ],
       payment_status: ["pending", "approved", "rejected"],
+      privacy_class: ["public", "sensitive"],
     },
   },
 } as const

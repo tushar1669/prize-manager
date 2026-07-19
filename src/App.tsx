@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, lazy, Suspense, type ReactNode } from "react";
 import { useApplyPendingReferral } from "@/hooks/useApplyPendingReferral";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -14,6 +14,7 @@ import { DirtyProvider } from "@/contexts/DirtyContext";
 import { NavigationGuard } from "@/components/NavigationGuard";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { isFeatureEnabled } from "@/utils/featureFlags";
+import { useBrochureImportRollout } from "@/hooks/useBrochureImportRollout";
 import { getSafeReturnToPath } from "@/utils/upgradeUrl";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,6 +31,15 @@ const PublicHome = lazy(() => import("./pages/PublicHome"));
 // Lazy load protected/less-critical pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TournamentSetup = lazy(() => import("./pages/TournamentSetup"));
+const BrochureReview = lazy(() => import("./pages/BrochureReview"));
+
+/** Renders brochure-import routes only while the platform flag is on; otherwise falls back to the dashboard. */
+function BrochureImportGate({ children }: { children: ReactNode }) {
+  const { enabled, isLoading } = useBrochureImportRollout();
+  if (isLoading) return null;
+  if (!enabled) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
 const PlayerImport = lazy(() => import("./pages/PlayerImport"));
 const ConflictReview = lazy(() => import("./pages/ConflictReview"));
 const Finalize = lazy(() => import("./pages/Finalize"));
@@ -146,6 +156,7 @@ const AppInner = () => {
                 {/* Protected routes */}
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+                <Route path="/import/brochure/:extractionId" element={<ProtectedRoute><BrochureImportGate><BrochureReview /></BrochureImportGate></ProtectedRoute>} />
                 <Route path="/t/:id/setup" element={<ProtectedRoute><TournamentSetup /></ProtectedRoute>} />
                 <Route path="/t/:id/order-review" element={<ProtectedRoute><CategoryOrderReview /></ProtectedRoute>} />
                 <Route path="/t/:id/import" element={<ProtectedRoute><PlayerImport /></ProtectedRoute>} />

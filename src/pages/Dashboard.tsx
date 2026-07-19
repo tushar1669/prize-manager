@@ -4,12 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useBrochureImportRollout } from "@/hooks/useBrochureImportRollout";
+import BrochureImportDialog from "@/components/import-brochure/BrochureImportDialog";
 import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Trash2, Eye, Shield } from "lucide-react";
+import { Search, Plus, Trash2, Eye, Shield, FileUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -33,6 +35,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const brochureImport = useBrochureImportRollout();
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
     { open: false, tournamentId: null, title: "" }
   );
@@ -211,6 +215,12 @@ export default function Dashboard() {
                 Admin
               </Button>
             )}
+            {(is_master || role === 'organizer') && brochureImport.enabled && (
+              <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2">
+                <FileUp className="h-4 w-4" />
+                Import from brochure
+              </Button>
+            )}
             {(is_master || role === 'organizer') && (
               <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -314,6 +324,8 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      <BrochureImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog(s => ({ ...s, open }))}>
         <AlertDialogContent>
