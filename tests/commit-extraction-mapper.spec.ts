@@ -3,6 +3,7 @@ import {
   expandPrize,
   mapPayloadToTables,
   MappingError,
+  resolveGeneralEntryFee,
   type ExtractionPayload,
 } from "../supabase/functions/commit-extraction/mapper";
 
@@ -133,6 +134,66 @@ describe("tournament mapping", () => {
       time_control_increment_seconds: 30,
       time_control_category: "classical",
     });
+  });
+});
+
+describe("entry fee resolution", () => {
+  it("picks the general tier regardless of array order", () => {
+    // Production Jaipur order: the local rate is listed before the general rate.
+    expect(resolveGeneralEntryFee([
+      { category: "Jaipur players", amount_inr: 4750 },
+      { category: "General", amount_inr: 5000 },
+    ])).toBe(5000);
+  });
+
+  it("matches general-equivalent labels", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Rated players", amount_inr: 800 },
+      { category: "All other players", amount_inr: 1000 },
+    ])).toBe(1000);
+  });
+
+  it("falls back to the highest non-late base rate when no tier is general", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Under-15", amount_inr: 600 },
+      { category: "Women", amount_inr: 700 },
+      { category: "Open", amount_inr: 900 },
+    ])).toBe(900);
+  });
+
+  it("never picks a late/on-the-spot rate while a base rate exists", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Standard", amount_inr: 1000 },
+      { category: "Late entry", amount_inr: 1500 },
+      { category: "On the spot", amount_inr: 2000 },
+    ])).toBe(1000);
+  });
+
+  it("uses the highest base rate even when a late fee is larger and no tier is general", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Local", amount_inr: 900 },
+      { category: "Rated", amount_inr: 1100 },
+      { category: "Spot registration", amount_inr: 1600 },
+    ])).toBe(1100);
+  });
+
+  it("returns null for no fees or unusable amounts", () => {
+    expect(resolveGeneralEntryFee([])).toBeNull();
+    expect(resolveGeneralEntryFee(null)).toBeNull();
+    expect(resolveGeneralEntryFee([{ category: "General", amount_inr: null }])).toBeNull();
+  });
+
+  it("flows the resolved general fee into the mapped tournament", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        entry_fees: [
+          { category: "Jaipur players", amount_inr: 4750 },
+          { category: "General", amount_inr: 5000 },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.tournament.entry_fee_amount).toBe(5000);
   });
 });
 

@@ -126,6 +126,40 @@ function positiveInt(value: unknown): number | null {
 }
 
 /**
+ * Picks the entry fee that belongs on the tournament from the list of tiers a brochure prints.
+ *
+ * A brochure states several fees — a standard rate plus discounts for local players, rated
+ * players, women, juniors, and often a higher "late"/"on-the-spot" rate. The tournament carries
+ * one number, and it must be the rate a general entrant pays, not whichever tier happens to be
+ * listed first. (Jaipur lists the Jaipur-players rate ₹4,750 before the general ₹5,000; taking
+ * the first item is wrong.)
+ *
+ * Rule, in order:
+ *   1. A tier explicitly labelled general/standard/all/other players — that is the answer.
+ *   2. Otherwise the highest non-late base rate, since discounts only ever go below the standard
+ *      one, so the top of the base rates is the general entrant's price.
+ *   3. Late / on-the-spot rates are never chosen while any non-late rate exists.
+ */
+const GENERAL_FEE_LABEL = /\b(general|standard|normal|regular|all\s+player|all\s+other|other\s+player|others)\b/i;
+const LATE_FEE_LABEL = /\b(late|on[-\s]?the[-\s]?spot|on[-\s]?spot|spot\s+registration)\b/i;
+
+export function resolveGeneralEntryFee(
+  entryFees: Array<{ category?: string | null; amount_inr?: number | null }> | null | undefined,
+): number | null {
+  const tiers = (Array.isArray(entryFees) ? entryFees : [])
+    .map((fee) => ({ label: cleanString(fee?.category) ?? "", amount: finiteNumber(fee?.amount_inr) }))
+    .filter((tier): tier is { label: string; amount: number } => tier.amount !== null && tier.amount >= 0);
+  if (tiers.length === 0) return null;
+
+  const general = tiers.find((tier) => GENERAL_FEE_LABEL.test(tier.label) && !LATE_FEE_LABEL.test(tier.label));
+  if (general) return general.amount;
+
+  const nonLate = tiers.filter((tier) => !LATE_FEE_LABEL.test(tier.label));
+  const pool = nonLate.length > 0 ? nonLate : tiers;
+  return pool.reduce((max, tier) => (tier.amount > max ? tier.amount : max), pool[0].amount);
+}
+
+/**
  * One payload prize row → zero or more concrete prize rows.
  * "11 to 15 at 6500" becomes five rows, places 11..15, 6500 each — the expansion the extraction
  * deliberately stopped doing (invented places are ungroundable), performed here where a human has
@@ -193,8 +227,7 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     endDate = startDate;
   }
 
-  const entryFees = Array.isArray(payload.entry_fees) ? payload.entry_fees : [];
-  const firstFee = entryFees.map((fee) => finiteNumber(fee?.amount_inr)).find((amount) => amount !== null) ?? null;
+  const entryFee = resolveGeneralEntryFee(payload.entry_fees);
 
   const tournament: MappedTournament = {
     owner_id: ownerId,
@@ -209,7 +242,7 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     time_control_category: cleanString(payload.time_control?.category),
     chief_arbiter: cleanString(payload.chief_arbiter),
     tournament_director: cleanString(payload.tournament_director),
-    entry_fee_amount: firstFee,
+    entry_fee_amount: entryFee,
     cash_prize_total: finiteNumber(payload.total_prize_fund),
   };
 
