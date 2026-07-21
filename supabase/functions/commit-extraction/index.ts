@@ -13,7 +13,7 @@ import { CORS_HEADERS, hasPingQueryParam } from "../_shared/health.ts";
 import { MappingError, mapPayloadToTables, type ExtractionPayload } from "./mapper.ts";
 
 const FUNCTION_NAME = "commit-extraction";
-const BUILD_VERSION = "2026-07-17T18:00:00Z";
+const BUILD_VERSION = "2026-07-21T00:00:00Z";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -42,6 +42,53 @@ function safeLog(fields: Record<string, string | number | boolean | null>): void
   console.log(
     `[${FUNCTION_NAME}] ${Object.entries(fields).map(([k, v]) => `${k}=${String(v)}`).join(" ")}`,
   );
+}
+
+/** The bucket + path pattern the manual "Tournament Brochure" upload uses (TournamentSetup.tsx). */
+const IMPORT_BUCKET = "extraction-uploads";
+const BROCHURE_BUCKET = "brochures";
+
+/**
+ * Attaches the imported brochure to the freshly created tournament so its setup page shows
+ * "Brochure uploaded" exactly as a manual upload would (QA #3).
+ *
+ * The manual flow stores the file in the `brochures` bucket under `${tournamentId}/${name}` and
+ * saves that path to `tournaments.brochure_url`. The imported file already lives in
+ * `extraction-uploads/{file_path}`, so we copy the bytes across (the RLS folder check keys on the
+ * tournament id, and the service role bypasses RLS) and set the same column.
+ *
+ * Best-effort: the tournament is already committed by the time we get here, so a storage hiccup
+ * must not fail the commit. On failure we log and return a warning instead of throwing.
+ */
+async function attachBrochure(
+  // deno-lint-ignore no-explicit-any
+  service: any,
+  tournamentId: string,
+  filePath: string,
+  fileName: string,
+): Promise<string | null> {
+  try {
+    const { data: file, error: dlErr } = await service.storage.from(IMPORT_BUCKET).download(filePath);
+    if (dlErr || !file) return `brochure not attached: could not read uploaded file (${dlErr?.message ?? "no data"})`;
+
+    const safeName = (fileName || "brochure.pdf").replace(/[^\w.\-]+/g, "_");
+    const destPath = `${tournamentId}/${Date.now()}_${safeName}`;
+
+    const { error: upErr } = await service.storage
+      .from(BROCHURE_BUCKET)
+      .upload(destPath, file, { contentType: (file as Blob).type || "application/pdf", upsert: true });
+    if (upErr) return `brochure not attached: upload failed (${upErr.message})`;
+
+    const { error: dbErr } = await service
+      .from("tournaments")
+      .update({ brochure_url: destPath })
+      .eq("id", tournamentId);
+    if (dbErr) return `brochure uploaded but reference not saved (${dbErr.message})`;
+
+    return null;
+  } catch (err) {
+    return `brochure not attached: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -83,7 +130,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: document, error: docErr } = await service
       .from("extraction_documents")
-      .select("id, uploaded_by")
+      .select("id, uploaded_by, file_path, file_name")
       .eq("id", extraction.document_id)
       .maybeSingle();
     if (docErr) throw new CommitError("document_lookup_failed", docErr.message, 500);
@@ -148,20 +195,38 @@ Deno.serve(async (req: Request) => {
     const tournamentId = row?.tournament_id as string | undefined;
     if (!tournamentId) throw new CommitError("commit_failed", "Transaction returned no tournament id", 500);
 
+    const alreadyCommitted = row?.already_committed === true;
+    const warnings = [...mapped.warnings];
+
+    // Attach the brochure only on a fresh commit; a replay already has it (and re-copying would
+    // orphan a second file). Failure here never fails the commit — the tournament is already saved.
+    if (!alreadyCommitted && document.file_path) {
+      const brochureWarning = await attachBrochure(
+        service,
+        tournamentId,
+        document.file_path as string,
+        (document.file_name as string) ?? "brochure.pdf",
+      );
+      if (brochureWarning) {
+        warnings.push(brochureWarning);
+        safeLog({ extraction_id: extractionId, tournament_id: tournamentId, brochure: brochureWarning });
+      }
+    }
+
     safeLog({
       extraction_id: extractionId,
       tournament_id: tournamentId,
-      already_committed: row?.already_committed === true,
+      already_committed: alreadyCommitted,
       categories: mapped.categories.length,
       prize_rows: mapped.categories.reduce((n, c) => n + c.prizes.length, 0),
-      warnings: mapped.warnings.length,
+      warnings: warnings.length,
       duration_ms: Date.now() - startedMs,
     });
 
     return jsonResponse({
       tournament_id: tournamentId,
-      already_committed: row?.already_committed === true,
-      warnings: mapped.warnings,
+      already_committed: alreadyCommitted,
+      warnings,
     });
   } catch (err) {
     const safeError = err instanceof CommitError

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -268,20 +268,31 @@ export default function BrochureReview() {
           </div>
         </div>
 
-        {/* Arithmetic cross-check, recomputed live from the edited values */}
+        {/* Arithmetic cross-check, recomputed live from the edited values. A mismatch is an
+            informational note, not an error: the stated fund is committed as-is (QA #9), and the
+            organizer may legitimately have a printed total that differs from the itemised rows. */}
         <div
           className={`mb-4 flex items-center gap-3 rounded-lg border p-3 text-sm ${
             sumOk
               ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-900/20"
-              : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20"
+              : "border-border bg-muted/40 text-muted-foreground"
           }`}
         >
-          {sumOk ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
-          <span>
-            Stated prize fund: <strong>₹{statedFund?.toLocaleString("en-IN") ?? "—"}</strong>
-            {" · "}Sum of listed prizes: <strong>₹{computedSum.toLocaleString("en-IN")}</strong>
-            {!sumOk && " — these don't match; please check the prize amounts before approving."}
-          </span>
+          {sumOk ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Info className="h-4 w-4 text-muted-foreground" />}
+          {sumOk ? (
+            <span>
+              Stated prize fund: <strong>₹{statedFund?.toLocaleString("en-IN") ?? "—"}</strong>
+              {" · "}Sum of listed prizes: <strong>₹{computedSum.toLocaleString("en-IN")}</strong>
+            </span>
+          ) : (
+            <span>
+              Stated <strong>₹{statedFund?.toLocaleString("en-IN") ?? "—"}</strong>
+              {" · "}itemised <strong>₹{computedSum.toLocaleString("en-IN")}</strong>
+              {statedFund !== null && (
+                <> {" "}(difference ₹{Math.abs(computedSum - statedFund).toLocaleString("en-IN")})</>
+              )}
+            </span>
+          )}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">

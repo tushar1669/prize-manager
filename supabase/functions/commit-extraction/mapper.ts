@@ -126,6 +126,40 @@ function positiveInt(value: unknown): number | null {
 }
 
 /**
+ * Picks the entry fee that belongs on the tournament from the list of tiers a brochure prints.
+ *
+ * A brochure states several fees — a standard rate plus discounts for local players, rated
+ * players, women, juniors, and often a higher "late"/"on-the-spot" rate. The tournament carries
+ * one number, and it must be the rate a general entrant pays, not whichever tier happens to be
+ * listed first. (Jaipur lists the Jaipur-players rate ₹4,750 before the general ₹5,000; taking
+ * the first item is wrong.)
+ *
+ * Rule, in order:
+ *   1. A tier explicitly labelled general/standard/all/other players — that is the answer.
+ *   2. Otherwise the highest non-late base rate, since discounts only ever go below the standard
+ *      one, so the top of the base rates is the general entrant's price.
+ *   3. Late / on-the-spot rates are never chosen while any non-late rate exists.
+ */
+const GENERAL_FEE_LABEL = /\b(general|standard|normal|regular|all\s+player|all\s+other|other\s+player|others)\b/i;
+const LATE_FEE_LABEL = /\b(late|on[-\s]?the[-\s]?spot|on[-\s]?spot|spot\s+registration)\b/i;
+
+export function resolveGeneralEntryFee(
+  entryFees: Array<{ category?: string | null; amount_inr?: number | null }> | null | undefined,
+): number | null {
+  const tiers = (Array.isArray(entryFees) ? entryFees : [])
+    .map((fee) => ({ label: cleanString(fee?.category) ?? "", amount: finiteNumber(fee?.amount_inr) }))
+    .filter((tier): tier is { label: string; amount: number } => tier.amount !== null && tier.amount >= 0);
+  if (tiers.length === 0) return null;
+
+  const general = tiers.find((tier) => GENERAL_FEE_LABEL.test(tier.label) && !LATE_FEE_LABEL.test(tier.label));
+  if (general) return general.amount;
+
+  const nonLate = tiers.filter((tier) => !LATE_FEE_LABEL.test(tier.label));
+  const pool = nonLate.length > 0 ? nonLate : tiers;
+  return pool.reduce((max, tier) => (tier.amount > max ? tier.amount : max), pool[0].amount);
+}
+
+/**
  * One payload prize row → zero or more concrete prize rows.
  * "11 to 15 at 6500" becomes five rows, places 11..15, 6500 each — the expansion the extraction
  * deliberately stopped doing (invented places are ungroundable), performed here where a human has
@@ -175,6 +209,43 @@ export function expandPrize(prize: PayloadPrize, categoryName: string, warnings:
   return [{ place, ...base }];
 }
 
+/** The 1st-place cash of a mapped category, or 0 when it has no place-1 row. */
+function firstPlaceCash(category: MappedCategory): number {
+  const first = category.prizes.find((prize) => prize.place === 1);
+  return first ? first.cash_amount : 0;
+}
+
+/**
+ * Guarantees exactly one is_main across the committed categories (QA #7).
+ *
+ * A tournament has exactly one main category (the app's manual flow enforces this too), but a
+ * brochure payload can mark none or several. Resolve deterministically:
+ *   - marked exactly one  → keep it
+ *   - marked several      → keep the one with the highest 1st-prize cash, unmark the rest
+ *   - marked none         → mark the category with the highest 1st-prize cash
+ * Ties (equal 1st-prize cash) break to the earliest by order_idx, so a retry picks the same one.
+ * Mutates each category's is_main in place; no-op when there are no categories.
+ */
+function enforceSingleMain(categories: MappedCategory[], warnings: string[]): void {
+  if (categories.length === 0) return;
+
+  const marked = categories.filter((c) => c.is_main);
+  if (marked.length === 1) return;
+
+  // `reduce` with strict `>` keeps the first-seen on a tie; categories are already in order_idx
+  // order, so the earliest category wins — deterministic across retries.
+  const pool = marked.length > 1 ? marked : categories;
+  const chosen = pool.reduce((best, c) => (firstPlaceCash(c) > firstPlaceCash(best) ? c : best), pool[0]);
+
+  if (marked.length === 0) {
+    warnings.push(`no main category marked; selected "${chosen.name}" (highest 1st prize)`);
+  } else {
+    warnings.push(`multiple main categories marked; kept "${chosen.name}" (highest 1st prize)`);
+  }
+
+  for (const c of categories) c.is_main = c === chosen;
+}
+
 export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string): MappingResult {
   const warnings: string[] = [];
 
@@ -192,26 +263,6 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     warnings.push("no valid end_date; defaulted to start_date");
     endDate = startDate;
   }
-
-  const entryFees = Array.isArray(payload.entry_fees) ? payload.entry_fees : [];
-  const firstFee = entryFees.map((fee) => finiteNumber(fee?.amount_inr)).find((amount) => amount !== null) ?? null;
-
-  const tournament: MappedTournament = {
-    owner_id: ownerId,
-    title,
-    start_date: startDate,
-    end_date: endDate,
-    venue: cleanString(payload.venue),
-    city: cleanString(payload.city),
-    event_code: cleanString(payload.event_code),
-    time_control_base_minutes: positiveInt(payload.time_control?.base_minutes),
-    time_control_increment_seconds: finiteNumber(payload.time_control?.increment_seconds) ?? null,
-    time_control_category: cleanString(payload.time_control?.category),
-    chief_arbiter: cleanString(payload.chief_arbiter),
-    tournament_director: cleanString(payload.tournament_director),
-    entry_fee_amount: firstFee,
-    cash_prize_total: finiteNumber(payload.total_prize_fund),
-  };
 
   const categories: MappedCategory[] = [];
   const sourceCategories = Array.isArray(payload.prize_categories) ? payload.prize_categories : [];
@@ -249,6 +300,37 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
   if (categories.length === 0) {
     warnings.push("payload has no prize categories; tournament will be created empty");
   }
+
+  enforceSingleMain(categories, warnings);
+
+  // Stated fund is authoritative when present (QA #9); it is the number the organizer reads off the
+  // brochure and the one the trust layer's sum check is measured against. Only when the brochure
+  // states no fund at all (e.g. Kurnool) do we fall back to the expanded itemised sum, so the
+  // tournament still carries a meaningful total instead of null.
+  const statedFund = finiteNumber(payload.total_prize_fund);
+  const expandedSum = categories.reduce(
+    (sum, category) => sum + category.prizes.reduce((s, prize) => s + prize.cash_amount, 0),
+    0,
+  );
+
+  const entryFee = resolveGeneralEntryFee(payload.entry_fees);
+
+  const tournament: MappedTournament = {
+    owner_id: ownerId,
+    title,
+    start_date: startDate,
+    end_date: endDate,
+    venue: cleanString(payload.venue),
+    city: cleanString(payload.city),
+    event_code: cleanString(payload.event_code),
+    time_control_base_minutes: positiveInt(payload.time_control?.base_minutes),
+    time_control_increment_seconds: finiteNumber(payload.time_control?.increment_seconds) ?? null,
+    time_control_category: cleanString(payload.time_control?.category),
+    chief_arbiter: cleanString(payload.chief_arbiter),
+    tournament_director: cleanString(payload.tournament_director),
+    entry_fee_amount: entryFee,
+    cash_prize_total: statedFund !== null ? statedFund : expandedSum,
+  };
 
   return { tournament, categories, warnings };
 }

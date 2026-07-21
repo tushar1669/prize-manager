@@ -3,6 +3,7 @@ import {
   expandPrize,
   mapPayloadToTables,
   MappingError,
+  resolveGeneralEntryFee,
   type ExtractionPayload,
 } from "../supabase/functions/commit-extraction/mapper";
 
@@ -136,6 +137,66 @@ describe("tournament mapping", () => {
   });
 });
 
+describe("entry fee resolution", () => {
+  it("picks the general tier regardless of array order", () => {
+    // Production Jaipur order: the local rate is listed before the general rate.
+    expect(resolveGeneralEntryFee([
+      { category: "Jaipur players", amount_inr: 4750 },
+      { category: "General", amount_inr: 5000 },
+    ])).toBe(5000);
+  });
+
+  it("matches general-equivalent labels", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Rated players", amount_inr: 800 },
+      { category: "All other players", amount_inr: 1000 },
+    ])).toBe(1000);
+  });
+
+  it("falls back to the highest non-late base rate when no tier is general", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Under-15", amount_inr: 600 },
+      { category: "Women", amount_inr: 700 },
+      { category: "Open", amount_inr: 900 },
+    ])).toBe(900);
+  });
+
+  it("never picks a late/on-the-spot rate while a base rate exists", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Standard", amount_inr: 1000 },
+      { category: "Late entry", amount_inr: 1500 },
+      { category: "On the spot", amount_inr: 2000 },
+    ])).toBe(1000);
+  });
+
+  it("uses the highest base rate even when a late fee is larger and no tier is general", () => {
+    expect(resolveGeneralEntryFee([
+      { category: "Local", amount_inr: 900 },
+      { category: "Rated", amount_inr: 1100 },
+      { category: "Spot registration", amount_inr: 1600 },
+    ])).toBe(1100);
+  });
+
+  it("returns null for no fees or unusable amounts", () => {
+    expect(resolveGeneralEntryFee([])).toBeNull();
+    expect(resolveGeneralEntryFee(null)).toBeNull();
+    expect(resolveGeneralEntryFee([{ category: "General", amount_inr: null }])).toBeNull();
+  });
+
+  it("flows the resolved general fee into the mapped tournament", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        entry_fees: [
+          { category: "Jaipur players", amount_inr: 4750 },
+          { category: "General", amount_inr: 5000 },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.tournament.entry_fee_amount).toBe(5000);
+  });
+});
+
 describe("category mapping", () => {
   it("assigns order_idx by payload order and skips unnamed categories", () => {
     const result = mapPayloadToTables(
@@ -167,6 +228,96 @@ describe("category mapping", () => {
     expect(result.categories[0].prizes).toHaveLength(1);
     expect(result.categories[0].prizes[0].cash_amount).toBe(100);
     expect(result.warnings.some((w) => w.includes("duplicate place"))).toBe(true);
+  });
+});
+
+describe("main-prize guarantee (exactly one is_main)", () => {
+  it("marks the highest 1st-prize category when the payload marks none", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Under 8", prizes: [{ place: 1, cash_amount: 2000 }] },
+          { name: "General", prizes: [{ place: 1, cash_amount: 50000 }] },
+          { name: "Women", prizes: [{ place: 1, cash_amount: 8000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["General"]);
+    expect(result.warnings.some((w) => w.includes("no main category marked"))).toBe(true);
+  });
+
+  it("keeps the highest 1st-prize category when the payload marks several", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 30000 }] },
+          { name: "Blitz", is_main: true, prizes: [{ place: 1, cash_amount: 45000 }] },
+          { name: "Rapid", is_main: true, prizes: [{ place: 1, cash_amount: 20000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["Blitz"]);
+    expect(result.warnings.some((w) => w.includes("multiple main categories marked"))).toBe(true);
+  });
+
+  it("breaks a 1st-prize tie toward the earliest category by order", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Section A", prizes: [{ place: 1, cash_amount: 25000 }] },
+          { name: "Section B", prizes: [{ place: 1, cash_amount: 25000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    const mains = result.categories.filter((c) => c.is_main).map((c) => c.name);
+    expect(mains).toEqual(["Section A"]);
+  });
+
+  it("leaves a single marked main untouched", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 10000 }] },
+          { name: "Under 8", prizes: [{ place: 1, cash_amount: 50000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["General"]);
+    expect(result.warnings.some((w) => w.includes("main categor"))).toBe(false);
+  });
+});
+
+describe("cash_prize_total stated-fund rule", () => {
+  it("uses the stated total_prize_fund as-is when present, even if it differs from the itemised sum", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        total_prize_fund: 600001,
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 100000 }, { place: 2, cash_amount: 50000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.tournament.cash_prize_total).toBe(600001);
+  });
+
+  it("falls back to the expanded itemised sum when no fund is stated (Kurnool case)", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        total_prize_fund: null,
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ rank_from: 1, rank_to: 3, cash_amount: 10000 }] },
+          { name: "Women", prizes: [{ place: 1, cash_amount: 5000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    // 3 × 10000 (expanded range) + 5000 = 35000
+    expect(result.tournament.cash_prize_total).toBe(35000);
   });
 });
 
