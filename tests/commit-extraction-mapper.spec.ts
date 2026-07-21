@@ -231,6 +231,96 @@ describe("category mapping", () => {
   });
 });
 
+describe("main-prize guarantee (exactly one is_main)", () => {
+  it("marks the highest 1st-prize category when the payload marks none", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Under 8", prizes: [{ place: 1, cash_amount: 2000 }] },
+          { name: "General", prizes: [{ place: 1, cash_amount: 50000 }] },
+          { name: "Women", prizes: [{ place: 1, cash_amount: 8000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["General"]);
+    expect(result.warnings.some((w) => w.includes("no main category marked"))).toBe(true);
+  });
+
+  it("keeps the highest 1st-prize category when the payload marks several", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 30000 }] },
+          { name: "Blitz", is_main: true, prizes: [{ place: 1, cash_amount: 45000 }] },
+          { name: "Rapid", is_main: true, prizes: [{ place: 1, cash_amount: 20000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["Blitz"]);
+    expect(result.warnings.some((w) => w.includes("multiple main categories marked"))).toBe(true);
+  });
+
+  it("breaks a 1st-prize tie toward the earliest category by order", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Section A", prizes: [{ place: 1, cash_amount: 25000 }] },
+          { name: "Section B", prizes: [{ place: 1, cash_amount: 25000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    const mains = result.categories.filter((c) => c.is_main).map((c) => c.name);
+    expect(mains).toEqual(["Section A"]);
+  });
+
+  it("leaves a single marked main untouched", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 10000 }] },
+          { name: "Under 8", prizes: [{ place: 1, cash_amount: 50000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.filter((c) => c.is_main).map((c) => c.name)).toEqual(["General"]);
+    expect(result.warnings.some((w) => w.includes("main categor"))).toBe(false);
+  });
+});
+
+describe("cash_prize_total stated-fund rule", () => {
+  it("uses the stated total_prize_fund as-is when present, even if it differs from the itemised sum", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        total_prize_fund: 600001,
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ place: 1, cash_amount: 100000 }, { place: 2, cash_amount: 50000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.tournament.cash_prize_total).toBe(600001);
+  });
+
+  it("falls back to the expanded itemised sum when no fund is stated (Kurnool case)", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        total_prize_fund: null,
+        prize_categories: [
+          { name: "General", is_main: true, prizes: [{ rank_from: 1, rank_to: 3, cash_amount: 10000 }] },
+          { name: "Women", prizes: [{ place: 1, cash_amount: 5000 }] },
+        ],
+      }),
+      OWNER,
+    );
+    // 3 × 10000 (expanded range) + 5000 = 35000
+    expect(result.tournament.cash_prize_total).toBe(35000);
+  });
+});
+
 describe("mapping is deterministic and non-mutating", () => {
   // True commit idempotency is enforced by the FOR UPDATE lock on extractions.linked_tournament_id
   // in commit_extraction_transaction; what the mapper owes is that running it twice over the same

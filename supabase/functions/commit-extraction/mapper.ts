@@ -209,6 +209,43 @@ export function expandPrize(prize: PayloadPrize, categoryName: string, warnings:
   return [{ place, ...base }];
 }
 
+/** The 1st-place cash of a mapped category, or 0 when it has no place-1 row. */
+function firstPlaceCash(category: MappedCategory): number {
+  const first = category.prizes.find((prize) => prize.place === 1);
+  return first ? first.cash_amount : 0;
+}
+
+/**
+ * Guarantees exactly one is_main across the committed categories (QA #7).
+ *
+ * A tournament has exactly one main category (the app's manual flow enforces this too), but a
+ * brochure payload can mark none or several. Resolve deterministically:
+ *   - marked exactly one  → keep it
+ *   - marked several      → keep the one with the highest 1st-prize cash, unmark the rest
+ *   - marked none         → mark the category with the highest 1st-prize cash
+ * Ties (equal 1st-prize cash) break to the earliest by order_idx, so a retry picks the same one.
+ * Mutates each category's is_main in place; no-op when there are no categories.
+ */
+function enforceSingleMain(categories: MappedCategory[], warnings: string[]): void {
+  if (categories.length === 0) return;
+
+  const marked = categories.filter((c) => c.is_main);
+  if (marked.length === 1) return;
+
+  // `reduce` with strict `>` keeps the first-seen on a tie; categories are already in order_idx
+  // order, so the earliest category wins — deterministic across retries.
+  const pool = marked.length > 1 ? marked : categories;
+  const chosen = pool.reduce((best, c) => (firstPlaceCash(c) > firstPlaceCash(best) ? c : best), pool[0]);
+
+  if (marked.length === 0) {
+    warnings.push(`no main category marked; selected "${chosen.name}" (highest 1st prize)`);
+  } else {
+    warnings.push(`multiple main categories marked; kept "${chosen.name}" (highest 1st prize)`);
+  }
+
+  for (const c of categories) c.is_main = c === chosen;
+}
+
 export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string): MappingResult {
   const warnings: string[] = [];
 
@@ -226,25 +263,6 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     warnings.push("no valid end_date; defaulted to start_date");
     endDate = startDate;
   }
-
-  const entryFee = resolveGeneralEntryFee(payload.entry_fees);
-
-  const tournament: MappedTournament = {
-    owner_id: ownerId,
-    title,
-    start_date: startDate,
-    end_date: endDate,
-    venue: cleanString(payload.venue),
-    city: cleanString(payload.city),
-    event_code: cleanString(payload.event_code),
-    time_control_base_minutes: positiveInt(payload.time_control?.base_minutes),
-    time_control_increment_seconds: finiteNumber(payload.time_control?.increment_seconds) ?? null,
-    time_control_category: cleanString(payload.time_control?.category),
-    chief_arbiter: cleanString(payload.chief_arbiter),
-    tournament_director: cleanString(payload.tournament_director),
-    entry_fee_amount: entryFee,
-    cash_prize_total: finiteNumber(payload.total_prize_fund),
-  };
 
   const categories: MappedCategory[] = [];
   const sourceCategories = Array.isArray(payload.prize_categories) ? payload.prize_categories : [];
@@ -282,6 +300,37 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
   if (categories.length === 0) {
     warnings.push("payload has no prize categories; tournament will be created empty");
   }
+
+  enforceSingleMain(categories, warnings);
+
+  // Stated fund is authoritative when present (QA #9); it is the number the organizer reads off the
+  // brochure and the one the trust layer's sum check is measured against. Only when the brochure
+  // states no fund at all (e.g. Kurnool) do we fall back to the expanded itemised sum, so the
+  // tournament still carries a meaningful total instead of null.
+  const statedFund = finiteNumber(payload.total_prize_fund);
+  const expandedSum = categories.reduce(
+    (sum, category) => sum + category.prizes.reduce((s, prize) => s + prize.cash_amount, 0),
+    0,
+  );
+
+  const entryFee = resolveGeneralEntryFee(payload.entry_fees);
+
+  const tournament: MappedTournament = {
+    owner_id: ownerId,
+    title,
+    start_date: startDate,
+    end_date: endDate,
+    venue: cleanString(payload.venue),
+    city: cleanString(payload.city),
+    event_code: cleanString(payload.event_code),
+    time_control_base_minutes: positiveInt(payload.time_control?.base_minutes),
+    time_control_increment_seconds: finiteNumber(payload.time_control?.increment_seconds) ?? null,
+    time_control_category: cleanString(payload.time_control?.category),
+    chief_arbiter: cleanString(payload.chief_arbiter),
+    tournament_director: cleanString(payload.tournament_director),
+    entry_fee_amount: entryFee,
+    cash_prize_total: statedFund !== null ? statedFund : expandedSum,
+  };
 
   return { tournament, categories, warnings };
 }
