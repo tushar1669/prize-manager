@@ -49,6 +49,13 @@ export type ExtractionPayload = {
   event_code?: string | null;
   chief_arbiter?: string | null;
   tournament_director?: string | null;
+  // Fields with no dedicated tournaments column; preserved in tournaments.notes (QA #1).
+  registration_deadline?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  fide_rated?: boolean | null;
+  aicf_rated?: boolean | null;
   total_prize_fund?: number | null;
   entry_fees?: Array<{ category?: string | null; amount_inr?: number | null }> | null;
   time_control?: {
@@ -88,6 +95,7 @@ export type MappedTournament = {
   time_control_category: string | null;
   chief_arbiter: string | null;
   tournament_director: string | null;
+  notes: string | null;
   entry_fee_amount: number | null;
   cash_prize_total: number | null;
 };
@@ -157,6 +165,29 @@ export function resolveGeneralEntryFee(
   const nonLate = tiers.filter((tier) => !LATE_FEE_LABEL.test(tier.label));
   const pool = nonLate.length > 0 ? nonLate : tiers;
   return pool.reduce((max, tier) => (tier.amount > max ? tier.amount : max), pool[0].amount);
+}
+
+/**
+ * Preserves brochure fields that have no dedicated tournaments column (QA #1).
+ *
+ * The Details tab surfaces registration deadline, contact details, website and rating status, but
+ * the tournaments table has no columns for them. Rather than drop the extracted values, we fold
+ * them into tournaments.notes as one "Label: value" line each, so the organizer sees them after
+ * import. Only non-empty values produce a line; a fresh tournament has no prior notes to preserve,
+ * but callers must append rather than overwrite if that ever changes.
+ */
+function buildNotes(payload: ExtractionPayload): string | null {
+  const lines: string[] = [];
+  const add = (label: string, value: string | null) => {
+    if (value) lines.push(`${label}: ${value}`);
+  };
+  add("Registration deadline", cleanString(payload.registration_deadline));
+  add("Contact email", cleanString(payload.contact_email));
+  add("Contact phone", cleanString(payload.contact_phone));
+  add("Website", cleanString(payload.website));
+  if (typeof payload.fide_rated === "boolean") add("FIDE rated", payload.fide_rated ? "Yes" : "No");
+  if (typeof payload.aicf_rated === "boolean") add("AICF rated", payload.aicf_rated ? "Yes" : "No");
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 /**
@@ -328,6 +359,7 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     time_control_category: cleanString(payload.time_control?.category),
     chief_arbiter: cleanString(payload.chief_arbiter),
     tournament_director: cleanString(payload.tournament_director),
+    notes: buildNotes(payload),
     entry_fee_amount: entryFee,
     cash_prize_total: statedFund !== null ? statedFund : expandedSum,
   };

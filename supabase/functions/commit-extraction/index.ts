@@ -13,7 +13,7 @@ import { CORS_HEADERS, hasPingQueryParam } from "../_shared/health.ts";
 import { MappingError, mapPayloadToTables, type ExtractionPayload } from "./mapper.ts";
 
 const FUNCTION_NAME = "commit-extraction";
-const BUILD_VERSION = "2026-07-21T00:00:00Z";
+const BUILD_VERSION = "2026-07-21T16:00:00Z";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
