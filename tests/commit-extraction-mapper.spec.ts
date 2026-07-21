@@ -321,6 +321,45 @@ describe("cash_prize_total stated-fund rule", () => {
   });
 });
 
+describe("notes fallback for columnless fields (QA #1)", () => {
+  it("folds registration deadline, contacts, website and rating status into notes", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        registration_deadline: "2025-11-15",
+        contact_email: "organizer@example.com",
+        contact_phone: "+91 90000 00000",
+        website: "www.apchess.org",
+        fide_rated: true,
+        aicf_rated: false,
+      }),
+      OWNER,
+    );
+    expect(result.tournament.notes).toBe(
+      [
+        "Registration deadline: 2025-11-15",
+        "Contact email: organizer@example.com",
+        "Contact phone: +91 90000 00000",
+        "Website: www.apchess.org",
+        "FIDE rated: Yes",
+        "AICF rated: No",
+      ].join("\n"),
+    );
+  });
+
+  it("emits only the fields that are present and null when none are", () => {
+    const partial = mapPayloadToTables(basePayload({ website: "www.example.com" }), OWNER);
+    expect(partial.tournament.notes).toBe("Website: www.example.com");
+
+    const none = mapPayloadToTables(basePayload(), OWNER);
+    expect(none.tournament.notes).toBeNull();
+  });
+
+  it("does not treat a null rating flag as 'No'", () => {
+    const result = mapPayloadToTables(basePayload({ fide_rated: null, aicf_rated: null }), OWNER);
+    expect(result.tournament.notes).toBeNull();
+  });
+});
+
 describe("mapping is deterministic and non-mutating", () => {
   // True commit idempotency is enforced by the FOR UPDATE lock on extractions.linked_tournament_id
   // in commit_extraction_transaction; what the mapper owes is that running it twice over the same

@@ -88,6 +88,9 @@ export default function BrochureReview() {
   const navigate = useNavigate();
   const [payload, setPayload] = useState<Payload | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Categories the reviewer has explicitly opted out of importing (FIX 4). Keyed by index, which is
+  // stable here because this screen never reorders categories.
+  const [excludedCategories, setExcludedCategories] = useState<Set<number>>(new Set());
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["brochure-extraction", extractionId],
@@ -130,10 +133,16 @@ export default function BrochureReview() {
   const approveMutation = useMutation({
     mutationFn: async () => {
       if (!extractionId || !payload) throw new Error("Nothing to approve");
+      // Drop excluded categories entirely (FIX 4): an explicit opt-out, never a silent skip. What
+      // remains is what gets committed, so the mapper never has to guess about a nameless row.
+      const committedPayload: Payload = {
+        ...payload,
+        prize_categories: (payload.prize_categories ?? []).filter((_, i) => !excludedCategories.has(i)),
+      };
       // Persist edits first so commit-extraction commits exactly what the reviewer saw.
       const { error: updateErr } = await supabase
         .from("extractions")
-        .update({ payload, updated_at: new Date().toISOString() })
+        .update({ payload: committedPayload, updated_at: new Date().toISOString() })
         .eq("id", extractionId);
       if (updateErr) throw updateErr;
 
@@ -200,6 +209,13 @@ export default function BrochureReview() {
   const computedSum = computedCashSum(payload);
   const sumOk = statedFund === null || Math.abs(computedSum - statedFund) <= SUM_TOLERANCE_INR;
 
+  const categories = payload.prize_categories ?? [];
+  const isUnnamed = (category: PrizeCategory) =>
+    !(typeof category?.name === "string" && category.name.trim().length > 0);
+  // Approve is blocked while any category is both nameless and not excluded (FIX 4).
+  const blockingCount = categories.filter((c, i) => isUnnamed(c) && !excludedCategories.has(i)).length;
+  const approveBlocked = blockingCount > 0;
+
   const setField = (key: keyof Payload, value: unknown) =>
     setPayload((prev) => (prev ? { ...prev, [key]: value } : prev));
 
@@ -209,6 +225,23 @@ export default function BrochureReview() {
       const next = structuredClone(prev);
       const prize = next.prize_categories?.[categoryIdx]?.prizes?.[prizeIdx];
       if (prize) Object.assign(prize, patch);
+      return next;
+    });
+
+  const setCategoryName = (categoryIdx: number, name: string) =>
+    setPayload((prev) => {
+      if (!prev) return prev;
+      const next = structuredClone(prev);
+      const category = next.prize_categories?.[categoryIdx];
+      if (category) category.name = name;
+      return next;
+    });
+
+  const toggleExcluded = (categoryIdx: number, excluded: boolean) =>
+    setExcludedCategories((prev) => {
+      const next = new Set(prev);
+      if (excluded) next.add(categoryIdx);
+      else next.delete(categoryIdx);
       return next;
     });
 
@@ -259,7 +292,7 @@ export default function BrochureReview() {
             </Button>
             <Button
               onClick={() => approveMutation.mutate()}
-              disabled={approveMutation.isPending || alreadyCommitted}
+              disabled={approveMutation.isPending || alreadyCommitted || approveBlocked}
               className="gap-2"
             >
               {approveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -294,6 +327,16 @@ export default function BrochureReview() {
             </span>
           )}
         </div>
+
+        {approveBlocked && (
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              {blockingCount} categor{blockingCount === 1 ? "y is" : "ies are"} still unnamed. Give each a name or
+              tick "Exclude from import" before approving.
+            </span>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Document preview */}
@@ -368,13 +411,48 @@ export default function BrochureReview() {
               </CardHeader>
               <CardContent>
                 <Accordion type="multiple" className="w-full">
-                  {(payload.prize_categories ?? []).map((category, categoryIdx) => (
-                    <AccordionItem key={categoryIdx} value={`category-${categoryIdx}`}>
-                      <AccordionTrigger className="text-sm">
-                        <span className="flex items-center gap-2">
-                          {category?.name ?? "Unnamed"}
-                          {category?.is_main && <Badge variant="secondary">Main</Badge>}
-                        </span>
+                  {categories.map((category, categoryIdx) => {
+                    const excluded = excludedCategories.has(categoryIdx);
+                    const unnamed = isUnnamed(category);
+                    const prizeCount = category?.prizes?.length ?? 0;
+                    return (
+                    <AccordionItem
+                      key={categoryIdx}
+                      value={`category-${categoryIdx}`}
+                      className={excluded ? "opacity-50" : ""}
+                    >
+                      {/* Editable category name (FIX 3). Kept a sibling of the trigger, never nested
+                          inside it, so typing never toggles the accordion and the markup stays valid. */}
+                      <div className="flex flex-wrap items-center gap-2 py-2">
+                        <Input
+                          value={category?.name ?? ""}
+                          placeholder="Category name"
+                          disabled={excluded}
+                          onChange={(e) => setCategoryName(categoryIdx, e.target.value)}
+                          className={`h-8 min-w-[10rem] flex-1 ${
+                            unnamed && !excluded ? "border-amber-400 focus-visible:ring-amber-400" : ""
+                          }`}
+                        />
+                        {category?.is_main && <Badge variant="secondary">Main</Badge>}
+                        {unnamed && !excluded && (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                          >
+                            <AlertTriangle className="mr-1 h-3 w-3" />
+                            Unnamed — give this a name or exclude it from import
+                          </Badge>
+                        )}
+                        <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                          <Checkbox
+                            checked={excluded}
+                            onCheckedChange={(checked) => toggleExcluded(categoryIdx, checked === true)}
+                          />
+                          Exclude from import
+                        </label>
+                      </div>
+                      <AccordionTrigger className="py-1 text-xs text-muted-foreground">
+                        {prizeCount} prize {prizeCount === 1 ? "row" : "rows"}
                       </AccordionTrigger>
                       <AccordionContent>
                         <table className="w-full text-sm">
@@ -383,23 +461,42 @@ export default function BrochureReview() {
                               <th className="pb-1 pr-2 font-normal">Place</th>
                               <th className="pb-1 pr-2 font-normal">Cash (₹)</th>
                               <th className="pb-1 pr-2 font-normal">Trophy</th>
-                              <th className="pb-1 font-normal">Medal</th>
+                              <th className="pb-1 pr-2 font-normal">Medal</th>
+                              <th className="pb-1 font-normal">Gift</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(category?.prizes ?? []).map((prize, prizeIdx) => {
                               const flagPath = `prize_categories[${categoryIdx}].prizes[${prizeIdx}]`;
                               const rowFlag = [...flags.keys()].find((key) => key.startsWith(flagPath));
+                              const cash = typeof prize?.cash_amount === "number" ? prize.cash_amount : 0;
+                              const hasGift =
+                                typeof prize?.gift_description === "string" &&
+                                prize.gift_description.trim().length > 0;
+                              // A gift-only row (no cash, no trophy, no medal) must not read as a ₹0
+                              // cash prize (FIX 2): tint it and label it.
+                              const giftOnly =
+                                cash === 0 && prize?.has_trophy !== true && prize?.has_medal !== true && hasGift;
+                              const rowClass = rowFlag
+                                ? "bg-amber-50 dark:bg-amber-900/20"
+                                : giftOnly
+                                  ? "bg-sky-50/70 dark:bg-sky-900/20"
+                                  : "";
                               return (
-                                <tr key={prizeIdx} className={rowFlag ? "bg-amber-50 dark:bg-amber-900/20" : ""}>
+                                <tr key={prizeIdx} className={rowClass}>
                                   <td className="py-1 pr-2 whitespace-nowrap">
                                     {prizeLabel(prize)}
+                                    {giftOnly && (
+                                      <Badge variant="outline" className="ml-1 text-[10px]">
+                                        Gift
+                                      </Badge>
+                                    )}
                                     {rowFlag && flagBadge(rowFlag)}
                                   </td>
                                   <td className="py-1 pr-2">
                                     <Input
                                       type="number"
-                                      className="h-8 w-28"
+                                      className="h-8 w-24"
                                       value={prize?.cash_amount ?? ""}
                                       onChange={(e) =>
                                         setPrize(categoryIdx, prizeIdx, {
@@ -416,11 +513,24 @@ export default function BrochureReview() {
                                       }
                                     />
                                   </td>
-                                  <td className="py-1">
+                                  <td className="py-1 pr-2">
                                     <Checkbox
                                       checked={prize?.has_medal === true}
                                       onCheckedChange={(checked) =>
                                         setPrize(categoryIdx, prizeIdx, { has_medal: checked === true })
+                                      }
+                                    />
+                                  </td>
+                                  <td className="py-1">
+                                    <Input
+                                      type="text"
+                                      className="h-8 w-36"
+                                      placeholder="—"
+                                      value={prize?.gift_description ?? ""}
+                                      onChange={(e) =>
+                                        setPrize(categoryIdx, prizeIdx, {
+                                          gift_description: e.target.value || null,
+                                        })
                                       }
                                     />
                                   </td>
@@ -431,7 +541,8 @@ export default function BrochureReview() {
                         </table>
                       </AccordionContent>
                     </AccordionItem>
-                  ))}
+                    );
+                  })}
                 </Accordion>
               </CardContent>
             </Card>
