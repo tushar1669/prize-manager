@@ -20,11 +20,21 @@ import {
 
 export type FieldFlag = {
   field: string;
-  reason: "ungrounded" | "sum_mismatch";
-  severity: "high" | "medium" | "low";
+  reason: "ungrounded" | "sum_mismatch" | "team_prize_detected";
+  severity: "high" | "medium" | "low" | "info";
   expected?: number;
   stated?: number;
+  /** Present on team_prize_detected: the offending category name, for the review UI and audit log. */
+  value?: string;
 };
+
+/**
+ * Institutional/team prizes (Best Academy, Best School, …) are awarded to a team, not a player.
+ * Prize Manager tracks them through institution_prize_groups, configured by the organizer — they
+ * must never be committed as ordinary player categories. This is a naming signal, so it lives in
+ * the deterministic trust layer, not the model.
+ */
+const TEAM_PRIZE_NAME = /\b(academy|school|library|club|college|institution)\b/i;
 
 export type GroundingMap = Record<string, GroundingHit>;
 
@@ -98,6 +108,14 @@ const KEYWORD_PATTERNS: Record<string, RegExp> = {
 
 const EXEMPT_LEAVES = new Set(["is_main", "currency"]);
 
+/**
+ * Engine signals, not claims the document makes: `multiple_tournaments_detected` is the model's
+ * meta-observation that the brochure holds more than one event, and `has_team_prizes` is set by
+ * this trust layer itself. Neither quotes the text, so grounding would blank them — they are
+ * exempt regardless of value.
+ */
+const META_LEAVES = new Set(["multiple_tournaments_detected", "has_team_prizes"]);
+
 function leafName(path: string): string {
   const last = path.split(".").pop() ?? path;
   return last.replace(/\[\d+\]$/, "");
@@ -110,6 +128,7 @@ function leafName(path: string): string {
 function exemption(path: string, value: unknown): GroundingHit | null {
   const leaf = leafName(path);
   if (EXEMPT_LEAVES.has(leaf)) return { grounded: true, method: "exempt", evidence: null };
+  if (META_LEAVES.has(leaf)) return { grounded: true, method: "exempt", evidence: null };
   // "any" is the neutral default of the gender enum, not something a brochure ever prints.
   if (leaf === "gender" && value === "any") return { grounded: true, method: "exempt", evidence: null };
   // A false boolean asserts nothing, so there is nothing to find.
@@ -201,6 +220,33 @@ function groundLeaf(
 }
 
 /**
+ * Flags institutional/team prize categories so they are surfaced in review and kept out of the
+ * commit (QA #1). Detection is by name only — a category called "Best Academy"/"Best School" etc.
+ * — because that is exactly the signal a human reads off the brochure. Runs after grounding so its
+ * flag paths index the pruned payload the reviewer sees; sets `has_team_prizes` when any match.
+ */
+function flagTeamPrizes(payload: Record<string, unknown>, flags: FieldFlag[]): void {
+  const categories = payload.prize_categories;
+  if (!Array.isArray(categories)) return;
+
+  let found = false;
+  categories.forEach((entry, index) => {
+    const name = (entry as Record<string, unknown> | null)?.name;
+    if (typeof name === "string" && TEAM_PRIZE_NAME.test(name)) {
+      found = true;
+      flags.push({
+        field: `prize_categories[${index}].name`,
+        reason: "team_prize_detected",
+        severity: "info",
+        value: name,
+      });
+    }
+  });
+
+  if (found) payload.has_team_prizes = true;
+}
+
+/**
  * Walks every leaf of the payload. Ungrounded leaves are blanked and flagged; leaves that are
  * already null are "absent" — the brochure simply did not say — and pass without a flag.
  */
@@ -253,6 +299,10 @@ export function runTrustCheck(rawPayload: Record<string, unknown>, transcription
   };
 
   for (const key of Object.keys(payload)) visit(payload, key, key);
+
+  // After grounding so the flag paths index the pruned payload, and so a category name that was
+  // blanked as ungrounded is no longer a string to match on.
+  flagTeamPrizes(payload, flags);
 
   const checked = Object.values(grounding).filter((hit) => hit.method !== "exempt");
   const groundedCount = checked.filter((hit) => hit.grounded).length;

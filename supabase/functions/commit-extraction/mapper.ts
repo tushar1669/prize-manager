@@ -118,6 +118,15 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** Ranges wider than this are almost certainly an extraction error, not a prize table. */
 const MAX_RANK_SPAN = 200;
 
+/**
+ * Institutional/team prizes are managed via institution_prize_groups, never as player categories
+ * (QA #1). The trust layer flags them as team_prize_detected and the review UI locks them out of
+ * import; this is the commit-side backstop. It matches by name — the same rule the trust layer uses
+ * (extract/trustCheck.ts TEAM_PRIZE_NAME) — rather than by flag index, so it is unaffected by the
+ * review screen dropping other excluded categories and shifting every later index.
+ */
+const TEAM_PRIZE_NAME = /\b(academy|school|library|club|college|institution)\b/i;
+
 function cleanString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -302,6 +311,13 @@ export function mapPayloadToTables(payload: ExtractionPayload, ownerId: string):
     const name = cleanString(category?.name);
     if (!name) {
       warnings.push("category with no name skipped");
+      continue;
+    }
+
+    if (TEAM_PRIZE_NAME.test(name)) {
+      // Team/institutional prize — excluded from the tournament's player categories and logged so
+      // the response records what was left out for the organizer to add under Team Prizes.
+      warnings.push(`team prize "${name}" excluded from import (add it manually under Team Prizes)`);
       continue;
     }
 

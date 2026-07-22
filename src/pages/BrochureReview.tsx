@@ -54,11 +54,12 @@ type Payload = {
   total_prize_fund?: number | null;
   aicf_rated?: boolean | null;
   fide_rated?: boolean | null;
+  multiple_tournaments_detected?: boolean | null;
   prize_categories?: PrizeCategory[] | null;
   [key: string]: unknown;
 };
 
-type FieldFlag = { field: string; reason: string; severity: string; expected?: number; stated?: number };
+type FieldFlag = { field: string; reason: string; severity: string; expected?: number; stated?: number; value?: string };
 
 const SUM_TOLERANCE_INR = 100;
 
@@ -133,11 +134,16 @@ export default function BrochureReview() {
   const approveMutation = useMutation({
     mutationFn: async () => {
       if (!extractionId || !payload) throw new Error("Nothing to approve");
-      // Drop excluded categories entirely (FIX 4): an explicit opt-out, never a silent skip. What
+      // Drop excluded categories entirely (FIX 4): an explicit opt-out, never a silent skip. Team
+      // prizes (FIX 1) are always dropped too — they cannot be imported as player categories. What
       // remains is what gets committed, so the mapper never has to guess about a nameless row.
       const committedPayload: Payload = {
         ...payload,
-        prize_categories: (payload.prize_categories ?? []).filter((_, i) => !excludedCategories.has(i)),
+        prize_categories: (payload.prize_categories ?? []).filter(
+          (_, i) =>
+            !excludedCategories.has(i) &&
+            flags.get(`prize_categories[${i}].name`)?.reason !== "team_prize_detected",
+        ),
       };
       // Persist edits first so commit-extraction commits exactly what the reviewer saw.
       const { error: updateErr } = await supabase
@@ -212,9 +218,16 @@ export default function BrochureReview() {
   const categories = payload.prize_categories ?? [];
   const isUnnamed = (category: PrizeCategory) =>
     !(typeof category?.name === "string" && category.name.trim().length > 0);
-  // Approve is blocked while any category is both nameless and not excluded (FIX 4).
-  const blockingCount = categories.filter((c, i) => isUnnamed(c) && !excludedCategories.has(i)).length;
+  // Team/institutional prizes (Best Academy, Best School…) are flagged by the trust layer and can
+  // never be imported as player categories (FIX 1) — they are always excluded from the commit.
+  const isTeamPrize = (categoryIdx: number) =>
+    flags.get(`prize_categories[${categoryIdx}].name`)?.reason === "team_prize_detected";
+  // Approve is blocked while any category is both nameless and not excluded (FIX 4). Team prizes
+  // carry a name and are auto-excluded, so they never block.
+  const blockingCount = categories.filter((c, i) => isUnnamed(c) && !excludedCategories.has(i) && !isTeamPrize(i)).length;
   const approveBlocked = blockingCount > 0;
+  // A multi-event brochure: only the primary event was extracted (FIX 3).
+  const multipleTournaments = payload.multiple_tournaments_detected === true;
 
   const setField = (key: keyof Payload, value: unknown) =>
     setPayload((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -300,6 +313,17 @@ export default function BrochureReview() {
             </Button>
           </div>
         </div>
+
+        {/* Multi-event brochure notice (FIX 3): only the primary event was extracted. */}
+        {multipleTournaments && (
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              This brochure appears to contain multiple events. Only the primary event was extracted.
+              The others were not imported.
+            </span>
+          </div>
+        )}
 
         {/* Arithmetic cross-check, recomputed live from the edited values. A mismatch is an
             informational note, not an error: the stated fund is committed as-is (QA #9), and the
@@ -412,14 +436,16 @@ export default function BrochureReview() {
               <CardContent>
                 <Accordion type="multiple" className="w-full">
                   {categories.map((category, categoryIdx) => {
-                    const excluded = excludedCategories.has(categoryIdx);
+                    const teamPrize = isTeamPrize(categoryIdx);
+                    // Team prizes are always excluded; other categories only when the reviewer opts out.
+                    const excluded = excludedCategories.has(categoryIdx) || teamPrize;
                     const unnamed = isUnnamed(category);
                     const prizeCount = category?.prizes?.length ?? 0;
                     return (
                     <AccordionItem
                       key={categoryIdx}
                       value={`category-${categoryIdx}`}
-                      className={excluded ? "opacity-50" : ""}
+                      className={excluded ? "opacity-60" : ""}
                     >
                       {/* Editable category name (FIX 3). Kept a sibling of the trigger, never nested
                           inside it, so typing never toggles the accordion and the markup stays valid. */}
@@ -433,7 +459,12 @@ export default function BrochureReview() {
                             unnamed && !excluded ? "border-amber-400 focus-visible:ring-amber-400" : ""
                           }`}
                         />
-                        {category?.is_main && <Badge variant="secondary">Main</Badge>}
+                        {category?.is_main && !teamPrize && <Badge variant="secondary">Main</Badge>}
+                        {teamPrize && (
+                          <Badge className="border-transparent bg-purple-600 text-white hover:bg-purple-600">
+                            Team Prize
+                          </Badge>
+                        )}
                         {unnamed && !excluded && (
                           <Badge
                             variant="outline"
@@ -446,11 +477,19 @@ export default function BrochureReview() {
                         <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
                           <Checkbox
                             checked={excluded}
+                            disabled={teamPrize}
                             onCheckedChange={(checked) => toggleExcluded(categoryIdx, checked === true)}
                           />
                           Exclude from import
                         </label>
                       </div>
+                      {teamPrize ? (
+                        <p className="pb-2 text-xs text-purple-700 dark:text-purple-300">
+                          This is a team/institutional prize — it cannot be auto-imported. Add it manually under
+                          Team Prizes after creating the tournament.
+                        </p>
+                      ) : (
+                      <>
                       <AccordionTrigger className="py-1 text-xs text-muted-foreground">
                         {prizeCount} prize {prizeCount === 1 ? "row" : "rows"}
                       </AccordionTrigger>
@@ -540,6 +579,8 @@ export default function BrochureReview() {
                           </tbody>
                         </table>
                       </AccordionContent>
+                      </>
+                      )}
                     </AccordionItem>
                     );
                   })}
