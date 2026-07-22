@@ -44,11 +44,9 @@ import { TeamPrizesEditor } from '@/components/team-prizes';
 import { ensureMainCategoryExists, MAIN_CATEGORY_NAME } from "@/pages/TournamentSetup.helpers";
 import { Switch } from "@/components/ui/switch";
 import CopyFromTournamentDialog from "@/components/prizes/CopyFromTournamentDialog";
-import BrochurePrizeDraftDialog from "@/components/prizes/BrochurePrizeDraftDialog";
 import PrizeTemplateImportDialog from "@/components/prizes/PrizeTemplateImportDialog";
 import PrizeTemplateGuideDialog from "@/components/prizes/PrizeTemplateGuideDialog";
 import { downloadPrizeTemplateV1Xlsx, downloadPrizeTemplateXlsx } from "@/utils/excel";
-import { useBrochureParserV2Rollout } from "@/hooks/useBrochureParserV2Rollout";
 
 // Flip to true only when debugging
 const DEBUG = false;
@@ -72,7 +70,6 @@ const asCriteriaJson = (val: unknown): CriteriaJson => {
 
 
 export default function TournamentSetup() {
-  const parserV2Rollout = useBrochureParserV2Rollout();
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -129,8 +126,6 @@ export default function TournamentSetup() {
   const [catDelete, setCatDelete] = useState<{ open: boolean; id?: string; name?: string; prizeCount?: number; confirm?: string }>({ open: false });
   const [copyFromTournamentOpen, setCopyFromTournamentOpen] = useState(false);
   const [copyFromTournamentDetailsOpen, setCopyFromTournamentDetailsOpen] = useState(false);
-  const [brochureDraftOpen, setBrochureDraftOpen] = useState(false);
-  const [brochureDraftV2Open, setBrochureDraftV2Open] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
   const [templateGuideOpen, setTemplateGuideOpen] = useState(false);
 
@@ -1307,8 +1302,8 @@ export default function TournamentSetup() {
         const { url } = await getSignedUrl('brochures', path);
         if (url) setBrochureSignedUrl(url);
 
-        // Auto-save brochure_url to DB so parseBrochurePrizes works
-        // even if user doesn't manually save the Details form
+        // Auto-save brochure_url to DB even if the user doesn't manually
+        // save the Details form.
         const { error: dbErr } = await supabase
           .from('tournaments')
           .update({ brochure_url: path })
@@ -2069,54 +2064,6 @@ export default function TournamentSetup() {
                         </Button>
                       </div>
 
-                      <div className="rounded-md border border-dashed border-border/60 bg-background/40 p-3 space-y-2">
-                        <div>
-                          <p className="text-sm font-medium">Assistive brochure draft</p>
-                          <p className="text-xs text-muted-foreground">
-                            Best-effort extraction. Review before applying.
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-2 text-muted-foreground"
-                          disabled={!tournament?.brochure_url}
-                          title={tournament?.brochure_url ? "Generate a best-effort draft from brochure — review required before applying" : "Upload a brochure on the Details tab first"}
-                          onClick={() => setBrochureDraftOpen(true)}
-                        >
-                          <Upload className="h-4 w-4" />
-                          Generate Draft from Brochure
-                        </Button>
-                        {parserV2Rollout.enabled && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-2 text-muted-foreground"
-                            disabled={!tournament?.brochure_url}
-                            title={tournament?.brochure_url ? "AI-powered brochure parser (beta) — review required before applying" : "Upload a brochure on the Details tab first"}
-                            onClick={() => setBrochureDraftV2Open(true)}
-                          >
-                            <Upload className="h-4 w-4" />
-                            Parse with AI Parser V2 (Beta)
-                          </Button>
-                        )}
-                        {!tournament?.brochure_url && (
-                          <p className="text-xs leading-snug text-muted-foreground">
-                            No brochure uploaded yet — add one in the{" "}
-                            <Button
-                              type="button"
-                              variant="link"
-                              size="sm"
-                              className="h-auto p-0 text-xs align-baseline"
-                              onClick={() => navigate(`/t/${id}/setup?tab=details`)}
-                            >
-                              Details
-                            </Button>{" "}
-                            tab to enable this.
-                          </p>
-                        )}
-                      </div>
-
                       <details className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
                         <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                           Legacy advanced options (v1)
@@ -2153,21 +2100,6 @@ export default function TournamentSetup() {
                       onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
                     />
                     <PrizeTemplateGuideDialog open={templateGuideOpen} onOpenChange={setTemplateGuideOpen} />
-                    <BrochurePrizeDraftDialog
-                      open={brochureDraftOpen}
-                      onOpenChange={setBrochureDraftOpen}
-                      tournamentId={id!}
-                      onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
-                    />
-                    {parserV2Rollout.enabled && (
-                      <BrochurePrizeDraftDialog
-                        open={brochureDraftV2Open}
-                        onOpenChange={setBrochureDraftV2Open}
-                        tournamentId={id!}
-                        parserMode="v2"
-                        onApplied={() => queryClient.invalidateQueries({ queryKey: categoriesQueryKey })}
-                      />
-                    )}
                   </>
                 )}
 
