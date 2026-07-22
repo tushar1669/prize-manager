@@ -167,6 +167,46 @@ describe("trust check", () => {
     );
     expect(confidence).toBe(0.5);
   });
+
+  it("flags institutional/team prize categories and sets has_team_prizes (FIX 1)", () => {
+    const text = "Best Academy trophy. Best School medals. Open prizes ₹5000.";
+    const { payload, flags } = runTrustCheck(
+      {
+        prize_categories: [
+          { name: "Best Academy", prizes: [{ has_trophy: true }] },
+          { name: "Best School", prizes: [{ has_medal: true }] },
+          { name: "Open", prizes: [{ place: 1, cash_amount: 5000 }] },
+        ],
+      },
+      text,
+    );
+    expect(payload.has_team_prizes).toBe(true);
+    const teamFlags = flags.filter((f) => f.reason === "team_prize_detected");
+    expect(teamFlags).toEqual([
+      { field: "prize_categories[0].name", reason: "team_prize_detected", severity: "info", value: "Best Academy" },
+      { field: "prize_categories[1].name", reason: "team_prize_detected", severity: "info", value: "Best School" },
+    ]);
+  });
+
+  it("does not set has_team_prizes when no category is institutional", () => {
+    const { payload, flags } = runTrustCheck(
+      { prize_categories: [{ name: "Open", prizes: [{ place: 1, cash_amount: 5000 }] }] },
+      "Open prizes ₹5000.",
+    );
+    expect(payload.has_team_prizes).toBeUndefined();
+    expect(flags.some((f) => f.reason === "team_prize_detected")).toBe(false);
+  });
+
+  it("exempts the multiple_tournaments_detected meta signal from grounding (FIX 3)", () => {
+    // A boolean the model reports about the brochure's structure is not a quotation, so it must
+    // survive the grounding walk rather than being blanked and flagged.
+    const { payload, flags } = runTrustCheck(
+      { tournament_name: "Kurnool Rapid & Blitz", multiple_tournaments_detected: true },
+      "Kurnool Rapid & Blitz open tournament.",
+    );
+    expect(payload.multiple_tournaments_detected).toBe(true);
+    expect(flags).toHaveLength(0);
+  });
 });
 
 describe("arithmetic check", () => {

@@ -360,6 +360,39 @@ describe("notes fallback for columnless fields (QA #1)", () => {
   });
 });
 
+describe("team prizes are never committed (FIX 1)", () => {
+  it("excludes institutional categories from the commit and logs each in warnings", () => {
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [
+          { name: "Open", is_main: true, prizes: [{ place: 1, cash_amount: 10000 }] },
+          { name: "Best Academy", prizes: [{ place: 1, has_trophy: true }] },
+          { name: "Best School", prizes: [{ place: 1, has_medal: true }] },
+          { name: "Best College", prizes: [{ place: 1, has_trophy: true }] },
+        ],
+      }),
+      OWNER,
+    );
+    expect(result.categories.map((c) => c.name)).toEqual(["Open"]);
+    expect(result.warnings.filter((w) => w.includes("team prize"))).toEqual([
+      'team prize "Best Academy" excluded from import (add it manually under Team Prizes)',
+      'team prize "Best School" excluded from import (add it manually under Team Prizes)',
+      'team prize "Best College" excluded from import (add it manually under Team Prizes)',
+    ]);
+  });
+
+  it("keeps a category whose name merely contains a team word as a substring, not a whole word", () => {
+    // Word-boundary matching: "Schoolboys" is not "School". (Guards against over-exclusion.)
+    const result = mapPayloadToTables(
+      basePayload({
+        prize_categories: [{ name: "Schooling Veterans", is_main: true, prizes: [{ place: 1, cash_amount: 5000 }] }],
+      }),
+      OWNER,
+    );
+    expect(result.categories.map((c) => c.name)).toEqual(["Schooling Veterans"]);
+  });
+});
+
 describe("mapping is deterministic and non-mutating", () => {
   // True commit idempotency is enforced by the FOR UPDATE lock on extractions.linked_tournament_id
   // in commit_extraction_transaction; what the mapper owes is that running it twice over the same
