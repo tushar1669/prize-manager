@@ -1,4 +1,4 @@
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 
 export function normalizeGeminiModel(
   rawModel: string | undefined | null,
