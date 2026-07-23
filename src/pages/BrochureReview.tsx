@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertTriangle, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +56,7 @@ type Payload = {
   aicf_rated?: boolean | null;
   fide_rated?: boolean | null;
   multiple_tournaments_detected?: boolean | null;
+  detected_tournament_names?: string[] | null;
   prize_categories?: PrizeCategory[] | null;
   [key: string]: unknown;
 };
@@ -92,6 +94,9 @@ export default function BrochureReview() {
   // Categories the reviewer has explicitly opted out of importing (FIX 4). Keyed by index, which is
   // stable here because this screen never reorders categories.
   const [excludedCategories, setExcludedCategories] = useState<Set<number>>(new Set());
+  // Multi-event chooser (Phase G): which detected event the organizer picked to re-extract. Empty
+  // string means no choice made yet — the re-extract CTA stays disabled.
+  const [selectedEvent, setSelectedEvent] = useState<string>("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["brochure-extraction", extractionId],
@@ -195,6 +200,43 @@ export default function BrochureReview() {
     },
   });
 
+  // Multi-event chooser (Phase G): re-run /extract scoped to the event the organizer picked. The
+  // document_id comes from the current extraction, so the same stored OCR is reused server-side
+  // (Pass-1 is skipped) and only Pass-2 runs against the chosen event. On success we navigate to
+  // the review page for the new extraction, which has multiple_tournaments_detected=false.
+  const reExtractMutation = useMutation({
+    mutationFn: async () => {
+      const documentId = data?.extraction?.document_id;
+      if (!documentId) throw new Error("No document to re-extract");
+      if (!selectedEvent) throw new Error("Choose an event first");
+      const { data: result, error: fnError } = await supabase.functions.invoke("extract", {
+        body: { document_id: documentId, target_event: selectedEvent },
+      });
+      if (fnError) {
+        const context = (fnError as { context?: Response }).context;
+        if (context instanceof Response) {
+          const body = await context.json().catch(() => null);
+          throw new Error(body?.message ?? "Re-extraction failed");
+        }
+        throw fnError;
+      }
+      const newId = result?.extraction_id;
+      if (typeof newId !== "string") throw new Error("Re-extraction returned no extraction");
+      return newId;
+    },
+    onSuccess: (newId) => {
+      toast.success("Re-extracted for the selected event");
+      // Fresh review of the targeted event; reset local state by remounting on the new id.
+      setPayload(null);
+      setExcludedCategories(new Set());
+      setSelectedEvent("");
+      navigate(`/import/brochure/${newId}`);
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Re-extraction failed");
+    },
+  });
+
   if (isLoading || !payload) {
     return (
       <div className="min-h-screen bg-background">
@@ -228,6 +270,15 @@ export default function BrochureReview() {
   const approveBlocked = blockingCount > 0;
   // A multi-event brochure: only the primary event was extracted (FIX 3).
   const multipleTournaments = payload.multiple_tournaments_detected === true;
+  // Phase G chooser: the distinct event names the model named for this multi-event brochure.
+  const detectedEvents = Array.isArray(payload.detected_tournament_names)
+    ? payload.detected_tournament_names.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    : [];
+  const currentEventName = typeof payload.tournament_name === "string" ? payload.tournament_name : "";
+  // CASE 1: we have ≥ 2 named events, so the organizer can pick one to re-extract. CASE 2: multi-event
+  // was flagged but the model named fewer than two, so there is no target to re-extract for.
+  const showEventChooser = multipleTournaments && detectedEvents.length >= 2;
+  const showStaticMultiBanner = multipleTournaments && detectedEvents.length < 2;
 
   const setField = (key: keyof Payload, value: unknown) =>
     setPayload((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -314,8 +365,67 @@ export default function BrochureReview() {
           </div>
         </div>
 
-        {/* Multi-event brochure notice (FIX 3): only the primary event was extracted. */}
-        {multipleTournaments && (
+        {/* CASE 1 (Phase G) — a multi-event brochure whose events the model named: let the organizer
+            pick one and re-extract for it. The current event is marked but NOT pre-selected, forcing
+            a conscious choice. */}
+        {showEventChooser && (
+          <Card className="mb-4 border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                This brochure contains {detectedEvents.length} events
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <RadioGroup
+                value={selectedEvent}
+                onValueChange={setSelectedEvent}
+                disabled={reExtractMutation.isPending}
+              >
+                {detectedEvents.map((name, i) => {
+                  const isCurrent = name.trim() === currentEventName.trim();
+                  return (
+                    <div key={`${name}-${i}`} className="flex items-start gap-2">
+                      <RadioGroupItem value={name} id={`event-${i}`} className="mt-0.5" />
+                      <Label htmlFor={`event-${i}`} className="cursor-pointer text-sm font-normal text-amber-900 dark:text-amber-100">
+                        {name}
+                        {isCurrent && (
+                          <span className="ml-2 text-xs text-amber-700 dark:text-amber-300">(currently shown)</span>
+                        )}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => reExtractMutation.mutate()}
+                  disabled={
+                    reExtractMutation.isPending ||
+                    !selectedEvent ||
+                    selectedEvent.trim() === currentEventName.trim()
+                  }
+                  className="gap-2"
+                >
+                  {reExtractMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {reExtractMutation.isPending ? "Re-extracting…" : "Re-extract for selected event"}
+                </Button>
+              </div>
+              {reExtractMutation.isError && (
+                <p className="text-sm text-destructive">
+                  {reExtractMutation.error instanceof Error ? reExtractMutation.error.message : "Re-extraction failed"}
+                </p>
+              )}
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                If the event shown below is what you want, skip this and proceed with the review.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CASE 2 (FIX 3) — multi-event was flagged but the model did not name the events, so there is
+            no target to re-extract for. Graceful degradation: the original static notice. */}
+        {showStaticMultiBanner && (
           <div className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>

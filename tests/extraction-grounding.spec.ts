@@ -10,6 +10,7 @@ import {
   runTrustCheck,
 } from "../supabase/functions/extract/trustCheck";
 import { toGeminiResponseSchema } from "../supabase/functions/extract/responseSchema";
+import { extractionPrompt } from "../supabase/functions/extract/extractionPrompt";
 
 const groundedIn = (text: string, value: number) =>
   groundNumber(value, text, extractNumericTokens(text)).grounded;
@@ -207,6 +208,29 @@ describe("trust check", () => {
     expect(payload.multiple_tournaments_detected).toBe(true);
     expect(flags).toHaveLength(0);
   });
+
+  it("exempts detected_tournament_names from grounding (Phase G)", () => {
+    // The model-generated event names are metadata, not quotations to verify against the OCR text —
+    // they must survive the grounding walk intact and never be flagged, even when the exact strings
+    // do not appear verbatim in the transcription.
+    const { payload, flags } = runTrustCheck(
+      {
+        tournament_name: "Kurnool Rapid & Blitz",
+        multiple_tournaments_detected: true,
+        detected_tournament_names: [
+          "International Fide Rating Open Rapid Chess Tournament",
+          "International Fide Rating Open Blitz Chess Tournament",
+        ],
+      },
+      // The tournament_name is present so it grounds; the two event names deliberately are not.
+      "Kurnool Rapid & Blitz — a two-event brochure. The individual event names are not repeated here.",
+    );
+    expect(payload.detected_tournament_names).toEqual([
+      "International Fide Rating Open Rapid Chess Tournament",
+      "International Fide Rating Open Blitz Chess Tournament",
+    ]);
+    expect(flags).toHaveLength(0);
+  });
 });
 
 describe("arithmetic check", () => {
@@ -314,5 +338,24 @@ describe("Gemini response schema conversion", () => {
   it("leaves array items non-nullable", () => {
     const converted = toGeminiResponseSchema(source);
     expect(converted.properties?.prize_categories.items?.type).toBe("object");
+  });
+});
+
+describe("targeted extraction prompt (Phase G)", () => {
+  const schema = { type: "object", properties: { tournament_name: { type: "string" } } };
+
+  it("puts the IMPORTANT targeting directive first when target_event is supplied", () => {
+    const prompt = extractionPrompt(schema, "some transcription", "3rd Open Blitz Tournament 2025");
+    // The directive must frame the whole task, so it comes before the schema and every rule.
+    expect(prompt.startsWith("IMPORTANT")).toBe(true);
+    expect(prompt).toContain("3rd Open Blitz Tournament 2025");
+    // It also instructs the model to clear the multi-event signals for the scoped run.
+    expect(prompt).toContain("Set multiple_tournaments_detected to false and detected_tournament_names to []");
+  });
+
+  it("emits no targeting preamble for an ordinary (untargeted) extraction", () => {
+    const prompt = extractionPrompt(schema, "some transcription");
+    expect(prompt.startsWith("IMPORTANT")).toBe(false);
+    expect(prompt.startsWith("You extract structured data")).toBe(true);
   });
 });
