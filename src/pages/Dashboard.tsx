@@ -78,6 +78,26 @@ export default function Dashboard() {
     enabled: !!user && authzStatus === 'ready'
   });
 
+  // Which of the user's tournaments came from a committed brochure import — used only to label
+  // the "In Progress" drafts. RLS scopes extractions to the caller's own uploads, so this returns
+  // just their rows; any error degrades to "no label" rather than breaking the dashboard.
+  const { data: importedTournamentIds } = useQuery({
+    queryKey: ['imported-tournament-ids', user?.id],
+    enabled: !!user && authzStatus === 'ready',
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('extractions')
+        .select('linked_tournament_id')
+        .eq('status', 'approved')
+        .not('linked_tournament_id', 'is', null);
+      if (error) {
+        console.warn('[dashboard] imported-ids lookup failed; skipping brochure labels', error);
+        return new Set<string>();
+      }
+      return new Set((data ?? []).map((row) => row.linked_tournament_id as string));
+    },
+  });
+
   // Create tournament mutation
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -147,6 +167,18 @@ export default function Dashboard() {
       t.city?.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
+
+  // Drafts get their own "In Progress" section so an imported (or half-built) tournament is easy to
+  // find and continue; everything else keeps the existing published/live list unchanged.
+  const inProgressDrafts = filteredTournaments.filter((t: DashboardTournament) => t.status === 'draft');
+  const otherTournaments = filteredTournaments.filter((t: DashboardTournament) => t.status !== 'draft');
+
+  const formatCreated = (value: string | null | undefined) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
 
   const handleResume = (id: string, status: string) => {
     if (status === 'draft') {
@@ -251,7 +283,35 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {filteredTournaments && filteredTournaments.length > 0 ? (
+        {inProgressDrafts.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-foreground mb-3">In Progress</h2>
+            <div className="bg-card rounded-lg border border-border divide-y divide-border">
+              {inProgressDrafts.map((tournament) => (
+                <div key={tournament.id} className="flex items-center justify-between gap-4 p-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground truncate">{tournament.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatCreated(tournament.created_at) && `Created ${formatCreated(tournament.created_at)}`}
+                      {formatCreated(tournament.created_at) && ' · '}
+                      {importedTournamentIds?.has(tournament.id) ? 'Created from brochure import' : 'Draft'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => navigate(`/t/${tournament.id}/setup?tab=details`)}
+                  >
+                    Continue Setup →
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {otherTournaments.length > 0 ? (
           <div className="bg-card rounded-lg border border-border">
             <Table>
               <TableHeader>
@@ -264,7 +324,7 @@ export default function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTournaments.map((tournament) => (
+                {otherTournaments.map((tournament) => (
                   <TableRow key={tournament.id} className="border-border">
                     <TableCell className="font-medium text-foreground">{tournament.title}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -310,7 +370,7 @@ export default function Dashboard() {
               </TableBody>
             </Table>
           </div>
-        ) : (
+        ) : inProgressDrafts.length === 0 ? (
           <div className="bg-card rounded-lg border border-border p-12 text-center">
             <p className="text-muted-foreground mb-4">
               {searchQuery ? 'No tournaments match your search' : 'No tournaments yet'}
@@ -322,7 +382,7 @@ export default function Dashboard() {
               </Button>
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <BrochureImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />

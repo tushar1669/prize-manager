@@ -1925,12 +1925,6 @@ export type Database = {
           enabled: boolean
         }[]
       }
-      get_brochure_parser_v2_rollout_state: {
-        Args: never
-        Returns: {
-          enabled: boolean
-        }[]
-      }
       get_or_create_my_referral_code: { Args: never; Returns: Json }
       get_public_tournament_results: {
         Args: { tournament_id: string }
@@ -2069,12 +2063,6 @@ export type Database = {
         Returns: Json
       }
       set_brochure_import_rollout_state: {
-        Args: { p_enabled: boolean }
-        Returns: {
-          enabled: boolean
-        }[]
-      }
-      set_brochure_parser_v2_rollout_state: {
         Args: { p_enabled: boolean }
         Returns: {
           enabled: boolean

@@ -110,11 +110,13 @@ const EXEMPT_LEAVES = new Set(["is_main", "currency"]);
 
 /**
  * Engine signals, not claims the document makes: `multiple_tournaments_detected` is the model's
- * meta-observation that the brochure holds more than one event, and `has_team_prizes` is set by
- * this trust layer itself. Neither quotes the text, so grounding would blank them — they are
- * exempt regardless of value.
+ * meta-observation that the brochure holds more than one event, `detected_tournament_names` is the
+ * list of event names it named for that observation, and `has_team_prizes` is set by this trust
+ * layer itself. None quotes the text as a value to ground against, so grounding would blank them —
+ * they are exempt regardless of value. (leafName strips the trailing [n], so each array element of
+ * detected_tournament_names matches this set.)
  */
-const META_LEAVES = new Set(["multiple_tournaments_detected", "has_team_prizes"]);
+const META_LEAVES = new Set(["multiple_tournaments_detected", "detected_tournament_names", "has_team_prizes"]);
 
 function leafName(path: string): string {
   const last = path.split(".").pop() ?? path;
