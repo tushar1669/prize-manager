@@ -13,6 +13,8 @@
  * into criteria_json; that decision was made deliberately and reversed once already.
  */
 
+import { ISO_DATE_RE, TEAM_PRIZE_NAME } from "../_shared/constants.ts";
+
 export type PayloadPrize = {
   place?: number | null;
   rank_from?: number | null;
@@ -113,8 +115,6 @@ export class MappingError extends Error {
   }
 }
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 /** Ranges wider than this are almost certainly an extraction error, not a prize table. */
 const MAX_RANK_SPAN = 200;
 
@@ -122,10 +122,10 @@ const MAX_RANK_SPAN = 200;
  * Institutional/team prizes are managed via institution_prize_groups, never as player categories
  * (QA #1). The trust layer flags them as team_prize_detected and the review UI locks them out of
  * import; this is the commit-side backstop. It matches by name — the same rule the trust layer uses
- * (extract/trustCheck.ts TEAM_PRIZE_NAME) — rather than by flag index, so it is unaffected by the
- * review screen dropping other excluded categories and shifting every later index.
+ * (TEAM_PRIZE_NAME in _shared/constants.ts, shared with the trust layer) — rather than by flag
+ * index, so it is unaffected by the review screen dropping other excluded categories and shifting
+ * every later index.
  */
-const TEAM_PRIZE_NAME = /\b(academy|school|library|club|college|institution)\b/i;
 
 function cleanString(value: unknown): string | null {
   if (typeof value !== "string") return null;

@@ -24,7 +24,7 @@ import { openPdfForRaster, RasterError } from "./pdfRaster.ts";
 import { extractionPrompt } from "./extractionPrompt.ts";
 
 const FUNCTION_NAME = "extract";
-const BUILD_VERSION = "2026-07-24T00:00:00Z";
+const BUILD_VERSION = "2026-07-25T00:00:00Z";
 const STORAGE_BUCKET = "extraction-uploads";
 
 /**
