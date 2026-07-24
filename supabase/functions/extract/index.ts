@@ -17,20 +17,19 @@ import {
   parseFallbackModels,
   parseProviderErrorDiagnostics,
   readProviderErrorBodyCapped,
-} from "../parseBrochurePrizesV2/geminiProvider.ts";
+} from "../_shared/geminiProvider.ts";
 import { toGeminiResponseSchema, type JsonSchema } from "./responseSchema.ts";
 import { decideStatus, runArithmeticCheck, runTrustCheck, type FieldFlag } from "./trustCheck.ts";
 import { openPdfForRaster, RasterError } from "./pdfRaster.ts";
 import { extractionPrompt } from "./extractionPrompt.ts";
 
 const FUNCTION_NAME = "extract";
-const BUILD_VERSION = "2026-07-19T03:00:00Z";
+const BUILD_VERSION = "2026-07-24T00:00:00Z";
 const STORAGE_BUCKET = "extraction-uploads";
 
 /**
- * Pass-1 fallback models, tried in order after the primary. Deliberately not geminiProvider's
- * DEFAULT_GEMINI_MODEL: that constant is shared with parseBrochurePrizesV2 and currently names a
- * retired model (gemini-2.5-flash 404s on this key), so pointing OCR at it re-creates the bug.
+ * Pass-1 fallback models, tried in order after the primary. Separate from geminiProvider's
+ * DEFAULT_GEMINI_MODEL so the OCR fallback chain can be tuned independently of the Pass-2 default.
  * Override with EXTRACT_OCR_FALLBACK_MODELS (comma-separated). An id that no longer exists costs
  * one fast 404 and falls through to the next.
  */

@@ -6,7 +6,7 @@ import {
   normalizeGeminiModel,
   parseFallbackModels,
   parseRetryAfterSeconds,
-} from "../supabase/functions/parseBrochurePrizesV2/geminiProvider";
+} from "../supabase/functions/_shared/geminiProvider";
 
 describe("Parser V2 Gemini provider helpers", () => {
   it("normalizes Gemini model ids for the Google Gemini API endpoint", () => {
