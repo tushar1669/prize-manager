@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Navigate } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface MissingSnapshot {
   tournament_id: string;
@@ -20,6 +22,7 @@ type RowStatus =
   | { state: "error"; message: string };
 
 export default function AdminTeamSnapshots() {
+  const { is_master } = useUserRole();
   const queryClient = useQueryClient();
   const [rowStatuses, setRowStatuses] = useState<Record<string, RowStatus>>({});
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -72,6 +75,9 @@ export default function AdminTeamSnapshots() {
     },
     [backfillOne, queryClient]
   );
+
+  // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  if (!is_master) return <Navigate to="/dashboard" replace />;
 
   if (isLoading) {
     return (

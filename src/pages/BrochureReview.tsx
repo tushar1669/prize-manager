@@ -323,6 +323,10 @@ export default function BrochureReview() {
   const statedFund = typeof payload.total_prize_fund === "number" ? payload.total_prize_fund : null;
   const computedSum = computedCashSum(payload);
   const sumOk = statedFund === null || Math.abs(computedSum - statedFund) <= SUM_TOLERANCE_INR;
+  // With neither a stated fund nor any itemised cash, the sum panel would render a green
+  // "₹— · ₹0" that reads as a successful match when there is simply nothing to compare.
+  // Suppress it entirely in that case. The sum_mismatch flag logic is untouched.
+  const hasSumData = computedSum !== 0 || (statedFund !== null && statedFund !== 0);
 
   const categories = payload.prize_categories ?? [];
   const isUnnamed = (category: PrizeCategory) =>
@@ -510,6 +514,7 @@ export default function BrochureReview() {
         {/* Arithmetic cross-check, recomputed live from the edited values. A mismatch is an
             informational note, not an error: the stated fund is committed as-is (QA #9), and the
             organizer may legitimately have a printed total that differs from the itemised rows. */}
+        {hasSumData && (
         <div
           className={`mb-4 flex items-center gap-3 rounded-lg border p-3 text-sm ${
             sumOk
@@ -533,6 +538,7 @@ export default function BrochureReview() {
             </span>
           )}
         </div>
+        )}
 
         {approveBlocked && (
           <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
@@ -639,7 +645,12 @@ export default function BrochureReview() {
                     const prizeCount = category?.prizes?.length ?? 0;
                     return (
                     <AccordionItem
-                      key={categoryIdx}
+                      // Positional key: the payload has no per-category id, and categories are
+                      // never reordered/inserted/removed here (edits are in-place; exclusion is a
+                      // separate Set). Keying by the editable name instead would remount this
+                      // subtree on every keystroke and drop input focus, so index is the correct,
+                      // stable identity. Namespaced to avoid collision with the prize-row keys.
+                      key={`category-${categoryIdx}`}
                       value={`category-${categoryIdx}`}
                       className={excluded ? "opacity-60" : ""}
                     >
@@ -681,8 +692,9 @@ export default function BrochureReview() {
                       </div>
                       {teamPrize ? (
                         <p className="pb-2 text-xs text-purple-700 dark:text-purple-300">
-                          This is a team/institutional prize — it cannot be auto-imported. Add it manually under
-                          Team Prizes after creating the tournament.
+                          This is a team or institutional prize and cannot be auto-imported.
+                          After approving this brochure, open the tournament in setup, go to the
+                          Prizes tab, and add it there under Team Prizes.
                         </p>
                       ) : (
                       <>
@@ -718,7 +730,11 @@ export default function BrochureReview() {
                                   ? "bg-sky-50/70 dark:bg-sky-900/20"
                                   : "";
                               return (
-                                <tr key={prizeIdx} className={rowClass}>
+                                // Positional key: prize rows have no id, and null-rank gift rows
+                                // make rank_from/rank_to non-unique — the rows are never reordered,
+                                // so index is stable. Namespaced by category so keys stay unique
+                                // across the whole accordion.
+                                <tr key={`prize-${categoryIdx}-${prizeIdx}`} className={rowClass}>
                                   <td className="py-1 pr-2 whitespace-nowrap">
                                     {prizeLabel(prize)}
                                     {giftOnly && (

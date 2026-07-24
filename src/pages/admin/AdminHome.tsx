@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +11,7 @@ import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 import { ADMIN_SECTIONS } from "@/components/admin/adminSections";
 
 export default function AdminHome() {
+  const { is_master } = useUserRole();
   const { data: publishDriftRows, isLoading: publishDriftLoading } = useQuery({
     queryKey: ["admin-publish-state-drift"],
     queryFn: async () => {
@@ -28,6 +30,9 @@ export default function AdminHome() {
       }>;
     },
   });
+
+  // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="space-y-6">

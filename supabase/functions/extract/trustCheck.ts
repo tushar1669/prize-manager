@@ -17,6 +17,7 @@ import {
   normalizeText,
   type GroundingHit,
 } from "./grounding.ts";
+import { ISO_DATE_RE, TEAM_PRIZE_NAME } from "../_shared/constants.ts";
 
 export type FieldFlag = {
   field: string;
@@ -32,9 +33,9 @@ export type FieldFlag = {
  * Institutional/team prizes (Best Academy, Best School, …) are awarded to a team, not a player.
  * Prize Manager tracks them through institution_prize_groups, configured by the organizer — they
  * must never be committed as ordinary player categories. This is a naming signal, so it lives in
- * the deterministic trust layer, not the model.
+ * the deterministic trust layer, not the model. TEAM_PRIZE_NAME lives in _shared/constants.ts
+ * so the commit mapper matches this regex byte-for-byte.
  */
-const TEAM_PRIZE_NAME = /\b(academy|school|library|club|college|institution)\b/i;
 
 export type GroundingMap = Record<string, GroundingHit>;
 
@@ -90,8 +91,6 @@ function pruneStructuralNoise(payload: Record<string, unknown>): { nameless: num
   if (nameless > 0 || empty > 0) payload.prize_categories = kept;
   return { nameless, empty };
 }
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Booleans assert something no literal in the text can confirm, so they are grounded by the

@@ -8,6 +8,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { useMartechMetrics } from "@/hooks/useMartechMetrics";
 import { useMartechDrilldown, type DrilldownSelection, type DrilldownChart } from "@/hooks/useMartechDrilldown";
 import { MartechDrilldownPanel } from "@/components/admin/MartechDrilldownPanel";
+import { useUserRole } from "@/hooks/useUserRole";
+import { Navigate } from "react-router-dom";
 
 interface AdminMartechProps {
   embeddedInAdmin?: boolean;
@@ -29,6 +31,7 @@ function EmptyText({ text = "No data yet" }: { text?: string }) {
 }
 
 export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechProps) {
+  const { is_master } = useUserRole();
   const [from, setFrom] = useState<Date | null>(null);
   const [to, setTo] = useState<Date | null>(null);
   const [selected, setSelected] = useState<DrilldownSelection>(null);
@@ -86,6 +89,10 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
       onClose={() => setSelected(null)}
     />
   ) : null;
+
+  // Defense-in-depth: this page already sits behind the /admin route's requireMaster guard;
+  // this in-component check is the second layer. Placed after all hooks to respect rules-of-hooks.
+  if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className={embeddedInAdmin ? "px-0 py-0" : "container mx-auto px-6 py-8 max-w-7xl"}>

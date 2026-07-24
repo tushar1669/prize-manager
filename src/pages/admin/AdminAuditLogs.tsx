@@ -10,6 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { AlertCircle, Search, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Navigate } from "react-router-dom";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const PAGE_SIZE = 25;
 
@@ -39,6 +41,7 @@ interface AdminAuditLogsProps {
 }
 
 export default function AdminAuditLogs({ embeddedInAdmin = false }: AdminAuditLogsProps) {
+  const { is_master } = useUserRole();
   const [from, setFrom] = useState<Date | null>(null);
   const [to, setTo] = useState<Date | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>("all");
@@ -118,6 +121,9 @@ export default function AdminAuditLogs({ embeddedInAdmin = false }: AdminAuditLo
     setSearchQuery(value);
     setPage(0);
   }, []);
+
+  // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className={embeddedInAdmin ? "px-0 py-0" : "container mx-auto px-6 py-8 max-w-7xl"}>

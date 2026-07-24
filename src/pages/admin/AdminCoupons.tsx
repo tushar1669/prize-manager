@@ -3,9 +3,15 @@ import { Ticket, BarChart3 } from "lucide-react";
 import { CouponCodesPanel } from "@/components/admin/coupons/CouponCodesPanel";
 import { CouponAnalyticsPanel } from "@/components/admin/coupons/CouponAnalyticsPanel";
 import { useCouponsAdmin } from "@/hooks/useCouponsAdmin";
+import { useUserRole } from "@/hooks/useUserRole";
+import { Navigate } from "react-router-dom";
 
 export default function AdminCoupons() {
   const couponsAdmin = useCouponsAdmin();
+  const { is_master } = useUserRole();
+
+  // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="space-y-6">
