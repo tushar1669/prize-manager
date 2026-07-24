@@ -148,10 +148,34 @@ export default function BrochureImportDialog({ open, onOpenChange }: BrochureImp
         stageTimers.current.push(window.setTimeout(() => setStage("extracting"), 20_000));
         stageTimers.current.push(window.setTimeout(() => setStage("checking"), 45_000));
 
-        // invoke() sends the user's session JWT; the extract gateway requires it.
-        const { data, error: fnError } = await supabase.functions.invoke("extract", {
-          body: { document_id: doc.id },
-        });
+        // FIX B-1 — bound the extract call at 120s so a hung request never leaves the dialog spinning
+        // forever. The AbortController fires the timeout; on abort we surface an inline retry message
+        // and keep the dialog open so the organizer can retry or fall back to manual setup.
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 120_000);
+        let invokeResult: Awaited<ReturnType<typeof supabase.functions.invoke>>;
+        try {
+          // invoke() sends the user's session JWT; the extract gateway requires it.
+          invokeResult = await supabase.functions.invoke("extract", {
+            body: { document_id: doc.id },
+            signal: controller.signal,
+          });
+        } catch (invokeErr) {
+          clearTimers();
+          if (controller.signal.aborted) {
+            setError({
+              title: "Extraction is taking longer than expected",
+              detail:
+                "Please try again — if it keeps failing, use manual tournament setup instead.",
+            });
+            setStage("error");
+            return;
+          }
+          throw invokeErr;
+        } finally {
+          window.clearTimeout(timer);
+        }
+        const { data, error: fnError } = invokeResult;
         clearTimers();
 
         if (fnError) {
@@ -172,6 +196,8 @@ export default function BrochureImportDialog({ open, onOpenChange }: BrochureImp
         navigate(`/import/brochure/${extractionId}`);
       } catch (err) {
         clearTimers();
+        // FIX H-1 — keep the raw error for debugging but never surface it to the user.
+        console.error("[brochure-import] extraction failed", err);
         setError({
           title: "Extraction didn't complete",
           detail: err instanceof Error && err.message.includes("row-level security")

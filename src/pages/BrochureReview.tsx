@@ -104,10 +104,13 @@ export default function BrochureReview() {
     queryFn: async () => {
       const { data: extraction, error: extErr } = await supabase
         .from("extractions")
-        .select("id, payload, field_flags, confidence, status, linked_tournament_id, document_id")
+        .select("id, payload, field_flags, confidence, status, review_notes, linked_tournament_id, document_id")
         .eq("id", extractionId!)
         .maybeSingle();
-      if (extErr) throw extErr;
+      if (extErr) {
+        console.error("[brochure-review] failed to load extraction", extErr);
+        throw extErr;
+      }
       if (!extraction) throw new Error("Extraction not found");
 
       const { data: document, error: docErr } = await supabase
@@ -115,7 +118,10 @@ export default function BrochureReview() {
         .select("id, file_name, file_path, mime_type")
         .eq("id", extraction.document_id)
         .maybeSingle();
-      if (docErr) throw docErr;
+      if (docErr) {
+        console.error("[brochure-review] failed to load document", docErr);
+        throw docErr;
+      }
       return { extraction, document };
     },
   });
@@ -178,7 +184,10 @@ export default function BrochureReview() {
       navigate(`/t/${tournamentId}/setup?tab=details`);
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Commit failed");
+      console.error("[brochure-review] commit failed", err);
+      toast.error(
+        "Something went wrong saving your tournament. Try approving again, or contact support if it persists.",
+      );
     },
   });
 
@@ -196,7 +205,8 @@ export default function BrochureReview() {
       navigate("/dashboard");
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Could not discard");
+      console.error("[brochure-review] discard failed", err);
+      toast.error("Couldn't discard this extraction. Please try again.");
     },
   });
 
@@ -233,20 +243,77 @@ export default function BrochureReview() {
       navigate(`/import/brochure/${newId}`);
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Re-extraction failed");
+      console.error("[brochure-review] re-extraction failed", err);
+      toast.error("Re-extraction failed. Try again or continue with the currently extracted data.");
     },
   });
+
+  // FIX B-4 — a failed extraction has no usable payload; never render the review form for it. This
+  // check runs before the loading/empty-payload guard so an error row shows the error card, not a
+  // perpetual spinner (an error extraction can have a null payload).
+  if (data?.extraction?.status === "error") {
+    // `extractions` has no dedicated error_message column, so surface a stored review note if one
+    // exists, otherwise a generic explanation. Never surface a raw server/DB string here.
+    const note =
+      typeof data.extraction.review_notes === "string" && data.extraction.review_notes.trim().length > 0
+        ? data.extraction.review_notes
+        : "We couldn't extract data from this brochure.";
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="flex items-center justify-center px-6 py-24">
+          <Card className="w-full max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Extraction failed</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">{note}</p>
+              <div className="flex justify-center gap-2">
+                <Button variant="outline" onClick={() => navigate("/dashboard")}>
+                  Try again
+                </Button>
+                {/* Manual setup starts from the dashboard's "Create Tournament" flow — there is no
+                    standalone /t/new create route. */}
+                <Button onClick={() => navigate("/dashboard")}>Set up manually</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // FIX H-1 — a load failure (RLS, missing row, network) must show a human message with a next step,
+  // never the raw error. The raw error is logged in the queryFn for debugging.
+  if (!isLoading && error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="flex items-center justify-center px-6 py-24">
+          <Card className="w-full max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Couldn't load this extraction</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Go back to the dashboard and try re-opening it.
+              </p>
+              <div className="flex justify-center">
+                <Button onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !payload) {
     return (
       <div className="min-h-screen bg-background">
         <AppNav />
         <div className="flex items-center justify-center py-24">
-          {error ? (
-            <p className="text-destructive">{error instanceof Error ? error.message : "Could not load extraction"}</p>
-          ) : (
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          )}
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </div>
     );
@@ -267,7 +334,12 @@ export default function BrochureReview() {
   // Approve is blocked while any category is both nameless and not excluded (FIX 4). Team prizes
   // carry a name and are auto-excluded, so they never block.
   const blockingCount = categories.filter((c, i) => isUnnamed(c) && !excludedCategories.has(i) && !isTeamPrize(i)).length;
-  const approveBlocked = blockingCount > 0;
+  // FIX E-1 — Approve must also block when nothing committable remains (every category excluded or
+  // auto-excluded as a team prize) or when the tournament has no title. Both would otherwise let the
+  // organizer commit an empty or untitled tournament.
+  const validCategoryCount = categories.filter((_, i) => !excludedCategories.has(i) && !isTeamPrize(i)).length;
+  const titleMissing = !(typeof payload.tournament_name === "string" && payload.tournament_name.trim().length > 0);
+  const approveBlocked = blockingCount > 0 || validCategoryCount === 0 || titleMissing;
   // A multi-event brochure: only the primary event was extracted (FIX 3).
   const multipleTournaments = payload.multiple_tournaments_detected === true;
   // Phase G chooser: the distinct event names the model named for this multi-event brochure.
@@ -413,7 +485,7 @@ export default function BrochureReview() {
               </div>
               {reExtractMutation.isError && (
                 <p className="text-sm text-destructive">
-                  {reExtractMutation.error instanceof Error ? reExtractMutation.error.message : "Re-extraction failed"}
+                  Re-extraction failed. Try again or continue with the currently extracted data.
                 </p>
               )}
               <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -463,12 +535,26 @@ export default function BrochureReview() {
         </div>
 
         {approveBlocked && (
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>
-              {blockingCount} categor{blockingCount === 1 ? "y is" : "ies are"} still unnamed. Give each a name or
-              tick "Exclude from import" before approving.
-            </span>
+          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+            {blockingCount > 0 && (
+              <span className="flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {blockingCount} categor{blockingCount === 1 ? "y is" : "ies are"} still unnamed. Give each a name or
+                tick "Exclude from import" before approving.
+              </span>
+            )}
+            {titleMissing && (
+              <span className="flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Tournament title is required before approving.
+              </span>
+            )}
+            {validCategoryCount === 0 && (
+              <span className="flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                No categories remain to import — un-exclude at least one or edit the brochure and re-run.
+              </span>
+            )}
           </div>
         )}
 
