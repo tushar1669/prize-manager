@@ -1919,6 +1919,7 @@ export type Database = {
           tournament_title: string
         }[]
       }
+      expire_stuck_extraction_documents: { Args: never; Returns: undefined }
       get_brochure_import_rollout_state: {
         Args: never
         Returns: {
