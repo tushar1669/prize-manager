@@ -37,8 +37,11 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const brochureImport = useBrochureImportRollout();
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string }>(
-    { open: false, tournamentId: null, title: "" }
+  // `mode` distinguishes the two entry points into the same archive path: the published-list "trash"
+  // action and the In Progress "discard import" action (FIX D-4). Both call deleteMutation; only the
+  // confirm copy differs.
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; tournamentId: string | null; title: string; mode: 'trash' | 'discard' }>(
+    { open: false, tournamentId: null, title: "", mode: 'trash' }
   );
   // CRITICAL: Non-masters only see their own tournaments (include_all=false)
   // Master status requires BOTH role=master AND email in allowlist (enforced in useUserRole)
@@ -297,14 +300,27 @@ export default function Dashboard() {
                       {importedTournamentIds?.has(tournament.id) ? 'Created from brochure import' : 'Draft'}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => navigate(`/t/${tournament.id}/setup?tab=details`)}
-                  >
-                    Continue Setup →
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/t/${tournament.id}/setup?tab=details`)}
+                    >
+                      Continue Setup →
+                    </Button>
+                    {/* FIX D-4 — draft rows in the In Progress section previously had no discard
+                        action (the trash button lived only in the non-draft list). Reuses the same
+                        archive path; the brochure file and extracted data are untouched. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Discard draft"
+                      onClick={() => setDeleteDialog({ open: true, tournamentId: tournament.id, title: tournament.title, mode: 'discard' })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -358,7 +374,7 @@ export default function Dashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setDeleteDialog({ open: true, tournamentId: tournament.id, title: tournament.title })}
+                            onClick={() => setDeleteDialog({ open: true, tournamentId: tournament.id, title: tournament.title, mode: 'trash' })}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -390,13 +406,19 @@ export default function Dashboard() {
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog(s => ({ ...s, open }))}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Move draft "{deleteDialog.title}" to trash?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteDialog.mode === 'discard'
+                ? 'Discard this import?'
+                : `Move draft "${deleteDialog.title}" to trash?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will move the draft out of your active dashboard list. You can restore it from Admin.
+              {deleteDialog.mode === 'discard'
+                ? 'The brochure file and extracted data will be kept, but the draft tournament will be deleted.'
+                : 'This will move the draft out of your active dashboard list. You can restore it from Admin.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteDialog({ open: false, tournamentId: null, title: "" })}>
+            <AlertDialogCancel onClick={() => setDeleteDialog({ open: false, tournamentId: null, title: "", mode: 'trash' })}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -404,11 +426,11 @@ export default function Dashboard() {
               onClick={() => {
                 if (!deleteDialog.tournamentId) return;
                 deleteMutation.mutate(deleteDialog.tournamentId, {
-                  onSettled: () => setDeleteDialog({ open: false, tournamentId: null, title: "" }),
+                  onSettled: () => setDeleteDialog({ open: false, tournamentId: null, title: "", mode: 'trash' }),
                 });
               }}
             >
-              Move to Trash
+              {deleteDialog.mode === 'discard' ? 'Discard' : 'Move to Trash'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

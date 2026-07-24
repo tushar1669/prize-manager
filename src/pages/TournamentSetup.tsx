@@ -233,7 +233,7 @@ export default function TournamentSetup() {
   const { isMaster } = useUserRole();
 
   // Fetch tournament data
-  const { data: tournament, isLoading: tournamentLoading } = useQuery({
+  const { data: tournament, isLoading: tournamentLoading, isError: tournamentIsError, error: tournamentError } = useQuery({
     queryKey: ['tournament', id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -241,12 +241,12 @@ export default function TournamentSetup() {
         .select('id, title, start_date, end_date, venue, city, event_code, notes, brochure_url, chessresults_url, public_results_url, owner_id, status, time_control_base_minutes, time_control_increment_seconds, chief_arbiter, tournament_director, entry_fee_amount, cash_prize_total')
         .eq('id', id)
         .single();
-      
+
       if (error) {
-        if (error.message?.includes('row-level security')) {
-          toast.error("You don't have access to this tournament");
-          navigate('/dashboard');
-        }
+        // FIX A-1 — a not-found / RLS-blocked read must render the not-found state (handled in the
+        // render branch below), never auto-redirect and never fall through to a blank setup form.
+        // The raw error is kept for debugging only.
+        console.error('[setup] failed to load tournament', error);
         throw error;
       }
 
@@ -1380,6 +1380,40 @@ export default function TournamentSetup() {
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // FIX A-1 — a foreign/invalid tournament id resolves to a PostgREST "no rows" error (PGRST116) or,
+  // for an RLS-blocked read, a message containing "row-level security". In either case render an
+  // explicit not-found state instead of the blank setup form. (id === 'new' disables the query, so
+  // this never fires for the create flow.)
+  const tournamentLoadError = tournamentError as { code?: string; message?: string } | null;
+  const tournamentNotFound =
+    tournamentIsError &&
+    (tournamentLoadError?.code === 'PGRST116' ||
+      (typeof tournamentLoadError?.message === 'string' &&
+        tournamentLoadError.message.includes('row-level security')));
+
+  if (tournamentNotFound) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppNav />
+        <div className="flex items-center justify-center px-6 py-24">
+          <Card className="w-full max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Tournament not found</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This tournament doesn't exist or you don't have access to it.
+              </p>
+              <div className="flex justify-center">
+                <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
