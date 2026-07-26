@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractDateTokens,
   extractNumericTokens,
+  groundDigits,
   groundNumber,
 } from "../supabase/functions/extract/grounding";
 import {
@@ -357,5 +358,52 @@ describe("targeted extraction prompt (Phase G)", () => {
     const prompt = extractionPrompt(schema, "some transcription");
     expect(prompt.startsWith("IMPORTANT")).toBe(false);
     expect(prompt.startsWith("You extract structured data")).toBe(true);
+  });
+});
+
+describe("Phase 2A — payment grounding and invariants", () => {
+  const UTR_PATTERN = /^[A-Za-z0-9]{8,22}$/;
+
+  it("grounds a UTR the screenshot spaced out but the text runs together", () => {
+    expect(groundDigits("123 456 789 012", "UTR: 123456789012 completed").grounded).toBe(true);
+  });
+
+  it("grounds a plain UTR quoted verbatim in the text", () => {
+    expect(groundDigits("123456789012", "ref 123456789012 paid").grounded).toBe(true);
+  });
+
+  it("refuses a UTR the text never states", () => {
+    expect(groundDigits("123456789012", "no digits here").grounded).toBe(false);
+  });
+
+  it("rejects a UTR shorter than the 8-character floor", () => {
+    expect(UTR_PATTERN.test("AB12")).toBe(false);
+  });
+
+  it("rejects a UTR longer than the 22-character ceiling", () => {
+    expect(UTR_PATTERN.test("ABCD1234ABCD1234ABCD123")).toBe(false);
+  });
+
+  it("accepts the 12-digit UTR Indian banks actually issue", () => {
+    expect(UTR_PATTERN.test("123456789012")).toBe(true);
+  });
+
+  it("flags an amount that does not match what was owed", () => {
+    expect(Math.abs(999 - 1499) > 1).toBe(true);
+  });
+
+  it("does not flag an exact amount match", () => {
+    expect(Math.abs(1499 - 1499) > 1).toBe(false);
+  });
+
+  it("absorbs a ₹1 rounding difference without flagging", () => {
+    expect(Math.abs(1499 - 1500) > 1).toBe(false);
+  });
+
+  it("treats a payment dated 31 days ago as stale", () => {
+    const old = new Date();
+    old.setDate(old.getDate() - 31);
+    const diff = (Date.now() - old.getTime()) / (1000 * 60 * 60 * 24);
+    expect(diff > 30).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppNav } from "@/components/AppNav";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Copy, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { uploadFile } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { useAuth } from "@/hooks/useAuth";
@@ -59,6 +60,11 @@ export default function TournamentUpgrade() {
   const [searchParams] = useSearchParams();
   const [couponCode, setCouponCode] = useState("");
   const [utrValue, setUtrValue] = useState("");
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotStage, setScreenshotStage] = useState<
+    "idle" | "uploading" | "extracting" | "done" | "error"
+  >("idle");
+  const [screenshotExtractionId, setScreenshotExtractionId] = useState<string | null>(null);
   const [upiCopied, setUpiCopied] = useState(false);
   const [amountDue, setAmountDue] = useState(0);
   const { user } = useAuth();
@@ -173,9 +179,96 @@ export default function TournamentUpgrade() {
     },
   });
 
+  const handleScreenshotFile = useCallback(
+    async (file: File) => {
+      if (!user) return;
+      const ACCEPTED: Record<string, string> = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/heic": ".heic",
+        "image/heif": ".heic",
+      };
+      if (!ACCEPTED[file.type]) {
+        toast.error("Use a JPEG, PNG, WebP or HEIC screenshot.");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Screenshot must be under 10MB.");
+        return;
+      }
+
+      setScreenshotFile(file);
+      setScreenshotStage("uploading");
+      setScreenshotExtractionId(null);
+
+      try {
+        const ext = ACCEPTED[file.type];
+        const storagePath = `${user.id}/${crypto.randomUUID()}${ext}`;
+        const { path: storedPath, error: uploadErr } = await uploadFile(
+          "extraction-uploads",
+          storagePath,
+          file,
+        );
+        if (uploadErr || !storedPath) throw new Error(uploadErr?.message ?? "Upload failed");
+
+        // Hash via built-in browser crypto — no external dependency
+        const hashBuffer = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+        const fileHash = Array.from(new Uint8Array(hashBuffer))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+
+        const { data: doc, error: docErr } = await supabase
+          .from("extraction_documents")
+          .insert({
+            uploaded_by: user.id,
+            file_name: file.name,
+            file_path: storedPath,
+            file_hash: fileHash,
+            file_size_bytes: file.size,
+            mime_type: file.type,
+            doc_type: "payment_screenshot" as never,
+            privacy_class: "public",
+            status: "pending",
+          })
+          .select("id")
+          .single();
+        if (docErr || !doc) throw new Error(docErr?.message ?? "Could not register screenshot");
+
+        setScreenshotStage("extracting");
+
+        const controller = new AbortController();
+        const abortTimer = window.setTimeout(() => controller.abort(), 90_000);
+        let invokeResult: Awaited<ReturnType<typeof supabase.functions.invoke>>;
+        try {
+          invokeResult = await supabase.functions.invoke("extract", {
+            body: { document_id: doc.id, tournament_id: id },
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(abortTimer);
+        }
+
+        const extractionId =
+          typeof invokeResult.data?.extraction_id === "string"
+            ? invokeResult.data.extraction_id
+            : null;
+        if (!extractionId) throw new Error("No extraction ID returned");
+
+        setScreenshotExtractionId(extractionId);
+        setScreenshotStage("done");
+      } catch (err) {
+        console.error("[payment-screenshot] failed", err);
+        setScreenshotStage("error");
+        // Non-fatal: user can still submit UTR without screenshot
+      }
+    },
+    [user, id],
+  );
+
   // Submit manual UPI payment claim
   const submitPaymentMutation = useMutation({
-    mutationFn: async (utr: string) => {
+    mutationFn: async ({ utr, extractionId }: { utr: string; extractionId: string | null }) => {
       if (!id) throw new Error("Tournament ID missing");
       const trimmedUtr = utr.trim();
       if (trimmedUtr.length < 6) throw new Error("INVALID_UTR");
@@ -187,6 +280,16 @@ export default function TournamentUpgrade() {
       } as never);
 
       if (error) throw new Error(error.message);
+
+      // Phase 2A: link extraction to payment if one completed before submit
+      if (data && extractionId) {
+        await supabase
+          .from("tournament_payments")
+          .update({ screenshot_extraction_id: extractionId })
+          .eq("id", data as string)
+          .eq("status", "pending");
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -415,6 +518,54 @@ export default function TournamentUpgrade() {
               {/* UTR input */}
               {canSubmitPayment && (
                 <div className="space-y-3 border-t pt-4">
+                  {/* Phase 2A: optional payment screenshot */}
+                  <div className="space-y-2">
+                    <Label>
+                      Payment screenshot{" "}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        (optional — speeds up approval)
+                      </span>
+                    </Label>
+                    <label className="flex min-h-[40px] cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-2 text-sm hover:border-primary/50">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/heic"
+                        className="hidden"
+                        disabled={submitPaymentMutation.isPending}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleScreenshotFile(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      {screenshotStage === "idle" && (
+                        <span className="text-muted-foreground">
+                          Choose screenshot from your UPI app…
+                        </span>
+                      )}
+                      {(screenshotStage === "uploading" || screenshotStage === "extracting") && (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                          <span className="text-muted-foreground">
+                            {screenshotStage === "uploading" ? "Uploading…" : "Reading screenshot…"}
+                          </span>
+                        </>
+                      )}
+                      {screenshotStage === "done" && (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          <span className="truncate text-emerald-700 dark:text-emerald-400">
+                            {screenshotFile?.name ?? "Screenshot ready"}
+                          </span>
+                        </>
+                      )}
+                      {screenshotStage === "error" && (
+                        <span className="text-xs text-destructive">
+                          Could not read screenshot — you can still submit with UTR only
+                        </span>
+                      )}
+                    </label>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="utr-input">UTR / Transaction Reference</Label>
                     <Input
@@ -429,7 +580,9 @@ export default function TournamentUpgrade() {
                     </p>
                   </div>
                   <Button
-                    onClick={() => submitPaymentMutation.mutate(utrValue)}
+                    onClick={() =>
+                      submitPaymentMutation.mutate({ utr: utrValue, extractionId: screenshotExtractionId })
+                    }
                     disabled={utrValue.trim().length < 6 || submitPaymentMutation.isPending}
                   >
                     {submitPaymentMutation.isPending ? (

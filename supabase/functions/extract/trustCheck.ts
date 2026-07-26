@@ -21,7 +21,15 @@ import { ISO_DATE_RE, TEAM_PRIZE_NAME } from "../_shared/constants.ts";
 
 export type FieldFlag = {
   field: string;
-  reason: "ungrounded" | "sum_mismatch" | "team_prize_detected";
+  reason:
+    | "ungrounded"
+    | "sum_mismatch"
+    | "team_prize_detected"
+    | "utr_format"
+    | "utr_duplicate"
+    | "amount_mismatch"
+    | "payee_vpa_mismatch"
+    | "date_stale";
   severity: "high" | "medium" | "low" | "info";
   expected?: number;
   stated?: number;
@@ -211,7 +219,7 @@ function groundLeaf(
 
   const trimmed = value.trim();
   if (ISO_DATE_RE.test(trimmed)) return groundDate(trimmed, ctx.text, ctx.dateTokens);
-  if (leaf === "contact_phone") return groundDigits(trimmed, ctx.text);
+  if (leaf === "contact_phone" || leaf === "utr") return groundDigits(trimmed, ctx.text);
   if (leaf === "category") {
     return path.endsWith("time_control.category")
       ? groundTimeControlCategory(trimmed, container, ctx)
