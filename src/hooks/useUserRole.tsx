@@ -18,6 +18,8 @@ export function useUserRole() {
     queryKey: ['user-role', user?.id],
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
+    retry: 3,
+    retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8_000),
     queryFn: async (): Promise<UserRoleData> => {
       const { data, error } = await supabase
         .from('user_roles')
@@ -29,9 +31,19 @@ export function useUserRole() {
         throw error;
       }
 
+      // Guard: an authenticated user with no visible role row means the session
+      // token was transiently unresolved — auth.uid() was null server-side, so
+      // the RLS policy matched zero rows and maybeSingle returned { data: null }.
+      // Throw here so React Query retries (up to 3×, exponential backoff) instead
+      // of defaulting role to 'organizer' and silently demoting a master.
+      // This is the permanent fix for the 26 Jul 2026 access incident.
+      if (!data) {
+        throw new Error('ROLE_NOT_RESOLVED');
+      }
+
       return {
-        role: data?.role ?? 'organizer',
-        is_verified: data?.is_verified ?? false,
+        role: data.role,
+        is_verified: data.is_verified ?? false,
       };
     },
   });
@@ -42,7 +54,7 @@ export function useUserRole() {
       ? 'error'
       : 'ready';
 
-  const role: UserRole | null = user ? (roleQuery.data?.role ?? 'organizer') : null;
+  const role: UserRole | null = user ? (roleQuery.data?.role ?? null) : null;
   const isVerified = roleQuery.data?.is_verified ?? false;
 
   // CRITICAL: Master access requires BOTH:
