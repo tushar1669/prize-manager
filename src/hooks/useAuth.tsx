@@ -8,17 +8,26 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
+    // Supabase v2 fires an INITIAL_SESSION event synchronously on subscribe,
+    // carrying the in-memory session — which is null until the async
+    // localStorage restore completes. Clearing `loading` there produced a
+    // window of (loading=false, user=null), which ProtectedRoute correctly
+    // read as "not signed in" and redirected to /auth -> /dashboard.
+    // Root cause of the 26 Jul 2026 /admin redirect. Guardrail M2: only
+    // getSession() may clear the INITIAL loading flag. Auth events may update
+    // session/user at any time, but may not declare resolution early.
+    let initialResolved = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        if (initialResolved) setLoading(false);
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      initialResolved = true;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
