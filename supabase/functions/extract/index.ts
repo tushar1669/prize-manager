@@ -20,6 +20,7 @@ import {
 } from "../_shared/geminiProvider.ts";
 import { toGeminiResponseSchema, type JsonSchema } from "./responseSchema.ts";
 import { decideStatus, runArithmeticCheck, runTrustCheck, type FieldFlag } from "./trustCheck.ts";
+import { runPaymentTrustChecks } from "./paymentTrustCheck.ts";
 import { openPdfForRaster, RasterError } from "./pdfRaster.ts";
 import { extractionPrompt } from "./extractionPrompt.ts";
 
@@ -80,6 +81,9 @@ class ExtractError extends Error {
 
 type DocumentRow = {
   id: string;
+  /** The uploader's auth UID. /extract runs service-role and parses no JWT, so this row column is
+   *  the only carrier of "which user" — the payment checks need it for the coupon lookup. */
+  uploaded_by: string | null;
   file_name: string;
   file_path: string;
   mime_type: string | null;
@@ -450,6 +454,11 @@ Deno.serve(async (req: Request) => {
     // Targeted re-extraction (Phase G): the organizer chose one event from a multi-event brochure.
     // When present, Pass-2 is scoped to this event and Pass-1 is reused from stored OCR (below).
     const targetEvent = typeof body?.target_event === "string" ? body.target_event.trim() : "";
+    // Phase 2A: which tournament the payment is for, so the amount can be checked against the
+    // expected price. Optional — the brochure flow does not send it, and must not break when absent.
+    const tournamentId = typeof body?.tournament_id === "string" && UUID_RE.test(body.tournament_id.trim())
+      ? body.tournament_id.trim()
+      : null;
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) throw new ExtractError("provider_not_configured", "GEMINI_API_KEY is not set", 500);
@@ -457,7 +466,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: doc, error: docErr } = await supabase
       .from("extraction_documents")
-      .select("id, file_name, file_path, mime_type, doc_type, ocr_markdown, ocr_text")
+      .select("id, uploaded_by, file_name, file_path, mime_type, doc_type, ocr_markdown, ocr_text")
       .eq("id", documentId)
       .maybeSingle<DocumentRow>();
     if (docErr) throw new ExtractError("document_lookup_failed", docErr.message, 500);
@@ -757,8 +766,22 @@ Deno.serve(async (req: Request) => {
     const arithmetic = runArithmeticCheck(trust.payload);
     const flags: FieldFlag[] = [...trust.flags, ...(arithmetic.flag ? [arithmetic.flag] : [])];
 
+    // Phase 2A: payment business rule checks (run after generic grounding)
+    if (doc.doc_type === "payment_screenshot") {
+      const paymentFlags = await runPaymentTrustChecks(
+        trust.payload,
+        tournamentId,
+        doc.uploaded_by,
+        supabase,
+      );
+      flags.push(...paymentFlags);
+    }
+
     const requiredFields = Array.isArray(schemaRow.schema_json.required) ? schemaRow.schema_json.required : [];
-    const status = decideStatus(trust.payload, trust.grounding, flags, requiredFields, arithmetic.within);
+    let status = decideStatus(trust.payload, trust.grounding, flags, requiredFields, arithmetic.within);
+
+    // Payment screenshots: money is involved, human review always required.
+    if (doc.doc_type === "payment_screenshot") status = "needs_review";
 
     // ------------------------------------------------------------------- persist
     const { data: extraction, error: insErr } = await supabase
