@@ -36,6 +36,27 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
     return <Navigate to="/auth" replace />;
   }
 
+  // Fail-safe: if role resolution failed after all retries on a master-only
+  // route, hold rather than fall through to children (which would grant
+  // access without a confirmed role). The user can reload to retry.
+  // Guardrail M2: auth must fail SAFE, never fail open.
+  if (requireMaster && authzStatus === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <p className="text-sm text-muted-foreground">Verifying access…</p>
+          <button
+            className="text-xs text-primary underline"
+            onClick={() => window.location.reload()}
+          >
+            Reload if this persists
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Masters bypass all checks
   if (authzStatus === 'ready' && is_master) {
     return <>{children}</>;
