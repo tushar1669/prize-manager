@@ -26,12 +26,20 @@ export function useAuth() {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initialResolved = true;
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        initialResolved = true;
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch(() => {
+        // getSession failed (network error, corrupt storage, etc.).
+        // Clear loading so the app doesn't spin forever. User is null,
+        // so ProtectedRoute will redirect to /auth — correct behavior.
+        initialResolved = true;
+        setLoading(false);
+      });
 
     return () => subscription.unsubscribe();
   }, []);
