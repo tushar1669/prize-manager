@@ -12,14 +12,14 @@ interface UserRoleData {
 }
 
 export function useUserRole() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   const roleQuery = useQuery({
     queryKey: ['user-role', user?.id],
-    enabled: !!user,
+    enabled: !!user && !!session?.access_token,
     staleTime: 5 * 60 * 1000,
-    retry: 3,
-    retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8_000),
+    retry: 2,
+    retryDelay: 500,
     queryFn: async (): Promise<UserRoleData> => {
       const { data, error } = await supabase
         .from('user_roles')
