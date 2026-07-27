@@ -1533,6 +1533,7 @@ export type Database = {
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          screenshot_extraction_id: string | null
           status: Database["public"]["Enums"]["payment_status"]
           tournament_id: string
           user_id: string
@@ -1545,6 +1546,7 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          screenshot_extraction_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           tournament_id: string
           user_id: string
@@ -1557,12 +1559,27 @@ export type Database = {
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          screenshot_extraction_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           tournament_id?: string
           user_id?: string
           utr?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tournament_payments_screenshot_extraction_id_fkey"
+            columns: ["screenshot_extraction_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_review_queue"
+            referencedColumns: ["extraction_id"]
+          },
+          {
+            foreignKeyName: "tournament_payments_screenshot_extraction_id_fkey"
+            columns: ["screenshot_extraction_id"]
+            isOneToOne: false
+            referencedRelation: "extractions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tournament_payments_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -2086,6 +2103,7 @@ export type Database = {
         | "bank_statement"
         | "photo"
         | "unknown"
+        | "payment_screenshot"
       extraction_status:
         | "pending"
         | "processing"
@@ -2230,6 +2248,7 @@ export const Constants = {
         "bank_statement",
         "photo",
         "unknown",
+        "payment_screenshot",
       ],
       extraction_status: [
         "pending",
