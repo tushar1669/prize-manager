@@ -34,8 +34,9 @@ export function useUserRole() {
       // Guard: an authenticated user with no visible role row means the session
       // token was transiently unresolved — auth.uid() was null server-side, so
       // the RLS policy matched zero rows and maybeSingle returned { data: null }.
-      // Throw here so React Query retries (up to 3×, exponential backoff) instead
-      // of defaulting role to 'organizer' and silently demoting a master.
+      // Retries twice with a flat 500ms delay. The enabled gate
+      // (session?.access_token) ensures the JWT is present before the
+      // query fires, so null data is rare and one retry is enough.
       // This is the permanent fix for the 26 Jul 2026 access incident.
       if (!data) {
         throw new Error('ROLE_NOT_RESOLVED');
