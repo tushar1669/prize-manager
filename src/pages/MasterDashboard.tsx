@@ -90,7 +90,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
     },
   });
 
-  if (roleLoading || isLoading) {
+  if (authzStatus !== 'ready' || isLoading) {
     return (
       <div className={embeddedInAdmin ? undefined : "min-h-screen bg-background"}>
         {!embeddedInAdmin && <AppNav />}
