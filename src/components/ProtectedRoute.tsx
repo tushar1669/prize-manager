@@ -23,7 +23,7 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
 
   const isLoading = authLoading || authzStatus === 'loading';
 
-  // TEMPORARY DIAGNOSTIC — remove once /admin access is confirmed stable.
+  
   if (requireMaster) {
     console.log('[protected-route]',
       'authLoading=', authLoading,
