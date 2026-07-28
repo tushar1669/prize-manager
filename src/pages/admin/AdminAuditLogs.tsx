@@ -41,7 +41,7 @@ interface AdminAuditLogsProps {
 }
 
 export default function AdminAuditLogs({ embeddedInAdmin = false }: AdminAuditLogsProps) {
-  const { is_master } = useUserRole();
+  const { is_master, authzStatus } = useUserRole();
   const [from, setFrom] = useState<Date | null>(null);
   const [to, setTo] = useState<Date | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>("all");
@@ -123,6 +123,15 @@ export default function AdminAuditLogs({ embeddedInAdmin = false }: AdminAuditLo
   }, []);
 
   // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  // Wait for role resolution before denying access.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (

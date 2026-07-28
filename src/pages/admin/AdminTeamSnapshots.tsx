@@ -22,7 +22,7 @@ type RowStatus =
   | { state: "error"; message: string };
 
 export default function AdminTeamSnapshots() {
-  const { is_master } = useUserRole();
+  const { is_master, authzStatus } = useUserRole();
   const queryClient = useQueryClient();
   const [rowStatuses, setRowStatuses] = useState<Record<string, RowStatus>>({});
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -77,6 +77,15 @@ export default function AdminTeamSnapshots() {
   );
 
   // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  // Wait for role resolution before denying access.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!is_master) return <Navigate to="/dashboard" replace />;
 
   if (isLoading) {

@@ -11,7 +11,7 @@ import { EdgeFunctionStatus } from "@/components/EdgeFunctionStatus";
 import { ADMIN_SECTIONS } from "@/components/admin/adminSections";
 
 export default function AdminHome() {
-  const { is_master } = useUserRole();
+  const { is_master, authzStatus } = useUserRole();
   const { data: publishDriftRows, isLoading: publishDriftLoading } = useQuery({
     queryKey: ["admin-publish-state-drift"],
     queryFn: async () => {
@@ -32,6 +32,16 @@ export default function AdminHome() {
   });
 
   // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  // Wait for role resolution: this component has its own useAuth/useUserRole
+  // instance, which starts unresolved and would otherwise redirect a master.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (

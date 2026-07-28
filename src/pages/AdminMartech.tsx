@@ -31,7 +31,7 @@ function EmptyText({ text = "No data yet" }: { text?: string }) {
 }
 
 export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechProps) {
-  const { is_master } = useUserRole();
+  const { is_master, authzStatus } = useUserRole();
   const [from, setFrom] = useState<Date | null>(null);
   const [to, setTo] = useState<Date | null>(null);
   const [selected, setSelected] = useState<DrilldownSelection>(null);
@@ -92,6 +92,14 @@ export default function AdminMartech({ embeddedInAdmin = false }: AdminMartechPr
 
   // Defense-in-depth: this page already sits behind the /admin route's requireMaster guard;
   // this in-component check is the second layer. Placed after all hooks to respect rules-of-hooks.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (

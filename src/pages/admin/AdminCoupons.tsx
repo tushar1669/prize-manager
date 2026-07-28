@@ -8,9 +8,18 @@ import { Navigate } from "react-router-dom";
 
 export default function AdminCoupons() {
   const couponsAdmin = useCouponsAdmin();
-  const { is_master } = useUserRole();
+  const { is_master, authzStatus } = useUserRole();
 
   // Defense-in-depth second layer behind the /admin requireMaster route guard.
+  // Wait for role resolution before denying access.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!is_master) return <Navigate to="/dashboard" replace />;
 
   return (
