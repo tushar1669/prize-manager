@@ -18,7 +18,7 @@ interface MasterDashboardProps {
 }
 
 export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashboardProps) {
-  const { isMaster, loading: roleLoading } = useUserRole();
+  const { isMaster, authzStatus } = useUserRole();
   const queryClient = useQueryClient();
 
   // Pending organizer access reviews
@@ -103,7 +103,16 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
     );
   }
 
-  // Access is enforced by ProtectedRoute requireMaster; extra guard for safety
+  // Access is enforced by ProtectedRoute requireMaster; extra guard for safety.
+  // Wait for role resolution before denying access.
+  if (authzStatus !== 'ready') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   if (!isMaster) {
     return null;
   }

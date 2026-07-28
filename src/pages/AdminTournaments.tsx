@@ -102,7 +102,8 @@ interface AdminTournamentsProps {
 
 export default function AdminTournaments({ embeddedInAdmin = false }: AdminTournamentsProps) {
   const { user } = useAuth();
-  const { isMaster, loading: roleLoading } = useUserRole();
+  const { isMaster, authzStatus } = useUserRole();
+  const roleLoading = authzStatus !== 'ready';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
