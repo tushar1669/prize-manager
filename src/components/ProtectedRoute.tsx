@@ -23,15 +23,6 @@ export function ProtectedRoute({ children, requireMaster = false }: ProtectedRou
 
   const isLoading = authLoading || authzStatus === 'loading';
 
-  
-  if (requireMaster) {
-    console.log('[protected-route]',
-      'authLoading=', authLoading,
-      'authzStatus=', authzStatus,
-      'user=', user?.id ?? 'NULL',
-      'is_master=', is_master);
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

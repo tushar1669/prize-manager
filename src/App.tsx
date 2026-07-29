@@ -1,6 +1,6 @@
 import { useEffect, lazy, Suspense, type ReactNode } from "react";
 import { useApplyPendingReferral } from "@/hooks/useApplyPendingReferral";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useIssueWelcomeOnboardingReward } from "@/hooks/useIssueWelcomeOnboardingReward";
 import { Toaster } from "@/components/ui/toaster";
@@ -199,7 +199,9 @@ const App = () => {
         <DirtyProvider>
           <Toaster />
           <Sonner />
-          <AppInner />
+          <AuthProvider>
+            <AppInner />
+          </AuthProvider>
         </DirtyProvider>
       </TooltipProvider>
     </QueryClientProvider>
