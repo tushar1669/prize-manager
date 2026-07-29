@@ -45,14 +45,25 @@ type OutboxRow = {
   action: string;
   recipient_email: string | null;
   review_note: string | null;
+  return_to: string | null;
   attempts: number;
 };
 
+// return_to goes straight into an email link, so re-check it here rather than
+// trusting the column constraint alone: a same-site relative path only, never
+// an absolute or protocol-relative URL.
+const safeReturnTo = (v: string | null): string | null =>
+  v && v.length <= 500 && /^\/[^/\\]/.test(v) ? v : null;
+
 function buildEmail(row: OutboxRow, appBaseUrl: string) {
   const base = appBaseUrl.replace(/\/+$/, "");
+  const returnTo = safeReturnTo(row.return_to);
 
   if (row.action === "approved") {
-    const link = `${base}/t/${row.tournament_id}/setup?tab=details`;
+    // Deep-link back to where the organizer was blocked, if we know it.
+    const link = returnTo
+      ? `${base}${returnTo}`
+      : `${base}/t/${row.tournament_id}/setup?tab=details`;
     const safeLink = escapeHtml(link);
     const subject = "Your tournament upgrade is approved";
     const html =
@@ -80,7 +91,10 @@ function buildEmail(row: OutboxRow, appBaseUrl: string) {
   }
 
   // action === 'rejected'
-  const link = `${base}/t/${row.tournament_id}/payment`;
+  // Carry return_to through the resubmission so the deep link survives a retry.
+  const link = returnTo
+    ? `${base}/t/${row.tournament_id}/payment?return_to=${encodeURIComponent(returnTo)}`
+    : `${base}/t/${row.tournament_id}/payment`;
   const safeLink = escapeHtml(link);
   const subject = "Your tournament payment needs another look";
   const reasonHtml = row.review_note
@@ -155,7 +169,9 @@ Deno.serve(async (req) => {
 
   const { data: rows, error: loadErr } = await admin
     .from("payment_notification_outbox")
-    .select("id, tournament_id, action, recipient_email, review_note, attempts")
+    .select(
+      "id, tournament_id, action, recipient_email, review_note, return_to, attempts",
+    )
     .in("email_status", ["pending", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
     .order("email_enqueued_at", { ascending: true })
