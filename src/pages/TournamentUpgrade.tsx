@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppNav } from "@/components/AppNav";
@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Copy, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { uploadFile } from "@/lib/storage";
@@ -60,6 +59,11 @@ export default function TournamentUpgrade() {
   const [searchParams] = useSearchParams();
   const [couponCode, setCouponCode] = useState("");
   const [utrValue, setUtrValue] = useState("");
+  const [utrWasPrefilled, setUtrWasPrefilled] = useState(false);
+  // The extraction can land while the organizer is still typing, and the upload
+  // callback would only see the utrValue captured when it was created. The ref
+  // is the live value, so the pre-fill never overwrites a keystroke it missed.
+  const utrValueRef = useRef("");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotStage, setScreenshotStage] = useState<
     "idle" | "uploading" | "extracting" | "done" | "error"
@@ -203,8 +207,11 @@ export default function TournamentUpgrade() {
       setScreenshotExtractionId(null);
 
       try {
+        // Without a tournament id the path would read ".../payments/undefined/…",
+        // so fail into the same non-fatal error state as any other upload problem.
+        if (!id) throw new Error("Tournament ID missing");
         const ext = ACCEPTED[file.type];
-        const storagePath = `${user.id}/${crypto.randomUUID()}${ext}`;
+        const storagePath = `${user.id}/payments/${id}/${crypto.randomUUID()}${ext}`;
         const { path: storedPath, error: uploadErr } = await uploadFile(
           "extraction-uploads",
           storagePath,
@@ -257,6 +264,32 @@ export default function TournamentUpgrade() {
 
         setScreenshotExtractionId(extractionId);
         setScreenshotStage("done");
+
+        // Best-effort UTR pre-fill. /extract returns metadata only (extraction_id,
+        // status, confidence, field_flags, schema_version, ocr_*), never the payload,
+        // so read the row back. Everything here is swallowed: a failed pre-fill must
+        // leave the screenshot "done" and manual entry working exactly as before.
+        try {
+          const { data: extraction, error: prefillErr } = await supabase
+            .from("extractions")
+            .select("payload")
+            .eq("id", extractionId)
+            .maybeSingle();
+          if (prefillErr) throw prefillErr;
+
+          const payload = extraction?.payload as Record<string, unknown> | null;
+          const extractedUtr =
+            payload && typeof payload.utr === "string" ? payload.utr.trim() : "";
+
+          // Never overwrite what the organizer has already typed.
+          if (extractedUtr && !utrValueRef.current.trim()) {
+            utrValueRef.current = extractedUtr;
+            setUtrValue(extractedUtr);
+            setUtrWasPrefilled(true);
+          }
+        } catch (prefillErr) {
+          console.error("[payment-screenshot] UTR pre-fill failed", prefillErr);
+        }
       } catch (err) {
         console.error("[payment-screenshot] failed", err);
         setScreenshotStage("error");
@@ -273,28 +306,26 @@ export default function TournamentUpgrade() {
       const trimmedUtr = utr.trim();
       if (trimmedUtr.length < 6) throw new Error("INVALID_UTR");
 
+      // 5-arg overload: it has no defaults, so PostgREST only resolves it when all
+      // five keys are present. The screenshot link is written inside the same INSERT,
+      // which is why there is no follow-up UPDATE from the client any more.
       const { data, error } = await supabase.rpc("submit_tournament_payment_claim" as never, {
         p_tournament_id: id,
         p_amount_inr: amountDue,
         p_utr: trimmedUtr,
+        p_screenshot_extraction_id: extractionId ?? null,
+        p_return_to: returnToForClaim,
       } as never);
 
       if (error) throw new Error(error.message);
-
-      // Phase 2A: link extraction to payment if one completed before submit
-      if (data && extractionId) {
-        await supabase
-          .from("tournament_payments")
-          .update({ screenshot_extraction_id: extractionId })
-          .eq("id", data as string)
-          .eq("status", "pending");
-      }
 
       return data;
     },
     onSuccess: () => {
       toast.success("Payment submitted. Awaiting admin approval.");
+      utrValueRef.current = "";
       setUtrValue("");
+      setUtrWasPrefilled(false);
       queryClient.invalidateQueries({ queryKey: ["tournament-payment-status", id, user?.id] });
       queryClient.invalidateQueries({ queryKey: ["tournament-access", id] });
     },
@@ -324,6 +355,15 @@ export default function TournamentUpgrade() {
     if (!id) return "/dashboard";
     return getSafeReturnToPath(id, searchParams.get("return_to"), `/t/${id}/finalize`);
   }, [id, searchParams]);
+
+  // Only record an origin we actually have evidence for. With the param present the
+  // organizer came from a paywall and we know where they were blocked; without it
+  // they walked here directly, so we write NULL and the approval email falls back to
+  // the tournament landing page rather than a guessed destination.
+  const returnToForClaim = useMemo(
+    () => (searchParams.get("return_to") ? returnTo : null),
+    [searchParams, returnTo],
+  );
 
   const handleCopyUpi = async () => {
     try {
@@ -572,9 +612,18 @@ export default function TournamentUpgrade() {
                       id="utr-input"
                       placeholder="Enter 12-digit UTR number"
                       value={utrValue}
-                      onChange={(e) => setUtrValue(e.target.value)}
+                      onChange={(e) => {
+                        utrValueRef.current = e.target.value;
+                        setUtrValue(e.target.value);
+                        setUtrWasPrefilled(false);
+                      }}
                       disabled={submitPaymentMutation.isPending}
                     />
+                    {utrWasPrefilled && (
+                      <p className="text-xs text-muted-foreground">
+                        Pre-filled from your screenshot — please check it matches your UPI app.
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Find the UTR in your UPI app&apos;s transaction details after paying.
                     </p>
