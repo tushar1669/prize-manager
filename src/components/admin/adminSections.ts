@@ -28,6 +28,11 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     description: "Search and moderate tournaments across the platform.",
   },
   {
+    to: "/admin/payments",
+    label: "Payments",
+    description: "Review pending UPI payment claims and browse the full payment history.",
+  },
+  {
     to: "/admin/coupons",
     label: "Coupons",
     description: "Manage coupon codes and view coupon analytics.",
