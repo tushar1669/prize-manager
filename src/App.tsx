@@ -59,6 +59,7 @@ const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminTeamSnapshots = lazy(() => import("./pages/admin/AdminTeamSnapshots"));
+const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout").then((module) => ({ default: module.AdminLayout })));
 
 const queryClient = new QueryClient();
@@ -173,6 +174,7 @@ const AppInner = () => {
                   <Route path="users" element={<MasterDashboard embeddedInAdmin />} />
                   <Route path="martech" element={<AdminMartech embeddedInAdmin />} />
                   <Route path="tournaments" element={<AdminTournaments embeddedInAdmin />} />
+                  <Route path="payments" element={<AdminPayments />} />
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="audit" element={<AdminAuditLogs embeddedInAdmin />} />
                   <Route path="team-snapshots" element={<AdminTeamSnapshots />} />

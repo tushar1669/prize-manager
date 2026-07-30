@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle, UserCheck, UserX, Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { PendingPaymentsPanel } from "@/components/master/PendingPaymentsPanel";
 
 // Access controlled by ProtectedRoute requireMaster prop
 interface MasterDashboardProps {
@@ -210,8 +209,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
           </Card>
         )}
 
-        {/* Payments Card */}
-        <PendingPaymentsPanel />
+        {/* Payments moved to /admin/payments (Phase 2A-2 step 3b-2) */}
 
         {/* All Users Card */}
         <Card>

@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, Loader2, RefreshCw, CreditCard, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, RefreshCw, CreditCard, AlertCircle, ImageIcon, ShieldAlert } from "lucide-react";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
+import { getSignedUrl } from "@/lib/storage";
+import { formatCurrencyINR } from "@/utils/currency";
 
 interface ExtractionPayload {
   amount_inr?: number | null;
@@ -29,6 +31,13 @@ interface ExtractionFlag {
   stated?: number;
 }
 
+interface ExtractionDetail {
+  payload: ExtractionPayload;
+  field_flags: ExtractionFlag[];
+  confidence: number;
+  file_path: string | null;
+}
+
 interface PaymentRow {
   id: string;
   tournament_id: string;
@@ -41,11 +50,49 @@ interface PaymentRow {
   tournament_title?: string;
   user_email?: string;
   screenshot_extraction_id?: string | null;
-  extraction?: {
-    payload: ExtractionPayload;
-    field_flags: ExtractionFlag[];
-    confidence: number;
-  } | null;
+  extraction?: ExtractionDetail | null;
+}
+
+/**
+ * Opens the uploaded payment screenshot via a short-lived signed URL.
+ * Failures are rendered as visible text — a review screen must never fail silently.
+ */
+function ViewScreenshotButton({ filePath }: { filePath: string | null }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!filePath) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+        <AlertCircle className="h-3 w-3 shrink-0" />
+        No stored file for this extraction — screenshot cannot be shown
+      </span>
+    );
+  }
+
+  const open = async () => {
+    setLoading(true);
+    setError(null);
+    const { url, error: signError } = await getSignedUrl("extraction-uploads", filePath, 3600);
+    setLoading(false);
+    if (!url) {
+      setError(signError?.message ?? "Could not generate a signed URL for this file.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={open} disabled={loading}>
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+        View screenshot
+      </Button>
+      {error && (
+        <span className="text-[11px] font-medium text-destructive">Screenshot unavailable: {error}</span>
+      )}
+    </span>
+  );
 }
 
 export function PendingPaymentsPanel() {
@@ -88,17 +135,29 @@ export function PendingPaymentsPanel() {
         .map((p) => p.screenshot_extraction_id as string | null)
         .filter((id): id is string => typeof id === "string");
 
-      const extractionMap = new Map<string, {
-        payload: ExtractionPayload;
-        field_flags: ExtractionFlag[];
-        confidence: number;
-      }>();
+      const extractionMap = new Map<string, ExtractionDetail>();
 
       if (screenshotIds.length > 0) {
         const { data: extractionRows } = await supabase
           .from("extractions")
-          .select("id, payload, field_flags, confidence")
+          .select("id, document_id, payload, field_flags, confidence")
           .in("id", screenshotIds);
+
+        // The stored file lives on extraction_documents; without file_path there is
+        // nothing to sign, which is why the screenshot was never viewable.
+        const documentIds = [
+          ...new Set((extractionRows ?? []).map((r) => r.document_id).filter(Boolean)),
+        ];
+        const pathMap = new Map<string, string | null>();
+        if (documentIds.length > 0) {
+          const { data: documentRows } = await supabase
+            .from("extraction_documents")
+            .select("id, file_path")
+            .in("id", documentIds);
+          for (const doc of documentRows ?? []) {
+            pathMap.set(doc.id, doc.file_path ?? null);
+          }
+        }
 
         for (const row of (extractionRows ?? [])) {
           extractionMap.set(row.id, {
@@ -107,6 +166,7 @@ export function PendingPaymentsPanel() {
               ? row.field_flags
               : []) as ExtractionFlag[],
             confidence: typeof row.confidence === "number" ? row.confidence : 0,
+            file_path: pathMap.get(row.document_id) ?? null,
           });
         }
       }
@@ -183,7 +243,7 @@ export function PendingPaymentsPanel() {
               <TableRow>
                 <TableHead>Tournament</TableHead>
                 <TableHead>Organizer</TableHead>
-                <TableHead>Amount</TableHead>
+                <TableHead>Amount (claimed vs screenshot)</TableHead>
                 <TableHead>UTR</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -193,6 +253,8 @@ export function PendingPaymentsPanel() {
               {payments.map((p) => {
                 const extractionFlags = p.extraction?.field_flags ?? [];
                 const hasFlags = extractionFlags.length > 0;
+                const extractedAmount = p.extraction?.payload.amount_inr ?? null;
+                const amountMismatch = extractedAmount != null && extractedAmount !== p.amount_inr;
                 return (
                   <Fragment key={p.id}>
                     <TableRow>
@@ -206,7 +268,37 @@ export function PendingPaymentsPanel() {
                           <span className="font-mono text-xs text-muted-foreground">{p.user_id.slice(0, 8)}…</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-sm">₹{p.amount_inr}</TableCell>
+                      {/* Claimed and extracted amounts sit adjacent — a bare "Amount"
+                          column is ambiguous about which number was actually paid. */}
+                      <TableCell className="text-sm">
+                        <div className="flex flex-col gap-0.5 leading-tight">
+                          <span className="font-medium text-foreground">
+                            {formatCurrencyINR(p.amount_inr)} <span className="font-normal">claimed</span>
+                          </span>
+                          {extractedAmount != null ? (
+                            <span
+                              className={
+                                amountMismatch
+                                  ? "font-semibold text-destructive"
+                                  : "text-foreground/80"
+                              }
+                            >
+                              {formatCurrencyINR(extractedAmount)}{" "}
+                              <span className="font-normal">on screenshot</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                              no amount read from screenshot
+                            </span>
+                          )}
+                          {amountMismatch && (
+                            <span className="inline-flex items-center gap-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-destructive">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              Mismatch
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {p.utr}
                         {!p.screenshot_extraction_id && (
@@ -266,41 +358,46 @@ export function PendingPaymentsPanel() {
                       </TableCell>
                     </TableRow>
                     {p.extraction && (
+                      /* Opaque background + a hover: override that repeats it. The base
+                         TableRow class carries `hover:bg-muted/50`, so a translucent
+                         resting tint made this block only legible while hovered. */
                       <TableRow
                         className={
                           hasFlags
-                            ? "bg-amber-50/60 dark:bg-amber-950/20"
-                            : "bg-emerald-50/60 dark:bg-emerald-950/20"
+                            ? "bg-amber-100 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-950/60"
+                            : "bg-emerald-100 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-950/60"
                         }
                       >
-                        <TableCell colSpan={6} className="py-2 px-6 border-t border-muted/30">
-                          <div className="space-y-1.5 text-xs">
-                            <div className="flex items-center gap-1.5 font-medium">
-                              {hasFlags ? (
-                                <>
-                                  <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
-                                  <span className="text-amber-700 dark:text-amber-400">
-                                    {extractionFlags.length} flag
-                                    {extractionFlags.length !== 1 ? "s" : ""} — review before approving
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
-                                  <span className="text-emerald-700 dark:text-emerald-400">
-                                    Screenshot verified · {p.extraction.confidence}% confidence
-                                  </span>
-                                </>
-                              )}
+                        <TableCell colSpan={6} className="py-2.5 px-6 border-t border-border text-foreground">
+                          <div className="space-y-2 text-xs">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-1.5 font-semibold">
+                                {hasFlags ? (
+                                  <>
+                                    <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300 shrink-0" />
+                                    <span className="text-amber-900 dark:text-amber-200">
+                                      {extractionFlags.length} flag
+                                      {extractionFlags.length !== 1 ? "s" : ""} — review before approving
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" />
+                                    <span className="text-emerald-900 dark:text-emerald-200">
+                                      Screenshot verified · {Math.round(p.extraction.confidence * 100)}% confidence
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <ViewScreenshotButton filePath={p.extraction.file_path} />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-x-6 gap-y-0.5">
+                            <div className="grid grid-cols-3 gap-x-6 gap-y-1">
                               {(
                                 [
-                                  { label: "Amount", value: p.extraction.payload.amount_inr != null ? `₹${p.extraction.payload.amount_inr}` : null, flagField: "amount_inr" },
+                                  { label: "Payer name", value: p.extraction.payload.payer_name ?? null, flagField: "payer_name" },
                                   { label: "UTR", value: p.extraction.payload.utr ?? null, flagField: "utr" },
                                   { label: "Date", value: p.extraction.payload.txn_date ?? null, flagField: "txn_date" },
-                                  { label: "Payee", value: p.extraction.payload.payee_vpa ?? null, flagField: "payee_vpa" },
                                   { label: "App", value: p.extraction.payload.app ?? null, flagField: "app" },
                                   { label: "Status", value: p.extraction.payload.status_text ?? null, flagField: "status_text" },
                                 ] as Array<{ label: string; value: string | null; flagField: string }>
@@ -309,43 +406,82 @@ export function PendingPaymentsPanel() {
                                 return (
                                   <div key={label} className="flex items-baseline gap-1 min-w-0">
                                     {value != null && !flagged && (
-                                      <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500 shrink-0 mt-px" />
+                                      <CheckCircle2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-px" />
                                     )}
                                     {flagged && (
-                                      <AlertCircle className="h-2.5 w-2.5 text-amber-500 shrink-0 mt-px" />
+                                      <AlertCircle className="h-2.5 w-2.5 text-amber-700 dark:text-amber-300 shrink-0 mt-px" />
                                     )}
                                     {value == null && !flagged && (
                                       <span className="inline-block w-2.5 shrink-0" />
                                     )}
-                                    <span className="text-muted-foreground shrink-0">{label}:</span>
+                                    <span className="shrink-0 font-medium text-foreground/70">{label}:</span>
                                     <span
                                       className={[
-                                        "truncate",
-                                        flagged ? "text-amber-700 dark:text-amber-400 font-medium" : "",
-                                        value == null ? "text-muted-foreground/50" : "",
+                                        "truncate font-medium",
+                                        flagged ? "text-amber-900 dark:text-amber-200" : "text-foreground",
+                                        value == null ? "font-normal italic text-foreground/70" : "",
                                       ]
                                         .filter(Boolean)
                                         .join(" ")}
                                     >
-                                      {value ?? "—"}
+                                      {value ?? "not found on screenshot"}
                                     </span>
                                   </div>
                                 );
                               })}
                             </div>
 
+                            {/* payee_vpa gets its own line: a null here does NOT mean
+                                "checked and fine" — paymentTrustCheck skips the VPA
+                                comparison entirely when the field is falsy. */}
+                            {(() => {
+                              const payeeVpa = p.extraction.payload.payee_vpa ?? null;
+                              const payeeFlagged = extractionFlags.some((f) => f.field === "payee_vpa");
+                              if (payeeVpa == null) {
+                                return (
+                                  <div className="flex items-start gap-1.5 rounded border border-amber-500 bg-amber-200/70 px-2 py-1 dark:border-amber-500/70 dark:bg-amber-900/60">
+                                    <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-900 dark:text-amber-200 mt-px" />
+                                    <span className="font-semibold text-amber-900 dark:text-amber-100">
+                                      Payee VPA: not found on screenshot — NOT VERIFIED
+                                      <span className="block font-normal">
+                                        The payee allow-list check did not run for this payment. Confirm the
+                                        destination account manually before approving.
+                                      </span>
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="flex items-baseline gap-1 min-w-0">
+                                  {payeeFlagged ? (
+                                    <AlertCircle className="h-2.5 w-2.5 text-amber-700 dark:text-amber-300 shrink-0 mt-px" />
+                                  ) : (
+                                    <CheckCircle2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-px" />
+                                  )}
+                                  <span className="shrink-0 font-medium text-foreground/70">Payee VPA:</span>
+                                  <span
+                                    className={`truncate font-medium ${
+                                      payeeFlagged ? "text-amber-900 dark:text-amber-200" : "text-foreground"
+                                    }`}
+                                  >
+                                    {payeeVpa}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+
                             {extractionFlags.length > 0 && (
                               <div className="flex flex-wrap gap-1 pt-0.5">
                                 {extractionFlags.map((f, i) => (
                                   <span
                                     key={i}
-                                    className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] leading-tight"
+                                    className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 bg-amber-200 dark:bg-amber-900/80 text-amber-950 dark:text-amber-100 border border-amber-500 dark:border-amber-700 text-[11px] font-medium leading-tight"
                                   >
                                     {f.field.replace(/_/g, " ")}: {f.reason.replace(/_/g, " ")}
                                     {f.reason === "amount_mismatch" &&
                                     f.expected != null &&
                                     f.stated != null
-                                      ? ` (expected ₹${f.expected}, got ₹${f.stated})`
+                                      ? ` (expected ${formatCurrencyINR(f.expected)}, got ${formatCurrencyINR(f.stated)})`
                                       : ""}
                                     {f.reason === "date_stale" ? " (too old)" : ""}
                                   </span>
