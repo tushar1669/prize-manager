@@ -1,3 +1,4 @@
+import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,26 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import { formatCurrencyINR } from "@/utils/currency";
-
-interface ExtractionPayload {
-  amount_inr?: number | null;
-  utr?: string | null;
-  txn_date?: string | null;
-  payee_vpa?: string | null;
-  payer_name?: string | null;
-  status_text?: string | null;
-  app?: string | null;
-}
-
-interface ExtractionFlag {
-  field: string;
-  reason: string;
-  severity: string;
-  expected?: number;
-  stated?: number;
-}
+import {
+  NoScreenshotNotice,
+  PaymentExtractionEvidence,
+  ViewScreenshotButton,
+  type ExtractionDetail,
+  type ExtractionFlag,
+  type ExtractionPayload,
+} from "@/components/payments/PaymentEvidence";
+import { evidenceRowClass } from "@/components/payments/evidenceStyles";
 
 interface HistoryRow {
   id: string;
@@ -43,6 +35,8 @@ interface HistoryRow {
   user_email?: string;
   extracted_amount_inr: number | null;
   field_flags: ExtractionFlag[];
+  /** Full extraction evidence for the detail row; null when the claim carried no screenshot. */
+  extraction: ExtractionDetail | null;
   /** 1-based ordinal of this payment within its (tournament_id, user_id) pair. */
   attempt_index: number;
   /** Total payments for that same pair. */
@@ -73,6 +67,7 @@ function formatDateTime(value: string | null): string {
 
 export default function AdminPayments() {
   const { is_master, authzStatus } = useUserRole();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const { data: history, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-payment-history"],
@@ -106,19 +101,35 @@ export default function AdminPayments() {
         .map((p) => p.screenshot_extraction_id as string | null)
         .filter((id): id is string => typeof id === "string");
 
-      const extractionMap = new Map<
-        string,
-        { payload: ExtractionPayload; field_flags: ExtractionFlag[] }
-      >();
+      const extractionMap = new Map<string, ExtractionDetail>();
       if (screenshotIds.length > 0) {
         const { data: extractionRows } = await supabase
           .from("extractions")
-          .select("id, payload, field_flags")
+          .select("id, document_id, payload, field_flags, confidence")
           .in("id", screenshotIds);
+
+        // The stored file lives on extraction_documents, not on the extraction —
+        // without file_path there is nothing to sign and no screenshot to show.
+        const documentIds = [
+          ...new Set((extractionRows ?? []).map((r) => r.document_id).filter(Boolean)),
+        ];
+        const pathMap = new Map<string, string | null>();
+        if (documentIds.length > 0) {
+          const { data: documentRows } = await supabase
+            .from("extraction_documents")
+            .select("id, file_path")
+            .in("id", documentIds);
+          for (const doc of documentRows ?? []) {
+            pathMap.set(doc.id, doc.file_path ?? null);
+          }
+        }
+
         for (const row of extractionRows ?? []) {
           extractionMap.set(row.id, {
             payload: ((row.payload ?? {}) as unknown) as ExtractionPayload,
             field_flags: (Array.isArray(row.field_flags) ? row.field_flags : []) as ExtractionFlag[],
+            confidence: typeof row.confidence === "number" ? row.confidence : 0,
+            file_path: pathMap.get(row.document_id) ?? null,
           });
         }
       }
@@ -160,6 +171,7 @@ export default function AdminPayments() {
           user_email: emailMap.get(p.user_id as string) ?? undefined,
           extracted_amount_inr: extraction?.payload.amount_inr ?? null,
           field_flags: extraction?.field_flags ?? [],
+          extraction,
           attempt_index: siblings.indexOf(p.id as string) + 1,
           attempt_total: siblings.length,
         };
@@ -213,12 +225,14 @@ export default function AdminPayments() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>Tournament</TableHead>
                   <TableHead>Organizer</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Claimed</TableHead>
                   <TableHead>On screenshot</TableHead>
                   <TableHead>UTR</TableHead>
+                  <TableHead>Screenshot</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Reviewed</TableHead>
                   <TableHead>Attempt</TableHead>
@@ -230,8 +244,28 @@ export default function AdminPayments() {
                   const mismatch =
                     row.extracted_amount_inr != null && row.extracted_amount_inr !== row.amount_inr;
                   const repeated = row.attempt_total > 1;
+                  const isOpen = expanded[row.id] ?? false;
                   return (
-                    <TableRow key={row.id}>
+                    <Fragment key={row.id}>
+                    <TableRow>
+                      <TableCell className="pr-0 align-top">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? "Hide payment evidence" : "Show payment evidence"}
+                          onClick={() =>
+                            setExpanded((prev) => ({ ...prev, [row.id]: !(prev[row.id] ?? false) }))
+                          }
+                        >
+                          {isOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-sm font-medium">
                         {row.tournament_title ?? (
                           <span className="font-mono text-xs text-muted-foreground">
@@ -283,6 +317,15 @@ export default function AdminPayments() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.utr}</TableCell>
+                      {/* Three visibly distinct states — a blank cell here would
+                          read as "no evidence" for all of them. */}
+                      <TableCell className="text-xs">
+                        {row.screenshot_extraction_id == null ? (
+                          <NoScreenshotNotice />
+                        ) : (
+                          <ViewScreenshotButton filePath={row.extraction?.file_path ?? null} />
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-foreground/80">
                         {formatDateTime(row.created_at)}
                       </TableCell>
@@ -317,6 +360,40 @@ export default function AdminPayments() {
                         )}
                       </TableCell>
                     </TableRow>
+                    {isOpen && (
+                      /* Opaque resting background plus a hover: override that repeats
+                         it — the base TableRow carries `hover:bg-muted/50`, so a
+                         translucent tint would only be legible while hovered. */
+                      <TableRow
+                        className={
+                          row.extraction
+                            ? evidenceRowClass(row.field_flags.length > 0)
+                            : "bg-muted hover:bg-muted"
+                        }
+                      >
+                        <TableCell
+                          colSpan={12}
+                          className="border-t border-border px-6 py-2.5 text-foreground"
+                        >
+                          {row.extraction ? (
+                            <PaymentExtractionEvidence
+                              extraction={row.extraction}
+                              claimedAmountInr={row.amount_inr}
+                            />
+                          ) : (
+                            <div className="flex items-start gap-1.5 text-xs">
+                              <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-800 dark:text-amber-300" />
+                              <span className="font-medium text-foreground">
+                                {row.screenshot_extraction_id
+                                  ? "The extraction record for this screenshot could not be read — no extracted fields to show."
+                                  : "UTR only — no screenshot was submitted with this claim, so nothing was extracted or verified."}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   );
                 })}
               </TableBody>
