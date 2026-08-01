@@ -1,6 +1,20 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle2, ImageIcon, Loader2, ShieldAlert } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  ImageIcon,
+  Loader2,
+  ShieldAlert,
+} from "lucide-react";
 import { getSignedUrl } from "@/lib/storage";
 import { formatCurrencyINR } from "@/utils/currency";
 
@@ -57,12 +71,26 @@ function flagText(f: ExtractionFlag): string {
 }
 
 /**
- * Opens the uploaded payment screenshot via a short-lived signed URL.
- * Failures are rendered as visible text — a review screen must never fail silently.
+ * Shows the uploaded payment screenshot in-app, via a short-lived signed URL.
+ *
+ * The reviewer stays in the review context: the image opens in a dialog next to
+ * the extracted fields it has to be checked against, not in a new tab on a raw
+ * storage URL. "Open in new tab" is kept inside the dialog for zooming.
+ *
+ * Three failure modes, all of which must be VISIBLE — a review screen may never
+ * render an empty box:
+ *  1. no stored file          → amber notice in place of the button
+ *  2. signing fails           → error text under the button
+ *  3. the object 404s / is gone → the <img> onError fallback inside the dialog
+ *
+ * The URL is signed on click and dropped on close, never cached across opens:
+ * tokens expire after an hour and a stale one fails silently.
  */
 export function ViewScreenshotButton({ filePath }: { filePath: string | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   if (!filePath) {
     return (
@@ -73,16 +101,19 @@ export function ViewScreenshotButton({ filePath }: { filePath: string | null }) 
     );
   }
 
+  // filePath is passed through verbatim: stored rows use more than one path
+  // shape and the bucket resolves all of them. Never parse or rebuild it here.
   const open = async () => {
     setLoading(true);
     setError(null);
+    setImageFailed(false);
     const { url, error: signError } = await getSignedUrl("extraction-uploads", filePath, 3600);
     setLoading(false);
     if (!url) {
       setError(signError?.message ?? "Could not generate a signed URL for this file.");
       return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    setSignedUrl(url);
   };
 
   return (
@@ -94,6 +125,66 @@ export function ViewScreenshotButton({ filePath }: { filePath: string | null }) 
       {error && (
         <span className="text-[11px] font-medium text-destructive">Screenshot unavailable: {error}</span>
       )}
+
+      <Dialog
+        open={signedUrl != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setSignedUrl(null);
+            setImageFailed(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">Payment screenshot</DialogTitle>
+            <DialogDescription className="text-xs">
+              Check the amount and UTR here against the extracted fields.
+              {signedUrl && (
+                <>
+                  {" "}
+                  <a
+                    href={signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 font-medium text-foreground underline underline-offset-2"
+                  >
+                    Open in new tab
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>{" "}
+                  to zoom.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Payment screenshots are tall phone captures. Scroll the container
+              rather than squashing the image below legibility. */}
+          <div className="max-h-[75vh] overflow-auto rounded border bg-muted/30">
+            {imageFailed ? (
+              <div className="flex items-start gap-2 p-4 text-xs font-medium text-destructive">
+                <AlertCircle className="mt-px h-4 w-4 shrink-0" />
+                <span>
+                  Screenshot could not be loaded.
+                  <span className="block font-normal">
+                    The file is missing from storage or the link has expired. Close this and try
+                    again; if it keeps failing, treat this payment as having no screenshot evidence.
+                  </span>
+                </span>
+              </div>
+            ) : (
+              signedUrl && (
+                <img
+                  src={signedUrl}
+                  alt="Payment screenshot submitted with this claim"
+                  className="mx-auto max-h-[80vh] w-auto object-contain"
+                  onError={() => setImageFailed(true)}
+                />
+              )
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </span>
   );
 }
