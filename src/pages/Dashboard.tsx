@@ -101,6 +101,73 @@ export default function Dashboard() {
     },
   });
 
+  // L4 — a pending or rejected payment claim must stay visible on the dashboard until it is
+  // resolved, surviving navigation and reload. Reads only the caller's own rows: RLS
+  // `users_read_own_payments` on tournament_payments and
+  // `tournament_entitlements_select_own_or_master` on tournament_entitlements both key off
+  // auth.uid(), so no new policy is needed. Any failure degrades to no banner (data stays
+  // undefined on error and while loading) rather than disturbing the dashboard.
+  const { data: paymentAlerts } = useQuery({
+    queryKey: ['dashboard-payment-alerts', user?.id],
+    enabled: !!user && authzStatus === 'ready' && role === 'organizer' && !is_master,
+    queryFn: async () => {
+      const { data: payments, error: paymentsError } = await supabase
+        .from('tournament_payments')
+        .select('id, tournament_id, status, review_note, created_at')
+        .eq('user_id', user!.id)
+        .in('status', ['pending', 'rejected'])
+        .order('created_at', { ascending: false });
+      if (paymentsError) throw paymentsError;
+      if (!payments || payments.length === 0) return [];
+
+      // One banner per tournament: the ordering above puts the newest claim first, so the first
+      // row seen for a tournament is the one whose state the organizer should act on.
+      const latestPerTournament = new Map<string, typeof payments[number]>();
+      for (const payment of payments) {
+        if (!latestPerTournament.has(payment.tournament_id)) {
+          latestPerTournament.set(payment.tournament_id, payment);
+        }
+      }
+      const tournamentIds = [...latestPerTournament.keys()];
+
+      // An already-active entitlement means Pro is live on that tournament; don't alarm the
+      // organizer about a stale rejected (or superseded pending) claim.
+      const nowIso = new Date().toISOString();
+      const { data: entitlements, error: entitlementsError } = await supabase
+        .from('tournament_entitlements')
+        .select('tournament_id')
+        .eq('owner_id', user!.id)
+        .in('tournament_id', tournamentIds)
+        .lte('starts_at', nowIso)
+        .gt('ends_at', nowIso);
+      if (entitlementsError) throw entitlementsError;
+      const entitledIds = new Set((entitlements ?? []).map((row) => row.tournament_id));
+
+      const unresolvedIds = tournamentIds.filter((id) => !entitledIds.has(id));
+      if (unresolvedIds.length === 0) return [];
+
+      // Titles are cosmetic — a failed lookup falls back to generic copy instead of hiding the banner.
+      const { data: titleRows, error: titlesError } = await supabase
+        .from('tournaments')
+        .select('id, title')
+        .in('id', unresolvedIds);
+      if (titlesError) {
+        console.warn('[dashboard] payment banner title lookup failed; using generic copy', titlesError);
+      }
+      const titles = new Map((titleRows ?? []).map((row) => [row.id, row.title]));
+
+      return unresolvedIds.map((tournamentId) => {
+        const payment = latestPerTournament.get(tournamentId)!;
+        return {
+          tournamentId,
+          status: payment.status,
+          reviewNote: payment.review_note,
+          title: titles.get(tournamentId) ?? null,
+        };
+      });
+    },
+  });
+
   // Create tournament mutation
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -272,6 +339,45 @@ export default function Dashboard() {
               Your organizer access needs attention. You can keep using the dashboard while this is checked.
             </p>
           </div>
+        )}
+
+        {/* Payment claim state banners (L4) — one per tournament with an unresolved claim. */}
+        {paymentAlerts?.map((alert) =>
+          alert.status === 'rejected' ? (
+            <div
+              key={alert.tournamentId}
+              className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
+            >
+              <p className="text-sm text-red-800 dark:text-red-200">
+                Your Pro upgrade payment for {alert.title ?? 'your tournament'} was rejected.
+                {alert.reviewNote ? ` Reason: ${alert.reviewNote}` : ''}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`/t/${alert.tournamentId}/payment`)}
+                className="mt-2 text-sm font-medium underline underline-offset-2 text-red-900 dark:text-red-100"
+              >
+                Review and resubmit payment
+              </button>
+            </div>
+          ) : (
+            <div
+              key={alert.tournamentId}
+              className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
+            >
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Your Pro upgrade payment for {alert.title ?? 'your tournament'} is awaiting review. We'll
+                enable Pro features as soon as it is approved.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`/t/${alert.tournamentId}/payment`)}
+                className="mt-2 text-sm font-medium underline underline-offset-2 text-amber-900 dark:text-amber-100"
+              >
+                View payment status
+              </button>
+            </div>
+          )
         )}
 
         <div className="mb-6">
