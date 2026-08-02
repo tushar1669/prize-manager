@@ -407,3 +407,65 @@ describe("Phase 2A — payment grounding and invariants", () => {
     expect(diff > 30).toBe(true);
   });
 });
+
+describe("payment_screenshot schema v2 — txn_id and direction_label grounding", () => {
+  it("grounds a txn_id quoted verbatim in the receipt text", () => {
+    const { payload, grounding, flags } = runTrustCheck(
+      { txn_id: "T2607241530" },
+      "Transaction ID T2607241530 · UPI",
+    );
+    expect(payload.txn_id).toBe("T2607241530");
+    expect(grounding.txn_id.method).toBe("digits");
+    expect(flags).toHaveLength(0);
+  });
+
+  it("grounds a txn_id the OCR broke into spaced runs", () => {
+    // Digits survive the spacing and the dropped "T"; groundString would not.
+    const { payload, grounding, flags } = runTrustCheck(
+      { txn_id: "T2607241530" },
+      "Transaction ID T 2607 241530 · UPI",
+    );
+    expect(payload.txn_id).toBe("T2607241530");
+    expect(grounding.txn_id.method).toBe("digits");
+    expect(flags).toHaveLength(0);
+  });
+
+  it("refuses a txn_id whose digits the receipt never states", () => {
+    const { payload, grounding, flags } = runTrustCheck(
+      { txn_id: "T2607241530" },
+      "Transaction ID T9999999999 · UPI",
+    );
+    expect(payload.txn_id).toBeNull();
+    expect(grounding.txn_id.grounded).toBe(false);
+    expect(flags).toEqual([{ field: "txn_id", reason: "ungrounded", severity: "high" }]);
+  });
+
+  it("grounds direction_label as a literal string, not by digits", () => {
+    const { payload, grounding, flags } = runTrustCheck(
+      { direction_label: "Paid to" },
+      "Paid to Prize Manager · ₹1499",
+    );
+    expect(payload.direction_label).toBe("Paid to");
+    expect(grounding.direction_label.method).toBe("string");
+    expect(flags).toHaveLength(0);
+  });
+
+  it("blanks and flags a direction_label the receipt never printed", () => {
+    const { payload, grounding, flags } = runTrustCheck(
+      { direction_label: "Paid to" },
+      "Received from Prize Manager · ₹1499",
+    );
+    expect(payload.direction_label).toBeNull();
+    expect(grounding.direction_label.grounded).toBe(false);
+    expect(flags).toEqual([{ field: "direction_label", reason: "ungrounded", severity: "high" }]);
+  });
+
+  it("grounds payee_name as a literal string, not by digits", () => {
+    const { payload, grounding } = runTrustCheck(
+      { payee_name: "Prize Manager" },
+      "Paid to Prize Manager · ₹1499",
+    );
+    expect(payload.payee_name).toBe("Prize Manager");
+    expect(grounding.payee_name.method).toBe("string");
+  });
+});
