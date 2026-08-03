@@ -219,10 +219,17 @@ function groundLeaf(
 
   const trimmed = value.trim();
   if (ISO_DATE_RE.test(trimmed)) return groundDate(trimmed, ctx.text, ctx.dateTokens);
-  // txn_id joins them because a PSP reference ("T2607241530") is a digit run behind a vendor
-  // prefix: OCR routinely spaces it ("T 2607 241530") or loses the leading letter, which
-  // groundString would call invented. The digits are the part the receipt actually commits to.
-  if (leaf === "contact_phone" || leaf === "utr" || leaf === "txn_id") return groundDigits(trimmed, ctx.text);
+  if (leaf === "contact_phone" || leaf === "utr") return groundDigits(trimmed, ctx.text);
+  // txn_id joins them only when it is really a digit run behind a vendor prefix
+  // ("T2607241530"): OCR routinely spaces those ("T 2607 241530") or loses the leading letter,
+  // which groundString would call invented. The digits are what the receipt commits to.
+  // But a mostly-alphabetic id (GPay's "CICAgLii79OjJA") strips down to a two-digit stub that
+  // matches almost any receipt, so below the 6-digit floor we ground the literal string instead.
+  if (leaf === "txn_id") {
+    return trimmed.replace(/\D/g, "").length >= 6
+      ? groundDigits(trimmed, ctx.text)
+      : groundString(trimmed, ctx.text, ctx.normalized);
+  }
   if (leaf === "category") {
     return path.endsWith("time_control.category")
       ? groundTimeControlCategory(trimmed, container, ctx)

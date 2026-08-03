@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   extractDateTokens,
   extractNumericTokens,
@@ -467,5 +467,138 @@ describe("payment_screenshot schema v2 — txn_id and direction_label grounding"
     );
     expect(payload.payee_name).toBe("Prize Manager");
     expect(grounding.payee_name.method).toBe("string");
+  });
+});
+
+describe("payment_screenshot schema v3 — txn_id grounding routes by digit count", () => {
+  it("grounds a mostly-alphabetic GPay txn_id as a string, not by digits", () => {
+    // "CICAgLii79OjJA" strips to "79" — digit grounding would match nearly any receipt.
+    const { payload, grounding, flags } = runTrustCheck(
+      { txn_id: "CICAgLii79OjJA" },
+      "Google transaction ID: CICAgLii79OjJA",
+    );
+    expect(payload.txn_id).toBe("CICAgLii79OjJA");
+    expect(grounding.txn_id.method).toBe("string");
+    expect(flags).toHaveLength(0);
+  });
+
+  it("refuses a short-digit txn_id whose literal string the receipt never states", () => {
+    // The vacuous-grounding case: "79" appears, the id itself does not.
+    const { payload, grounding } = runTrustCheck(
+      { txn_id: "CICAgLii79OjJA" },
+      "UPI transaction ID: 127287042392 · debited 79 rupees",
+    );
+    expect(payload.txn_id).toBeNull();
+    expect(grounding.txn_id.grounded).toBe(false);
+  });
+
+  it("still grounds a long PhonePe txn_id by digits", () => {
+    const { payload, grounding, flags } = runTrustCheck(
+      { txn_id: "T2607281109445608536045" },
+      "PhonePe Transaction ID: T2607281109445608536045",
+    );
+    expect(payload.txn_id).toBe("T2607281109445608536045");
+    expect(grounding.txn_id.method).toBe("digits");
+    expect(flags).toHaveLength(0);
+  });
+});
+
+describe("payment invariants — direction, payee VPA presence, required fields", () => {
+  const PLATFORM_VPA = "9559161414-5@ybl";
+
+  // Verbatim production OCR text for the three receipt shapes we have to separate.
+  const PHONEPE_OUTGOING =
+    "Transaction Header\n   Status: Transaction Successful\n   Timestamp: 11:09 am on 28 Jul 2026\nPayee Details\n   Name: NEW PRASHAANT ENTERPRISES\n   UPI ID: Q016383450@ybl\n   Amount: ₹43\nPayment Details\n   PhonePe Transaction ID: T2607281109445608536045\n   Debited from: XXXXXX4944\n   Debit Amount: ₹43\n   UTR: 530869563988";
+  const GPAY_OUTGOING =
+    "Transaction Details\n   Recipient Name: TUSHAR SARASWAT\n   Amount: ₹1\n   Status: Completed\nTransaction Identifiers\n   UPI transaction ID: 127287042392\n   Google transaction ID: CICAgLii79OjJA\nRecipient Information\n   Recipient Name: TUSHAR SARASWAT\n   Recipient UPI ID: 9559161414-5@ybl\n   Recipient Platform: PhonePe\nSender Information\n   Sender Name: TUSHAR SARASWAT\n   Sender UPI ID: tusharsaraswat68-5@okhdfcbank";
+  const PHONEPE_INCOMING =
+    "Transaction Header\n   Status: Transaction Successful\n   Timestamp: 08:50 am on 03 Aug 2026\nSender Details\n   Name: TUSHAR SARASWAT\n   Identifier: tusharsaraswat68-5@okhdfcbank\n   Amount: ₹1\nTransfer Details\n   PhonePe Transaction ID: T2608030850117559380892\nRecipient Details\n   Credited to: 3561XXXXXXX3993\n   Amount: ₹1\n   UTR: 127287042392";
+
+  // Minimal chainable stand-in for the service-role client: every payment invariant that
+  // touches the database (UTR duplicate, expected amount) resolves to "nothing found".
+  const admin = {
+    from: () => {
+      const result = Promise.resolve({ data: [], error: null, count: 0 });
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        neq: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        then: (...args: Parameters<Promise<unknown>["then"]>) => result.then(...args),
+      };
+      return builder;
+    },
+  };
+
+  let runPaymentTrustChecks: typeof import("../supabase/functions/extract/paymentTrustCheck").runPaymentTrustChecks;
+
+  beforeAll(async () => {
+    (globalThis as { Deno?: unknown }).Deno = {
+      env: { get: vi.fn((key: string) => (key === "PLATFORM_PAYEE_VPA" ? PLATFORM_VPA : undefined)) },
+    };
+    ({ runPaymentTrustChecks } = await import("../supabase/functions/extract/paymentTrustCheck"));
+  });
+
+  const reasons = async (payload: Record<string, unknown>, ocrText: string) => {
+    const flags = await runPaymentTrustChecks(payload, null, null, admin as never, ocrText);
+    return flags.map((flag) => flag.reason);
+  };
+
+  it("clears a PhonePe outgoing receipt on its own wording, not the payee VPA", async () => {
+    // payee_vpa here is the merchant, not us — direction has to come from "Debited from".
+    expect(
+      await reasons({ payee_vpa: "Q016383450@ybl", amount_inr: 43 }, PHONEPE_OUTGOING),
+    ).not.toContain("direction_not_outgoing");
+  });
+
+  it("clears a GPay receipt on the platform VPA match, which prints no direction word", async () => {
+    expect(
+      await reasons({ payee_vpa: PLATFORM_VPA, amount_inr: 1 }, GPAY_OUTGOING),
+    ).not.toContain("direction_not_outgoing");
+  });
+
+  it("flags a PhonePe incoming receipt passed off as a payment made", async () => {
+    expect(
+      await reasons({ payee_vpa: null, amount_inr: 1 }, PHONEPE_INCOMING),
+    ).toContain("direction_not_outgoing");
+  });
+
+  it("flags a missing payee VPA instead of skipping the allow-list check", async () => {
+    expect(await reasons({ payee_vpa: null, amount_inr: 1 }, PHONEPE_INCOMING)).toContain(
+      "payee_vpa_missing",
+    );
+    expect(await reasons({ payee_vpa: "   ", amount_inr: 1 }, PHONEPE_INCOMING)).toContain(
+      "payee_vpa_missing",
+    );
+  });
+
+  it("leaves the mismatch behaviour untouched when a payee VPA is present", async () => {
+    const platform = await reasons({ payee_vpa: PLATFORM_VPA, amount_inr: 1 }, GPAY_OUTGOING);
+    expect(platform).not.toContain("payee_vpa_missing");
+    expect(platform).not.toContain("payee_vpa_mismatch");
+
+    const stranger = await reasons({ payee_vpa: "Q016383450@ybl", amount_inr: 43 }, PHONEPE_OUTGOING);
+    expect(stranger).not.toContain("payee_vpa_missing");
+    expect(stranger).toContain("payee_vpa_mismatch");
+  });
+
+  it("flags a screenshot that yielded no amount, no UTR and no date", async () => {
+    expect(
+      await reasons(
+        { payee_vpa: PLATFORM_VPA, amount_inr: null, utr: null, txn_date: null },
+        GPAY_OUTGOING,
+      ),
+    ).toContain("required_fields_missing");
+  });
+
+  it("does not flag required fields when at least the UTR came through", async () => {
+    expect(
+      await reasons(
+        { payee_vpa: PLATFORM_VPA, amount_inr: null, utr: "530869563988", txn_date: null },
+        GPAY_OUTGOING,
+      ),
+    ).not.toContain("required_fields_missing");
   });
 });

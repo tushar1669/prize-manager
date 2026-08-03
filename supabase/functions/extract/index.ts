@@ -773,6 +773,7 @@ Deno.serve(async (req: Request) => {
         tournamentId,
         doc.uploaded_by,
         supabase,
+        transcription,
       );
       flags.push(...paymentFlags);
     }
