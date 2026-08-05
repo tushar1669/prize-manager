@@ -4,6 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +30,19 @@ import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrati
 
 const UPI_ID = "9559161414-5@ybl";
 const PAYEE_NAME = "Tushar Saraswat";
+const SUPPORT_EMAIL = "chess.tushar@gmail.com";
+const SUPPORT_PHONE = "+91-9559161414";
+
+/**
+ * Server-side UTR blocks raised by submit_tournament_payment_claim (D30/D31). Each one
+ * gets a dialog rather than a toast: the organizer has just paid real money and needs
+ * enough copy to work out what to do next.
+ */
+type UtrBlockCode =
+  | "UTR_ALREADY_USED"
+  | "UTR_IS_TXN_ID"
+  | "UTR_MISMATCH"
+  | "UTR_EXTRACTION_UNREADABLE";
 
 type RedeemCouponResponse = { amount_after: number; discount_amount: number; reason: string };
 
@@ -29,6 +52,36 @@ type ProPriceRow = {
   amount_inr: number;
   tier_label: string;
   free_player_threshold: number;
+};
+
+const UTR_BLOCK_COPY: Record<UtrBlockCode, { title: string; body: string; contact: boolean }> = {
+  // Deliberately says nothing about which tournament or which user consumed the UTR.
+  UTR_ALREADY_USED: {
+    title: "This UTR has already been used",
+    body:
+      "Each UPI payment can only be used for one tournament. If you paid separately for this tournament, please check you've entered the right UTR from that payment.",
+    contact: true,
+  },
+  UTR_IS_TXN_ID: {
+    title: "That's the Transaction ID, not the UTR",
+    body:
+      "Payment apps show two different numbers for the same payment: their own Transaction ID, and the bank's UTR (sometimes labelled UPI Ref No). We need the UTR — the number you entered is the Transaction ID.",
+    contact: false,
+  },
+  // No extracted UTR here and no one-tap fill: the submitted value matched neither the
+  // UTR nor the txn_id on the screenshot, so we have no basis for suggesting a correction.
+  UTR_MISMATCH: {
+    title: "UTR doesn't match your screenshot",
+    body:
+      "The UTR you entered doesn't match the one on the screenshot you uploaded. Please check your receipt and re-enter it, or upload the screenshot for this exact payment.",
+    contact: true,
+  },
+  UTR_EXTRACTION_UNREADABLE: {
+    title: "We couldn't read the UTR on your screenshot",
+    body:
+      "Please upload a clearer screenshot showing the full UTR / UPI Ref No, or remove the screenshot and submit the UTR on its own.",
+    contact: true,
+  },
 };
 
 function getCouponErrorMessage(error: unknown): string {
@@ -69,6 +122,14 @@ export default function TournamentUpgrade() {
     "idle" | "uploading" | "extracting" | "done" | "error"
   >("idle");
   const [screenshotExtractionId, setScreenshotExtractionId] = useState<string | null>(null);
+  // Retained from the extraction purely for dialog copy — the one-tap correction on
+  // UTR_IS_TXN_ID. Never used to decide whether a submission may proceed.
+  const [extractedUtr, setExtractedUtr] = useState<string | null>(null);
+  const [extractedTxnId, setExtractedTxnId] = useState<string | null>(null);
+  // Advisory only (D31): /extract saw this UTR on another payment. The extracted value
+  // can be an OCR misread, so this warns and never blocks — the server check is the truth.
+  const [utrDuplicateWarning, setUtrDuplicateWarning] = useState(false);
+  const [utrBlock, setUtrBlock] = useState<UtrBlockCode | null>(null);
   const [upiCopied, setUpiCopied] = useState(false);
   const [amountDue, setAmountDue] = useState(0);
   const { user } = useAuth();
@@ -205,6 +266,9 @@ export default function TournamentUpgrade() {
       setScreenshotFile(file);
       setScreenshotStage("uploading");
       setScreenshotExtractionId(null);
+      setExtractedUtr(null);
+      setExtractedTxnId(null);
+      setUtrDuplicateWarning(false);
 
       try {
         // Without a tournament id the path would read ".../payments/undefined/…",
@@ -265,6 +329,22 @@ export default function TournamentUpgrade() {
         setScreenshotExtractionId(extractionId);
         setScreenshotStage("done");
 
+        // Advisory duplicate warning (D31): field_flags comes back on the invoke response
+        // itself, so this surfaces seconds after upload — before the organizer hits Submit.
+        const responseFlags = (invokeResult.data as { field_flags?: unknown } | null)
+          ?.field_flags;
+        if (
+          Array.isArray(responseFlags) &&
+          responseFlags.some(
+            (flag: unknown) =>
+              !!flag &&
+              typeof flag === "object" &&
+              (flag as { reason?: unknown }).reason === "utr_duplicate",
+          )
+        ) {
+          setUtrDuplicateWarning(true);
+        }
+
         // Best-effort UTR pre-fill. /extract returns metadata only (extraction_id,
         // status, confidence, field_flags, schema_version, ocr_*), never the payload,
         // so read the row back. Everything here is swallowed: a failed pre-fill must
@@ -278,13 +358,19 @@ export default function TournamentUpgrade() {
           if (prefillErr) throw prefillErr;
 
           const payload = extraction?.payload as Record<string, unknown> | null;
-          const extractedUtr =
+          const payloadUtr =
             payload && typeof payload.utr === "string" ? payload.utr.trim() : "";
+          const payloadTxnId =
+            payload && typeof payload.txn_id === "string" ? payload.txn_id.trim() : "";
+
+          // Retained for the block dialogs only — never for gating the submission.
+          setExtractedUtr(payloadUtr || null);
+          setExtractedTxnId(payloadTxnId || null);
 
           // Never overwrite what the organizer has already typed.
-          if (extractedUtr && !utrValueRef.current.trim()) {
-            utrValueRef.current = extractedUtr;
-            setUtrValue(extractedUtr);
+          if (payloadUtr && !utrValueRef.current.trim()) {
+            utrValueRef.current = payloadUtr;
+            setUtrValue(payloadUtr);
             setUtrWasPrefilled(true);
           }
         } catch (prefillErr) {
@@ -329,12 +415,38 @@ export default function TournamentUpgrade() {
       queryClient.invalidateQueries({ queryKey: ["tournament-payment-status", id, user?.id] });
       queryClient.invalidateQueries({ queryKey: ["tournament-access", id] });
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       const msg = error instanceof Error ? error.message : String(error);
+
+      // Every server-side UTR block is audited (D31) so the false-positive rate is
+      // measurable in week one. The RPC raises these as bare strings.
+      const logBlocked = (code: string) => {
+        void logAuditEvent({
+          eventType: "payment_blocked",
+          message: code,
+          referenceId: normalizeError(error).referenceId,
+          context: {
+            tournament_id: id,
+            had_screenshot: variables.extractionId !== null,
+          },
+        });
+      };
+
       if (msg === "PENDING_PAYMENT_ALREADY_EXISTS") {
         toast.error("You already have a pending payment for this tournament.");
       } else if (msg === "INVALID_UTR") {
         toast.error("Please enter a valid UTR (at least 6 characters).");
+      } else if (
+        msg === "UTR_ALREADY_USED" ||
+        msg === "UTR_IS_TXN_ID" ||
+        msg === "UTR_MISMATCH" ||
+        msg === "UTR_EXTRACTION_UNREADABLE"
+      ) {
+        logBlocked(msg);
+        setUtrBlock(msg);
+      } else if (msg === "EXTRACTION_NOT_OWNED") {
+        logBlocked(msg);
+        toast.error("Something went wrong with your screenshot. Please re-upload it.");
       } else {
         const normalized = normalizeError(error);
         toast.error(toastMessage(normalized));
@@ -624,6 +736,12 @@ export default function TournamentUpgrade() {
                         Pre-filled from your screenshot — please check it matches your UPI app.
                       </p>
                     )}
+                    {utrDuplicateWarning && (
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+                        This UTR looks like one already used on this platform. If that&apos;s
+                        unexpected, double-check your receipt before submitting.
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Find the UTR in your UPI app&apos;s transaction details after paying.
                     </p>
@@ -648,6 +766,72 @@ export default function TournamentUpgrade() {
           </Card>
         )}
       </div>
+
+      {/* Server-side UTR blocks (D30/D31). Informational — dismissing returns the
+          organizer to the form with what they typed intact. */}
+      <AlertDialog
+        open={utrBlock !== null}
+        onOpenChange={(open) => {
+          if (!open) setUtrBlock(null);
+        }}
+      >
+        <AlertDialogContent>
+          {utrBlock && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{UTR_BLOCK_COPY[utrBlock].title}</AlertDialogTitle>
+                <AlertDialogDescription>{UTR_BLOCK_COPY[utrBlock].body}</AlertDialogDescription>
+              </AlertDialogHeader>
+
+              {utrBlock === "UTR_IS_TXN_ID" && (
+                <div className="space-y-2 rounded-md border bg-muted/40 px-3 py-2">
+                  {extractedTxnId && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Transaction ID on your screenshot
+                      </p>
+                      <code className="mt-0.5 block font-mono text-sm">{extractedTxnId}</code>
+                    </div>
+                  )}
+                  {extractedUtr && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        UTR on your screenshot
+                      </p>
+                      <code className="mt-0.5 block font-mono text-sm font-semibold text-foreground">
+                        {extractedUtr}
+                      </code>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {UTR_BLOCK_COPY[utrBlock].contact && (
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Still stuck? Contact us:</p>
+                  <p>{SUPPORT_EMAIL}</p>
+                  <p>{SUPPORT_PHONE}</p>
+                </div>
+              )}
+
+              <AlertDialogFooter>
+                <AlertDialogCancel>Close</AlertDialogCancel>
+                {utrBlock === "UTR_IS_TXN_ID" && extractedUtr && (
+                  <AlertDialogAction
+                    onClick={() => {
+                      utrValueRef.current = extractedUtr;
+                      setUtrValue(extractedUtr);
+                      setUtrBlock(null);
+                    }}
+                  >
+                    Use this UTR
+                  </AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
