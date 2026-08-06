@@ -138,15 +138,30 @@ export default function TournamentUpgrade() {
   const hasBackendMigrationIssue = accessErrorCode === "backend_migration_missing";
 
 
-  const { data: proPrice, isLoading: pricingLoading } = useQuery({
+  const {
+    data: proPrice,
+    isLoading: pricingLoading,
+    isError: pricingIsError,
+    error: pricingError,
+    refetch: refetchPricing,
+  } = useQuery({
     queryKey: ["tournament-pro-price", id],
     enabled: !!id && !hasBackendMigrationIssue,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_tournament_pro_price", { tournament_id: id! });
-      if (error) throw error;
+      // supabase raises a PostgrestError, not an Error. Re-throw as a real Error so the
+      // retry predicate and the error card can both read `.message` without guarding.
+      if (error) throw new Error(error.message);
       const row: ProPriceRow | null = Array.isArray(data) ? data[0] ?? null : data;
       if (!row) throw new Error("Pricing response missing");
       return row;
+    },
+    // UNAUTHORIZED and TOURNAMENT_NOT_FOUND are permanent — retrying them only makes
+    // the page flicker between loading and error.
+    retry: (failureCount, error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("UNAUTHORIZED") || msg.includes("TOURNAMENT_NOT_FOUND")) return false;
+      return failureCount < 2;
     },
   });
 
@@ -447,6 +462,10 @@ export default function TournamentUpgrade() {
       } else if (msg === "EXTRACTION_NOT_OWNED") {
         logBlocked(msg);
         toast.error("Something went wrong with your screenshot. Please re-upload it.");
+      } else if (msg === "INVALID_PAYMENT_AMOUNT") {
+        toast.error("The payment amount is out of date. Please refresh the page and try again.");
+      } else if (msg === "UNAUTHORIZED") {
+        toast.error("You don't have permission to pay for this tournament.");
       } else {
         const normalized = normalizeError(error);
         toast.error(toastMessage(normalized));
@@ -525,6 +544,63 @@ export default function TournamentUpgrade() {
         </Card>
         )}
 
+        {/* Pricing is what every section below gates on, so its loading and failure
+            states are explicit — a silent failure used to render "Pay ₹0". */}
+        {!hasBackendMigrationIssue && pricingLoading && (
+          <Card>
+            <CardContent className="pt-6 flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading pricing…</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {!hasBackendMigrationIssue && pricingIsError && (
+          <Card className="border-destructive/50">
+            <CardContent className="pt-6 space-y-3">
+              {(() => {
+                const msg =
+                  pricingError instanceof Error ? pricingError.message : String(pricingError);
+                if (msg.includes("UNAUTHORIZED")) {
+                  return (
+                    <>
+                      <p className="text-sm font-medium text-destructive">
+                        You don&apos;t have access to this tournament
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        This tournament belongs to a different account. Check which account
+                        you&apos;re signed in with, or go back to your dashboard.
+                      </p>
+                    </>
+                  );
+                }
+                if (msg.includes("TOURNAMENT_NOT_FOUND")) {
+                  return (
+                    <>
+                      <p className="text-sm font-medium text-destructive">Tournament not found</p>
+                      <p className="text-sm text-muted-foreground">
+                        This tournament may have been deleted.
+                      </p>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <p className="text-sm font-medium text-destructive">Couldn&apos;t load pricing</p>
+                    <p className="text-sm text-muted-foreground">
+                      Something went wrong loading the price for this tournament. Your payment has
+                      not been affected.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => void refetchPricing()}>
+                      Try again
+                    </Button>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Already Pro */}
         {!accessLoading && hasFullAccess && (
           <Card className="border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
@@ -588,7 +664,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* Coupon section — preserved exactly */}
-        {!hasBackendMigrationIssue && !pricingLoading && !isFreeTier && (
+        {!hasBackendMigrationIssue && proPrice && !isFreeTier && (
         <Card className={couponHighlighted ? "border-primary/60" : ""}>
           <CardHeader>
             <CardTitle>Apply Coupon</CardTitle>
@@ -622,7 +698,7 @@ export default function TournamentUpgrade() {
         )}
 
         {/* UPI Payment section — new */}
-        {!hasBackendMigrationIssue && !hasFullAccess && !pricingLoading && !isFreeTier && (
+        {!hasBackendMigrationIssue && !hasFullAccess && proPrice && !isFreeTier && (
           <Card>
             <CardHeader>
               <CardTitle>Pay via UPI</CardTitle>
@@ -750,7 +826,7 @@ export default function TournamentUpgrade() {
                     onClick={() =>
                       submitPaymentMutation.mutate({ utr: utrValue, extractionId: screenshotExtractionId })
                     }
-                    disabled={utrValue.trim().length < 6 || submitPaymentMutation.isPending}
+                    disabled={utrValue.trim().length < 6 || submitPaymentMutation.isPending || amountDue <= 0}
                   >
                     {submitPaymentMutation.isPending ? (
                       <span className="inline-flex items-center gap-2">
