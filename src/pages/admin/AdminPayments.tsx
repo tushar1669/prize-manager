@@ -44,12 +44,9 @@ interface HistoryRow {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  approved:
-    "bg-emerald-100 text-emerald-900 border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700",
-  rejected:
-    "bg-red-100 text-red-900 border-red-500 dark:bg-red-950/60 dark:text-red-200 dark:border-red-700",
-  pending:
-    "bg-amber-100 text-amber-900 border-amber-500 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-700",
+  approved: "bg-success/15 text-success border-success/30",
+  rejected: "bg-destructive/15 text-destructive border-destructive/30",
+  pending: "bg-warning/15 text-warning border-warning/30",
 };
 
 function formatDateTime(value: string | null): string {
@@ -311,7 +308,7 @@ export default function AdminPayments() {
                             )}
                           </span>
                         ) : (
-                          <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                          <span className="text-[11px] font-medium text-warning">
                             {row.screenshot_extraction_id ? "not read" : "no screenshot"}
                           </span>
                         )}
@@ -336,7 +333,7 @@ export default function AdminPayments() {
                         <span
                           className={
                             repeated
-                              ? "font-semibold text-amber-900 dark:text-amber-200"
+                              ? "font-semibold text-warning"
                               : "text-foreground/80"
                           }
                         >
@@ -351,7 +348,7 @@ export default function AdminPayments() {
                             {row.field_flags.map((f, i) => (
                               <span
                                 key={i}
-                                className="inline-flex items-center rounded border border-amber-500 bg-amber-200 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-amber-950 dark:border-amber-700 dark:bg-amber-900/80 dark:text-amber-100"
+                                className="inline-flex items-center rounded border border-warning/30 bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-warning"
                               >
                                 {f.field.replace(/_/g, " ")}: {f.reason.replace(/_/g, " ")}
                               </span>
@@ -382,7 +379,7 @@ export default function AdminPayments() {
                             />
                           ) : (
                             <div className="flex items-start gap-1.5 text-xs">
-                              <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-800 dark:text-amber-300" />
+                              <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
                               <span className="font-medium text-foreground">
                                 {row.screenshot_extraction_id
                                   ? "The extraction record for this screenshot could not be read — no extracted fields to show."

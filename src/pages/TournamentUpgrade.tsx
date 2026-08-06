@@ -603,9 +603,9 @@ export default function TournamentUpgrade() {
 
         {/* Already Pro */}
         {!accessLoading && hasFullAccess && (
-          <Card className="border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <Card className="border-success/30 bg-success/10">
             <CardContent className="pt-6">
-              <p className="text-sm text-emerald-700 dark:text-emerald-300">This tournament already has Pro access.</p>
+              <p className="text-sm text-success">This tournament already has Pro access.</p>
               <Button className="mt-3" onClick={() => navigate(returnTo)}>
                 Return
               </Button>
@@ -614,9 +614,9 @@ export default function TournamentUpgrade() {
         )}
 
         {!accessLoading && !hasFullAccess && isFreeTier && (
-          <Card className="border-emerald-300 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <Card className="border-success/30 bg-success/10">
             <CardContent className="pt-6">
-              <p className="text-sm text-emerald-700 dark:text-emerald-300">This tournament is within the free tier.</p>
+              <p className="text-sm text-success">This tournament is within the free tier.</p>
               <Button className="mt-3" onClick={() => navigate(returnTo)}>
                 Continue
               </Button>
@@ -628,21 +628,21 @@ export default function TournamentUpgrade() {
         {!hasBackendMigrationIssue && !paymentLoading && latestPayment && (
           <>
             {paymentStatus === "pending" && (
-              <Card className="border-amber-300 dark:border-amber-800">
+              <Card className="border-warning/30">
                 <CardContent className="pt-6 flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <Clock className="h-5 w-5 text-warning mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Payment pending approval</p>
+                    <p className="text-sm font-medium text-warning">Payment pending approval</p>
                     <p className="text-xs text-muted-foreground mt-1">UTR: {latestPayment.utr} · Submitted {new Date(latestPayment.created_at).toLocaleDateString()}</p>
                   </div>
                 </CardContent>
               </Card>
             )}
             {paymentStatus === "approved" && !hasFullAccess && (
-              <Card className="border-emerald-300 dark:border-emerald-900">
+              <Card className="border-success/30">
                 <CardContent className="pt-6 flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
-                  <p className="text-sm text-emerald-700 dark:text-emerald-300">Payment approved — Pro active.</p>
+                  <CheckCircle2 className="h-5 w-5 text-success mt-0.5 shrink-0" />
+                  <p className="text-sm text-success">Payment approved — Pro active.</p>
                 </CardContent>
               </Card>
             )}
@@ -722,7 +722,7 @@ export default function TournamentUpgrade() {
                     <div className="flex items-center gap-2 mt-1">
                       <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{UPI_ID}</code>
                       <Button variant="ghost" size="sm" onClick={handleCopyUpi} className="h-7 px-2">
-                        {upiCopied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                        {upiCopied ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
                   </div>
@@ -738,7 +738,7 @@ export default function TournamentUpgrade() {
               </div>
 
               {amountDue < baseAmount && (
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+                <p className="text-xs font-medium text-warning bg-warning/10 border border-warning/30 rounded px-3 py-2">
                   Pay exactly ₹{amountDue} (after coupon discount). Paying ₹{baseAmount} may cause your claim to be rejected.
                 </p>
               )}
@@ -781,8 +781,8 @@ export default function TournamentUpgrade() {
                       )}
                       {screenshotStage === "done" && (
                         <>
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                          <span className="truncate text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                          <span className="truncate text-success">
                             {screenshotFile?.name ?? "Screenshot ready"}
                           </span>
                         </>
@@ -813,7 +813,7 @@ export default function TournamentUpgrade() {
                       </p>
                     )}
                     {utrDuplicateWarning && (
-                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+                      <p className="text-xs font-medium text-warning bg-warning/10 border border-warning/30 rounded px-3 py-2">
                         This UTR looks like one already used on this platform. If that&apos;s
                         unexpected, double-check your receipt before submitting.
                       </p>

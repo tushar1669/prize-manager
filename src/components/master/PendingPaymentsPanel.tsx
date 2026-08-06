@@ -160,7 +160,7 @@ export function PendingPaymentsPanel() {
           </div>
           <div className="flex items-center gap-2">
             {pendingCount > 0 && (
-              <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+              <Badge variant="outline" className="bg-warning/15 text-warning border-warning/30">
                 {pendingCount} pending
               </Badge>
             )}
@@ -226,7 +226,7 @@ export function PendingPaymentsPanel() {
                               <span className="font-normal">on screenshot</span>
                             </span>
                           ) : (
-                            <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                            <span className="text-[11px] font-medium text-warning">
                               no amount read from screenshot
                             </span>
                           )}
@@ -255,7 +255,7 @@ export function PendingPaymentsPanel() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700 dark:hover:bg-emerald-900/30"
+                              className="gap-1 text-success border-success/30 hover:bg-success/10"
                               onClick={() => reviewMutation.mutate({ paymentId: p.id, decision: "approve" })}
                               disabled={reviewMutation.isPending}
                             >

@@ -334,8 +334,8 @@ export default function Dashboard() {
 
         {/* Organizer account state banner */}
         {authzStatus === 'ready' && role === 'organizer' && !is_verified && !is_master && (
-          <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+          <div className="mb-6 bg-warning/10 border border-warning/30 rounded-lg p-4">
+            <p className="text-sm text-warning">
               Your organizer access needs attention. You can keep using the dashboard while this is checked.
             </p>
           </div>
@@ -346,16 +346,16 @@ export default function Dashboard() {
           alert.status === 'rejected' ? (
             <div
               key={alert.tournamentId}
-              className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
+              className="mb-6 bg-destructive/10 border border-destructive/30 rounded-lg p-4"
             >
-              <p className="text-sm text-red-800 dark:text-red-200">
+              <p className="text-sm text-destructive">
                 Your Pro upgrade payment for {alert.title ?? 'your tournament'} was rejected.
                 {alert.reviewNote ? ` Reason: ${alert.reviewNote}` : ''}
               </p>
               <button
                 type="button"
                 onClick={() => navigate(`/t/${alert.tournamentId}/payment`)}
-                className="mt-2 text-sm font-medium underline underline-offset-2 text-red-900 dark:text-red-100"
+                className="mt-2 text-sm font-medium underline underline-offset-2 text-destructive"
               >
                 Review and resubmit payment
               </button>
@@ -363,16 +363,16 @@ export default function Dashboard() {
           ) : (
             <div
               key={alert.tournamentId}
-              className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
+              className="mb-6 bg-warning/10 border border-warning/30 rounded-lg p-4"
             >
-              <p className="text-sm text-amber-800 dark:text-amber-200">
+              <p className="text-sm text-warning">
                 Your Pro upgrade payment for {alert.title ?? 'your tournament'} is awaiting review. We'll
                 enable Pro features as soon as it is approved.
               </p>
               <button
                 type="button"
                 onClick={() => navigate(`/t/${alert.tournamentId}/payment`)}
-                className="mt-2 text-sm font-medium underline underline-offset-2 text-amber-900 dark:text-amber-100"
+                className="mt-2 text-sm font-medium underline underline-offset-2 text-warning"
               >
                 View payment status
               </button>
