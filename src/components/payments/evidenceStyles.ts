@@ -5,6 +5,6 @@
  */
 export function evidenceRowClass(hasFlags: boolean): string {
   return hasFlags
-    ? "bg-amber-100 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-950/60"
-    : "bg-emerald-100 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-950/60";
+    ? "bg-warning/10 hover:bg-warning/10"
+    : "bg-success/10 hover:bg-success/10";
 }

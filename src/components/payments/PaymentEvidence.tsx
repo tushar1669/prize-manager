@@ -94,7 +94,7 @@ export function ViewScreenshotButton({ filePath }: { filePath: string | null }) 
 
   if (!filePath) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-warning">
         <AlertCircle className="h-3 w-3 shrink-0" />
         No stored file for this extraction — screenshot cannot be shown
       </span>
@@ -195,7 +195,7 @@ export function ViewScreenshotButton({ filePath }: { filePath: string | null }) 
  */
 export function NoScreenshotNotice() {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-amber-800 dark:text-amber-300">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-warning">
       <AlertCircle className="h-3 w-3 shrink-0" />
       UTR only — no screenshot
     </span>
@@ -230,15 +230,15 @@ export function PaymentExtractionEvidence({
         <div className="flex items-center gap-1.5 font-semibold">
           {hasFlags ? (
             <>
-              <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300 shrink-0" />
-              <span className="text-amber-900 dark:text-amber-200">
+              <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" />
+              <span className="text-warning">
                 {flags.length} flag{flags.length !== 1 ? "s" : ""} — review before approving
               </span>
             </>
           ) : (
             <>
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300 shrink-0" />
-              <span className="text-emerald-900 dark:text-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+              <span className="text-success">
                 Screenshot verified · {Math.round(extraction.confidence * 100)}% confidence
               </span>
             </>
@@ -287,17 +287,17 @@ export function PaymentExtractionEvidence({
           return (
             <div key={label} className="flex items-baseline gap-1 min-w-0">
               {value != null && !flagged && (
-                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-px" />
+                <CheckCircle2 className="h-2.5 w-2.5 text-success shrink-0 mt-px" />
               )}
               {flagged && (
-                <AlertCircle className="h-2.5 w-2.5 text-amber-700 dark:text-amber-300 shrink-0 mt-px" />
+                <AlertCircle className="h-2.5 w-2.5 text-warning shrink-0 mt-px" />
               )}
               {value == null && !flagged && <span className="inline-block w-2.5 shrink-0" />}
               <span className="shrink-0 font-medium text-foreground/70">{label}:</span>
               <span
                 className={[
                   "truncate font-medium",
-                  flagged ? "text-amber-900 dark:text-amber-200" : "text-foreground",
+                  flagged ? "text-warning" : "text-foreground",
                   value == null ? "font-normal italic text-foreground/70" : "",
                 ]
                   .filter(Boolean)
@@ -314,9 +314,9 @@ export function PaymentExtractionEvidence({
           fine" — paymentTrustCheck skips the VPA comparison entirely when the
           field is falsy. */}
       {payeeVpa == null ? (
-        <div className="flex items-start gap-1.5 rounded border border-amber-500 bg-amber-200/70 px-2 py-1 dark:border-amber-500/70 dark:bg-amber-900/60">
-          <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-900 dark:text-amber-200 mt-px" />
-          <span className="font-semibold text-amber-900 dark:text-amber-100">
+        <div className="flex items-start gap-1.5 rounded border border-warning/30 bg-warning/10 px-2 py-1">
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-warning mt-px" />
+          <span className="font-semibold text-warning">
             Payee VPA: not found on screenshot — NOT VERIFIED
             <span className="block font-normal">
               The payee allow-list check did not run for this payment. Confirm the destination
@@ -327,14 +327,14 @@ export function PaymentExtractionEvidence({
       ) : (
         <div className="flex items-baseline gap-1 min-w-0">
           {payeeFlagged ? (
-            <AlertCircle className="h-2.5 w-2.5 text-amber-700 dark:text-amber-300 shrink-0 mt-px" />
+            <AlertCircle className="h-2.5 w-2.5 text-warning shrink-0 mt-px" />
           ) : (
-            <CheckCircle2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-px" />
+            <CheckCircle2 className="h-2.5 w-2.5 text-success shrink-0 mt-px" />
           )}
           <span className="shrink-0 font-medium text-foreground/70">Payee VPA:</span>
           <span
             className={`truncate font-medium ${
-              payeeFlagged ? "text-amber-900 dark:text-amber-200" : "text-foreground"
+              payeeFlagged ? "text-warning" : "text-foreground"
             }`}
           >
             {payeeVpa}
@@ -347,7 +347,7 @@ export function PaymentExtractionEvidence({
           {flags.map((f, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 bg-amber-200 dark:bg-amber-900/80 text-amber-950 dark:text-amber-100 border border-amber-500 dark:border-amber-700 text-[11px] font-medium leading-tight"
+              className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 bg-warning/15 text-warning border border-warning/30 text-[11px] font-medium leading-tight"
             >
               {flagText(f)}
             </span>
