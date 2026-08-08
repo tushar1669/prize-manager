@@ -88,7 +88,7 @@ export function GenderSummaryChip({
       case 'ok':
         return 'gap-1 cursor-help';
       case 'soft_warning':
-        return 'gap-1 cursor-help border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700';
+        return 'gap-1 cursor-help border-warning/30 bg-warning/15 text-warning';
       case 'hard_warning':
         return 'gap-1 cursor-help';
     }
@@ -130,7 +130,7 @@ export function GenderSummaryChip({
         return (
           <div className="space-y-2">
             <h4 className="text-sm font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <CheckCircle2 className="h-4 w-4 text-success" />
               Gender detection OK
             </h4>
             <p className="text-sm text-muted-foreground">
@@ -152,7 +152,7 @@ export function GenderSummaryChip({
         return (
           <div className="space-y-2">
             <h4 className="text-sm font-semibold flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertTriangle className="h-4 w-4 text-warning" />
               More female sections than detected females
             </h4>
             <p className="text-sm text-muted-foreground">

@@ -630,7 +630,7 @@ export default function CopyFromTournamentDialog({ tournamentId, open, onOpenCha
                     </div>
                   </label>
                   {copyAllocationRules && (
-                    <p className="pl-7 text-xs text-amber-600">
+                    <p className="pl-7 text-xs text-warning">
                       This will overwrite your current allocation rules.
                     </p>
                   )}

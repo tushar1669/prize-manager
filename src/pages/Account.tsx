@@ -416,18 +416,18 @@ export default function Account() {
 
         {/* Completion Reward */}
         {(alreadyCompleted || complete) && (
-          <Card className={rewardClaimed ? "border-muted" : "border-emerald-300 dark:border-emerald-800"}>
+          <Card className={rewardClaimed ? "border-muted" : "border-success/30"}>
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 {rewardClaimed || claimedCouponCode ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                  <CheckCircle2 className="h-5 w-5 text-success mt-0.5 shrink-0" />
                 ) : (
-                  <Gift className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                  <Gift className="h-5 w-5 text-success mt-0.5 shrink-0" />
                 )}
                 <div className="space-y-2">
                   {rewardClaimed || claimedCouponCode ? (
                     <>
-                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                      <p className="text-sm text-success">
                         Profile completion reward claimed!
                       </p>
                       {claimedCouponCode && (
@@ -469,7 +469,7 @@ export default function Account() {
                     </>
                   ) : (
                     <>
-                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      <p className="text-sm font-medium text-success">
                         🎉 You earned 1 free tournament upgrade!
                       </p>
                       <Button

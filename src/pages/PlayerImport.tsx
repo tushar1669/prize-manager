@@ -2786,7 +2786,7 @@ export default function PlayerImport() {
 
         {/* Restore banner */}
         {importRestore && !hasData && (
-          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+          <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 A saved draft from <strong>{formatAge(importRestore.ageMs)}</strong> with{' '}
@@ -2849,7 +2849,7 @@ export default function PlayerImport() {
                 <div className="flex items-center justify-center mb-4">
                   <button
                     type="button"
-                    className="bg-yellow-300 text-black px-2 py-1 rounded-md font-medium hover:bg-yellow-200 transition-colors"
+                    className="bg-warning/15 text-warning border border-warning/30 px-2 py-1 rounded-md font-medium hover:bg-warning/25 transition-colors"
                     onClick={() => setShowSwissManagerTip(true)}
                   >
                     Swiss-Manager export tip: enable ‘Print all columns’
@@ -2945,18 +2945,18 @@ export default function PlayerImport() {
         ) : (
           <div className="space-y-6">
             {CONFLICT_REVIEW_ENABLED && conflicts.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/80">
+              <Card className="border-warning/30 bg-warning/10">
                 <CardHeader>
                   <div className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="text-lg font-semibold text-foreground">
                         Conflict Review ({conflicts.length})
                       </CardTitle>
-                      <span className={`text-sm font-medium ${unresolvedCount > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      <span className={`text-sm font-medium ${unresolvedCount > 0 ? 'text-warning' : 'text-success'}`}>
                         {unresolvedCount > 0 ? `${unresolvedCount} unresolved` : 'All conflicts resolved'}
                       </span>
                     </div>
-                    <p className="text-sm text-amber-800">
+                    <p className="text-sm text-warning">
                       Resolve each conflict before importing. Keep A keeps the first occurrence, Keep B keeps the incoming row, and Merge selects the richer record.
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -3285,7 +3285,7 @@ export default function PlayerImport() {
                               key={idx}
                               tabIndex={0}
                               aria-rowindex={idx + 1}
-                              className={hasConflict ? 'bg-amber-50/50' : ''}
+                              className={hasConflict ? 'bg-warning/10' : ''}
                             >
                               <TableCell>{player.rank ?? ''}</TableCell>
                               <TableCell>
@@ -3293,7 +3293,7 @@ export default function PlayerImport() {
                                   <div className="flex items-center gap-2">
                                     {player.full_name ?? player.name ?? ''}
                                     {hasConflict && (
-                                      <span className="text-xs text-amber-600" title="Conflict detected">⚠️</span>
+                                      <span className="text-xs text-warning" title="Conflict detected">⚠️</span>
                                     )}
                                   </div>
                                   <PlayerRowBadges
@@ -3443,15 +3443,15 @@ export default function PlayerImport() {
                   </Alert>
                 )}
                 {fullNameMissingBanner && (
-                  <Alert className="mt-4 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-amber-700 dark:text-amber-400">Full names not detected</AlertTitle>
-                    <AlertDescription className="text-amber-600 dark:text-amber-300">
+                  <Alert className="mt-4 border-warning/30 bg-warning/10">
+                    <AlertCircle className="h-4 w-4 text-warning" />
+                    <AlertTitle className="text-warning">Full names not detected</AlertTitle>
+                    <AlertDescription className="text-warning">
                       If your sheet has two "Name" columns, map the longer one to <strong>Full Name</strong>.
                       <Button
                         variant="link"
                         size="sm"
-                        className="p-0 h-auto ml-1 text-amber-700 dark:text-amber-400 underline"
+                        className="p-0 h-auto ml-1 text-warning underline"
                         onClick={applyFullNameFromName}
                       >
                         Set Full Name = Name
@@ -3460,7 +3460,7 @@ export default function PlayerImport() {
                       <Button
                         variant="link"
                         size="sm"
-                        className="p-0 h-auto text-amber-700 dark:text-amber-400 underline"
+                        className="p-0 h-auto text-warning underline"
                         onClick={() => setShowMappingDialog(true)}
                       >
                         Fix mapping
@@ -3499,13 +3499,13 @@ export default function PlayerImport() {
             )}
             
             {/* Import status and proceed section */}
-            <Card className={`border-2 ${canProceed ? 'border-emerald-300 bg-emerald-50/50' : hasUnresolvedConflicts ? 'border-amber-300 bg-amber-50/50' : hasValidationErrors ? 'border-destructive/30 bg-destructive/5' : 'border-muted'}`}>
+            <Card className={`border-2 ${canProceed ? 'border-success/30 bg-success/10' : hasUnresolvedConflicts ? 'border-warning/30 bg-warning/10' : hasValidationErrors ? 'border-destructive/30 bg-destructive/5' : 'border-muted'}`}>
               <CardContent className="py-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     {canProceed ? (
                       <>
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <CheckCircle2 className="h-5 w-5 text-success" />
                         <div>
                           <p className="font-medium text-foreground">
                             {conflicts.length > 0 
@@ -3519,7 +3519,7 @@ export default function PlayerImport() {
                       </>
                     ) : hasUnresolvedConflicts ? (
                       <>
-                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                        <AlertCircle className="h-5 w-5 text-warning" />
                         <div>
                           <p className="font-medium text-foreground">
                             {unresolvedCount} conflict{unresolvedCount === 1 ? '' : 's'} remaining
@@ -3630,7 +3630,7 @@ export default function PlayerImport() {
             <p className="text-sm text-muted-foreground">No imputed ranks to display.</p>
           )}
           {tieRankReport?.warnings.length ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-900">
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
               <div className="font-medium">Warnings</div>
               <ul className="mt-2 list-disc pl-5">
                 {tieRankReport.warnings.map((warning) => (

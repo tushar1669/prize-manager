@@ -349,7 +349,7 @@ export function ImportQualityNotes({ tournamentId }: ImportQualityNotesProps) {
             <p className="text-sm text-muted-foreground">No imputed ranks to display.</p>
           )}
           {summary.tieRanks.warnings.length ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-900">
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
               <div className="font-medium">Warnings</div>
               <ul className="mt-2 list-disc pl-5">
                 {summary.tieRanks.warnings.map((warning) => (

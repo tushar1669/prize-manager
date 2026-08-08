@@ -1435,11 +1435,11 @@ export default function TournamentSetup() {
         <Tabs value={activeTab} onValueChange={(v) => navigate(`/t/${id}/setup?tab=${v}`)}>
           <TabsList className="mb-6">
             <TabsTrigger value="details">
-              Details{detailsDirty && <span className="ml-1 text-amber-500">•</span>}
+              Details{detailsDirty && <span className="ml-1 text-warning">•</span>}
             </TabsTrigger>
             <TabsTrigger value="prizes">
               Prize Structure{prizesDirtyCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs font-medium rounded-full bg-warning/15 text-warning">
                   {prizesDirtyCount}
                 </span>
               )}
@@ -1448,7 +1448,7 @@ export default function TournamentSetup() {
 
           <TabsContent value="details" className="space-y-6">
             {detailsRestore && activeTab === 'details' && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+              <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     A saved draft from <strong>{formatAge(detailsRestore.ageMs)}</strong> is available.
@@ -1890,7 +1890,7 @@ export default function TournamentSetup() {
                 </div>
 
                 {mainPrizesRestore && activeTab === 'prizes' && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                  <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         A saved draft for main prizes from <strong>{formatAge(mainPrizesRestore.ageMs)}</strong> is available.
@@ -1985,7 +1985,7 @@ export default function TournamentSetup() {
                                 <Label htmlFor="copy-from">Copy prize structure from</Label>
                                 <select
                                   id="copy-from"
-                                  className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
+                                  className="border border-input bg-background text-foreground rounded px-2 py-1 w-full mt-2"
                                   value={copyFromCategoryId || ''}
                                   onChange={(e) => setCopyFromCategoryId(e.target.value || null)}
                                 >
@@ -2157,7 +2157,7 @@ export default function TournamentSetup() {
                                   data-category-id={cat.id}
                                   className={cn(
                                     deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
-                                      ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
+                                      ? 'rounded-md border border-warning/30 bg-warning/10 p-1'
                                       : undefined
                                   )}
                                 >
@@ -2212,7 +2212,7 @@ export default function TournamentSetup() {
                                   data-category-id={cat.id}
                                   className={cn(
                                     deepLinkedDualFilterSet.has(cat.id) && !collapsedCategories[cat.id]
-                                      ? 'rounded-md border border-amber-300 bg-amber-50/40 p-1 dark:border-amber-700 dark:bg-amber-950/20'
+                                      ? 'rounded-md border border-warning/30 bg-warning/10 p-1'
                                       : undefined
                                   )}
                                 >
@@ -2504,7 +2504,7 @@ export default function TournamentSetup() {
                         </p>
                       )}
                       {!dobSpecialCategory && (
-                        <div className="mt-3 rounded-md border border-zinc-700/60 bg-zinc-900/40 p-3">
+                        <div className="mt-3 rounded-md border border-border bg-muted/40 p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <Label htmlFor="criteria-max-age-inclusive">Include players exactly at max age</Label>
@@ -2569,7 +2569,7 @@ export default function TournamentSetup() {
                   )}
 
                   {dobSpecialCategory && (
-                    <div className="rounded-md border border-zinc-700/60 bg-zinc-900/40 p-3">
+                    <div className="rounded-md border border-border bg-muted/40 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <Label htmlFor="criteria-allow-duplicate-dob-special">
@@ -2673,7 +2673,7 @@ export default function TournamentSetup() {
                     <p className="text-sm text-destructive font-medium">{criteriaErrors.ratingRange}</p>
                   )}
                   {criteria?.unrated_only && (
-                    <p className="text-xs text-amber-500">
+                    <p className="text-xs text-warning">
                       Rating range is ignored when "Unrated-only" is enabled.
                     </p>
                   )}
@@ -2708,7 +2708,7 @@ export default function TournamentSetup() {
                     <Label htmlFor="criteria-gender">Gender</Label>
                     <select 
                       id="criteria-gender" 
-                      className="border border-zinc-700 bg-zinc-800 text-zinc-100 rounded px-2 py-1 w-full mt-2"
+                      className="border border-input bg-background text-foreground rounded px-2 py-1 w-full mt-2"
                       defaultValue={
                         // Normalize legacy 'M' to 'M_OR_UNKNOWN' for display
                         criteria?.gender === 'M' ? 'M_OR_UNKNOWN' : (criteria?.gender || '')
@@ -2727,7 +2727,7 @@ export default function TournamentSetup() {
                     </div>
                     {/* Gender warning for Girls Only */}
                     {criteriaGenderSelection === 'F' && (
-                      <div className="mt-2 rounded-md border border-amber-700 bg-amber-600 text-white dark:bg-amber-600 dark:text-white dark:border-amber-500 px-3 py-2 text-xs">
+                      <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 text-warning px-3 py-2 text-xs">
                         <strong>Reminder:</strong> Ensure your player import file has female players marked with gender=F. 
                         Otherwise these prizes will stay unfilled.
                       </div>
@@ -2812,7 +2812,7 @@ export default function TournamentSetup() {
                       Uses the Type column from Swiss-Manager ranking file (e.g., PC, S60, F14, U15). Only players whose Type matches will be eligible. Leave empty to allow all.
                     </p>
                     {criteriaAllowedTypesInput.trim().length > 0 && (criteriaMaxAgeInput || criteriaMinAgeInput) && (
-                      <div className="mt-2 rounded-md border border-amber-700 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-600 p-3 text-sm flex items-start gap-2">
+                      <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 text-warning p-3 text-sm flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                         <span>
                           <strong>Dual filter active</strong> — Players must match BOTH the Type label and the Age Limit to be eligible.

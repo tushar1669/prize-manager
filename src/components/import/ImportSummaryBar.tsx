@@ -70,7 +70,7 @@ export function ImportSummaryBar({
             className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
               hasMissingGender
                 ? 'border-destructive/50 bg-destructive/10 text-destructive'
-                : 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-warning/30 bg-warning/10 text-warning'
             }`}
           >
             <AlertTriangle className="mt-0.5 h-4 w-4" />

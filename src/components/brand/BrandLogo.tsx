@@ -62,7 +62,7 @@ export function BrandLogo({
       className={cn(
         "block object-contain",
         sizeClasses[size],
-        tone === "mono" && "dark:brightness-0 dark:invert",
+        tone === "mono" && "",
         className,
       )}
       style={combinedStyle}

@@ -482,7 +482,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                 </span>
               )}
               {hasDirty && (
-                <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-amber-100 text-amber-700 border border-amber-200">
+                <span className="px-2 py-0.5 text-xs font-normal rounded-md bg-warning/15 text-warning border border-warning/30">
                   Unsaved
                 </span>
               )}
@@ -554,7 +554,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
       <CardContent className="space-y-4">
         <ErrorPanel error={error} onDismiss={() => clearError()} />
         {restore && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs">
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-xs">
             <div className="flex items-center justify-between gap-2">
               <div>Saved draft from <strong>{formatAge(restore.ageMs)}</strong> is available.</div>
               <div className="flex gap-2">
@@ -627,7 +627,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                       key={row.id || row._tempId} 
                       className={cn(
                         'border-t',
-                        row._error === 'Empty prize' && 'bg-amber-50/50 dark:bg-amber-950/20'
+                        row._error === 'Empty prize' && 'bg-warning/10'
                       )}
                     >
                       <td className="py-2 pr-4">
@@ -668,7 +668,7 @@ const CategoryPrizesEditor = forwardRef<CategoryPrizesEditorHandle, Props>(
                             const digitsOnly = e.target.value.replace(/\D/g, '');
                             markDirty(rowIndex, { cash_amount: digitsOnly ? parseInt(digitsOnly, 10) : 0 });
                           }}
-                          className={cn("w-40", row._error === 'Empty prize' && "border-amber-500")}
+                          className={cn("w-40", row._error === 'Empty prize' && "border-warning")}
                         />
                       </td>
                       <td className="py-2 pr-4">

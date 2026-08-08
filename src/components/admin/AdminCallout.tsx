@@ -11,8 +11,8 @@ interface AdminCalloutProps {
 
 export function AdminCallout({ title, description, ctaLabel, ctaHref }: AdminCalloutProps) {
   return (
-    <Alert className="border-amber-500/40 bg-amber-500/10">
-      <AlertTriangle className="h-4 w-4 text-amber-400" />
+    <Alert className="border-warning/30 bg-warning/10">
+      <AlertTriangle className="h-4 w-4 text-warning" />
       <AlertTitle className="text-foreground">{title}</AlertTitle>
       <AlertDescription className="flex flex-col gap-3 text-muted-foreground">
         <span>{description}</span>

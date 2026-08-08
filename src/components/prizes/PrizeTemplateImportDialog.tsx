@@ -157,7 +157,7 @@ export default function PrizeTemplateImportDialog({ open, onOpenChange, tourname
           )}
 
           {(errorIssues.length > 0 || warningIssues.length > 0) && (
-            <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+            <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 p-3">
               <p className="text-sm font-medium">Review before importing</p>
               <p className="text-xs text-muted-foreground">Errors mean those rows cannot be imported until you fix the file and upload again. Warnings are for review and may still be okay to continue.</p>
               <ul className="text-xs space-y-1">

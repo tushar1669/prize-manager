@@ -482,7 +482,7 @@ export default function Settings() {
 
                 {hasActiveGiftPrizes && (
                   <div className="space-y-4">
-                    <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                    <Alert className="border-warning/30 bg-warning/10 text-warning">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
                         Gifts detected. If your intent differs, adjust ordering here.
@@ -638,14 +638,14 @@ export default function Settings() {
                               type="button"
                               variant="default"
                               size="sm"
-                              className="mt-2 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
+                              className="mt-2 bg-warning/15 text-warning hover:bg-warning/25 border border-warning/30"
                               onClick={() => navigate(prizeStructureTarget)}
                             >
                               Open Prize Structure
                             </Button>
                           </>
                         ) : (
-                          <div className="rounded-md border border-amber-700 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-600 p-4 text-sm space-y-2">
+                          <div className="rounded-md border border-warning/30 bg-warning/10 text-warning p-4 text-sm space-y-2">
                             <p className="font-semibold text-base">Not used yet</p>
                             <p>
                               This setting only works when you set Age Limits (Max Age / Min Age) inside a prize category.
@@ -663,7 +663,7 @@ export default function Settings() {
                               type="button"
                               variant="default"
                               size="sm"
-                              className="mt-1 bg-amber-400 text-black hover:bg-amber-500 border border-amber-500 dark:bg-amber-400 dark:hover:bg-amber-500"
+                              className="mt-1 bg-warning/15 text-warning hover:bg-warning/25 border border-warning/30"
                               onClick={() => navigate(prizeStructureTarget)}
                             >
                               Open Prize Structure
@@ -673,7 +673,7 @@ export default function Settings() {
                       </div>
 
                       {/* F) Dual-filter warning */}
-                      <Alert className="mt-4 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 text-amber-900 dark:text-amber-200">
+                      <Alert className="mt-4 border-warning/30 bg-warning/10 text-warning">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle className="font-semibold">Watch out: dual filters</AlertTitle>
                         <AlertDescription>
@@ -753,7 +753,7 @@ export default function Settings() {
                         
                         {/* Warning for non-strict modes */}
                         {(field.value === 'main_plus_one_side' || field.value === 'unlimited') && (
-                          <div className="mt-4 flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                          <div className="mt-4 flex items-start gap-2 text-sm text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
                             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                             <span>
                               Allowing multiple prizes per player reduces the number of distinct winners. 

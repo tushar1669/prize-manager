@@ -308,10 +308,10 @@ export default function AuthCallback() {
         <div className="font-semibold mb-2 text-muted-foreground">Debug Info (dev/preview only)</div>
         <div className="space-y-1 text-muted-foreground">
           <div>Flow: <span className="text-foreground">{flowType}</span></div>
-          <div>code: <span className={debugInfo.hasCode ? "text-green-600" : "text-red-500"}>{debugInfo.hasCode ? '✓' : '✗'}</span></div>
-          <div>access_token: <span className={debugInfo.hasAccessToken ? "text-green-600" : "text-red-500"}>{debugInfo.hasAccessToken ? '✓' : '✗'}</span></div>
-          <div>refresh_token: <span className={debugInfo.hasRefreshToken ? "text-green-600" : "text-red-500"}>{debugInfo.hasRefreshToken ? '✓' : '✗'}</span></div>
-          <div>error: <span className={debugInfo.hasError ? "text-amber-600" : "text-muted-foreground"}>{debugInfo.errorParam || 'none'}</span></div>
+          <div>code: <span className={debugInfo.hasCode ? "text-success" : "text-destructive"}>{debugInfo.hasCode ? '✓' : '✗'}</span></div>
+          <div>access_token: <span className={debugInfo.hasAccessToken ? "text-success" : "text-destructive"}>{debugInfo.hasAccessToken ? '✓' : '✗'}</span></div>
+          <div>refresh_token: <span className={debugInfo.hasRefreshToken ? "text-success" : "text-destructive"}>{debugInfo.hasRefreshToken ? '✓' : '✗'}</span></div>
+          <div>error: <span className={debugInfo.hasError ? "text-warning" : "text-muted-foreground"}>{debugInfo.errorParam || 'none'}</span></div>
           <div>origin: <span className="text-foreground break-all">{debugInfo.origin}</span></div>
         </div>
       </div>
@@ -325,8 +325,8 @@ export default function AuthCallback() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="p-3 rounded-full bg-amber-500/10">
-                <Mail className="h-10 w-10 text-amber-500" />
+              <div className="p-3 rounded-full bg-warning/10">
+                <Mail className="h-10 w-10 text-warning" />
               </div>
             </div>
             <CardTitle className="text-2xl">Confirmation Required</CardTitle>
@@ -398,8 +398,8 @@ export default function AuthCallback() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="p-3 rounded-full bg-amber-500/10">
-                <RefreshCw className="h-10 w-10 text-amber-500" />
+              <div className="p-3 rounded-full bg-warning/10">
+                <RefreshCw className="h-10 w-10 text-warning" />
               </div>
             </div>
             <CardTitle className="text-2xl">Link Expired</CardTitle>
@@ -476,8 +476,8 @@ export default function AuthCallback() {
               </div>
             )}
             {status === 'success' && (
-              <div className="p-3 rounded-full bg-green-500/10">
-                <CheckCircle className="h-10 w-10 text-green-500" />
+              <div className="p-3 rounded-full bg-success/10">
+                <CheckCircle className="h-10 w-10 text-success" />
               </div>
             )}
             {status === 'error' && (
