@@ -1,7 +1,7 @@
 # Architecture — Phase 2: Universal Extraction Engine
 
-**Status:** Accepted — Phase 2A and 2A-2 complete; Phase 2A-3 prerequisites F0a/F0b/F0c complete and production-verified; F0d in progress (D30/D31 accepted)
-**Date:** July–August 2026 (last revised 4 Aug 2026)
+**Status:** Accepted — Phase 2A, 2A-2 complete; Phase 2A-3 prerequisites F0a–F0e complete and production-verified; UI token migration complete; F0d closeout (tests + normalize_utr parity) next
+**Date:** July–August 2026 (last revised 8 Aug 2026)
 **Deciders:** Tushar (owner), Claude (architecture)
 **Predecessor:** `docs/extraction-engine/ARCHITECTURE.md` (Phase 1 — read this first)
 **Repo location:** `docs/extraction-engine/PHASE2_ARCHITECTURE.md`
@@ -26,7 +26,8 @@ Phase 2A-3 (in progress):
   F0a close extractions UPDATE policy        [DONE 2 Aug 2026]
   F0b payment_screenshot schema v2 -> v3    [DONE 3 Aug 2026]
   F0c three new trust invariants            [DONE 3 Aug 2026]
-  F0d UTR match + duplicate hard-block      [IN PROGRESS — D30/D31]
+  F0d UTR match + duplicate hard-block      [DONE 4 Aug 2026]
+  F0e payment-page failure states           [DONE 6 Aug 2026]
   F1  profile verification / F2 auto-approve gate
 
 Phase 2B (blocked on 2A-3):
@@ -362,6 +363,29 @@ Pre-work audit (4 Aug) found the submit-time checks would be decorative without 
 - Deliberate N1 exception: `normalize_utr` keeps EXECUTE for `authenticated`. Expression-index evaluation during DML runs as the invoking role; a blanket N1 revoke would make any future authenticated-role direct write (e.g. master via `master_full_payments` if grants were ever restored) fail with a confusing permission error on a pure string function that exposes nothing.
 - One legitimate flow is knowingly blocked: one UPI transaction paying for two tournaments (single UTR, second submission → `UTR_ALREADY_USED`). No combined-payment product exists; the dialog copy must say "one payment per tournament" so the organizer understands it's policy, not a bug.
 
+**D32 — A failed query must render an explicit state, never blank space (Accepted 6 Aug 2026).**
+
+Found in production during F0d testing. `get_tournament_pro_price` raises `UNAUTHORIZED` for a non-owner; the payment page read only `data` and `isLoading` from that query and never `isError`. The result was a half-rendered page: the "Upgrade to Pro" card (which does not depend on pricing) drew normally, while the coupon and UPI sections vanished because they gated on `!pricingLoading`. Worse, `baseAmount` and `amountDue` both fall back to `0`, so the page offered "Pay ₹0" against a live QR code with an enabled Submit button. React Query then retried a permanently-failing error, producing visible flicker — 24 attempts captured in one HAR.
+
+Three rules follow, and they generalise beyond this page:
+1. **Gate on success, not on "not loading."** Sections that depend on a query must render only when that query's data is present. `!isLoading` is true in the error state too.
+2. **Never retry a permanent error.** `UNAUTHORIZED` and `TOURNAMENT_NOT_FOUND` will not succeed on retry; retrying them costs backend calls and looks like a broken page.
+3. **A money-bearing control must be disabled when its amount is unknown.** `amountDue <= 0` now disables Submit.
+
+This is the same failure shape as D21: a surface that renders nothing is not obviously broken. Fixed in F0e.
+
+**D33 — The app is permanently dark; styling uses semantic tokens (Accepted 6–8 Aug 2026).**
+
+`tailwind.config.ts` sets `darkMode: ["class"]`, but nothing ever adds a `dark` class to `<html>` and no `.dark` block exists in `index.css` — the dark palette lives directly in `:root`. Two consequences, both verified by grep across the tree: all 185 `dark:` utilities were dead code that had never rendered, and 529 raw light-palette utilities (`bg-amber-100`, `text-amber-800`, …) rendered literally, painting near-white blocks on a near-black page. The `/admin/payments` evidence panel was the visible symptom; the defect was app-wide.
+
+Rejected fix: adding `class="dark"` to `<html>`. It would have activated 185 never-rendered variants at once — trading an obvious bug for a subtle one — and left every literal utility without a `dark:` sibling still broken.
+
+Accepted fix: migrate to the semantic tokens already defined in `index.css` (`--success`, `--warning`, `--info`, `--destructive`, `--accent`, `--status-*`), delete dead `dark:` variants, and codify the rules in `docs/design/UI_CONVENTIONS.md`. Four batches, ~45 files.
+
+One bounded exception, documented in UI_CONVENTIONS §6: category chips in `CategoryCriteriaChips.tsx` encode a *kind of criterion*, not a status. Forcing them onto status tokens would assert meaning that does not exist; forcing them all to neutral would destroy information used for scanning. They keep raw hues at `bg-<hue>-500/15 text-<hue>-300 border-<hue>-500/30` — the `-300` shade being the actual fix, since `-700` was the dark-on-dark bug.
+
+Allocation-engine safety: the engine is not in the frontend — it lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes` and `backfillTeamAllocations`, invoked by string name. A SHA-256 baseline of all 408 source files was taken before the sweep and re-diffed after every batch; the 9 engine files stayed byte-identical and nothing under `supabase/` changed. Each allocation-adjacent batch also proved, mechanically, that only `className` lines had changed and that non-className line counts were unmoved.
+
 ---
 
 ## 7. Security & Privacy
@@ -388,7 +412,7 @@ Pre-work audit (4 Aug) found the submit-time checks would be decorative without 
 | `submit_tournament_payment_claim` had no `screenshot_extraction_id` param | ✅ 4-arg overload added `20260729130000` |
 | Client wrote `screenshot_extraction_id` directly via loose UPDATE policy | ✅ 5-arg overload closes this; frontend switched |
 | Master could not read extraction rows under RLS | ✅ Fixed `20260730120000` |
-| Both 3-arg and 4-arg claim overloads live with 5-arg | ⏳ Dropped in F0d Migration A (D31) |
+| Both 3-arg and 4-arg claim overloads live with 5-arg | ✅ Dropped in F0d Migration A |
 | Notification `MAX_ATTEMPTS=5` with no backoff | ⏳ Raise cap or add age-based backoff |
 | L6 `return_to` — OPEN at 30 Jul, resolved as Option A | ✅ Done `20260730100000` |
 | `supabase db execute` does not exist; correct is `supabase db query --linked -f` | ✅ Corrected; record in CLAUDE.md |
@@ -398,15 +422,19 @@ Pre-work audit (4 Aug) found the submit-time checks would be decorative without 
 | `extractions` UPDATE policy too broad — blocks auto-approval | ✅ Fixed `20260802124253` (F0a); see D29 |
 | Three fail-open trust invariants | ✅ Fixed (F0c); see D27 |
 | `payment_screenshot` schema v2 fields | ✅ v2 `20260802165554`, v3 `20260803181034` (F0b) |
-| UTR-match enforcement (submitted UTR must match extracted UTR) | ⏳ HIGH — F0d Migration B (D31) |
-| Hard-block duplicate UTR at submission | ⏳ HIGH — F0d Migration B (D31) |
+| UTR-match enforcement (submitted UTR must match extracted UTR) | ✅ Done F0d Migration B `20260804160000` |
+| Hard-block duplicate UTR at submission | ✅ Done F0d Migration B `20260804160000` |
 | Direction marker regexes lack `\b` word boundaries | ⏳ LOW — `sent to` also matches inside `present to`; bounded by D27's non-unique-block property |
 | Auto-approve gate must use named reasons, not flag count | ⏳ **HIGH — implement in F2**; see D28 |
 | `tsconfig.app.json` does not cover `supabase/functions/` or `tests/` | ⏳ MEDIUM — the tsc check is blind to all edge-function work |
-| `tournament_payments` client write grants + unused write policies | ⏳ Closed in F0d Migration A (D31) — includes DELETE/TRUNCATE/TRIGGER sweep |
-| `review_tournament_payment` EXECUTE-able by `anon` | ⏳ Grant-only fix in F0d Migration A (body has a first-line master check — hygiene, not a live hole) |
+| `tournament_payments` client write grants + unused write policies | ✅ Done F0d Migration A `20260804120000` |
+| `review_tournament_payment` EXECUTE-able by `anon` | ✅ Done F0d Migration A (grant-only) |
 | No duplicate-screenshot (`file_hash`) invariant | ⏳ MEDIUM — F2 scope. Readable-UTR replays are caught by UTR duplicate checks; cropped-UTR replays by `UTR_EXTRACTION_UNREADABLE` (D31); the `file_hash` check closes the remainder |
 | `normalize_utr` frozen once backstop index exists | ⏳ Standing rule (D31) — changing it requires drop-index → replace → recreate |
+| `normalize_utr` not mirrored in `paymentTrustCheck.ts` | ⏳ HIGH — next. Advisory duplicate banner compares exactly; server compares normalised |
+| F0d test suite not written | ⏳ HIGH — next. `EXTRACTION_NOT_OWNED` has no production coverage |
+| No UI guard test enforcing UI_CONVENTIONS.md | ⏳ MEDIUM — next |
+| F2 decline messages are a fraud oracle | ⏳ HIGH — F2 design. Naming the failed invariant lets an attacker iterate; recommend generic message to organizer, itemised reasons in /admin/payments only |
 
 ---
 
