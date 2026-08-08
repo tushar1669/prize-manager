@@ -635,7 +635,7 @@ export default function ConflictReview() {
     neutral: 'border-border/70 bg-muted/40 text-foreground',
     error: 'border-destructive/30 bg-destructive/10 text-destructive',
     warning: 'border-warning/30 bg-warning/10 text-warning',
-    success: 'border-warning/30 bg-warning/15 text-warning',
+    success: 'border-accent/30 bg-accent/15 text-accent',
   };
 
   const statusMessage = {
