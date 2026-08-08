@@ -120,7 +120,7 @@ export function EdgeFunctionStatus() {
   const getStatusIcon = (status: FunctionStatus['status']) => {
     switch (status) {
       case 'ok':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-success" />;
       case 'error':
         return <XCircle className="h-4 w-4 text-destructive" />;
       case 'pending':
@@ -131,7 +131,7 @@ export function EdgeFunctionStatus() {
   const getStatusBadge = (status: FunctionStatus['status']) => {
     switch (status) {
       case 'ok':
-        return <Badge className="bg-green-600">OK</Badge>;
+        return <Badge className="bg-success/15 text-success border-success/30">OK</Badge>;
       case 'error':
         return <Badge variant="destructive">Error</Badge>;
       case 'pending':

@@ -99,7 +99,7 @@ export function DuplicateSetCard({
                 return (
                   <div key={field} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{fieldLabels[field]}:</span>
-                    <span className={isChanged ? 'font-medium text-green-600' : ''}>
+                    <span className={isChanged ? 'font-medium text-success' : ''}>
                       {formatValue(value)}
                     </span>
                   </div>
@@ -164,7 +164,7 @@ export function DuplicateSetCard({
                 className="flex-1 cursor-pointer"
               >
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-blue-600" />
+                  <Users className="h-4 w-4 text-info" />
                   <span className="font-medium">Keep Both (Different Players)</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
@@ -193,14 +193,14 @@ export function DuplicateSetCard({
 
           {/* Warnings */}
           {selectedAction === 'skip' && (
-            <div className="mt-3 flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-amber-900 dark:text-amber-200 text-xs">
+            <div className="mt-3 flex items-start gap-2 p-2 bg-warning/10 rounded text-warning text-xs">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <span>This player will NOT be imported. Use this if the existing record is already correct.</span>
             </div>
           )}
           
           {selectedAction === 'update' && !hasChanges && (
-            <div className="mt-3 flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded text-blue-900 dark:text-blue-200 text-xs">
+            <div className="mt-3 flex items-start gap-2 p-2 bg-info/10 rounded text-info text-xs">
               <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <span>No fields will be updated because the data is already identical.</span>
             </div>

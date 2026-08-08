@@ -273,7 +273,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge
         key="dual-filter"
         variant="outline"
-        className={cn("bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-400 gap-1", interactiveClassName)}
+        className={cn("bg-amber-500/20 text-amber-700 border-amber-400 gap-1", interactiveClassName)}
         title="Players must match BOTH Type label and Age Limit"
         {...interactiveProps}
       >

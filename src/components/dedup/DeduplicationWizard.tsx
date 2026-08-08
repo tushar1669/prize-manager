@@ -107,7 +107,7 @@ export function DeduplicationWizard({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
               No Duplicates Detected
             </DialogTitle>
             <DialogDescription>
@@ -147,13 +147,13 @@ export function DeduplicationWizard({
 
           {/* Summary badges */}
           <div className="flex items-center gap-2 mt-3">
-            <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300">
+            <Badge variant="outline" className="bg-info/15 text-info border-info/30">
               {actionCounts.create} Create
             </Badge>
-            <Badge variant="outline" className="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300">
+            <Badge variant="outline" className="bg-success/15 text-success border-success/30">
               {actionCounts.update} Update
             </Badge>
-            <Badge variant="outline" className="bg-gray-50 dark:bg-gray-950/20 text-gray-700 dark:text-gray-300">
+            <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border">
               {actionCounts.skip} Skip
             </Badge>
           </div>

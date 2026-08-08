@@ -389,7 +389,7 @@ export default function BrochureReview() {
     const flag = flags.get(field);
     if (!flag) return null;
     return (
-      <Badge variant="outline" className="ml-2 border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      <Badge variant="outline" className="ml-2 border-warning/30 bg-warning/15 text-warning">
         <AlertTriangle className="mr-1 h-3 w-3" />
         {flag.reason === "ungrounded" ? "not found in document" : flag.reason}
       </Badge>
@@ -445,9 +445,9 @@ export default function BrochureReview() {
             pick one and re-extract for it. The current event is marked but NOT pre-selected, forcing
             a conscious choice. */}
         {showEventChooser && (
-          <Card className="mb-4 border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
+          <Card className="mb-4 border-warning/30 bg-warning/10">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200">
+              <CardTitle className="flex items-center gap-2 text-base text-warning">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 This brochure contains {detectedEvents.length} events
               </CardTitle>
@@ -463,10 +463,10 @@ export default function BrochureReview() {
                   return (
                     <div key={`${name}-${i}`} className="flex items-start gap-2">
                       <RadioGroupItem value={name} id={`event-${i}`} className="mt-0.5" />
-                      <Label htmlFor={`event-${i}`} className="cursor-pointer text-sm font-normal text-amber-900 dark:text-amber-100">
+                      <Label htmlFor={`event-${i}`} className="cursor-pointer text-sm font-normal text-warning">
                         {name}
                         {isCurrent && (
-                          <span className="ml-2 text-xs text-amber-700 dark:text-amber-300">(currently shown)</span>
+                          <span className="ml-2 text-xs text-warning">(currently shown)</span>
                         )}
                       </Label>
                     </div>
@@ -492,7 +492,7 @@ export default function BrochureReview() {
                   Re-extraction failed. Try again or continue with the currently extracted data.
                 </p>
               )}
-              <p className="text-xs text-amber-700 dark:text-amber-300">
+              <p className="text-xs text-warning">
                 If the event shown below is what you want, skip this and proceed with the review.
               </p>
             </CardContent>
@@ -502,7 +502,7 @@ export default function BrochureReview() {
         {/* CASE 2 (FIX 3) — multi-event was flagged but the model did not name the events, so there is
             no target to re-extract for. Graceful degradation: the original static notice. */}
         {showStaticMultiBanner && (
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>
               This brochure appears to contain multiple events. Only the primary event was extracted.
@@ -518,11 +518,11 @@ export default function BrochureReview() {
         <div
           className={`mb-4 flex items-center gap-3 rounded-lg border p-3 text-sm ${
             sumOk
-              ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-900/20"
+              ? "border-success/30 bg-success/10"
               : "border-border bg-muted/40 text-muted-foreground"
           }`}
         >
-          {sumOk ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Info className="h-4 w-4 text-muted-foreground" />}
+          {sumOk ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Info className="h-4 w-4 text-muted-foreground" />}
           {sumOk ? (
             <span>
               Stated prize fund: <strong>₹{statedFund?.toLocaleString("en-IN") ?? "—"}</strong>
@@ -541,7 +541,7 @@ export default function BrochureReview() {
         )}
 
         {approveBlocked && (
-          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+          <div className="mb-4 flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
             {blockingCount > 0 && (
               <span className="flex items-center gap-3">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -663,19 +663,19 @@ export default function BrochureReview() {
                           disabled={excluded}
                           onChange={(e) => setCategoryName(categoryIdx, e.target.value)}
                           className={`h-8 min-w-[10rem] flex-1 ${
-                            unnamed && !excluded ? "border-amber-400 focus-visible:ring-amber-400" : ""
+                            unnamed && !excluded ? "border-warning focus-visible:ring-warning" : ""
                           }`}
                         />
                         {category?.is_main && !teamPrize && <Badge variant="secondary">Main</Badge>}
                         {teamPrize && (
-                          <Badge className="border-transparent bg-purple-600 text-white hover:bg-purple-600">
+                          <Badge className="border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/40">
                             Team Prize
                           </Badge>
                         )}
                         {unnamed && !excluded && (
                           <Badge
                             variant="outline"
-                            className="border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                            className="border-warning/30 bg-warning/15 text-warning"
                           >
                             <AlertTriangle className="mr-1 h-3 w-3" />
                             Unnamed — give this a name or exclude it from import
@@ -691,7 +691,7 @@ export default function BrochureReview() {
                         </label>
                       </div>
                       {teamPrize ? (
-                        <p className="pb-2 text-xs text-purple-700 dark:text-purple-300">
+                        <p className="pb-2 text-xs text-muted-foreground">
                           This is a team or institutional prize and cannot be auto-imported.
                           After approving this brochure, open the tournament in setup, go to the
                           Prizes tab, and add it there under Team Prizes.
@@ -725,9 +725,9 @@ export default function BrochureReview() {
                               const giftOnly =
                                 cash === 0 && prize?.has_trophy !== true && prize?.has_medal !== true && hasGift;
                               const rowClass = rowFlag
-                                ? "bg-amber-50 dark:bg-amber-900/20"
+                                ? "bg-warning/10"
                                 : giftOnly
-                                  ? "bg-sky-50/70 dark:bg-sky-900/20"
+                                  ? "bg-info/10"
                                   : "";
                               return (
                                 // Positional key: prize rows have no id, and null-rank gift rows

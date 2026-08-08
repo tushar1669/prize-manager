@@ -122,7 +122,7 @@ export default function AdminTeamSnapshots() {
 
       {!missing?.length ? (
         <Card>
-          <CardContent className="flex items-center gap-2 py-6 text-green-500">
+          <CardContent className="flex items-center gap-2 py-6 text-success">
             <CheckCircle2 className="h-5 w-5" />
             <span>All published tournaments have team snapshots ✅</span>
           </CardContent>
@@ -172,7 +172,7 @@ export default function AdminTeamSnapshots() {
                       </TableCell>
                       <TableCell>
                         {status.state === "success" && (
-                          <Badge variant="default" className="bg-green-600">
+                          <Badge variant="default" className="bg-success/15 text-success border-success/30">
                             {status.already_backfilled
                               ? "Already backfilled"
                               : `Done — ${status.rows_inserted} rows`}

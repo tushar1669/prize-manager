@@ -235,9 +235,9 @@ export default function Auth() {
           </CardHeader>
           <CardContent>
             {!isLogin && isLocalhost && (
-              <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-warning">
                   You're on localhost. Email confirmation links will redirect here, which may fail in production.
                 </p>
               </div>

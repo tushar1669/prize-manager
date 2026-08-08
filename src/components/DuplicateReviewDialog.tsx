@@ -210,7 +210,7 @@ export function DuplicateReviewDialog({
                               return (
                                 <div key={field} className="flex justify-between gap-2">
                                   <span className="text-xs font-medium text-muted-foreground">{fieldLabels[field]}</span>
-                                  <span className={`text-xs text-right ${isChanged ? 'font-semibold text-emerald-600' : ''}`}>
+                                  <span className={`text-xs text-right ${isChanged ? 'font-semibold text-success' : ''}`}>
                                     {formatValue(value)}
                                   </span>
                                 </div>
@@ -224,7 +224,7 @@ export function DuplicateReviewDialog({
                     </div>
 
                     {selectedAction === "update" && disableUpdate && (
-                      <div className="mt-2 rounded-md border border-dashed border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                      <div className="mt-2 rounded-md border border-dashed border-warning/30 bg-warning/10 p-2 text-xs text-warning">
                         The merge policy does not update any fields for this match. Switch to “Create new” or adjust the policy
                         below.
                       </div>

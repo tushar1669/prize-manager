@@ -76,9 +76,9 @@ export default function AdminHome() {
           <div className="mb-6 rounded-lg border p-4">
             <div className="mb-2 flex items-center gap-2">
               {publishDriftRows?.length ? (
-                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertCircle className="h-4 w-4 text-warning" />
               ) : (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className="h-4 w-4 text-success" />
               )}
               <h3 className="font-medium">Publish State Drift</h3>
             </div>

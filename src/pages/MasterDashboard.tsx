@@ -131,15 +131,15 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
         )}
 
         {pendingCount > 0 && (
-          <Card className="mb-6 border-amber-200 dark:border-amber-800">
+          <Card className="mb-6 border-warning/30">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  <Clock className="h-5 w-5 text-warning" />
                   <CardTitle>Organizer Access Exceptions</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                  <Badge variant="outline" className="bg-warning/15 text-warning border-warning/30">
                     {pendingCount} exception item{pendingCount !== 1 ? 's' : ''}
                   </Badge>
                   <Button
@@ -181,7 +181,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1 text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
+                              className="gap-1 text-success border-success/30 hover:bg-success/10"
                               onClick={() => approve(u.user_id)}
                               disabled={isApproving || isRejecting}
                             >
@@ -191,7 +191,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                             <Button
                               size="sm"
                               variant="outline"
-                              className="gap-1 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
+                              className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                               onClick={() => reject(u.user_id)}
                               disabled={isApproving || isRejecting}
                             >
@@ -244,7 +244,7 @@ export default function MasterDashboard({ embeddedInAdmin = false }: MasterDashb
                       </TableCell>
                       <TableCell>
                         {u.role === 'organizer' ? (
-                          <Badge className="bg-green-600">Enabled</Badge>
+                          <Badge className="bg-success/15 text-success border-success/30">Enabled</Badge>
                         ) : u.role === 'master' ? (
                           <Badge>Always enabled</Badge>
                         ) : (

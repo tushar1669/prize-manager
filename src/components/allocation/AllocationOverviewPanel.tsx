@@ -197,7 +197,7 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                   <div className="flex flex-wrap gap-1.5">
                     <Badge variant="outline" className="text-xs bg-muted/50">Any = All</Badge>
                     <Badge variant="outline" className="text-xs bg-muted/40 text-muted-foreground border-border">Girls = F only</Badge>
-                    <Badge variant="outline" className="text-xs bg-info/15 text-info border-info/30">Boys = not F</Badge>
+                    <Badge variant="outline" className="text-xs bg-muted/40 text-muted-foreground border-border">Boys = not F</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Boys (not F) includes males and unknown gender

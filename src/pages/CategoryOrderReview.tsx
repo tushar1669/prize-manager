@@ -479,7 +479,7 @@ export default function CategoryOrderReview() {
         <ErrorPanel error={error} onDismiss={clearError} />
 
         {orderRestore && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+          <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <div>Saved order draft from <strong>{formatAge(orderRestore.ageMs)}</strong> is available.</div>
               <div className="flex gap-2">

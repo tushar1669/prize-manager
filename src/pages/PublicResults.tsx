@@ -184,8 +184,8 @@ export default function PublicResults() {
                                       Gift: {giftText}
                                     </span>
                                   )}
-                                  {result.hasTrophy && <Trophy className="h-4 w-4 text-yellow-500" />}
-                                  {result.hasMedal && <Medal className="h-4 w-4 text-gray-400" />}
+                                  {result.hasTrophy && <Trophy className="h-4 w-4 text-accent" />}
+                                  {result.hasMedal && <Medal className="h-4 w-4 text-success" />}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -199,8 +199,8 @@ export default function PublicResults() {
             )}
 
             {results?.otherCategoriesLocked && (
-              <Card className="mt-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
-                <CardContent className="pt-4 text-center text-sm text-amber-800 dark:text-amber-200">
+              <Card className="mt-4 border-warning/30 bg-warning/10">
+                <CardContent className="pt-4 text-center text-sm text-warning">
                   Some categories are hidden. Full results are available for Pro tournaments.
                 </CardContent>
               </Card>

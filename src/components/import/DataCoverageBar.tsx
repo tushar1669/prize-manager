@@ -17,9 +17,9 @@ export interface DataCoverageBarProps {
 }
 
 function CoverageChip({ label, percent, starred }: { label: string; percent: number; starred?: boolean }) {
-  const color = percent >= 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                percent >= 0.5 ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                'bg-red-50 text-red-700 border-red-200';
+  const color = percent >= 0.8 ? 'bg-success/15 text-success border-success/30' :
+                percent >= 0.5 ? 'bg-warning/15 text-warning border-warning/30' :
+                'bg-destructive/15 text-destructive border-destructive/30';
   
   return (
     <div className="text-center">

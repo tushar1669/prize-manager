@@ -259,7 +259,7 @@ export default function TeamGroupPrizesTable({
             </>
           )}
         </Button>
-        {hasDirty && <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>}
+        {hasDirty && <span className="text-xs text-warning font-medium">Unsaved changes</span>}
       </div>
 
       <Table>
@@ -293,9 +293,9 @@ export default function TeamGroupPrizesTable({
                 <TableRow
                   key={row.id || row._tempId}
                   className={cn(
-                    isEmpty && 'bg-amber-50 dark:bg-amber-950/30',
-                    row._status === 'new' && 'bg-green-50/50 dark:bg-green-950/20',
-                    row._status === 'dirty' && 'bg-blue-50/50 dark:bg-blue-950/20'
+                    isEmpty && 'bg-warning/10',
+                    row._status === 'new' && 'bg-success/10',
+                    row._status === 'dirty' && 'bg-info/10'
                   )}
                 >
                   <TableCell>
@@ -370,7 +370,7 @@ export default function TeamGroupPrizesTable({
       </Table>
 
       {visibleRows.some((r) => r.cash_amount === 0 && !r.has_trophy && !r.has_medal) && (
-        <p className="text-xs text-amber-600">
+        <p className="text-xs text-warning">
           Some prizes have no value. Add cash, trophy, or medal before saving.
         </p>
       )}
