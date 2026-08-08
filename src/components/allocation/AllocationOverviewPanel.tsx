@@ -49,15 +49,15 @@ function CoverageBar({ label, count, total, icon: Icon }: {
   const level = getCoverageLevel(percent);
   
   const colorClasses = {
-    good: 'bg-emerald-500',
-    moderate: 'bg-amber-500',
-    poor: 'bg-red-500',
+    good: 'bg-success',
+    moderate: 'bg-warning',
+    poor: 'bg-destructive',
   };
   
   const textClasses = {
-    good: 'text-emerald-700',
-    moderate: 'text-amber-700',
-    poor: 'text-red-700',
+    good: 'text-success',
+    moderate: 'text-warning',
+    poor: 'text-destructive',
   };
 
   return (

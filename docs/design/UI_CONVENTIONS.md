@@ -74,7 +74,30 @@ Status tokens (`success`, `warning`, `destructive`, `info`, and the `--status-*`
 intentionally survive into print — a printed prize sheet or payment record must keep carrying
 its status meaning, so those colors are deliberately not neutralized.
 
-## 6. Before you commit
+## 7. Category colours (bounded exception)
+
+Some chips encode a **category**, not a status — the criteria chips that describe age, rating,
+state, gender, or type. Forcing those onto `success` / `warning` / `destructive` / `info` would
+assert a status meaning that does not exist, and forcing them all to neutral would destroy the
+information the user relies on to scan a list of categories at a glance.
+
+For these, and **only** these, raw Tailwind hues are permitted, restricted to this exact shape:
+
+```
+bg-<hue>-500/15  text-<hue>-300  border-<hue>-500/30
+```
+
+The `/15` fill and the `-300` text shade are chosen for legibility on the near-black background.
+`text-<hue>-700` is **forbidden** — it is dark text on a dark background, which was the original
+bug.
+
+Permitted hues for this exception: `violet`, `amber`, `blue`, `pink`, `sky`, `emerald`, `orange`,
+`teal`, `indigo`.
+
+This exception applies to `src/components/prizes/CategoryCriteriaChips.tsx` only. Any new use
+requires the same justification: the colour must encode a category, never a status.
+
+## 8. Before you commit
 
 - [ ] No raw palette utilities added (`bg-amber-*`, `text-emerald-*`, `border-red-*`, …).
 - [ ] No `dark:` variants added.

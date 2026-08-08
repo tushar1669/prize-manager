@@ -76,7 +76,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="youngest" 
         variant="outline" 
-        className={cn("bg-violet-500/10 text-violet-700 border-violet-300 gap-1", interactiveClassName)}
+        className={cn("bg-violet-500/15 text-violet-300 border-violet-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <Baby className="h-3 w-3" />
@@ -89,7 +89,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge
         key="oldest"
         variant="outline"
-        className={cn("bg-violet-500/10 text-violet-700 border-violet-300 gap-1", interactiveClassName)}
+        className={cn("bg-violet-500/15 text-violet-300 border-violet-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <UserRound className="h-3 w-3" />
@@ -103,7 +103,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge
         key="duplicate-dob-special"
         variant="outline"
-        className={cn("bg-amber-500/10 text-amber-700 border-amber-300 gap-1", interactiveClassName)}
+        className={cn("bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <Users className="h-3 w-3" />
@@ -134,7 +134,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="age" 
         variant="outline" 
-        className={cn("bg-blue-500/10 text-blue-700 border-blue-300 gap-1", interactiveClassName)}
+        className={cn("bg-blue-500/15 text-blue-300 border-blue-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <Users className="h-3 w-3" />
@@ -159,7 +159,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="rating" 
         variant="outline" 
-        className={cn("bg-amber-500/10 text-amber-700 border-amber-300 gap-1", interactiveClassName)}
+        className={cn("bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <Star className="h-3 w-3" />
@@ -189,7 +189,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="gender" 
         variant="outline" 
-        className={cn("bg-pink-500/10 text-pink-700 border-pink-300", interactiveClassName)}
+        className={cn("bg-pink-500/15 text-pink-300 border-pink-500/30", interactiveClassName)}
         {...interactiveProps}
       >
         Girls Only
@@ -200,7 +200,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="gender" 
         variant="outline" 
-        className={cn("bg-sky-500/10 text-sky-700 border-sky-300", interactiveClassName)}
+        className={cn("bg-sky-500/15 text-sky-300 border-sky-500/30", interactiveClassName)}
         {...interactiveProps}
       >
         Boys (not F)
@@ -215,7 +215,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="disability" 
         variant="outline" 
-        className={cn("bg-emerald-500/10 text-emerald-700 border-emerald-300 gap-1", interactiveClassName)}
+        className={cn("bg-emerald-500/15 text-emerald-300 border-emerald-500/30 gap-1", interactiveClassName)}
         {...interactiveProps}
       >
         <Zap className="h-3 w-3" />
@@ -229,7 +229,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="states" 
         variant="outline" 
-        className={cn("bg-orange-500/10 text-orange-700 border-orange-300", interactiveClassName)}
+        className={cn("bg-orange-500/15 text-orange-300 border-orange-500/30", interactiveClassName)}
         {...interactiveProps}
       >
         {c.allowed_states.length === 1 ? c.allowed_states[0] : `${c.allowed_states.length} states`}
@@ -242,7 +242,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="groups" 
         variant="outline" 
-        className={cn("bg-teal-500/10 text-teal-700 border-teal-300", interactiveClassName)}
+        className={cn("bg-teal-500/15 text-teal-300 border-teal-500/30", interactiveClassName)}
         {...interactiveProps}
       >
         Group: {c.allowed_groups.join(', ')}
@@ -255,7 +255,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge 
         key="types" 
         variant="outline" 
-        className={cn("bg-indigo-500/10 text-indigo-700 border-indigo-300", interactiveClassName)}
+        className={cn("bg-indigo-500/15 text-indigo-300 border-indigo-500/30", interactiveClassName)}
         {...interactiveProps}
       >
         Type: {c.allowed_types.join(', ')}
@@ -273,7 +273,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       <Badge
         key="dual-filter"
         variant="outline"
-        className={cn("bg-amber-500/20 text-amber-700 border-amber-400 gap-1", interactiveClassName)}
+        className={cn("bg-warning/20 text-warning border-warning/50 gap-1", interactiveClassName)}
         title="Players must match BOTH Type label and Age Limit"
         {...interactiveProps}
       >
