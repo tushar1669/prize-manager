@@ -32,10 +32,10 @@ export function UnfilledPrizesPanel({ unfilled, prizes, categories }: UnfilledPr
   // Success state: all prizes allocated
   if (unfilled.length === 0) {
     return (
-      <Card className="border-green-200 bg-green-50/50">
+      <Card className="border-success/30 bg-success/10">
         <CardContent className="flex items-center gap-3 py-4">
-          <CheckCircle2 className="h-5 w-5 text-green-600" />
-          <p className="text-sm font-medium text-green-900">
+          <CheckCircle2 className="h-5 w-5 text-success" />
+          <p className="text-sm font-medium text-success">
             All prizes were allocated successfully
           </p>
         </CardContent>
@@ -79,10 +79,10 @@ export function UnfilledPrizesPanel({ unfilled, prizes, categories }: UnfilledPr
   };
 
   return (
-    <Card className="border-amber-200 bg-amber-50/30">
+    <Card className="border-warning/30 bg-warning/10">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <AlertCircle className="h-5 w-5 text-amber-600" />
+          <AlertCircle className="h-5 w-5 text-warning" />
           <CardTitle className="text-foreground">
             Unfilled Prizes ({unfilled.length})
           </CardTitle>
@@ -96,7 +96,7 @@ export function UnfilledPrizesPanel({ unfilled, prizes, categories }: UnfilledPr
               {items.map(({ prize, reasons }) => (
                 <div
                   key={prize.id}
-                  className="flex flex-wrap items-start gap-2 rounded-md border border-amber-200 bg-background p-3 text-sm"
+                  className="flex flex-wrap items-start gap-2 rounded-md border border-warning/30 bg-background p-3 text-sm"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -112,7 +112,7 @@ export function UnfilledPrizesPanel({ unfilled, prizes, categories }: UnfilledPr
                         <Badge
                           key={idx}
                           variant="secondary"
-                          className="text-xs bg-amber-100 text-amber-800 border-amber-200"
+                          className="text-xs bg-warning/15 text-warning border-warning/30"
                         >
                           {formatReasonCode(code)}
                         </Badge>

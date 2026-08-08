@@ -83,7 +83,7 @@ function CoverageBar({ label, count, total, icon: Icon }: {
 
 function CoverageWarning({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+    <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
       <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
       <span>{message}</span>
     </div>
@@ -196,8 +196,8 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
                   <span className="text-muted-foreground">Gender Semantics</span>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge variant="outline" className="text-xs bg-muted/50">Any = All</Badge>
-                    <Badge variant="outline" className="text-xs bg-pink-50 text-pink-700 border-pink-200">Girls = F only</Badge>
-                    <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">Boys = not F</Badge>
+                    <Badge variant="outline" className="text-xs bg-muted/40 text-muted-foreground border-border">Girls = F only</Badge>
+                    <Badge variant="outline" className="text-xs bg-info/15 text-info border-info/30">Boys = not F</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Boys (not F) includes males and unknown gender
@@ -288,7 +288,7 @@ export function AllocationOverviewPanel({ ruleConfig, players, className }: Prop
             
             {/* All Good */}
             {coverage.total > 0 && warnings.length === 0 && (
-              <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-md px-3 py-2">
                 <CheckCircle2 className="h-4 w-4" />
                 <span>Field coverage looks good. Most prizes should fill correctly.</span>
               </div>
