@@ -126,9 +126,9 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                           <TableRow>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-1">
-                                {prize.place === 1 && <Trophy className="h-4 w-4 text-yellow-500" />}
-                                {prize.place === 2 && <Medal className="h-4 w-4 text-gray-400" />}
-                                {prize.place === 3 && <Award className="h-4 w-4 text-amber-600" />}
+                                {prize.place === 1 && <Trophy className="h-4 w-4 text-accent" />}
+                                {prize.place === 2 && <Medal className="h-4 w-4 text-success" />}
+                                {prize.place === 3 && <Award className="h-4 w-4 text-muted-foreground" />}
                                 {getPlaceOrdinal(prize.place)}
                               </div>
                             </TableCell>
@@ -158,8 +158,8 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                                 {prize.cash_amount > 0 && (
                                   <span className="font-medium">{formatCurrency(prize.cash_amount)}</span>
                                 )}
-                                {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-yellow-500" />}
-                                {prize.has_medal && <Medal className="h-3.5 w-3.5 text-gray-400" />}
+                                {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-accent" />}
+                                {prize.has_medal && <Medal className="h-3.5 w-3.5 text-success" />}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -170,10 +170,10 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                 </Table>
               </div>
             ) : (
-              <Alert variant="default" className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                <AlertTitle className="text-amber-800 dark:text-amber-200">No eligible teams found</AlertTitle>
-                <AlertDescription className="text-amber-700 dark:text-amber-300 mt-2">
+              <Alert variant="default" className="border-warning/30 bg-warning/10">
+                <AlertCircle className="h-4 w-4 text-warning" />
+                <AlertTitle className="text-warning">No eligible teams found</AlertTitle>
+                <AlertDescription className="text-warning mt-2">
                   <p className="mb-2">Common causes:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm">
                     <li><strong>Missing "{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}" data</strong> – players may not have this field populated in the import</li>

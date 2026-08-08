@@ -12,7 +12,7 @@ export function NoAllocationGuard() {
       <Card className="max-w-md w-full">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-6 w-6 text-amber-500" />
+            <AlertCircle className="h-6 w-6 text-warning" />
             <CardTitle>No allocation preview found</CardTitle>
           </div>
         </CardHeader>

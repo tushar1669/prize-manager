@@ -204,13 +204,13 @@ function CategorySection({
                         )}
                         {iconData.has_trophy && (
                           <Trophy
-                            className="h-4 w-4 text-amber-500"
+                            className="h-4 w-4 text-accent"
                             aria-label="Trophy"
                           />
                         )}
                         {iconData.has_medal && (
                           <Medal
-                            className="h-4 w-4 text-sky-500"
+                            className="h-4 w-4 text-success"
                             aria-label="Medal"
                           />
                         )}
@@ -323,7 +323,7 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
       <div className="flex items-center gap-3">
         <div className="flex flex-col items-end gap-1">
           {isBlockedByOnePrize && (
-            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-100">
+            <Badge variant="secondary" className="text-xs bg-warning/15 text-warning border-warning/30 hover:bg-warning/15">
               Blocked by one-prize
             </Badge>
           )}
@@ -730,7 +730,7 @@ export function AllocationDebugReport({
                   </div>
                 ) : unfilledEntries.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
+                    <CheckCircle2 className="h-12 w-12 text-success mb-4" />
                     <h3 className="text-lg font-semibold">
                       All prizes filled!
                     </h3>

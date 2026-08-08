@@ -736,7 +736,7 @@ export default function ConflictReview() {
               <p>{statusMessage}</p>
             </div>
             {!canViewFullResults && hiddenWinnerCount > 0 && (
-              <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+              <div className="mt-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
                 <p>
                   Some winners are hidden until Pro. Showing {visibleWinnerNamesCount} of {summaryCounts.winners} winner names.
                 </p>
@@ -746,12 +746,12 @@ export default function ConflictReview() {
         </Alert>
 
         {!canViewFullResults && accessErrorCode !== 'backend_migration_missing' && (
-          <Card className="mb-6 border-2 border-amber-400 bg-amber-100">
+          <Card className="mb-6 border-2 border-warning/30 bg-warning/10">
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-amber-950">Unlock full winner details</CardTitle>
+              <CardTitle className="text-lg font-bold text-warning">Unlock full winner details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-amber-950">
+              <p className="text-sm text-foreground">
                 This tournament has <strong>{summaryCounts.players} players</strong>, which is above the free limit of 150.
                 Upgrade to Pro to reveal all winner names and enable exports. You can review all categories and totals now.
               </p>
@@ -759,14 +759,14 @@ export default function ConflictReview() {
                 <Button className="font-semibold" size="lg" onClick={() => navigate(upgradePath)}>Upgrade to Pro</Button>
                 <Button
                   size="lg"
-                  className="bg-white text-amber-950 border-2 border-amber-700 font-semibold hover:bg-amber-50"
+                  className="text-warning border-2 border-warning/30 font-semibold hover:bg-warning/10"
                   variant="outline"
                   onClick={() => navigate(couponPath)}
                 >
                   Apply Coupon
                 </Button>
               </div>
-              <p className="text-xs text-amber-900">
+              <p className="text-xs text-muted-foreground">
                 Have a welcome or referral coupon? Click <strong>Apply Coupon</strong> to enter your code. Otherwise, pay via UPI on the Upgrade page.
               </p>
             </CardContent>
@@ -915,7 +915,7 @@ export default function ConflictReview() {
 
                                 if (!winner) {
                                   return (
-                                    <div key={entry.prize_id} className="rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-2 text-sm text-amber-100">
+                                    <div key={entry.prize_id} className="rounded-md border border-dashed border-warning/30 bg-warning/10 p-2 text-sm text-warning">
                                       <div className="flex items-center gap-2 font-medium">
                                         <Lock className="h-4 w-4" />
                                         Place #{entry.prize_place} — Winner hidden until Pro
