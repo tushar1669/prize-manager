@@ -633,9 +633,9 @@ export default function ConflictReview() {
 
   const statusStyles = {
     neutral: 'border-border/70 bg-muted/40 text-foreground',
-    error: 'border-red-500/40 bg-red-500/10 text-red-200',
-    warning: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200',
-    success: 'border-[#E59D1D]/40 bg-[#E59D1D]/10 text-[#F0CB54]',
+    error: 'border-destructive/30 bg-destructive/10 text-destructive',
+    warning: 'border-warning/30 bg-warning/10 text-warning',
+    success: 'border-accent/30 bg-accent/15 text-accent',
   };
 
   const statusMessage = {

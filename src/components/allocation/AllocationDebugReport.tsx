@@ -253,7 +253,7 @@ function CategorySection({
                             className={
                               entry.candidates_after_one_prize === 0 &&
                               entry.candidates_before_one_prize > 0
-                                ? "text-amber-600 font-medium"
+                                ? "text-warning font-medium"
                                 : entry.candidates_after_one_prize === 0
                                   ? "text-destructive font-medium"
                                   : ""
@@ -293,7 +293,7 @@ function UnfilledPrizeRow({ entry }: { entry: AllocationCoverageEntry }) {
     (entry.candidates_before_one_prize > 0 && entry.candidates_after_one_prize === 0);
   const hasNoEligibleCandidates = entry.candidates_before_one_prize === 0;
   const containerClassName = isBlockedByOnePrize
-    ? "bg-amber-500/10 border-amber-300"
+    ? "bg-warning/10 border-warning/30"
     : "bg-destructive/5 border-destructive/20";
 
   return (

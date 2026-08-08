@@ -19,7 +19,7 @@ interface DuplicateGroupSectionProps {
 const confidenceColors: Record<ConfidenceLevel, string> = {
   high: 'bg-success/15 text-success',
   medium: 'bg-warning/15 text-warning',
-  low: 'bg-warning/15 text-warning',
+  low: 'bg-muted/40 text-muted-foreground',
 };
 
 export function DuplicateGroupSection({

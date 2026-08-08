@@ -501,11 +501,11 @@ export default function Finalize() {
           </Card>
 
           {/* Free tier note */}
-          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-950/30 print:hidden">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/10 px-4 py-3 text-sm print:hidden">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
             <div>
-              <p className="font-medium text-blue-800 dark:text-blue-200">{freeTierSummaryLabel(freePlayerThreshold)}</p>
-              <p className="mt-0.5 text-blue-700/80 dark:text-blue-300/70">{freeTierSummaryBody(freePlayerThreshold)}</p>
+              <p className="font-medium text-info">{freeTierSummaryLabel(freePlayerThreshold)}</p>
+              <p className="mt-0.5 text-info/80">{freeTierSummaryBody(freePlayerThreshold)}</p>
             </div>
           </div>
 
@@ -525,7 +525,7 @@ export default function Finalize() {
               </div>
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Unfilled Prizes</span>
-                <span className={`font-medium ${unfilled.length > 0 ? 'text-amber-600' : 'text-foreground'}`}>
+                <span className={`font-medium ${unfilled.length > 0 ? 'text-warning' : 'text-foreground'}`}>
                   {unfilled.length}
                 </span>
               </div>
@@ -605,7 +605,7 @@ export default function Finalize() {
                 <CardTitle>Final Prize Views</CardTitle>
                 <BackendMigrationMissingAlert errorCode={accessErrorCode} compact className="mt-2" onRetry={() => window.location.reload()} />
                 {!hasFullAccess && accessErrorCode !== 'backend_migration_missing' && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">Preview mode — some views are locked</p>
+                  <p className="text-xs text-warning">Preview mode — some views are locked</p>
                 )}
               </div>
               <div className="flex gap-2">
