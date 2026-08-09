@@ -530,6 +530,7 @@ describe("payment invariants — direction, payee VPA presence, required fields"
       };
       return builder;
     },
+    rpc: () => Promise.resolve({ data: false, error: null }),
   };
 
   let runPaymentTrustChecks: typeof import("../supabase/functions/extract/paymentTrustCheck").runPaymentTrustChecks;
