@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 8 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 9 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -23,20 +23,22 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (prize-manager.com, ap-south-1, Postgres 17) |
-| Edge functions | `extract` (**v44**), `commit-extraction` (v13), `send-payment-notifications` (v7, `verify_jwt=false`), `sendWelcomeOnboardingEmail` (v20), `allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `finalize`, `publicTeamPrizes`, `generatePdf`, `parseWorkbook`, `pmPing` |
+| Edge functions | `extract` (**v45**), `commit-extraction` (v13), `send-payment-notifications` (v7, `verify_jwt=false`), `sendWelcomeOnboardingEmail` (v20), `allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `finalize`, `publicTeamPrizes`, `generatePdf`, `parseWorkbook`, `pmPing` |
 | Active extraction schema | `extraction_schemas` v5 (chess_brochure), **v3 (payment_screenshot)** |
 | Storage buckets | `extraction-uploads`, `brochures`, `exports`, `imports` |
-| Repo | github.com/tushar1669/prize-manager (**public**) · branch: **main** · feature branch `feat/phase-2a3-trust-hardening` (fully merged) |
+| Repo | github.com/tushar1669/prize-manager (**public**) · branch: **main** at `10744a8` · `feat/phase-2a3-trust-hardening` and `feat/f0d-closeout` both fully merged and pushed |
 | Gemini model | `GEMINI_MODEL` env secret = `gemini-3.1-flash-lite` |
 | Local paths | repo `~/Desktop/prize-manager`, test PDFs `~/Desktop/prize-manager/test-brochures/` |
 | Payment trust invariants | 8 in `extract/paymentTrustCheck.ts`: `utr_format`, `utr_duplicate`, `amount_mismatch`, `payee_vpa_mismatch`, `payee_vpa_missing`, `date_stale`, `direction_not_outgoing`, `required_fields_missing` |
-| Test baseline | **448 passing, 3 known failures** (conflict-utils ×2, martech-metrics ×1 — pre-existing) |
+| Test baseline | **474 passing, 3 known failures** (conflict-utils ×2, martech-metrics ×1 — pre-existing) |
 | TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 pre-existing errors**. Root `npx tsc --noEmit` checks nothing. |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
 | Claim RPC | **5-arg only.** 3-arg and 4-arg dropped in F0d Migration A. |
 | Client grants on `tournament_payments` | `authenticated`: **SELECT only**. `anon`: **nothing**. All writes flow through RPCs. |
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
-| Design doc | `docs/design/UI_CONVENTIONS.md` — governs all styling. Dark-only. |
+| Advisory duplicate lookup | `public.utr_active_duplicate_exists(text)` — STABLE, SECURITY DEFINER, EXECUTE to `service_role` only. Called by `extract` for the pre-submit banner. |
+| Verification harness | `supabase/tests/f0d_rpc_checks.sql` — self-aborting, covers 13 RPC branches. Ends with `ERROR: HARNESS RESULTS`; that is the pass condition. |
+| Design doc | `docs/design/UI_CONVENTIONS.md` — governs all styling. Dark-only. Enforced by `tests/ui-conventions.spec.ts`. |
 
 ### Real frontend routes
 
@@ -98,12 +100,24 @@ Q1. **The 5-arg `submit_tournament_payment_claim` is the ONLY client write path 
 Q2. **`normalize_utr` is FROZEN** while `uq_tournament_payments_utr_active` exists. Index entries are built with the function as of creation and never re-evaluated. Any change requires drop-index → replace-function → recreate-index.
 Q3. `normalize_utr` deliberately keeps EXECUTE for `authenticated` (N1 exception) — expression-index evaluation during DML runs as the invoking role.
 
+**F0d closeout (new):**
+
+Q4. **`utr_format` and `utr_duplicate` are INDEPENDENT blocks in `paymentTrustCheck.ts`.** The duplicate lookup must never be nested back inside the format check's `else` — a malformed UTR can still be a re-use of one already seen. Both flags may fire on the same field; that is intended and harmless under D28.
+
+Q5. **`utr_format` semantics are frozen** while F2's named-flag gate depends on them: it tests the whitespace-stripped value against `^[A-Za-z0-9]{8,22}$` at severity `high`. Normalising before the format test would relax a security-relevant flag as a side effect of a cosmetic fix.
+
+Q6. **The advisory duplicate lookup fails OPEN by design.** On RPC error or throw, `paymentTrustCheck.ts` logs and emits no flag. This is safe only because the hard block is the RPC plus `uq_tournament_payments_utr_active`; a failed advisory can never let a duplicate be inserted. Do not "fix" this into a fail-closed flag.
+
+Q7. **Pass the RAW trimmed UTR to `utr_active_duplicate_exists`, never `normalizeUtr()` output.** The SQL function normalises both sides itself, so TS-mirror drift cannot become a false negative.
+
 **UI (new):**
 
 U1. **Prize Manager is permanently dark.** `darkMode: ["class"]` is set but nothing adds a `dark` class and no `.dark` block exists. Every `dark:` utility is dead; every raw light-palette utility renders literally. See `docs/design/UI_CONVENTIONS.md`.
 U2. Use semantic tokens (`success`, `warning`, `destructive`, `info`, `accent`, `muted`). Never add raw palette utilities or `dark:` variants.
 U3. The only permitted raw-hue exception is category chips in `CategoryCriteriaChips.tsx`, restricted to `bg-<hue>-500/15 text-<hue>-300 border-<hue>-500/30`.
 U4. `.pm-print-surface` in `index.css` governs print. Do not modify it. Verified: no token-styled surface renders inside it.
+
+U5. `tests/ui-conventions.spec.ts` enforces U1–U3 mechanically (5 rules over `src/`). White/black literals are deliberately OUT of scope — print and public poster surfaces are meant to be light (UI_CONVENTIONS §5). Widening `PALETTE_EXCEPTION_FILES` beyond the one chips file requires editing the test, which is the point.
 
 **Phase 2B:**
 13. Bank statements are `privacy_class='sensitive'`. NEVER process through Gemini. pdfplumber only.
@@ -116,7 +130,7 @@ See prior PROJECT_STATE for full detail. All shipped and production-verified.
 
 ---
 
-## 8. Phase 2A-3 — Trust Hardening (F0a–F0e COMPLETE ✅ — 8 August 2026)
+## 8. Phase 2A-3 — Trust Hardening (F0a–F0e + F0d closeout COMPLETE ✅ — 9 August 2026)
 
 ### Prerequisite status
 
@@ -127,6 +141,7 @@ See prior PROJECT_STATE for full detail. All shipped and production-verified.
 | **F0c** | Three new trust invariants | ✅ `extract` v44 |
 | **F0d** | UTR match + duplicate hard-block | ✅ `20260804120000`, `20260804160000` |
 | **F0e** | Payment-page failure states | ✅ frontend only |
+| **F0d closeout** | `normalize_utr` parity · RPC harness · UI guard | ✅ merged `10744a8`, 9 Aug |
 
 ### F0d — what shipped
 
@@ -152,20 +167,43 @@ Four batches, ~45 files: Batch 1 (payment surfaces + `UI_CONVENTIONS.md`), 2a (3
 
 ---
 
+### F0d closeout — what shipped (9 Aug, merge `10744a8`)
+
+**1. `normalize_utr` parity (was: advisory banner and server disagreed on "same UTR").**
+The debt entry said "mirror `normalize_utr` into `paymentTrustCheck.ts`", but a TS-only mirror could not have closed the gap: PostgREST's `.eq()` cannot apply a function to a column, so the *stored* side stayed raw however the probe was normalised. Fixed server-side instead — migration `20260808172212` adds `public.utr_active_duplicate_exists(text)` (STABLE, SECURITY DEFINER, `service_role`-only EXECUTE), and `extract` calls it. `normalize_utr` itself was NOT touched (Q2 freeze intact). The TS mirror `normalizeUtr()` still ships, exported and tested, for the parity fixture and future F2 use.
+
+Also fixed in the same change: the duplicate lookup used to live inside the format check's `else`, so a hyphenated UTR flagged `utr_format` and was **never** duplicate-checked. Now independent (Q4).
+
+**Production-verified 9 Aug.** `extract` v45 deployed; re-uploading the GPay screenshot with UTR `127287042392` (which sits on an approved row) produced `utr_duplicate` in `extractions.field_flags` on extraction `b63c6152`, and the advisory banner rendered on the payment page. Neither `console.warn` path fired, which is the only way to distinguish a working RPC from one silently swallowed by the `catch`.
+
+**2. Test coverage.** Split by what each runner can actually prove:
+- `tests/payment-utr-normalization.spec.ts` (21 cases) — the 11 normalisation fixtures, strip-before-upper ordering, duplicate-flag behaviour on true/false/error, the format-fails-but-duplicate-still-runs regression, and a guard asserting the migration still compares on `normalize_utr` and still excludes rejected rows.
+- `supabase/tests/f0d_rpc_checks.sql` (13 branches) — everything living inside the plpgsql RPC, where a mocked client would only be testing the mock.
+- `tests/extraction-grounding.spec.ts` — one-line fix: its fake admin client had no `.rpc`, so the new call threw into the `catch`. Without this the suite would have stayed green against an implementation whose duplicate check failed 100% of the time.
+
+**Harness results, reproduced identically by Tushar and by SQL audit:** A/B/C `UTR_ALREADY_USED` (exact, separator variant, case variant) · D rejected-only UTR passes through (D15 intact) · E `UTR_IS_TXN_ID` · F `UTR_MISMATCH` · G `UTR_EXTRACTION_UNREADABLE` · H/I/J `EXTRACTION_NOT_OWNED` (foreign extraction, missing id, wrong doc_type) · K master carve-out succeeds · L `unique_violation on uq_tournament_payments_utr_active` · M all 11 parity fixtures match. Post-run state confirmed unchanged: 7 payments, 0 harness documents, outbox 6.
+
+**Correction to the previous PROJECT_STATE:** it claimed `EXTRACTION_NOT_OWNED` was "not verifiable in production — every extraction in the database belongs to one account." That is no longer true. `extraction_documents` has four distinct uploaders (`753b536b`, `6817f058`, `48e9e020`, `edb3c95d` — all Tushar's own accounts) plus 122 legacy rows with `uploaded_by` NULL. Harness case H exercises the branch against a genuinely foreign extraction. `753b536b` is confirmed **not** master, which is what makes H, I and J meaningful.
+
+**3. UI guard.** `tests/ui-conventions.spec.ts` — 5 rules over all 255 files in `src/`. Survey before writing: zero `dark:` variants, and all 33 raw palette utilities confined to `CategoryCriteriaChips.tsx` in the permitted shape — so the guard passes with **no allowlist of grandfathered violations**. Verified to bite via three sabotage runs (`dark:bg-red-900`, `text-violet-700` in the exception file, `dark:-mt-2`), each reverted. The `dark:` lookahead is `(?=\S)` rather than `(?=[A-Za-z[])` so `dark:-mt-2` and `dark:!bg-red-500` cannot escape; it still excludes the one legitimate `{ dark: ".dark" }` object key in `chart.tsx`.
+
+---
+
 ## 9. Immediate next step
 
-**Status as of 8 Aug 2026:** F0a–F0e complete and production-verified. `extract` v44, schema v3, 448 tests passing / 3 known failures. Branch `feat/phase-2a3-trust-hardening` fully merged to main. UI token migration complete.
+**Status as of 9 Aug 2026:** Phase 2A-3 prerequisites F0a–F0e **and** the F0d closeout are complete and production-verified. `extract` v45, schema v3, **474 tests passing / 3 known failures**, everything merged and pushed to `main` at `10744a8`. Working tree clean.
 
-**Next: close out F0d's remaining three items, then F1 and F2.**
+**Next: F1, then F2 — in a fresh chat.**
 
-1. **`normalize_utr` mirror into `paymentTrustCheck.ts`** — the advisory duplicate banner compares UTRs exactly while the server compares them normalised, so a spaced or lower-case variant passes the early warning then hard-blocks at Submit. Fails safe but confusing. Requires `supabase functions deploy extract` (P5) — vitest is the only real gate (P6).
-2. **F0d automated test suite** — the ten cases in PHASE2_ARCHITECTURE §9, including `EXTRACTION_NOT_OWNED` and `normalize_utr` SQL/TS parity.
-3. **UI guard test** — vitest check that fails on new raw palette utilities, `dark:` variants, or dark-on-dark text shades, so `UI_CONVENTIONS.md` is enforced by CI.
+**F1 — profile verification prerequisite.** Verified email + verified phone before payment submission. Open question that must be settled first: **OTP SMS provider and budget.** Not free. Email verification likely reuses Supabase auth email. Decide the provider before any code.
 
-Then **F1** (profile verification — open question: OTP provider and budget) and **F2** (the auto-approval gate itself, per D28).
+**F2 — conditional auto-approval.** Per D28: gate on the named security-relevant flag reasons (`utr_format`, `utr_duplicate`, `amount_mismatch`, `payee_vpa_mismatch`, `payee_vpa_missing`, `date_stale`, `direction_not_outgoing`, `required_fields_missing`), never on flag count. Three things to resolve during design:
+1. **Decline messages are a fraud oracle.** Naming which invariant failed lets an attacker iterate. Recommend a generic message to the organizer, itemised reasons in `/admin/payments` only.
+2. **`file_hash` duplicate-screenshot invariant** — currently nothing checks it; belongs in the F2 gate.
+3. **`auto_upi` source value** needs the `source` CHECK on `tournament_entitlements` widened, mirroring how `manual_upi` was added.
 
 **Opening line for the next chat:**
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §8 and §9. Phase 2A-3 prerequisites F0a–F0e are complete and production-verified, and the UI token migration is done — extract v44, schema v3, 448 tests passing, all work merged to main. Starting the F0d closeout: (1) mirror `normalize_utr` into `paymentTrustCheck.ts` so the advisory duplicate banner matches the server's normalised comparison, (2) add the ten F0d test cases from PHASE2_ARCHITECTURE §9, (3) add a UI guard test enforcing UI_CONVENTIONS.md. Begin by reading `supabase/functions/extract/paymentTrustCheck.ts` and reporting how `utr_duplicate` currently compares UTRs before proposing changes.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §8 and §9. Phase 2A-3 prerequisites F0a–F0e and the F0d closeout are all complete and production-verified — extract v45, schema v3, 474 tests passing / 3 known failures, merged to main at `10744a8`, working tree clean. Starting F1 (profile verification). Before any code, settle the open question: which OTP SMS provider and what budget, given no paid services without justification (guardrail 5). Begin by reporting what verification state already exists on `profiles` and in Supabase auth, and what the payment submission path currently checks, before proposing anything.*
 
 ---
 
@@ -187,12 +225,15 @@ Phase 2B (bank statement reconciliation) blocked on 2A-3. Phase 2C-D (REST API +
 | ~~3-arg / 4-arg claim overloads live~~ | ✅ RESOLVED | Dropped in Migration A |
 | ~~`review_tournament_payment` `anon`-executable~~ | ✅ RESOLVED | Grant-only fix, Migration A |
 | ~~Dead `dark:` variants / raw palette utilities~~ | ✅ RESOLVED | UI batches 1, 2a, 2b, 2c |
-| **`normalize_utr` not mirrored in `paymentTrustCheck.ts`** | **HIGH — next** | Advisory banner and server disagree on "same UTR" |
-| **F0d test suite not written** | **HIGH — next** | `EXTRACTION_NOT_OWNED` has no production coverage at all |
-| **No UI guard test** | MEDIUM — next | `UI_CONVENTIONS.md` is enforced by memory only |
+| ~~`normalize_utr` parity~~ | ✅ RESOLVED | `utr_active_duplicate_exists` + `20260808172212`; verified in prod on `extract` v45 |
+| ~~F0d test suite~~ | ✅ RESOLVED | 21 vitest cases + 13-branch SQL harness; `EXTRACTION_NOT_OWNED` covered 3 ways |
+| ~~No UI guard test~~ | ✅ RESOLVED | `tests/ui-conventions.spec.ts`, 5 rules, sabotage-verified |
 | **Auto-approve gate must use named flag reasons** | **HIGH — F2** | See D28 |
 | **F2 decline messages are a fraud oracle** | **HIGH — F2 design** | PRD says "specific, human-readable pop-up". Naming which invariant failed lets an attacker iterate. Recommend generic message to organizer, itemised reasons in `/admin/payments` only. |
 | **No duplicate-screenshot (`file_hash`) invariant** | MEDIUM — F2 | Same image re-uploaded creates a new `extraction_documents` row with the same `file_hash`; nothing checks it |
+| **Advisory duplicate check fails open** | Accepted residual | RPC error → no flag, only a `console.warn`. Bounded by the hard block + unique index (Q6). Nothing alerts if it starts failing in production — only absence of `utr_duplicate` on a known-duplicate upload would reveal it |
+| `import.meta.url` vs `process.cwd()` inconsistency | LOW | `ui-conventions.spec.ts` resolves the repo root from `import.meta.url` and works; `payment-utr-normalization.spec.ts` uses `process.cwd()` and its comment claims `import.meta.url` is an `http://` URL under jsdom. Both work; the second justification looks wrong. Harmonise when either file is next touched |
+| 122 `extraction_documents` rows with `uploaded_by` NULL | LOW | Legacy (≤20 Jul). If any were `payment_screenshot`, the F0d ownership gate would reject them — fail-closed, so not a hole. Not audited by doc_type |
 | **Consistent-but-wrong UTR** | Accepted residual | OCR misreads, organizer accepts pre-fill → submitted and extracted agree, both wrong vs bank. Only Phase 2B closes this. |
 | **UTR-only valve** | Accepted residual | No screenshot = no mismatch check by construction. Safe under F2 (no-extraction claims never auto-approve). |
 | `tsconfig.app.json` scope gap | MEDIUM | Covers `src/` only |

@@ -1,7 +1,7 @@
 # Architecture — Phase 2: Universal Extraction Engine
 
-**Status:** Accepted — Phase 2A, 2A-2 complete; Phase 2A-3 prerequisites F0a–F0e complete and production-verified; UI token migration complete; F0d closeout (tests + normalize_utr parity) next
-**Date:** July–August 2026 (last revised 8 Aug 2026)
+**Status:** Accepted — Phase 2A, 2A-2 complete; Phase 2A-3 prerequisites F0a–F0e complete and production-verified; UI token migration complete; **F0d closeout complete (9 Aug, merge `10744a8`)**; F1 (profile verification) next
+**Date:** July–August 2026 (last revised 9 Aug 2026)
 **Deciders:** Tushar (owner), Claude (architecture)
 **Predecessor:** `docs/extraction-engine/ARCHITECTURE.md` (Phase 1 — read this first)
 **Repo location:** `docs/extraction-engine/PHASE2_ARCHITECTURE.md`
@@ -28,6 +28,7 @@ Phase 2A-3 (in progress):
   F0c three new trust invariants            [DONE 3 Aug 2026]
   F0d UTR match + duplicate hard-block      [DONE 4 Aug 2026]
   F0e payment-page failure states           [DONE 6 Aug 2026]
+  F0d closeout: parity + tests + UI guard   [DONE 9 Aug 2026]
   F1  profile verification / F2 auto-approve gate
 
 Phase 2B (blocked on 2A-3):
@@ -386,6 +387,35 @@ One bounded exception, documented in UI_CONVENTIONS §6: category chips in `Cate
 
 Allocation-engine safety: the engine is not in the frontend — it lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes` and `backfillTeamAllocations`, invoked by string name. A SHA-256 baseline of all 408 source files was taken before the sweep and re-diffed after every batch; the 9 engine files stayed byte-identical and nothing under `supabase/` changed. Each allocation-adjacent batch also proved, mechanically, that only `className` lines had changed and that non-className line counts were unmoved.
 
+**D34 — The advisory duplicate check compares server-side; format and duplicate are independent blocks (Accepted 9 Aug 2026; completes D30).**
+
+D30 said `normalize_utr` would be "mirrored in `paymentTrustCheck.ts`". Implementing it exposed that a mirror alone cannot close the gap. The edge function's check was `.eq("utr", utrClean)` — PostgREST's filter builder **cannot apply a function to a column**, so however thoroughly the probe is normalised, the stored side is still compared raw. A TS-only mirror would have closed the case-folding half and left the stored-separator half open, while looking resolved.
+
+Resolution: `public.utr_active_duplicate_exists(text)` (migration `20260808172212`) — STABLE, SECURITY DEFINER, EXECUTE granted to `service_role` only (both N1 paths closed), wrapping the same `EXISTS` predicate the RPC uses. One definition of "same UTR", index-backed by `uq_tournament_payments_utr_active`. `normalize_utr` itself is untouched, so the Q2 freeze holds. Rejected alternatives: fetching all non-rejected rows and normalising in TypeScript (correct at 2 rows, cannot use the index, quietly wrong at 5,000); and the TS-only mirror above.
+
+Three contracts follow, and each is a guardrail because each is individually reversible by a well-meaning edit:
+
+1. **Format and duplicate are independent blocks.** The duplicate lookup previously sat inside the format check's `else`, so a hyphenated UTR flagged `utr_format` and was never duplicate-checked — a hyphen was enough to skip the lookup. They are now separate `if` blocks over the same trimmed value, and both flags may fire on `utr`. Harmless under D28, where any named reason blocks.
+2. **`utr_format` semantics stay frozen.** It still tests the whitespace-stripped value against `^[A-Za-z0-9]{8,22}$` at severity `high`. Normalising before the format test was the tempting shortcut and would have relaxed a security-relevant flag as a side effect of a banner fix.
+3. **Pass the raw trimmed string to the RPC, never `normalizeUtr()` output.** The SQL function normalises both sides itself, so TS-mirror drift cannot become a false negative — the failure mode that would matter.
+
+The lookup **fails open**: on RPC error or throw, `paymentTrustCheck.ts` logs and emits no flag. Safe only because the hard block is the RPC plus the unique index, so a failed advisory can never let a duplicate be inserted; flagging on error would punish an honest payer for our outage. The cost is that no unit test can distinguish a working RPC from one that fails every time — which is why the wiring was proven in production rather than in CI: re-uploading a screenshot whose UTR sits on an approved row produced `utr_duplicate` on extraction `b63c6152` under `extract` v45.
+
+**Testing split, by what each runner can actually prove.** Vitest owns normalisation parity, flag behaviour, and the format/duplicate decoupling; the plpgsql branches go to `supabase/tests/f0d_rpc_checks.sql`, a self-aborting harness, because a mocked client asserting `UTR_MISMATCH` would only be testing the mock. Two findings from writing it:
+
+- `tests/extraction-grounding.spec.ts` had a fake admin client with no `.rpc`, so the new call threw into the `catch`. Left unfixed, the suite would have stayed green against an implementation whose duplicate check failed 100% of the time. Stderr noise is not a gate.
+- **`EXTRACTION_NOT_OWNED` is verifiable in production after all.** The earlier note that "every extraction belongs to one account" is superseded: `extraction_documents` has four distinct uploaders. Harness case H runs it against a genuinely foreign extraction, with the caller confirmed **not** master — without that confirmation the master carve-out would have made H, I and J falsely pass.
+
+**Ordering note for anyone extending the RPC:** the duplicate check runs *before* the extraction gate. Any new test asserting a mismatch or ownership branch must use a UTR that is not already active, or it will get `UTR_ALREADY_USED` first and appear to pass for the wrong reason.
+
+**D35 — `UI_CONVENTIONS.md` is enforced mechanically (Accepted 9 Aug 2026; completes D33).**
+
+D33 codified the dark-only rules in prose. Prose is enforced by memory, and the original defect (529 raw utilities, 185 dead `dark:` variants) accumulated precisely because nothing mechanical objected. `tests/ui-conventions.spec.ts` now checks all 255 files in `src/` on every run: no `dark:` variants; no numbered-shade palette utilities outside `CategoryCriteriaChips.tsx`; inside that file only the exact §6 shape and the nine listed hues; no `text-<hue>-600..950` anywhere; and the exception list must contain exactly one file, so widening it is a deliberate edit that forces the §6 justification to be argued.
+
+Two scoping decisions worth recording. **White and black literals are out of scope** — `text-black` and `bg-white` appear ~100 times across the print and public poster surfaces, which are deliberately light per §5; flagging them would be the test disagreeing with the document. **The `dark:` lookahead is `(?=\S)`, not `(?=[A-Za-z[])`** — the narrower form was written to exclude the one legitimate `{ dark: ".dark" }` object key in `chart.tsx`, but it also let `dark:-mt-2` and `dark:!bg-red-500` through. `(?=\S)` catches both and still excludes the object key, which has a space after the colon. Known residual, accepted: an object key formatted without that space would false-positive — the correct direction for a guard to fail.
+
+The guard was verified to **fail** on three injected violations before being trusted, each then reverted. A guard test that has never been observed failing is an assumption, not a check.
+
 ---
 
 ## 7. Security & Privacy
@@ -431,9 +461,11 @@ Allocation-engine safety: the engine is not in the frontend — it lives in `sup
 | `review_tournament_payment` EXECUTE-able by `anon` | ✅ Done F0d Migration A (grant-only) |
 | No duplicate-screenshot (`file_hash`) invariant | ⏳ MEDIUM — F2 scope. Readable-UTR replays are caught by UTR duplicate checks; cropped-UTR replays by `UTR_EXTRACTION_UNREADABLE` (D31); the `file_hash` check closes the remainder |
 | `normalize_utr` frozen once backstop index exists | ⏳ Standing rule (D31) — changing it requires drop-index → replace → recreate |
-| `normalize_utr` not mirrored in `paymentTrustCheck.ts` | ⏳ HIGH — next. Advisory duplicate banner compares exactly; server compares normalised |
-| F0d test suite not written | ⏳ HIGH — next. `EXTRACTION_NOT_OWNED` has no production coverage |
-| No UI guard test enforcing UI_CONVENTIONS.md | ⏳ MEDIUM — next |
+| `normalize_utr` parity between banner and server | ✅ Done 9 Aug — `utr_active_duplicate_exists` (`20260808172212`); see D34. A TS-only mirror would NOT have sufficed |
+| F0d test suite | ✅ Done 9 Aug — 21 vitest cases + 13-branch `supabase/tests/f0d_rpc_checks.sql`. `EXTRACTION_NOT_OWNED` covered three ways |
+| No UI guard test enforcing UI_CONVENTIONS.md | ✅ Done 9 Aug — `tests/ui-conventions.spec.ts`, 5 rules, sabotage-verified; see D35 |
+| Advisory duplicate check fails open with no alerting | ⏳ Accepted residual — bounded by the RPC hard block + unique index (D34). Only a missing `utr_duplicate` on a known-duplicate upload would reveal a silent RPC failure |
+| `import.meta.url` vs `process.cwd()` root resolution differs between the two new spec files | ⏳ LOW — both work; the `process.cwd()` justification comment looks incorrect. Harmonise when either is next touched |
 | F2 decline messages are a fraud oracle | ⏳ HIGH — F2 design. Naming the failed invariant lets an attacker iterate; recommend generic message to organizer, itemised reasons in /admin/payments only |
 
 ---
@@ -455,20 +487,45 @@ Allocation-engine safety: the engine is not in the frontend — it lives in `sup
 - auto-approve: secret off → needs_review even if all invariants pass
 ```
 
-### F0d additions (D30/D31)
+### F0d additions (D30/D31) — ALL COVERED as of 9 Aug 2026
+
+Split by runner, because most of these live inside a plpgsql function where a mocked
+client would only be testing the mock. See D34.
+
+**`supabase/tests/f0d_rpc_checks.sql`** — self-aborting harness, run with
+`supabase db query --linked -f`. Always ends with `ERROR: HARNESS RESULTS`; that is
+the pass condition, and the closing `RAISE` is what rolls the fixtures back.
 
 ```
-- duplicate: normalized UTR exists on a non-rejected row → UTR_ALREADY_USED
-- duplicate: same UTR exists only on rejected rows → proceeds (D15 resubmission)
-- duplicate: case/separator variant of an existing UTR ("sbin 1234...") → UTR_ALREADY_USED
-- mismatch: submitted ≠ extracted utr, = extracted txn_id → UTR_IS_TXN_ID
-- mismatch: submitted matches neither → UTR_MISMATCH
-- unreadable: screenshot linked, payload.utr null → UTR_EXTRACTION_UNREADABLE
-- ownership: extraction uploaded by another user, caller not master → blocked
-- ownership: master submits with organizer's extraction → proceeds
-- race: two concurrent submissions, same normalized UTR → exactly one succeeds (backstop index)
-- normalize_utr parity: SQL and paymentTrustCheck.ts produce identical output on shared fixtures
+A duplicate: normalized UTR on a non-rejected row      → UTR_ALREADY_USED
+B duplicate: separator variant " 1272-8704 2392 "      → UTR_ALREADY_USED
+C duplicate: case variant "sbin 1234-abcd"             → UTR_ALREADY_USED
+D duplicate: UTR exists only on rejected rows          → proceeds (D15 resubmission)
+E mismatch:  submitted = extracted txn_id              → UTR_IS_TXN_ID
+F mismatch:  submitted matches neither                 → UTR_MISMATCH
+G unreadable: screenshot linked, payload.utr null      → UTR_EXTRACTION_UNREADABLE
+H ownership: extraction uploaded by another user       → EXTRACTION_NOT_OWNED
+I ownership: extraction id does not exist              → EXTRACTION_NOT_OWNED
+J ownership: extraction is a chess_brochure            → EXTRACTION_NOT_OWNED
+K ownership: master submits with organizer's extraction → proceeds (carve-out)
+L race backstop: two normalized-equal active UTRs      → unique_violation on
+                                                          uq_tournament_payments_utr_active
+M normalize_utr parity: 11 fixtures                    → all match the TS mirror
 ```
+
+Case L tests the *index*, not concurrency: true parallelism cannot be simulated from one
+session, and the index is the mechanism that makes the TOCTOU race safe. Case D and case K
+succeed and are rolled back by per-case sub-transactions, so they cannot leak into later cases.
+
+**`tests/payment-utr-normalization.spec.ts`** — the 11 parity fixtures (expected values
+captured from live Postgres, not predicted), the strip-before-upper ordering proof
+(`utr\u00DF1234\u0131` → `UTR1234`, where upper-then-strip would give `UTRSS1234I`),
+duplicate-flag behaviour on rpc true / false / error, the raw-not-normalized argument
+contract, the format-fails-but-duplicate-still-runs regression, and a guard that the
+migration still compares on `normalize_utr` and still excludes rejected rows.
+
+**Fixture list is shared:** `tests/fixtures/utrNormalizationFixtures.ts` and the `M` block
+of the SQL harness must stay identical. If they diverge, parity is no longer proven.
 
 ### Phase 2A verification (existing, keep running)
 
