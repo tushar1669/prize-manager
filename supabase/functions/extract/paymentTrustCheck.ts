@@ -43,6 +43,26 @@ function isAbsent(value: unknown): boolean {
 }
 
 /**
+ * TypeScript mirror of the SQL `public.normalize_utr`:
+ *   upper(regexp_replace(coalesce(p_utr, ''), '[^A-Za-z0-9]', '', 'g'))
+ *
+ * The strip-then-upper ORDER IS LOAD-BEARING. After stripping every character
+ * outside [A-Za-z0-9], only ASCII remains, so JS `toUpperCase()` and Postgres
+ * `upper()` cannot diverge. Reversed (upper first, then strip) the two differ:
+ * JS uppercases 'ß' to 'SS' and 'ı' to 'I', which survive the strip as letters,
+ * while Postgres `upper()` leaves them alone and the strip then deletes them.
+ *
+ * This mirror is FROZEN alongside the SQL function. The entries in
+ * `uq_tournament_payments_utr_active` were built with `normalize_utr` as of
+ * index creation, so changing either side silently invalidates the index —
+ * neither this function nor the SQL one may be "improved" independently.
+ */
+export function normalizeUtr(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+/**
  * Derives expected price from player count — mirrors get_tournament_pro_price
  * logic without the auth dependency (this runs with the service-role client).
  * Checks for an active coupon redemption that may have lowered the price.
@@ -91,23 +111,44 @@ export async function runPaymentTrustChecks(
 ): Promise<FieldFlag[]> {
   const flags: FieldFlag[] = [];
 
-  // ── 1. UTR format ─────────────────────────────────────────────────────────
+  // A UTR that is present at all gets BOTH checks below. They are independent:
+  // a malformed UTR can still be a re-use of one we have already seen, so the
+  // duplicate lookup must not hide behind a passing format check.
   const rawUtr = payload.utr;
-  if (typeof rawUtr === "string" && rawUtr.trim()) {
-    const utrClean = rawUtr.replace(/\s+/g, "");
+  const utrTrimmed = typeof rawUtr === "string" ? rawUtr.trim() : "";
+
+  // ── 1. UTR format ─────────────────────────────────────────────────────────
+  if (utrTrimmed) {
+    const utrClean = utrTrimmed.replace(/\s+/g, "");
     if (!UTR_PATTERN.test(utrClean)) {
       flags.push({ field: "utr", reason: "utr_format", severity: "high" });
-    } else {
-      // ── 2. UTR duplicate (only run if format is valid) ───────────────────
-      const { data: dupes } = await admin
-        .from("tournament_payments")
-        .select("id")
-        .eq("utr", utrClean)
-        .neq("status", "rejected")
-        .limit(1);
-      if (dupes && dupes.length > 0) {
+    }
+  }
+
+  // ── 2. UTR duplicate ──────────────────────────────────────────────────────
+  // Runs independently of the format check — both flags may fire on `utr`.
+  if (utrTrimmed) {
+    try {
+      // Pass the RAW trimmed string, never normalizeUtr() output. The SQL
+      // function normalizes both sides itself, so if the TS mirror above ever
+      // drifts from the SQL definition, that drift cannot turn into a false
+      // negative here (which would let a duplicate through unflagged).
+      const { data, error } = await admin.rpc("utr_active_duplicate_exists", {
+        p_utr: utrTrimmed,
+      });
+      if (error) {
+        // Advisory only — no flag on failure. The hard block is
+        // submit_tournament_payment_claim plus the
+        // uq_tournament_payments_utr_active unique index, so a failed advisory
+        // call can never let a duplicate actually be inserted. Flagging on
+        // error would instead punish the honest payer for our outage.
+        console.warn("utr_active_duplicate_exists failed; skipping duplicate flag", error);
+      } else if (data === true) {
         flags.push({ field: "utr", reason: "utr_duplicate", severity: "high" });
       }
+    } catch (err) {
+      // Same reasoning as above: a thrown call is still just a missing advisory.
+      console.warn("utr_active_duplicate_exists threw; skipping duplicate flag", err);
     }
   }
 
