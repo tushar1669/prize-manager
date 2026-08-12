@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import type { ProfileData } from "@/utils/profileCompletion";
-import { isProfileComplete } from "@/utils/profileCompletion";
 
 const PROFILE_FIELDS_SELECT =
   "display_name, phone, city, org_name, fide_arbiter_id, profile_completed_at, profile_reward_claimed";
@@ -37,23 +36,21 @@ export function useOrganizerProfile() {
     mutationFn: async (updates: Partial<ProfileData>) => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      // Check if this save completes the profile for the first time
-      const willComplete =
-        isProfileComplete(updates) &&
-        !profile?.profile_completed_at;
-
-      const payload: Record<string, unknown> = { ...updates };
-      if (willComplete) {
-        payload.profile_completed_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from("profiles")
-        .update(payload)
-        .eq("id", user.id);
-
+      const { data, error } = await supabase.rpc("update_my_profile", {
+        p_display_name:    updates.display_name    ?? null,
+        p_phone:           updates.phone           ?? null,
+        p_city:            updates.city            ?? null,
+        p_org_name:        updates.org_name        ?? null,
+        p_fide_arbiter_id: updates.fide_arbiter_id ?? null,
+      });
       if (error) throw error;
-      return { justCompleted: willComplete };
+
+      // profile_completed_at is derived server-side; the client never sends it.
+      const justCompleted =
+        !profile?.profile_completed_at &&
+        !!(data as any)?.profile_completed_at;
+
+      return { justCompleted };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["organizer-profile", user?.id] });

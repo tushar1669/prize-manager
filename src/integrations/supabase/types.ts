@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       allocations: {
@@ -808,6 +833,68 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_notification_outbox: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          email_enqueued_at: string
+          email_error: string | null
+          email_sent_at: string | null
+          email_status: string
+          id: string
+          payment_id: string
+          recipient_email: string | null
+          return_to: string | null
+          review_note: string | null
+          tournament_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          email_enqueued_at?: string
+          email_error?: string | null
+          email_sent_at?: string | null
+          email_status?: string
+          id?: string
+          payment_id: string
+          recipient_email?: string | null
+          return_to?: string | null
+          review_note?: string | null
+          tournament_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          email_enqueued_at?: string
+          email_error?: string | null
+          email_sent_at?: string | null
+          email_status?: string
+          id?: string
+          payment_id?: string
+          recipient_email?: string | null
+          return_to?: string | null
+          review_note?: string | null
+          tournament_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_notification_outbox_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_feature_flags: {
         Row: {
           description: string | null
@@ -1530,6 +1617,7 @@ export type Database = {
           amount_inr: number
           created_at: string
           id: string
+          return_to: string | null
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1543,6 +1631,7 @@ export type Database = {
           amount_inr: number
           created_at?: string
           id?: string
+          return_to?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1556,6 +1645,7 @@ export type Database = {
           amount_inr?: number
           created_at?: string
           id?: string
+          return_to?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -2049,6 +2139,7 @@ export type Database = {
         }
       }
       normalize_dob_input: { Args: { in_raw: string }; Returns: string }
+      normalize_utr: { Args: { p_utr: string }; Returns: string }
       publish_tournament: {
         Args: { requested_slug?: string; tournament_id: string }
         Returns: {
@@ -2057,6 +2148,7 @@ export type Database = {
           version: number
         }[]
       }
+      reap_stuck_payment_notifications: { Args: never; Returns: number }
       redeem_coupon_for_tournament: {
         Args: { amount_before: number; code: string; tournament_id: string }
         Returns: {
@@ -2087,13 +2179,30 @@ export type Database = {
         }[]
       }
       submit_tournament_payment_claim: {
-        Args: { p_amount_inr: number; p_tournament_id: string; p_utr: string }
+        Args: {
+          p_amount_inr: number
+          p_return_to: string
+          p_screenshot_extraction_id: string
+          p_tournament_id: string
+          p_utr: string
+        }
         Returns: string
       }
       unpublish_tournament: {
         Args: { tournament_id: string }
         Returns: undefined
       }
+      update_my_profile: {
+        Args: {
+          p_city: string
+          p_display_name: string
+          p_fide_arbiter_id: string
+          p_org_name: string
+          p_phone: string
+        }
+        Returns: Json
+      }
+      utr_active_duplicate_exists: { Args: { p_utr: string }; Returns: boolean }
     }
     Enums: {
       app_role: "master" | "organizer" | "user"
@@ -2239,6 +2348,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["master", "organizer", "user"],
