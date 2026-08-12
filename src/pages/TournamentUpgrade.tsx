@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppNav } from "@/components/AppNav";
 import { BackBar } from "@/components/BackBar";
@@ -45,6 +45,18 @@ type UtrBlockCode =
   | "UTR_EXTRACTION_UNREADABLE";
 
 type RedeemCouponResponse = { amount_after: number; discount_amount: number; reason: string };
+
+/**
+ * F1-B2 pre-flight gate. `my_payment_gate_status()` is read-only and enforces nothing
+ * server-side yet — this is the surface that tells the organizer what is missing before
+ * they send money we cannot chase them about.
+ */
+type PaymentGateStatus = {
+  email_verified: boolean;
+  phone_present: boolean;
+  is_master: boolean;
+  ok: boolean;
+};
 
 type ProPriceRow = {
   players_count: number;
@@ -136,6 +148,41 @@ export default function TournamentUpgrade() {
 
   const { hasFullAccess, isLoading: accessLoading, errorCode: accessErrorCode } = useTournamentAccess(id);
   const hasBackendMigrationIssue = accessErrorCode === "backend_migration_missing";
+
+  // F1-B2: payment pre-flight. Per D32 every consumer below reads `paymentGate` itself
+  // (data present) rather than `!isLoading`, and Submit stays disabled whenever the
+  // status is unknown — loading, errored, or not yet fetched.
+  const {
+    data: paymentGate,
+    isError: paymentGateIsError,
+    refetch: refetchPaymentGate,
+  } = useQuery({
+    queryKey: ["payment-gate-status", user?.id],
+    enabled: !!user?.id && !hasBackendMigrationIssue,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("my_payment_gate_status" as never);
+      if (error) throw new Error(error.message);
+      const raw = data as unknown;
+      const row = (Array.isArray(raw) ? raw[0] ?? null : raw) as Record<string, unknown> | null;
+      if (!row || typeof row !== "object") throw new Error("Gate status response missing");
+      return {
+        email_verified: row.email_verified === true,
+        phone_present: row.phone_present === true,
+        is_master: row.is_master === true,
+        ok: row.ok === true,
+      } satisfies PaymentGateStatus;
+    },
+    // UNAUTHORIZED means no session — retrying cannot produce one (D32 rule 2).
+    retry: (failureCount, error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("UNAUTHORIZED")) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Money controls require a known-good status. Unknown (loading / errored) reads as
+  // "not ok" — never as permission to submit.
+  const paymentGateOk = paymentGate?.ok === true;
 
 
   const {
@@ -663,6 +710,50 @@ export default function TournamentUpgrade() {
           </>
         )}
 
+        {/* F1-B2 pre-flight gate, above every payment surface. Rendered only where a
+            payment is actually possible, and only from the query's own data (D32 rule 1):
+            a missing status renders the error card below, never a silent pass. */}
+        {!hasBackendMigrationIssue && !hasFullAccess && proPrice && !isFreeTier && (
+          <>
+            {paymentGate && !paymentGate.ok && (
+              <Card className="border-warning/30">
+                <CardContent className="pt-6 space-y-2">
+                  <p className="text-sm font-medium text-warning">
+                    Complete your profile to continue
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    {!paymentGate.phone_present && <li>Add your phone number</li>}
+                    {!paymentGate.email_verified && <li>Verify your email address</li>}
+                  </ul>
+                  <Link
+                    to="/account"
+                    className="inline-block text-sm font-medium text-primary underline underline-offset-4"
+                  >
+                    Go to your account
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
+
+            {paymentGateIsError && (
+              <Card className="border-destructive/50">
+                <CardContent className="pt-6 space-y-3">
+                  <p className="text-sm font-medium text-destructive">
+                    Couldn&apos;t check your profile
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    We can&apos;t confirm your phone number and email are on file, so payment is
+                    paused. Your payment has not been affected.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchPaymentGate()}>
+                    Try again
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
         {/* Coupon section — preserved exactly */}
         {!hasBackendMigrationIssue && proPrice && !isFreeTier && (
         <Card className={couponHighlighted ? "border-primary/60" : ""}>
@@ -826,7 +917,12 @@ export default function TournamentUpgrade() {
                     onClick={() =>
                       submitPaymentMutation.mutate({ utr: utrValue, extractionId: screenshotExtractionId })
                     }
-                    disabled={utrValue.trim().length < 6 || submitPaymentMutation.isPending || amountDue <= 0}
+                    disabled={
+                      utrValue.trim().length < 6 ||
+                      submitPaymentMutation.isPending ||
+                      amountDue <= 0 ||
+                      !paymentGateOk
+                    }
                   >
                     {submitPaymentMutation.isPending ? (
                       <span className="inline-flex items-center gap-2">

@@ -10,6 +10,27 @@ import type { ProfileData } from "@/utils/profileCompletion";
 const PROFILE_FIELDS_SELECT =
   "display_name, phone, city, org_name, fide_arbiter_id, profile_completed_at, profile_reward_claimed";
 
+/**
+ * F1-B1: update_my_profile rejects a phone it cannot normalise to +91 followed by
+ * 10 digits starting 6-9, raising INVALID_PHONE. It is a correctable input mistake,
+ * not a fault, so it gets its own copy instead of normalizeError's generic fallback
+ * ("Something went wrong") — and no reference ID, which would imply support is needed.
+ */
+export const INVALID_PHONE_CODE = "INVALID_PHONE";
+export const INVALID_PHONE_MESSAGE =
+  "Enter a valid Indian mobile number (10 digits starting 6-9).";
+
+/** True when a save rejection is the server's phone-format block. */
+export function isInvalidPhoneError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof Error) return error.message.includes(INVALID_PHONE_CODE);
+  if (typeof error === "string") return error.includes(INVALID_PHONE_CODE);
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "").includes(INVALID_PHONE_CODE);
+  }
+  return false;
+}
+
 export function useOrganizerProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -43,7 +64,7 @@ export function useOrganizerProfile() {
         p_org_name:        updates.org_name        ?? null,
         p_fide_arbiter_id: updates.fide_arbiter_id ?? null,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message);
 
       // profile_completed_at is derived server-side; the client never sends it.
       const justCompleted =
@@ -62,11 +83,12 @@ export function useOrganizerProfile() {
     },
     onError: (err) => {
       const normalized = normalizeError(err);
-      toast.error(toastMessage(normalized));
+      const invalidPhone = isInvalidPhoneError(err);
+      toast.error(invalidPhone ? INVALID_PHONE_MESSAGE : toastMessage(normalized));
       logAuditEvent({
         eventType: "profile_save_error",
         message: err instanceof Error ? err.message : String(err),
-        friendlyMessage: normalized.friendlyMessage,
+        friendlyMessage: invalidPhone ? INVALID_PHONE_MESSAGE : normalized.friendlyMessage,
         referenceId: normalized.referenceId,
       });
     },
@@ -78,5 +100,8 @@ export function useOrganizerProfile() {
     error,
     save: saveMutation.mutate,
     isSaving: saveMutation.isPending,
+    // Exposed so the form can put the message next to the field that caused it;
+    // the toast alone leaves the offending input unmarked once it fades.
+    saveError: saveMutation.error,
   };
 }

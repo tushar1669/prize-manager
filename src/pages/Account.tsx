@@ -2,7 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useOrganizerProfile } from "@/hooks/useOrganizerProfile";
+import {
+  useOrganizerProfile,
+  isInvalidPhoneError,
+  INVALID_PHONE_MESSAGE,
+} from "@/hooks/useOrganizerProfile";
 import { AppNav } from "@/components/AppNav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +23,13 @@ import {
   type ProfileData,
 } from "@/utils/profileCompletion";
 
-const FIELD_LABELS: Record<string, { label: string; placeholder: string }> = {
+const FIELD_LABELS: Record<string, { label: string; placeholder: string; helper?: string }> = {
   display_name: { label: "Full Name", placeholder: "Your full name" },
-  phone: { label: "Phone Number", placeholder: "+91 98765 43210" },
+  phone: {
+    label: "Phone Number",
+    placeholder: "+91 98765 43210",
+    helper: "Indian mobile numbers only",
+  },
   city: { label: "City", placeholder: "e.g. Mumbai" },
   org_name: { label: "Organization Name", placeholder: "e.g. Chess Academy India" },
   fide_arbiter_id: { label: "FIDE ID", placeholder: "e.g. 12345678" },
@@ -37,7 +45,11 @@ function copyToClipboard(text: string, label: string) {
 export default function Account() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { profile, isLoading, save, isSaving } = useOrganizerProfile();
+  const { profile, isLoading, save, isSaving, saveError } = useOrganizerProfile();
+
+  // F1-B1: the server rejects an unparseable phone with INVALID_PHONE. Kept next to
+  // the field so the message is still there after the toast has gone.
+  const phoneRejected = isInvalidPhoneError(saveError);
 
   // Local form state
   const [form, setForm] = useState<Record<string, string>>({});
@@ -374,6 +386,7 @@ export default function Account() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   {PROFILE_FIELDS.map((field) => {
                     const meta = FIELD_LABELS[field];
+                    const invalid = field === "phone" && phoneRejected;
                     return (
                       <div key={field} className="space-y-1.5">
                         <Label htmlFor={`profile-${field}`}>{meta.label}</Label>
@@ -383,7 +396,18 @@ export default function Account() {
                           value={form[field] ?? ""}
                           onChange={(e) => handleFieldChange(field, e.target.value)}
                           disabled={isSaving}
+                          aria-invalid={invalid || undefined}
+                          aria-describedby={invalid ? `profile-${field}-error` : undefined}
+                          className={invalid ? "border-destructive" : undefined}
                         />
+                        {invalid && (
+                          <p id={`profile-${field}-error`} className="text-xs text-destructive">
+                            {INVALID_PHONE_MESSAGE}
+                          </p>
+                        )}
+                        {meta.helper && (
+                          <p className="text-xs text-muted-foreground">{meta.helper}</p>
+                        )}
                       </div>
                     );
                   })}
