@@ -513,6 +513,11 @@ export default function TournamentUpgrade() {
         toast.error("The payment amount is out of date. Please refresh the page and try again.");
       } else if (msg === "UNAUTHORIZED") {
         toast.error("You don't have permission to pay for this tournament.");
+      } else if (msg === "PROFILE_INCOMPLETE") {
+        // Only reachable from a stale tab — the pre-flight gate disables Submit otherwise.
+        // Refetch so the gate card appears and Submit disables without a manual reload.
+        toast.error("Add your phone number in your account before paying.");
+        void refetchPaymentGate();
       } else {
         const normalized = normalizeError(error);
         toast.error(toastMessage(normalized));
