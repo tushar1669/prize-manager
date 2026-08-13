@@ -2138,7 +2138,9 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      my_payment_gate_status: { Args: never; Returns: Json }
       normalize_dob_input: { Args: { in_raw: string }; Returns: string }
+      normalize_phone_in: { Args: { p_raw: string }; Returns: string }
       normalize_utr: { Args: { p_utr: string }; Returns: string }
       publish_tournament: {
         Args: { requested_slug?: string; tournament_id: string }
