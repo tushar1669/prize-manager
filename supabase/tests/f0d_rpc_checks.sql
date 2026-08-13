@@ -26,6 +26,10 @@
 --   I extraction not found     = EXTRACTION_NOT_OWNED
 --   J wrong doc_type           = EXTRACTION_NOT_OWNED
 --   K master carve-out         = OK:<uuid>
+--   N gate: organizer no phone = PROFILE_INCOMPLETE
+--   Q gate: no phone + dup UTR = PROFILE_INCOMPLETE       (gate sits above F0d)
+--   O gate: master no phone    = OK:<uuid>                (carve-out)
+--   P gate: phone present      = OK:<uuid>
 --   L backstop index           = unique_violation on uq_tournament_payments_utr_active
 --   M normalize_utr parity     = all 11 fixtures matched
 --
@@ -36,12 +40,17 @@
 --
 -- SAFETY
 --   Everything runs in one transaction aborted by the closing RAISE. Each case
---   additionally runs in its own BEGIN/EXCEPTION sub-transaction, so the two
---   cases that SUCCEED (D and K) roll their inserted payment row back at once
+--   additionally runs in its own BEGIN/EXCEPTION sub-transaction, so the cases
+--   that SUCCEED (D, K, O, P) roll their inserted payment row back at once
 --   rather than leaking into later cases. Verified after the first run:
 --   tournament_payments count unchanged at 7, zero harness documents left,
 --   payment_notification_outbox unchanged at 6. The enqueue trigger is
 --   AFTER UPDATE OF status, so plain INSERTs never fire it.
+--
+--   The gate cases mutate profiles.phone on the two fixture users. That is
+--   rolled back with everything else, but it is the one place this harness
+--   touches a row it did not create — check both phones after any run that
+--   somehow commits.
 --
 -- SCOPE / LIMITS
 --   * Tests RPC logic, not RLS. Runs as a superuser session with auth.uid()
@@ -95,6 +104,11 @@ BEGIN
   INSERT INTO public.tournament_payments(tournament_id,user_id,amount_inr,utr,status)
   VALUES (T_ID,OWNER_ID,500,'SBIN1234ABCD','approved');
 
+  -- F1-B3 added a profile gate that runs before every branch below. Seed both
+  -- fixture users explicitly so cases A-K test the RPC rather than whatever
+  -- phone happens to be on the live profile today. Rolled back with the rest.
+  UPDATE public.profiles SET phone = '+919559161414' WHERE id IN (OWNER_ID, MASTER_ID);
+
   -- ── caller = organizer ────────────────────────────────────────────────────
   PERFORM set_config('request.jwt.claims', json_build_object('sub',OWNER_ID)::text, true);
 
@@ -133,6 +147,32 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub',MASTER_ID)::text, true);
   BEGIN v := public.submit_tournament_payment_claim(T_ID,500,'MASTERCARVE01',e_fresh,NULL); RAISE EXCEPTION 'OK:%',v;
   EXCEPTION WHEN others THEN r := r||E'\nK master carve-out         = '||SQLERRM; END;
+
+  -- ── F1-B3 profile gate ────────────────────────────────────────────────────
+  UPDATE public.profiles SET phone = NULL WHERE id = OWNER_ID;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub',OWNER_ID)::text, true);
+
+  BEGIN v := public.submit_tournament_payment_claim(T_ID,500,'GATETEST0001',NULL,NULL); RAISE EXCEPTION 'OK:%',v;
+  EXCEPTION WHEN others THEN r := r||E'\nN gate: organizer no phone = '||SQLERRM; END;
+
+  -- The gate must sit ABOVE the duplicate check. A phoneless caller reusing a
+  -- live UTR must get PROFILE_INCOMPLETE. If this ever returns UTR_ALREADY_USED,
+  -- the gate has been moved below the F0d block and is bypassable by ordering.
+  BEGIN v := public.submit_tournament_payment_claim(T_ID,500,'127287042392',NULL,NULL); RAISE EXCEPTION 'OK:%',v;
+  EXCEPTION WHEN others THEN r := r||E'\nQ gate: no phone + dup UTR = '||SQLERRM; END;
+
+  -- Carve-out holds even when the master also has no phone: the RPC resolves
+  -- master via has_role, not is_master(), so it needs no email claim.
+  UPDATE public.profiles SET phone = NULL WHERE id = MASTER_ID;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub',MASTER_ID)::text, true);
+  BEGIN v := public.submit_tournament_payment_claim(T_ID,500,'GATETEST0002',NULL,NULL); RAISE EXCEPTION 'OK:%',v;
+  EXCEPTION WHEN others THEN r := r||E'\nO gate: master no phone    = '||SQLERRM; END;
+
+  -- With a phone present the gate is transparent and control reaches F0d.
+  UPDATE public.profiles SET phone = '+919559161414' WHERE id = OWNER_ID;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub',OWNER_ID)::text, true);
+  BEGIN v := public.submit_tournament_payment_claim(T_ID,500,'GATETEST0003',NULL,NULL); RAISE EXCEPTION 'OK:%',v;
+  EXCEPTION WHEN others THEN r := r||E'\nP gate: phone present      = '||SQLERRM; END;
 
   -- ── backstop index: two normalized-equal UTRs cannot both be active ───────
   BEGIN
