@@ -63,43 +63,38 @@ export function normalizeUtr(value: unknown): string {
 }
 
 /**
- * Derives expected price from player count — mirrors get_tournament_pro_price
- * logic without the auth dependency (this runs with the service-role client).
- * Checks for an active coupon redemption that may have lowered the price.
+ * The expected amount is NOT computed here. `public.expected_payment_amount_inr`
+ * is the single implementation of "what should this person pay for this
+ * tournament" — the very same function `submit_tournament_payment_claim`
+ * validates the claimed amount against (PF1-B).
+ *
+ * This file used to carry a third copy of the rule: its own player count, its
+ * own 0/500/1000 ladder and its own coupon query. That copy counted players
+ * LIVE, so it disagreed with the billing basis the moment anyone deleted a
+ * player — exactly the E2 scenario the watermark closed. Do not reintroduce it.
+ *
+ * Returning null on failure preserves today's behaviour: no `amount_mismatch`
+ * flag is raised. That is a fail-open and it is deliberate — turning "check
+ * skipped" into a blocking condition is F2's job, not this file's.
  */
 async function getExpectedAmountInr(
   tournamentId: string,
   userId: string,
   admin: SupabaseClient,
 ): Promise<number | null> {
-  const { count: playerCount, error } = await admin
-    .from("players")
-    .select("*", { count: "exact", head: true })
-    .eq("tournament_id", tournamentId);
-  if (error) return null;
-
-  const n = playerCount ?? 0;
-  let expected = n <= 150 ? 0 : n <= 500 ? 500 : 1000;
-
-  // Coupon-aware: use amount_after if the user applied a coupon to this tournament
-  const { data: redemption } = await admin
-    .from("coupon_redemptions")
-    .select("amount_after")
-    .eq("tournament_id", tournamentId)
-    .eq("redeemed_by_user_id", userId)
-    .order("redeemed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (
-    redemption &&
-    typeof redemption.amount_after === "number" &&
-    Number.isFinite(redemption.amount_after)
-  ) {
-    expected = redemption.amount_after;
+  const { data, error } = await admin.rpc("expected_payment_amount_inr", {
+    p_tournament_id: tournamentId,
+    p_user_id: userId,
+  });
+  if (error) {
+    console.warn("expected_payment_amount_inr failed; skipping amount check", error);
+    return null;
   }
 
-  return expected;
+  // RETURNS TABLE, so PostgREST delivers an array holding a single row.
+  const row = Array.isArray(data) ? data[0] : data;
+  const expected = (row as { expected_amount_inr?: unknown } | null)?.expected_amount_inr;
+  return typeof expected === "number" && Number.isFinite(expected) ? expected : null;
 }
 
 export async function runPaymentTrustChecks(
