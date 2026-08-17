@@ -41,6 +41,7 @@ async function secretMatches(presented: string, expected: string) {
 
 type OutboxRow = {
   id: string;
+  payment_id: string;
   tournament_id: string;
   action: string;
   recipient_email: string | null;
@@ -55,9 +56,58 @@ type OutboxRow = {
 const safeReturnTo = (v: string | null): string | null =>
   v && v.length <= 500 && /^\/[^/\\]/.test(v) ? v : null;
 
-function buildEmail(row: OutboxRow, appBaseUrl: string) {
+type BuiltEmail = { subject: string; html: string; text: string };
+
+// Returns null for any action this function does not explicitly know how to
+// render. Before F2 that was unreachable: the outbox action CHECK only
+// permitted 'approved' and 'rejected', so the constraint was doing the work of
+// a default branch. F2 widens that CHECK, so the guard has to live here.
+function buildEmail(row: OutboxRow, appBaseUrl: string): BuiltEmail | null {
   const base = appBaseUrl.replace(/\/+$/, "");
   const returnTo = safeReturnTo(row.return_to);
+
+  // Oversight notice to the platform owner when the F2 gate approved a payment
+  // with no human in the loop (PRD F2-4). The recipient is set by the RPC that
+  // enqueues the row, not here. Deliberately carries no UTR.
+  if (row.action === "auto_approved") {
+    const link = `${base}/admin/payments`;
+    const safeLink = escapeHtml(link);
+    const subject = "A tournament payment was auto-approved";
+    const noteHtml = row.review_note
+      ? `<p style="margin:16px 0;padding:12px 16px;border-left:3px solid #1F6E5B;background:#F0FDF4;">${escapeHtml(row.review_note)}</p>`
+      : "";
+    const html =
+      `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#ffffff;color:#111;padding:24px;">
+  <h1 style="font-size:20px;margin:0 0 16px;">A tournament payment was auto-approved</h1>
+  <p>All eight payment invariants returned <strong>pass</strong>, the payer met the profile gate, and the auto-approval flag was on. Pro was unlocked without review.</p>
+  <p style="color:#666;font-size:13px;">Payment <code>${escapeHtml(row.payment_id)}</code><br>Tournament <code>${escapeHtml(row.tournament_id)}</code></p>
+  ${noteHtml}
+  <p>This is a post-hoc notice, not a request. Review it if you want to; nothing is waiting on you.</p>
+  <p style="margin:24px 0;">
+    <a href="${safeLink}" style="display:inline-block;padding:12px 18px;background:#1F6E5B;border-radius:6px;color:#ffffff;text-decoration:none;font-weight:bold;">Open the payments admin</a>
+  </p>
+  <p style="color:#666;font-size:12px;">If the button doesn't work, paste this into your browser:<br>${safeLink}</p>
+  <p style="color:#666;font-size:12px;margin-top:32px;">Prize-Manager.com</p>
+  </body></html>`;
+    const text = [
+      "A tournament payment was auto-approved",
+      "",
+      "All eight payment invariants returned pass, the payer met the profile gate,",
+      "and the auto-approval flag was on. Pro was unlocked without review.",
+      "",
+      `Payment:    ${row.payment_id}`,
+      `Tournament: ${row.tournament_id}`,
+      ...(row.review_note ? ["", row.review_note] : []),
+      "",
+      "This is a post-hoc notice, not a request.",
+      "",
+      "Open the payments admin:",
+      `  ${link}`,
+      "",
+      "Prize-Manager.com",
+    ].join("\n");
+    return { subject, html, text };
+  }
 
   if (row.action === "approved") {
     // Deep-link back to where the organizer was blocked, if we know it.
@@ -90,7 +140,13 @@ function buildEmail(row: OutboxRow, appBaseUrl: string) {
     return { subject, html, text };
   }
 
-  // action === 'rejected'
+  if (row.action !== "rejected") {
+    // Unknown action. Fail closed: send nothing. Falling through to the
+    // rejection template would tell someone their payment was refused when it
+    // was not.
+    return null;
+  }
+
   // Carry return_to through the resubmission so the deep link survives a retry.
   const link = returnTo
     ? `${base}/t/${row.tournament_id}/payment?return_to=${encodeURIComponent(returnTo)}`
@@ -170,7 +226,7 @@ Deno.serve(async (req) => {
   const { data: rows, error: loadErr } = await admin
     .from("payment_notification_outbox")
     .select(
-      "id, tournament_id, action, recipient_email, review_note, return_to, attempts",
+      "id, payment_id, tournament_id, action, recipient_email, review_note, return_to, attempts",
     )
     .in("email_status", ["pending", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
@@ -202,6 +258,18 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // 1b. Unrenderable action — terminal, and checked BEFORE the claim so it
+    //     never burns an attempt or parks the row in 'sending'.
+    const email = buildEmail(row, APP_BASE_URL);
+    if (!email) {
+      await admin
+        .from("payment_notification_outbox")
+        .update({ email_status: "skipped", email_error: "unknown_action" })
+        .eq("id", row.id);
+      skipped++;
+      continue;
+    }
+
     // 2. Claim the row. The status predicate is the lock: if another worker got
     //    here first the update matches nothing and we leave the row alone.
     const { data: claimed, error: claimErr } = await admin
@@ -220,14 +288,13 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // 3. Send.
-    const { subject, html, text } = buildEmail(row, APP_BASE_URL);
+    // 3. Send. Built above, before the claim.
     const payload: Record<string, unknown> = {
       from: WELCOME_EMAIL_FROM,
       to: [row.recipient_email],
-      subject,
-      html,
-      text,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
     };
     if (WELCOME_EMAIL_REPLY_TO) payload.reply_to = WELCOME_EMAIL_REPLY_TO;
 
