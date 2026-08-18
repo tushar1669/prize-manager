@@ -14,6 +14,11 @@
  *
  * The caller (index.ts) MUST force status = 'needs_review' for
  * payment_screenshot regardless of how many flags this returns.
+ *
+ * F2: this file now returns BOTH the flags and a per-invariant verdict record.
+ * The flags are advisory and drive the admin UI. The verdicts are the gate
+ * input for conditional auto-approval, and they distinguish "checked and
+ * passed" from "never ran". See PaymentVerdicts below.
  */
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -97,14 +102,82 @@ async function getExpectedAmountInr(
   return typeof expected === "number" && Number.isFinite(expected) ? expected : null;
 }
 
+/**
+ * F2 — the per-invariant verdict record.
+ *
+ * A flag says "something is wrong". Its ABSENCE does not say "everything was
+ * checked and fine" — five of the eight invariants below have skip paths where
+ * no comparison happens at all (PROJECT_STATE §11 finding 2). Auto-approval
+ * reading only flags would approve every one of those.
+ *
+ * So each invariant records pass | fail | skipped, and F2's gate requires all
+ * eight to be "pass". Skipped is NOT pass.
+ *
+ * The eight keys here are the same eight named in D28's allow-list, and the
+ * same eight the pivx_verdicts_exact_shape CHECK on payment_invariant_verdicts
+ * enforces. Adding a ninth invariant means changing this type, this file's
+ * verdict initialiser, that CHECK constraint, and PAYMENT_CHECKER_VERSION
+ * below — the constraint is what makes forgetting any of them fail loudly.
+ *
+ * Deliberately NOT derived from FieldFlag["reason"] in trustCheck.ts: that
+ * union is stale (it omits three reasons that are pushed anyway) and compiles
+ * only because tsconfig.app.json excludes supabase/functions/.
+ */
+export type PaymentVerdict = "pass" | "fail" | "skipped";
+
+export type PaymentVerdicts = {
+  utr_format: PaymentVerdict;
+  utr_duplicate: PaymentVerdict;
+  amount_mismatch: PaymentVerdict;
+  payee_vpa_mismatch: PaymentVerdict;
+  payee_vpa_missing: PaymentVerdict;
+  date_stale: PaymentVerdict;
+  direction_not_outgoing: PaymentVerdict;
+  required_fields_missing: PaymentVerdict;
+};
+
+export type PaymentCheckResult = {
+  flags: FieldFlag[];
+  verdicts: PaymentVerdicts;
+};
+
+/**
+ * Bump whenever the invariant SET or any invariant's SEMANTICS change.
+ *
+ * F2's gate requires a stored verdict row to carry the current version, so
+ * bumping this instantly invalidates every verdict computed by an older build
+ * and sends those payments to manual review until they are re-extracted.
+ *
+ * This is not hypothetical caution. Image ebba2416fd produced three different
+ * named flag sets from byte-identical payloads — not model nondeterminism, but
+ * F0c shipping between two of the runs. A verdict is only evidence about the
+ * code that produced it.
+ */
+export const PAYMENT_CHECKER_VERSION = 1;
+
 export async function runPaymentTrustChecks(
   payload: Record<string, unknown>,
   tournamentId: string | null,
   userId: string | null,
   admin: SupabaseClient,
   ocrText: string,
-): Promise<FieldFlag[]> {
+): Promise<PaymentCheckResult> {
   const flags: FieldFlag[] = [];
+
+  // EVERY verdict starts at "skipped". A check that runs overwrites its own
+  // entry; a check that does not run leaves it. The default is therefore the
+  // conservative one, and forgetting to record a verdict can only ever cost a
+  // manual review — never grant a false pass.
+  const verdicts: PaymentVerdicts = {
+    utr_format: "skipped",
+    utr_duplicate: "skipped",
+    amount_mismatch: "skipped",
+    payee_vpa_mismatch: "skipped",
+    payee_vpa_missing: "skipped",
+    date_stale: "skipped",
+    direction_not_outgoing: "skipped",
+    required_fields_missing: "skipped",
+  };
 
   // A UTR that is present at all gets BOTH checks below. They are independent:
   // a malformed UTR can still be a re-use of one we have already seen, so the
@@ -117,8 +190,13 @@ export async function runPaymentTrustChecks(
     const utrClean = utrTrimmed.replace(/\s+/g, "");
     if (!UTR_PATTERN.test(utrClean)) {
       flags.push({ field: "utr", reason: "utr_format", severity: "high" });
+      verdicts.utr_format = "fail";
+    } else {
+      verdicts.utr_format = "pass";
     }
   }
+  // No UTR at all: nothing was checked. Stays "skipped" — required_fields_missing
+  // and the RPC's own UTR handling are what catch that case.
 
   // ── 2. UTR duplicate ──────────────────────────────────────────────────────
   // Runs independently of the format check — both flags may fire on `utr`.
@@ -137,9 +215,16 @@ export async function runPaymentTrustChecks(
         // uq_tournament_payments_utr_active unique index, so a failed advisory
         // call can never let a duplicate actually be inserted. Flagging on
         // error would instead punish the honest payer for our outage.
+        //
+        // The verdict stays "skipped", which DOES block auto-approval. That is
+        // the intended asymmetry: fail open for the flag (advisory, cosmetic),
+        // fail closed for the gate (authoritative, money-bearing).
         console.warn("utr_active_duplicate_exists failed; skipping duplicate flag", error);
       } else if (data === true) {
         flags.push({ field: "utr", reason: "utr_duplicate", severity: "high" });
+        verdicts.utr_duplicate = "fail";
+      } else {
+        verdicts.utr_duplicate = "pass";
       }
     } catch (err) {
       // Same reasoning as above: a thrown call is still just a missing advisory.
@@ -156,7 +241,10 @@ export async function runPaymentTrustChecks(
     userId
   ) {
     const expected = await getExpectedAmountInr(tournamentId, userId, admin);
-    if (expected !== null && Math.abs(extractedAmount - expected) > AMOUNT_TOLERANCE_INR) {
+    if (expected === null) {
+      // The price RPC failed. We do not know what this person owes, so we have
+      // not checked anything. Verdict stays "skipped".
+    } else if (Math.abs(extractedAmount - expected) > AMOUNT_TOLERANCE_INR) {
       flags.push({
         field: "amount_inr",
         reason: "amount_mismatch",
@@ -164,8 +252,14 @@ export async function runPaymentTrustChecks(
         expected,
         stated: extractedAmount,
       });
+      verdicts.amount_mismatch = "fail";
+    } else {
+      verdicts.amount_mismatch = "pass";
     }
   }
+  // Non-numeric amount, or no tournament/user context: nothing was compared.
+  // This is PROJECT_STATE §11 finding 2 — 122 legacy rows have uploaded_by NULL
+  // and silently skip this check. Under F2 they cannot auto-approve.
 
   // ── 4. Payee VPA — presence, then allow-list ──────────────────────────────
   // PLATFORM_PAYEE_VPA must be configured as a Supabase Edge Function secret.
@@ -180,8 +274,20 @@ export async function runPaymentTrustChecks(
   const payeeVpaIsPlatform = Boolean(payeeVpa && allowedVpa && payeeVpa === allowedVpa);
   if (!payeeVpa) {
     flags.push({ field: "payee_vpa", reason: "payee_vpa_missing", severity: "high" });
-  } else if (allowedVpa && payeeVpa !== allowedVpa) {
-    flags.push({ field: "payee_vpa", reason: "payee_vpa_mismatch", severity: "high" });
+    verdicts.payee_vpa_missing = "fail";
+    // payee_vpa_mismatch stays "skipped": there was no value to compare.
+  } else {
+    verdicts.payee_vpa_missing = "pass";
+    if (!allowedVpa) {
+      // Secret unset. The comparison did not happen, so it did not pass.
+      // Under F2 this disables auto-approval platform-wide until it is set,
+      // which is the correct blast radius for a missing payee identity.
+    } else if (payeeVpa !== allowedVpa) {
+      flags.push({ field: "payee_vpa", reason: "payee_vpa_mismatch", severity: "high" });
+      verdicts.payee_vpa_mismatch = "fail";
+    } else {
+      verdicts.payee_vpa_mismatch = "pass";
+    }
   }
 
   // ── 5. Date freshness ─────────────────────────────────────────────────────
@@ -192,9 +298,16 @@ export async function runPaymentTrustChecks(
       const daysDiff = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
       if (daysDiff > MAX_AGE_DAYS) {
         flags.push({ field: "txn_date", reason: "date_stale", severity: "high" });
+        verdicts.date_stale = "fail";
+      } else {
+        verdicts.date_stale = "pass";
       }
     }
+    // Unparseable date string: nothing was compared. Stays "skipped".
   }
+  // txn_date is NOT in the schema's required list, so an absent date is common
+  // and legitimate. It still blocks auto-approval, by design: we cannot certify
+  // freshness we never measured.
 
   // ── 6. Direction — money must have left the payer ─────────────────────────
   // The attack this closes: screenshotting a payment *received* (or any unrelated
@@ -207,13 +320,22 @@ export async function runPaymentTrustChecks(
   const outgoingProven = payeeVpaIsPlatform || (hasOutgoingMarker && !hasIncomingMarker);
   if (!outgoingProven) {
     flags.push({ field: "direction", reason: "direction_not_outgoing", severity: "high" });
+    verdicts.direction_not_outgoing = "fail";
+  } else {
+    // Always determinate — D27 requires outgoing to be PROVEN, so there is no
+    // "did not run" state here. Never "skipped".
+    verdicts.direction_not_outgoing = "pass";
   }
 
   // ── 7. Required fields ────────────────────────────────────────────────────
   // Nothing readable came off the image: a cropped, blurred or blank upload.
   if (isAbsent(payload.amount_inr) && isAbsent(payload.utr) && isAbsent(payload.txn_date)) {
     flags.push({ field: "payload", reason: "required_fields_missing", severity: "high" });
+    verdicts.required_fields_missing = "fail";
+  } else {
+    // Always determinate. Never "skipped".
+    verdicts.required_fields_missing = "pass";
   }
 
-  return flags;
+  return { flags, verdicts };
 }
