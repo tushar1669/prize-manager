@@ -47,7 +47,7 @@ describe("runPaymentTrustChecks — UTR duplicate check", () => {
   const admin = { rpc } as never;
 
   const reasons = async (payload: Record<string, unknown>) => {
-    const flags = await runPaymentTrustChecks(payload, null, null, admin, "");
+    const { flags } = await runPaymentTrustChecks(payload, null, null, admin, "");
     return flags.map((flag) => flag.reason);
   };
 

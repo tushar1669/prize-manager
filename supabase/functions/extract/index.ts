@@ -20,7 +20,11 @@ import {
 } from "../_shared/geminiProvider.ts";
 import { toGeminiResponseSchema, type JsonSchema } from "./responseSchema.ts";
 import { decideStatus, runArithmeticCheck, runTrustCheck, type FieldFlag } from "./trustCheck.ts";
-import { runPaymentTrustChecks } from "./paymentTrustCheck.ts";
+import {
+  PAYMENT_CHECKER_VERSION,
+  runPaymentTrustChecks,
+  type PaymentVerdicts,
+} from "./paymentTrustCheck.ts";
 import { openPdfForRaster, RasterError } from "./pdfRaster.ts";
 import { extractionPrompt } from "./extractionPrompt.ts";
 
@@ -767,15 +771,20 @@ Deno.serve(async (req: Request) => {
     const flags: FieldFlag[] = [...trust.flags, ...(arithmetic.flag ? [arithmetic.flag] : [])];
 
     // Phase 2A: payment business rule checks (run after generic grounding)
+    // F2: the same call now also yields a per-invariant verdict record. It is
+    // persisted further down, after the extraction row exists — the verdict
+    // table is keyed by extraction_id.
+    let paymentVerdicts: PaymentVerdicts | null = null;
     if (doc.doc_type === "payment_screenshot") {
-      const paymentFlags = await runPaymentTrustChecks(
+      const paymentChecks = await runPaymentTrustChecks(
         trust.payload,
         tournamentId,
         doc.uploaded_by,
         supabase,
         transcription,
       );
-      flags.push(...paymentFlags);
+      flags.push(...paymentChecks.flags);
+      paymentVerdicts = paymentChecks.verdicts;
     }
 
     const requiredFields = Array.isArray(schemaRow.schema_json.required) ? schemaRow.schema_json.required : [];
@@ -823,6 +832,29 @@ Deno.serve(async (req: Request) => {
         `${insErr.message} [pg: ${pgDetail || "none"}] [bytes=${raw.length} suspect=${suspect}]`,
         500,
       );
+    }
+
+    // ---------------------------------------------- F2 per-invariant verdicts
+    // Written after the extraction row because the table is keyed by
+    // extraction_id. A failure here is logged, NOT thrown: with no verdict row
+    // the F2 gate has nothing to certify and the payment goes to manual review,
+    // which is precisely today's behaviour. Throwing instead would break an
+    // honest organizer's upload over a degradation that costs one click.
+    if (paymentVerdicts) {
+      const { error: verdictErr } = await supabase
+        .from("payment_invariant_verdicts")
+        .insert({
+          extraction_id: extraction.id,
+          checker_version: PAYMENT_CHECKER_VERSION,
+          verdicts: paymentVerdicts,
+        });
+      if (verdictErr) {
+        console.error("payment_invariant_verdicts insert failed; this extraction cannot auto-approve", {
+          extraction_id: extraction.id,
+          code: (verdictErr as { code?: string }).code,
+          message: verdictErr.message,
+        });
+      }
     }
 
     await supabase

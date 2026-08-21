@@ -543,7 +543,7 @@ describe("payment invariants — direction, payee VPA presence, required fields"
   });
 
   const reasons = async (payload: Record<string, unknown>, ocrText: string) => {
-    const flags = await runPaymentTrustChecks(payload, null, null, admin as never, ocrText);
+    const { flags } = await runPaymentTrustChecks(payload, null, null, admin as never, ocrText);
     return flags.map((flag) => flag.reason);
   };
 
