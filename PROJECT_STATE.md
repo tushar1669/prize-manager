@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 16 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 20 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -9,12 +9,12 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 
 **Prize Manager** (prize-manager.com) is a chess tournament management platform. Phase 1 built a brochure extraction engine: organizer uploads a PDF brochure → two-pass Gemini OCR + structured extraction + deterministic trust/grounding layer → review screen → on Approve, a tournament is created with categories and prizes.
 
-**Phase 2** extends the same extraction engine into a Universal Extraction Engine serving three platforms and eventually external developers. The engine is doc-type-driven; adding a new document type requires only a new schema row and new trust invariants — not a new pipeline.
+**Phase 2** extends the same engine into a Universal Extraction Engine serving three platforms and eventually external developers. The engine is doc-type-driven; adding a document type requires a new schema row and new trust invariants, not a new pipeline.
 
 **Three-platform context:**
-- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, and the profile prerequisite.
-- **certificate-hub.com** — Certificate creation service; paywalled. Will consume the extraction engine via REST API (Phase 2C).
-- **sportup.online** — Discovery + tournament management platform. Will consume via REST API (Phase 2C).
+- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, and **conditional auto-approval, which went live on 20 August 2026.**
+- **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C).
+- **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C).
 
 ---
 
@@ -22,46 +22,41 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 
 | Item | Value |
 |---|---|
-| Supabase project | `nvjjifnzwrueutbirpde` (prize-manager.com, ap-south-1, Postgres 17) |
-| Edge functions | `extract` (**v46**), `commit-extraction` (v13), `send-payment-notifications` (v7, `verify_jwt=false`), `sendWelcomeOnboardingEmail` (v20), `allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `finalize`, `publicTeamPrizes`, `generatePdf`, `parseWorkbook`, `pmPing` |
-| Active extraction schema | `extraction_schemas` v5 (chess_brochure), **v3 (payment_screenshot)** |
-| Storage buckets | `extraction-uploads`, `brochures`, `exports`, `imports` |
-| Repo | github.com/tushar1669/prize-manager (**public**) · branch: **main** at **`01e6a3e`** |
-| Gemini model | `GEMINI_MODEL` env secret = `gemini-3.1-flash-lite` |
+| Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17) |
+| Edge functions | `extract` (**v47**, bundle `704f5074`), `send-payment-notifications` (**v8**, bundle `ccf8c3be`, `verify_jwt=false`), `commit-extraction` (v13), `sendWelcomeOnboardingEmail` (v20), `allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `finalize`, `publicTeamPrizes`, `generatePdf`, `parseWorkbook`, `pmPing` |
+| Active extraction schema | v5 (chess_brochure), v3 (payment_screenshot, id `4e8beb4d-4a07-4ef8-a774-18b22f722522`) |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`a5bebf8`** · `f2a-verdict-table` **merged 20 Aug**, branch may be deleted |
+| Gemini model | `GEMINI_MODEL` = `gemini-3.1-flash-lite` |
 | Local paths | repo `~/Desktop/prize-manager`, test PDFs `~/Desktop/prize-manager/test-brochures/` |
-| Payment trust invariants | 8 in `extract/paymentTrustCheck.ts`: `utr_format`, `utr_duplicate`, `amount_mismatch`, `payee_vpa_mismatch`, `payee_vpa_missing`, `date_stale`, `direction_not_outgoing`, `required_fields_missing` |
-| Test baseline | **474 passing, 3 known failures** (conflict-utils ×2, martech-metrics ×1 — pre-existing). Verified 16 Aug. |
-| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 pre-existing errors**. Verified 16 Aug. Root `npx tsc --noEmit` checks nothing. |
+| Payment trust invariants | 8 in `extract/paymentTrustCheck.ts` · returns `{flags, verdicts}` |
+| Checker version | `PAYMENT_CHECKER_VERSION = 1` in `paymentTrustCheck.ts`; the RPC gate pins the literal `1` |
+| **F2 kill switch** | `platform_feature_flags.payment_auto_approve` — **`true` since 2026-08-20 17:26:33 UTC**. RLS on, zero policies, `authenticated` cannot read it (control-tested). **Off switch: `supabase/ops/f2_auto_approve_off.sql`** |
+| Test baseline | **474 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of 477. **Re-verified on `main` 20 Aug** |
+| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 pre-existing errors, re-verified 20 Aug.** Root `npx tsc --noEmit` checks nothing |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
-| Claim RPC | **5-arg only.** 3-arg and 4-arg dropped in F0d Migration A. |
-| Client grants on `tournament_payments` | `authenticated`: **SELECT only**. `anon`: **nothing**. |
-| Client grants on `profiles` | `authenticated`: **SELECT only**. `anon`: **nothing**. All writes via `update_my_profile`. (F1-A2) |
-| Client grants on `tournament_player_watermark` | **NOTHING for either role.** RLS on, zero policies. (Audit step 3) |
+| Claim RPC | **5-arg only**, `RETURNS uuid`, 1 overload, **15 `RAISE EXCEPTION` across 11 codes** |
+| Client grants: `tournament_payments` / `profiles` | `authenticated` SELECT only; `anon` nothing |
+| Client grants: `payment_invariant_verdicts` / `platform_feature_flags` / `tournament_player_watermark` | **NOTHING for either role.** RLS on, zero policies. All three owned by `postgres` with `relforcerowsecurity = false`, which is *why* the SECURITY DEFINER RPC can read them |
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
-| Advisory duplicate lookup | `public.utr_active_duplicate_exists(text)` — STABLE, SECURITY DEFINER, EXECUTE to `service_role` only |
-| Verification harnesses | `supabase/tests/f0d_rpc_checks.sql` — **17 branches**, ends `ERROR: HARNESS RESULTS` (pass condition). **17/17 verified 16 Aug, byte-identical to the F1 baseline.**<br>`supabase/tests/pf1b_expected_amount.sql` — **9 cases**, ends `ERROR: PF1B HARNESS RESULTS` (pass condition). **9/9 verified 16 Aug.** |
-| Design doc | `docs/design/UI_CONVENTIONS.md` — governs all styling. Dark-only. Enforced by `tests/ui-conventions.spec.ts`. |
-| Live counts (16 Aug, session close) | 97 tournaments · 13,699 players · 117 watermark rows · 7 payments · 9 entitlements · 31 coupons · 172 extraction_documents · 170 extractions · **0 `auto_ok` payment extractions** |
+| Pending index | `uq_tournament_payments_pending` — UNIQUE `(tournament_id, user_id)` WHERE pending |
+| Outbox uniqueness | `uq_payment_notification_outbox_payment_action` — UNIQUE **INDEX** on `(payment_id, action)` |
+| Verification harnesses | `supabase/tests/f2_gate_checks.sql` — **24 checks**, ends `ERROR: F2 GATE HARNESS RESULTS` (pass condition). **24/24 on 20 Aug**<br>`supabase/tests/f0d_rpc_checks.sql` — 17 branches, `ERROR: HARNESS RESULTS`. 17/17 on 19 Aug<br>`supabase/tests/pf1b_expected_amount.sql` — 9 cases. 9/9 on 19 Aug |
+| Operational scripts | `supabase/ops/f2_auto_approve_on.sql` · `f2_auto_approve_off.sql` · `f2_auto_approval_report.sql`. **Not migrations — never `migration repair` them** |
+| Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
+| Live counts (20 Aug) | **97 live tournaments** (+20 soft-deleted = 117 rows; "97" has always meant live) · 13,699 players · 7 payments · 9 entitlements (**0 `auto_upi`**) · 31 coupons · 174 extraction_documents · 172 extractions · **2 verdict rows** · 6 outbox rows · 36 profiles (**4 with a phone**) · 3 referrals · **0 referral_rewards ever** |
+| Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as the `PLATFORM_PAYEE_VPA` secret. Verified in agreement |
 
-### Functions added / changed in PF1 (16 Aug)
-
-| Function | Shape | Grants |
-|---|---|---|
-| `public.tournament_billing_basis(uuid)` | **NEW.** `GREATEST(live players, watermark)`. STABLE, SECURITY DEFINER, `search_path=public` | `anon` **no**, `authenticated` **no**, `service_role` yes |
-| `public.tournament_pro_tier(integer)` | **NEW.** The 0/500/1000 ladder + tier label + the `150` threshold. IMMUTABLE. RETURNS TABLE | `anon` **no**, `authenticated` **no**, `service_role` yes |
-| `public.expected_payment_amount_inr(uuid,uuid)` | **NEW.** Canonical price **and** the coupon rule. Returns `(billing_basis, canonical_amount_inr, expected_amount_inr)`. STABLE, SECURITY DEFINER | `anon` **no**, `authenticated` **no**, `service_role` yes |
-| `public.get_tournament_pro_price(uuid)` | Rewired to the two helpers; no inline count, ladder or `150` | `authenticated` retained; **`anon` revoked** (dead grant) |
-| `public.get_tournament_access_state(uuid)` | Rewired to the two helpers; same billing basis | unchanged (`authenticated` only) |
-| `public.submit_tournament_payment_claim(...)` | Coupon block removed; calls `expected_payment_amount_inr`. Error census and gate ordering unchanged | unchanged (`authenticated` only) |
-
-### Migrations (16 Aug)
+### Migrations (all applied, repaired, and version-matched to repo filenames)
 
 | Version | What |
 |---|---|
-| `20260816120000` | PF1-A — one billing basis, one tier ladder; price/access rewired; dead `anon` EXECUTE on `get_tournament_pro_price` revoked |
-| `20260816140000` | PF1-B — `expected_payment_amount_inr` created; claim RPC calls it |
+| `20260817120000` | F2-A — `payment_invariant_verdicts` |
+| `20260817130000` | F2-B — `source` admits `auto_upi` |
+| `20260817140000` | F2-D — outbox `action` admits `auto_approved` |
+| `20260817150000` | F2-E — `payment_auto_approve` flag, created disabled |
+| `20260817160000` | F2-G — the auto-approval gate |
 
-Both applied via `supabase db query --linked -f`, both registered with `supabase migration repair --status applied`, both confirmed in `supabase migration list`.
+(F2-C and F2-F were edge-function deploys. The 20 Aug flag flip was an **operational UPDATE**, not a migration.)
 
 ### Real frontend routes
 
@@ -78,7 +73,7 @@ Both applied via `supabase db query --linked -f`, both registered with `supabase
 ## 3. Non-negotiable guardrails
 
 **Phase 1:**
-1. NEVER touch the allocation engine — allocations, `rule_config`, conflicts, player-to-prize matching — unless Tushar explicitly names it. The engine lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`. The frontend invokes it **by string name**; never alter an invoke name or payload.
+1. NEVER touch the allocation engine — allocations, `rule_config`, conflicts, player-to-prize matching — unless Tushar explicitly names it. Lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`. The frontend invokes it **by string name**; never alter an invoke name or payload.
 2. `criteria_json` committed as always `'{}'`.
 3. Never weaken grounding or arithmetic. Never weaken checks to force a pass.
 4. Client never writes production tables; only `commit-extraction` does, on explicit Approve.
@@ -87,140 +82,185 @@ Both applied via `supabase db query --linked -f`, both registered with `supabase
 7. Builder/auditor split: Claude Code builds; Claude (chat) verifies via Supabase SQL before advancing.
 
 **Phase 2A:**
-8. Payment auto-approval is CONDITIONAL and server-side only (F2, not yet built). Gates on **named security-relevant flag reasons**, not flag count (D28).
+8. Payment auto-approval is CONDITIONAL and server-side only. Gates on **named security-relevant invariant verdicts**, not flag count (D28), and **`skipped` is not `pass`** (D39).
 9. NEVER use `commit-extraction` or `commit_extraction_transaction` for payment data.
-10. NEVER modify `review_tournament_payment`'s core entitlement-insert logic.
-11. Screenshot upload is OPTIONAL. The UTR-text-only path must keep working.
-12. NEVER expose the platform payee VPA or the auto-approve secret in frontend code or logs.
+10. NEVER modify `review_tournament_payment`'s core entitlement-insert logic. **F2 mirrors it; it does not call it.**
+11. Screenshot upload is OPTIONAL. The UTR-text-only path must keep working. **A claim with no screenshot can never auto-approve** — proven by harness case 6.
+12. NEVER expose the **auto-approve kill switch** in frontend code or logs. The payee VPA is necessarily public and is *not* covered by this guardrail.
 
-**Master / admin / auth:** M1–M5 unchanged. **Phase 2A-2:** N1–N5 unchanged. **Phase 2A-3:** P1–P6 unchanged. **F0d:** Q1–Q7 unchanged. **UI:** U1–U5 unchanged. **F1:** R1–R7 unchanged. **Client write-grant audit:** S1–S8 unchanged (see §10).
+**Master / admin / auth:** M1–M5. **Phase 2A-2:** N1–N5. **Phase 2A-3:** P1–P6. **F0d:** Q1–Q7. **UI:** U1–U5. **F1:** R1–R7. **Client write-grant audit:** S1–S8. **PF1:** T1–T6.
 
-**PF1 — single source of truth (new, 16 Aug) — T1–T6:**
+**F2 — V1–V8 (all now behaviourally or structurally asserted by `f2_gate_checks.sql`):**
 
-T1. **The billing basis is `public.tournament_billing_basis(uuid)` and it exists exactly once.** `get_tournament_pro_price`, `get_tournament_access_state` and `expected_payment_amount_inr` all call it. Never inline a player count or a watermark lookup again — S5's "change one, change both" has been replaced by "there is only one."
+V1. **`skipped` is not `pass`.** The gate requires all eight verdicts to read `pass`. Never rewrite it to test for "no `fail`". *Asserted: harness case 3.*
 
-T2. **The tier ladder is `public.tournament_pro_tier(integer)` and it exists exactly once.** It is the only place the numbers `150`, `500` and `1000` and the labels `free_0_to_150` / `pro_151_to_500` / `pro_501_plus` are written in the database. `src/constants/tournamentAccess.ts` holds a **display fallback only** and must never become a computation.
+V2. **Every verdict initialises to `"skipped"`** and is overwritten only by a check that actually ran. Never change the initialiser to `"pass"`.
 
-T3. **`public.expected_payment_amount_inr(tournament, user)` is the only answer to "what should this person pay".** It carries the canonical price *and* the coupon predicate. `submit_tournament_payment_claim` validates against it; `extract/paymentTrustCheck.ts` flags `amount_mismatch` against it. **F2 must use it too — do not compute an expected amount anywhere else.**
+V3. **`PAYMENT_CHECKER_VERSION` must be bumped whenever the invariant set or any invariant's semantics change**, and the constant must match the literal in the RPC gate. *Asserted: harness case 8 (behavioural) and S4 (SQL side). **The TypeScript side is still asserted by nothing** — see backlog B6.*
 
-T4. **`paymentTrustCheck.ts` must never regain its own price logic.** It previously counted players **live**, so it disagreed with the billing basis the instant anyone deleted a player — the exact E2 scenario the watermark closed. A comment block in the file says so; keep it.
+V4. **The gate contains no `RAISE`.** Census is **15 raises across 11 codes**. *Asserted: harness S1 and S3.*
 
-T5. **`getExpectedAmountInr` returning null is a deliberate fail-open** — no `amount_mismatch` flag is raised when the RPC fails. That is correct *today* because a human reviews every payment. **It stops being correct the moment F2 ships.** See §11 finding 2.
+V5. **`tp.id <> v_payment_id` in the `file_hash` predicate is load-bearing.** Remove it and the gate silently never fires. *Asserted: harness case 7, 7B and S5.*
 
-T6. **New functions need `notify pgrst, 'reload schema'`.** `extract` reaches `expected_payment_amount_inr` over PostgREST, not over a direct connection. Without the reload the call 404s, the amount check silently stops running, and nothing looks broken. Verified live after PF1-C: `amount_mismatch` fired with `expected: 500`.
+V6. **Master-submitted claims never auto-approve.** *Asserted: harness case 5.*
+
+V7. **`issue_referral_rewards` must stay mirrored in the F2 path.** *Asserted: harness case 1g and S7.*
+
+V8. **The auto-approval predicate is `status='approved' AND reviewed_by IS NULL`**, plus `source='auto_upi'` on the entitlement. `reviewed_by` must never be set to `auth.uid()`. *Asserted: harness case 1c and S6. Predicate verified clean against history — all 7 pre-F2 payments carry a reviewer, so zero false positives.*
 
 **Phase 2B:**
 13. Bank statements are `privacy_class='sensitive'`. NEVER process through Gemini. pdfplumber only.
 
 ---
 
-## 4–9. Phases 1, 2A, Workstream C, 2A-2, F0a–F0e, F1 — COMPLETE
+## 4–10. Phases 1, 2A, Workstream C, 2A-2, F0a–F0e, F1, client write-grant audit — COMPLETE
 
-See prior PROJECT_STATE for full detail. All shipped and production-verified. Nothing in these sections changed during the audit or PF1.
-
----
-
-## 10. Client write-grant audit — COMPLETE ✅ (14 August 2026)
-
-Unchanged from the previous PROJECT_STATE. Summary: run **before** F2 by deliberate reversal of the order in the older docs. Three proven exploits found and closed — **E1** `issue_referral_rewards` unbounded 100%-off coupons (`20260814120000`), **E2** player-count price self-attestation (`20260814160000`, high-water mark), **E3** `publish_tournament` with no ownership check (`20260814140000`). Dead grants removed from eight tables (`20260814180000`). `coupons` / `coupon_redemptions` / `tournament_entitlements` checked and clean (master-only RLS, control-tested `42501`). Guardrails S1–S8. **D38: a SECURITY DEFINER function's EXECUTE grant is a write path RLS cannot see.**
-
-**E2 is the reason PF1 exists.** The audit fixed the *database's* billing basis but left two other implementations of the same rule in place — one of which is the input to F2's `amount_mismatch` gate.
+See prior PROJECT_STATE for full detail. Nothing in these changed during F2 closeout. Audit summary: **E1** `issue_referral_rewards` unbounded coupons, **E2** player-count price self-attestation (high-water mark), **E3** `publish_tournament` ownership — all closed 14 Aug. **D38: a SECURITY DEFINER function's EXECUTE grant is a write path RLS cannot see.**
 
 ---
 
-## 11. F2 pre-design audit + PF1 — COMPLETE ✅ (16 August 2026)
+## 11. F2 — SHIPPED AND LIVE ✅ (17–20 August 2026)
 
-### The audit that preceded any code
+**Conditional auto-approval went live at `2026-08-20 17:26:33 UTC`.** Merged to `main` as `a5bebf8` (14 files, 1862 insertions).
 
-Four questions were answered against the live DB and the deployed `extract` source before anything was proposed.
+Seven build pieces (F2-A…F2-G, 17–19 Aug) plus closeout (20 Aug): the harness, the ops scripts, the test-baseline repair, and the flip.
 
-**Which flag reasons `extract` emits, and at what severity.** Nine reasons across both checkers. **Every payment reason is hardcoded `severity: "high"` — including `ungrounded`.** There is no severity value that separates the security set from the cosmetic set, which confirms D28's named allow-list is the only workable discriminator, not merely the preferable one. Live counts over 14 payment extractions: `amount_mismatch` 13, `utr_duplicate` 5, `ungrounded` 5, `payee_vpa_missing` 3, `direction_not_outgoing` 3, `payee_vpa_mismatch` 1. **`utr_format`, `date_stale` and `required_fields_missing` have never fired in production** — F2 will gate on three branches no real screenshot has ever exercised.
+| | Piece | Commit |
+|---|---|---|
+| F2-A | `payment_invariant_verdicts` | `49bfa5b` |
+| F2-B | `source` admits `auto_upi` | `9e6bddf` |
+| F2-C | drain handles `auto_approved` | `c73165e` |
+| F2-D | outbox `action` admits `auto_approved` | `ea8ec5a` |
+| F2-E | kill switch, created off | `8f3f4d1` |
+| F2-F | `extract` records verdicts | `965d6e5` |
+| F2-G | the gate | `67a411a` |
+| F2-H | 24-check gate harness | `c9da84c` |
+| F2-I | ops on/off/report scripts | `c230274` |
+| F2-J | `{flags}` destructure, baseline restored | `1ae0e21` |
 
-**How `status` is forced.** `extract/index.ts` line 785: `if (doc.doc_type === "payment_screenshot") status = "needs_review";` — an unconditional override *after* `decideStatus`, persisted to both `extractions.status` and `extraction_documents.status`. `decideStatus` itself uses `flags.length === 0`, the exact rule D28 rejects. Live: 14/14 `needs_review`, zero `auto_ok`. The `extraction_status` enum already contains `auto_ok`, `approved`, `rejected` — no enum change needed.
+### The harness — `supabase/tests/f2_gate_checks.sql`
 
-**What the `source` CHECK permits.** `CHECK (source = ANY (ARRAY['payment','coupon','manual_upi']))`. **`auto_upi` is not permitted** (F2-7 confirmed). Only `review_tournament_payment` writes it, hardcoded. Nothing branches on the value; `useMartechMetrics.ts:299` groups generically. **`review_tournament_payment` cannot be reused by a server-side caller** — its first statement is `has_role(auth.uid(),'master')` and `auth.uid()` is NULL under service-role, so it raises `FORBIDDEN`. Guardrail 10 forbids changing it. F2's approval write needs its own path.
+One self-aborting statement, 24 checks, everything rolled back. Run: `supabase db query --linked -f supabase/tests/f2_gate_checks.sql`. Pass condition is `24 passed, 0 failed` inside an `ERROR:`.
 
-**Whether anything reads `file_hash`.** **Nothing does.** Four write sites, one **non-unique** btree index, zero functions, views, constraints or frontend reads. Live: 14 payment documents, **5 distinct images**. One image was submitted against **two different tournaments** under two different UTRs with one approved. Correction to the older note: `extract/index.ts:493` **overwrites** the client-supplied hash with a server-computed SHA-256 before pass 1, so any row that has an extraction carries a server-authoritative hash.
-
-### Five findings that constrain F2
-
-1. **~~A third implementation of the pricing rule~~ — RESOLVED by PF1.**
-2. **Absence of a flag is not evidence a check passed.** `amount_mismatch` is skipped entirely when `tournament_id` is absent from the request body, when `uploaded_by` is NULL (122 legacy rows), or when the extracted amount is not finite. `payee_vpa_mismatch` is skipped if `PLATFORM_PAYEE_VPA` is unset. `utr_duplicate` fails open on RPC error (Q6). A gate reading "no allow-listed reason is present" auto-approves all of these. **Decision taken: `skipped` is not `pass`.**
-3. **`/extract` performs no caller-ownership check.** `verify_jwt=true`, then a service-role client reads the document by ID with no comparison between the JWT subject and `doc.uploaded_by`. Both `document_id` and `tournament_id` are caller-supplied. Harmless today; fatal if the auto-approve decision lives there.
-4. **Re-extraction is unbounded and nondeterministic.** Three documents carry multiple extractions; one carries **6 extractions with 3 distinct flag sets** from identical bytes. The client picks which `extraction_id` to submit. The claim RPC pins ownership and UTR-match but not "is this the only extraction".
-5. **The outbox has no slot for F2-4's admin email.** `action` is `CHECK (action IN ('approved','rejected'))` with `UNIQUE (payment_id, action)`. The organizer's approval email already fires from the existing trigger with no wiring (D17 as designed); the oversight email to chess.tushar@gmail.com needs the CHECK widened.
-
-### PF1 — one billing basis, one tier ladder, one expected amount
-
-Three deploy cycles, all verified live. **Merged to `main` at `01e6a3e`.**
-
-**PF1-A (`20260816120000`).** Created `tournament_billing_basis` and `tournament_pro_tier`; rewired `get_tournament_pro_price` and `get_tournament_access_state` to call them. The migration proved equivalence over **all 117 tournaments** before committing — 0 basis mismatches, 0 amount mismatches, 0 label mismatches. Tier distribution unchanged: 92 free / 20 at ₹500 / 5 at ₹1000. **No tournament's price moved.**
-
-It also caught something nobody was looking for. The grant-proof block failed on first run with `anon gained price EXECUTE` — and `anon` had not gained it, it **already held an explicit EXECUTE on `get_tournament_pro_price`** while `get_tournament_access_state` did not. Provably dead (the function's first statement raises `UNAUTHORIZED` when `auth.uid()` is NULL, which it always is for `anon`; sole caller is an authenticated page), so it was removed rather than left to drift. **Same asymmetry shape as E3.** The lesson is about the guard, not the grant: *an assertion written from memory rather than measurement will fire on the truth and look like a regression.*
-
-**PF1-B (`20260816140000`).** Created `expected_payment_amount_inr` carrying the canonical price and the coupon predicate; `submit_tournament_payment_claim` now calls it and no longer mentions `coupon_redemptions` or `get_tournament_pro_price`. Verified structurally: **profile gate at char 1258 → price lookup at 1716 → F0d block at 2605**, so D37's ordering holds. Error census unchanged across all 11 codes (`UNAUTHORIZED` ×3, `PENDING_PAYMENT_ALREADY_EXISTS` ×2, `UTR_ALREADY_USED` ×2, rest ×1).
-
-**All 6 live coupon redemptions are 100%-off (`amount_after = 0`), so the partial-discount branch has never executed in production.** Live data could not prove the move was faithful. `supabase/tests/pf1b_expected_amount.sql` proves it with fixtures — 9 cases covering baseline, partial discount, consumed-coupon reversion, stale `amount_before`, `amount_after = 0`, newest-redemption-wins, cross-user isolation, and **end-to-end through the claim RPC**: a claim at canonical ₹500 with a discount active returns `INVALID_PAYMENT_AMOUNT`, a claim at the discounted ₹300 succeeds. **9/9, all fixtures rolled back, residue verified zero.**
-
-**PF1-C (`extract` v46).** `getExpectedAmountInr` lost its live player count, its 0/500/1000 ladder and its coupon query; it is now one `admin.rpc("expected_payment_amount_inr", …)` call. Bundle hash changed (`b387a65c…` → `0136c488…`).
-
-**Proven in production, not inferred.** A ₹1 screenshot uploaded against a ₹500 tournament on `tusharsaraswat68@gmail.com` produced:
-
-```json
-{ "field": "amount_inr", "reason": "amount_mismatch", "stated": 1, "expected": 500, "severity": "high" }
+```
+1a-1h  all eight pass, flag ON, organizer, screenshot   → APPROVED + eight sub-assertions:
+       price fixture 500/500 · status approved · reviewed_by NULL + reviewed_at set +
+       note "Auto-approved." · one entitlement source=auto_upi owner=organizer 365d ·
+       exactly 2 outbox rows {approved, auto_approved} · oversight note carries verdicts ·
+       issue_referral_rewards ran (level-1 row) · reward linked to a coupon
+2      one verdict 'fail' (amount_mismatch)             → pending
+3      one verdict 'skipped' (utr_duplicate)            → pending   ← D39
+4      flag OFF, all else perfect                       → pending
+5      master submits                                   → pending   ← V6
+6      no screenshot pinned                             → pending   ← guardrail 11
+7      file_hash on a NON-REJECTED payment              → pending   ← V5
+7B     same fixture, other payment REJECTED             → APPROVED  ← D15 scoping
+8      all eight pass at checker_version = 2            → pending   ← V3
+S1-S7  structural: raise census 15 · gate located · gate contains no RAISE ·
+       checker_version = 1 pinned · tp.id <> v_payment_id present ·
+       reviewed_by = NULL and not auth.uid() · issue_referral_rewards present
+S8     kill switch is exactly where it started (leak check)
 ```
 
-`expected: 500` can only have come from the new RPC — the code that used to compute it no longer exists in the bundle. A failed RPC would have produced **no flag at all**, which is what makes the test decisive. `payee_vpa_mismatch`, `direction_not_outgoing`, `payee_vpa_missing` and `date_stale` all correctly stayed silent; `status` remained `needs_review`.
+**Cases 7 and 7B are a matched pair** and must be kept together. They differ by one column value and land on opposite sides. Case 7 alone would pass if the fixture were broken in any way; 7B is what makes the pair meaningful.
 
-**Session close:** tsc **12** · vitest **474 passed / 3 known failures** · F0d harness **17/17 byte-identical to the F1 baseline, case Q returning `PROFILE_INCOMPLETE`** · PF1-B harness **9/9** · `main` at `01e6a3e`, working tree clean.
+**Three live rows the harness touches that it did not create, all rolled back:** `profiles.phone` on both fixture users (seeded, never assumed — the f0d "passed by luck" lesson); `platform_feature_flags.payment_auto_approve` (set *inside each case's sub-transaction*, so no case depends on ordering, and S8 proves no leak); and `referrals`, whose trigger is DISABLED for one INSERT and re-enabled immediately — see finding 1 below. `auth.users.email_confirmed_at` is **not** seeded; it is asserted as a precondition with its own abort message.
 
-One artifact left behind deliberately: extraction `9c41508d` (document `f5a88a46`) is a `needs_review` payment extraction with no payment claim attached — the PF1-C proof.
+### Operational scripts — `supabase/ops/`
+
+| File | Purpose |
+|---|---|
+| `f2_auto_approve_on.sql` | Turns it on. Prints the row. |
+| `f2_auto_approve_off.sql` | **The emergency brake.** Safe to run any time, including when already off. Does **not** revoke Pro from anyone already auto-approved. |
+| `f2_auto_approval_report.sql` | Read-only. Every auto-approval with organizer, amount, UTR, file_hash, whether Pro is still active, oversight email status, and **the exact eight verdicts the gate acted on**. Self-aborting so output is forced through the CLI. Dry-run verified 20 Aug returning `0 total`. |
+
+**These are not migrations.** Never `migration repair` them.
+
+### Five findings from F2 closeout
+
+**1. `public.referrals` cannot be inserted into. Referral capture has been silently dead since ~19 April 2026.**
+`trg_referrals_set_snapshot` reads `new.referred_email` and `new.referred_label`; `pg_attribute` shows exactly 2 dropped columns on that table. Every insert raises `42703 record "new" has no field "referred_email"`. Verified with a rolled-back insert, not by reading code. 3 referrals rows exist, all predating the drop; **`referral_rewards` has zero rows ever.** **Not backfillable** — the referral link is never recorded, so lost signups cannot be recovered. Fix is the next workstream.
+
+**2. Both live verdict rows decline, correctly, and re-confirm D39 on real data.**
+```
+9a773dfc  utr_format=skipped  utr_duplicate=skipped        6 pass / 2 skipped → DECLINE
+f9dd011e  payee_vpa_missing=fail  payee_vpa_mismatch=skipped  6/1/1          → DECLINE
+```
+The first is the CRED receipt: **zero flags fired**, so a flags-only rule would have auto-approved a ₹500 claim from a receipt that never printed a UTR. The second shows the intended asymmetry — VPA *missing* **fails** while *mismatch* **skips**, because you cannot compare a value that is not there.
+
+**3. The V8 predicate is clean against history.** All 7 pre-F2 payments (2 approved, 5 rejected) carry a non-null `reviewed_by`. `status='approved' AND reviewed_by IS NULL` therefore has zero false positives from history, and every row the report returns was approved by the gate.
+
+**4. `max(uuid)` does not exist in Postgres** — the first harness run failed on it, and because that one line sat inside case 1's capture block it took all eight of case 1's assertions down with it, reporting a single opaque FAIL. **Generalisation: isolate capture queries from the case body.** The harness now wraps the referral capture in its own handler and reports a capture failure distinctly from a real V7 failure, and case 1's error branch dumps what it managed to capture.
+
+**5. F2 touches zero files under `src/`.** The whole feature is database and edge function. Lovable publishes were no-ops for it. This is the concrete reason F2-4 (the admin auto-approved view) is still open.
+
+### Practical note on auto-approval rate
+
+`payee_vpa` is present in only **7 of 17** payment extractions. Absent VPA **fails** (does not skip), so it is a hard decline. Bank-account transfers — PhonePe's "Transfer to 3561XXXXXXX3993, Union Bank Of India" — carry no VPA and can never auto-approve. That is correct security behaviour and must not be loosened (guardrail 3), but it caps the achievable rate. **The PRD's >70% target must be re-derived from real post-launch data.** The historical sample is dominated by deliberate test and attack screenshots and is not representative.
+
+### D39 — the governing decision
+
+**D39 — Absence of a flag is not evidence a check passed (Accepted 17 Aug 2026; extends D22, D27, D28).**
+Five of the eight invariants have skip paths. A gate reading "no allow-listed reason is present" auto-approves every one. `extract` therefore records a verdict per named invariant and F2 requires all eight to read `pass`.
+**The asymmetry is deliberate:** the duplicate and price RPCs fail **open** for the *flag* (advisory) and **closed** for the *verdict* (authoritative, money-bearing).
+**Accepted cost:** false declines rise. Three of the eight invariants have never fired in production; anything landing in `skipped` sends an honest payer to manual review. A false decline costs a click; a false approval costs revenue and is invisible.
 
 ---
 
 ## 12. Immediate next step
 
-**F2 (conditional auto-approval) is the next workstream. Fresh chat.** Its blocking prerequisite — a third implementation of the pricing rule feeding the `amount_mismatch` gate — is now gone.
+**Fix the `referrals` trigger. Fresh chat. Small, self-contained, one migration.**
 
-**Four decisions already taken during the F2 pre-design audit. Do not relitigate them; implement them.**
+`trg_referrals_set_snapshot` references two dropped columns and raises `42703` on every insert. Drop the dead references. Then verify by inserting a referral inside a rolled-back block and watching it succeed — the same probe that found it, run in reverse.
 
-1. **The auto-approval decision lives in a claim-time RPC, not inside `/extract`.** At claim time `auth.uid()` is real, ownership is checked, the amount is validated against `expected_payment_amount_inr`, the UTR is matched, and the extraction is pinned to the payment. Findings 3 and 4 both disappear. The entitlement write has to happen in SQL anyway, since `review_tournament_payment` is unusable from service-role and guardrail 10 forbids changing it.
+Two things to check while in there, neither assumed:
+- Whether any application code path inserts into `referrals` (signup, `use-apply-pending-referral`), and whether that path swallows the error or surfaces it.
+- Whether `referral_codes` and the reward chain are otherwise healthy. `issue_referral_rewards` was proven end-to-end by harness case 1g/1h — it mints a coupon correctly once a referral row exists — so the *only* broken link is the insert.
 
-2. **`skipped` is not `pass`.** `extract` must record a **verdict per named invariant** — `pass` / `fail` / `skipped` — and F2 requires all eight to be `pass`. This is the same principle as D22 (absence became its own flag) and D27 (outgoing must be *proven*). **Accepted cost:** F2 modifies `extract` as well as adding an RPC, and the false-decline rate rises — three of the eight invariants have never fired in production, and any landing in `skipped` sends an honest payer to manual review. A false decline costs a click; a false approval costs revenue and is invisible.
-
-3. **`file_hash` scope: global, restricted to hashes linked to a non-rejected payment, and it denies auto-approval rather than blocking submission.** Global costs nothing over per-user in false positives and per-user has a trivial bypass (a second signup). Restricting to non-rejected payments preserves D15 — the live data contains a legitimate resubmission (`282d67b367`, rejected 3 Aug then approved 6 Aug with the same image and UTR) that an "any upload ever" rule would have blocked. Denying auto-approval rather than hard-blocking avoids inventing a new way for an honest organizer to get stuck at the paywall, which F2-2's generic messaging would make un-debuggable for them.
-
-4. **F2-5 changes from "Edge Function secret" to "server-side kill switch unreachable from any client."** A database RPC cannot read an edge function secret. `platform_feature_flags` satisfies every property the requirement actually asks for — verified live: RLS on, **zero policies**, `anon` and `authenticated` hold **no SELECT and no UPDATE** — and is *more* auditable than a secret, since it carries `updated_at` and `updated_by`. **This is a PRD amendment; apply it when PHASE2_PRD.md is next revised.**
-
-Plus the three items already tracked: gate on named flag reasons never flag count (D28); decline messages are a fraud oracle, generic to the organizer and itemised in `/admin/payments` only; and widen the `tournament_entitlements.source` CHECK to permit `auto_upi`, mirroring how `manual_upi` was added.
+**After that: F3, the auto-approval oversight loop** (§13, B5).
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §11 and §12. The F2 pre-design audit is complete and PF1 has shipped: the billing basis, the tier ladder and the expected payment amount each now have exactly one implementation, `extract` v46 reads `expected_payment_amount_inr` over RPC, and that was proven in production by an `amount_mismatch` flag carrying `expected: 500`. Guardrails T1–T6 now apply on top of S1–S8. 474 tests / 3 known failures, tsc 12, F0d harness 17/17, PF1-B harness 9/9, main at `01e6a3e`, working tree clean. Starting F2 (conditional auto-approval). The four decisions in §12 are settled — design to them, don't reopen them. Before any code, propose the F2 design in three parts: (a) where the per-invariant verdict record lives and what shape it takes, (b) the exact signature and authorization of the claim-time auto-approval RPC, (c) how the `file_hash` check is expressed. Show me the design before writing anything.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §11 and §12. F2 is SHIPPED AND LIVE — conditional auto-approval turned on 20 Aug 17:26 UTC, merged to `main` at `a5bebf8`, gate harness 24/24, baselines re-verified at 474/3 and tsc 12. Guardrails V1–V8 are now each asserted by a named harness check. Next workstream: repair `trg_referrals_set_snapshot`, which references two dropped columns and has been raising 42703 on every insert into `public.referrals` since ~19 April — referral capture is silently dead and `referral_rewards` has zero rows ever. Audit before code: confirm the dropped columns, find every code path that inserts into `referrals`, and check whether the error is swallowed. Show me the plan before writing the migration.*
 
 ---
 
 ## 13. Backlog — carried forward, NOT forgotten
 
-### B1 — `coupons` admin hardening (was audit step 5) · MEDIUM, defence-in-depth
+### B5 — F3, the auto-approval oversight loop · **agreed 20 Aug, scheduled after the referrals fix**
 
-**Not currently exploitable.** `coupons`, `coupon_redemptions` and `tournament_entitlements` hold client write grants but are fully closed by master-only RLS — control-tested `42501` as a non-master. This is about removing a surface that is one careless policy edit from being live.
+The evidence trail already exists in full — payment row, entitlement, screenshot, file hash, and the eight verdicts frozen at the code version that produced them. `f2_auto_approval_report.sql` is the lens. What is missing is the ability to *act* on what it shows.
 
-**The ordering is the decision (D36 pattern) — never revoke before the write path exists:** additive `admin_update_coupon(...)` RPC (note `admin_create_coupon` already exists and is unused) → frontend switches `src/hooks/useCouponsAdmin.ts` off direct table writes → **production HAR capture proving zero PATCH/POST to `/rest/v1/coupons`** (mandatory here, unlike step 4's dead grants, because these writes genuinely work today) → revoke INSERT/UPDATE/DELETE and consider dropping the write policies so both layers close together.
+- **F3-A — `payment_auto_approval_audit`.** One row per audited auto-approval: `payment_id` PK, `outcome` CHECK (`ok` | `loophole` | `uncertain`), `reason`, `action_taken`, `audited_by`, `audited_at`. Same lockdown shape as `payment_invariant_verdicts`: RLS on, zero policies, no client grants, written only by a master-only SECURITY DEFINER RPC `record_auto_approval_audit(...)`.
+- **F3-B — `revoke_auto_entitlement(payment_id, reason)`.** Sets the entitlement's `ends_at = now()` rather than deleting it, so the evidence survives. Flips the payment to `rejected`, which fires the existing `AFTER UPDATE OF status` trigger and emails the organizer with no new wiring. **Open question: does Tushar want the organizer emailed on revocation, or a quieter path?** Must not touch `review_tournament_payment` (guardrail 10).
+- **F3-C — `/admin/payments` auto-approved section.** Closes F2-4. Predicate `status='approved' AND reviewed_by IS NULL`, verified clean against history. Backend is done; this is frontend-only.
+
+**The feedback loop is already closed by construction and does not need building.** When an auto-approval turns out to be a loophole, the fix is always to strengthen an invariant or add a ninth — which means bumping `PAYMENT_CHECKER_VERSION` to 2, which automatically invalidates every verdict written by the old code. Harness case 8 proves that. F3 only adds the flagging and the revocation on top.
+
+### B6 — two tests deliberately deferred at the F2 phase boundary · LOW
+Withdrawn on 20 Aug rather than smuggled into a baseline-restoring commit, because adding them would have moved the 474 number at exactly the moment PROJECT_STATE was being written around it. Do them inside F3:
+1. **Assert the verdicts, not just the flags,** in `payment-utr-normalization.spec.ts` and `extraction-grounding.spec.ts`. Both now destructure `{ flags }` and ignore `verdicts` entirely; verdict logic has only F2-F's stubbed coverage.
+2. **Assert `PAYMENT_CHECKER_VERSION === 1`** in TypeScript. V3 requires the constant to match the RPC literal; the SQL half is asserted by harness S4, the TS half by nothing.
+
+### B1 — `coupons` admin hardening · MEDIUM, defence-in-depth
+Not currently exploitable — `coupons`, `coupon_redemptions` and `tournament_entitlements` hold client write grants but are fully closed by master-only RLS, control-tested `42501`. F2 raised the stakes slightly: `tournament_entitlements` now has a second writer, and F3-B would add a third. Ordering is the decision (D36 pattern), never revoke before the write path exists: additive `admin_update_coupon(...)` → frontend off direct table writes → **production HAR proving zero PATCH/POST to `/rest/v1/coupons`** → revoke and drop the write policies together.
 
 ### B2 — `master_allowlist` dead grants · LOW, blocked on M1
-
-Full client write grants with zero write policies, so closed today. Deliberately excluded from `20260814180000` because it sits on the master/admin role-resolution path. Requires an explicit M1 exception. One-line migration when cleared.
+Full client write grants, zero write policies, so closed today. Requires an explicit M1 exception. One-line migration when cleared.
 
 ### B3 — Watermark UI for the master reset · LOW
+`master_reset_player_watermark(uuid)` works (520 → 294 in test) but is SQL-only. Add a control on `/admin/tournaments` when that page is next touched.
 
-`master_reset_player_watermark(uuid)` exists and is verified working (520 → 294 in test) but is SQL-only. Add a control on `/admin/tournaments` when that page is next touched.
+### B4 — "eight" hardcoded in the oversight email · LOW
+`send-payment-notifications/index.ts` states "All eight payment invariants returned pass". The count is also enforced by the verdict CHECK, in another file. Largely self-correcting: the RPC writes the itemised verdicts into the outbox row's `review_note`, which the email renders, so the static line is redundant rather than wrong. Drop the count when that file is next touched.
 
 ---
 
 ## 14–17. Phase 2B / 2C-D / 3 / 4 — unchanged
 
-Phase 2B (bank statement reconciliation) blocked on 2A-3. Phase 2C-D (REST API + MCP) blocked on 2B. See PHASE2_PRD.md.
+Phase 2B (bank statement reconciliation) blocked on 2A-3, which is **now complete**. Phase 2C-D (REST API + MCP) blocked on 2B. See PHASE2_PRD.md.
+
+**Ordering note:** with F2 shipped, Phase 2A-3 is closed. The path is: referrals fix → F3 → Phase 2B.
 
 ---
 
@@ -228,44 +268,37 @@ Phase 2B (bank statement reconciliation) blocked on 2A-3. Phase 2C-D (REST API +
 
 | Item | Priority | Detail |
 |---|---|---|
-| ~~`extractions` UPDATE policy / three fail-open invariants / UTR hard-block / `tournament_payments` grants~~ | ✅ RESOLVED | F0a, F0c, F0d |
-| ~~`normalize_utr` parity / F0d test suite / no UI guard test~~ | ✅ RESOLVED | `utr_active_duplicate_exists`, 21 vitest cases, SQL harness, `ui-conventions.spec.ts` |
-| ~~`profiles` client-writable / reward-flag reset / harness depends on live phone / stale types~~ | ✅ RESOLVED | F1 |
-| ~~33 tables retain client write grants~~ | ✅ RESOLVED | Audit 14 Aug. Real number 26. Three exploits closed. See §10 |
-| ~~`issue_referral_rewards` / player-count self-attestation / `publish_tournament`~~ | ✅ RESOLVED | `20260814120000`, `20260814160000`, `20260814180000` |
-| ~~Third implementation of the pricing rule in `paymentTrustCheck.ts`~~ | ✅ RESOLVED | PF1. See T1–T4 |
-| ~~Price vs access-state billing-basis drift (S5)~~ | ✅ RESOLVED | PF1-A — both call one helper |
-| ~~Dead `anon` EXECUTE on `get_tournament_pro_price`~~ | ✅ RESOLVED | PF1-A |
-| **`extract` cannot tell "check passed" from "check skipped"** | **HIGH — F2** | Finding 2. Blocking for F2's gate; harmless while a human reviews every payment |
-| **`/extract` has no caller-ownership check** | **HIGH — F2 design input** | Finding 3. `document_id` and `tournament_id` both caller-supplied. Mitigated by putting the decision at claim time |
-| **Re-extraction unbounded → flag shopping** | **HIGH — F2 design input** | Finding 4. One document has 6 extractions with 3 distinct flag sets |
-| **Auto-approve gate must use named flag reasons** | **HIGH — F2** | D28. Severity cannot discriminate — `ungrounded` is also `high` |
-| **F2 decline messages are a fraud oracle** | **HIGH — F2 design** | Generic to organizer, itemised in `/admin/payments` only |
-| **No duplicate-screenshot (`file_hash`) invariant** | MEDIUM — F2 | Scope decided: global, non-rejected payments only, denies auto-approval. `file_hash` is server-overwritten on the extraction path |
-| **Outbox `action` CHECK has no slot for the F2 oversight email** | MEDIUM — F2 | `CHECK (action IN ('approved','rejected'))` + `UNIQUE (payment_id, action)` |
-| **`FieldFlag.reason` union in `trustCheck.ts` is stale** | MEDIUM | Missing `payee_vpa_missing`, `direction_not_outgoing`, `required_fields_missing` — all three are pushed anyway. Compiles only because `tsconfig.app.json` excludes `supabase/functions/`. **Do not derive F2's allow-list from this type** |
-| **Three named invariants have never fired in production** | MEDIUM — F2 | `utr_format`, `date_stale`, `required_fields_missing`. F2 will gate on untested branches |
-| **PRD / ARCHITECTURE carry stale content** | MEDIUM | Both still say the grant audit follows F2 (it preceded it). ARCHITECTURE §2.4 shows an early `return` that is not the shipped code. F2-5's "Edge Function secret" needs amending per §12.4. Correct all four at the next revision |
-| **Gate / helper drift risk** | MEDIUM | `my_payment_gate_status()` vs the RPC gate (R4). Nothing tests the helper side. The billing-basis instance of this shape (S5) is now closed by T1 |
-| `CLAUDE.md` schema drift | MEDIUM | Says v3 active; actual is v5. Missing AuthProvider, `db query --linked`, tsc correction, N1 hygiene, UI conventions, R1–R7, S1–S8, and now T1–T6 |
-| `MAX_ATTEMPTS=5` with no backoff | MEDIUM | Brief Resend outage permanently loses a notification |
-| `/admin/team-snapshots` broken | MEDIUM | RPC `detect_missing_team_snapshots` 404; page calls `is_master(uuid)` but DB function is `is_master()` |
-| `brew unlink node` fragile | MEDIUM | Any `brew upgrade` re-shadows v22 → 9 test failures |
-| `tsconfig.app.json` scope gap | MEDIUM | Covers `src/` only — this is why the stale `FieldFlag` union compiles |
-| **No watermark UI** | LOW — B3 | `master_reset_player_watermark` is SQL-only |
-| `as never` RPC casts in `TournamentUpgrade.tsx` | LOW | Drop when the file is next touched |
+| ~~F0a–F0e / F1 / 33-table audit / PF1 / verdict recording / named-reason gate / `file_hash` / outbox action / `source` CHECK~~ | ✅ RESOLVED | Phases 2A-3 and F2 |
+| ~~Seven-case gate harness not written~~ | ✅ RESOLVED | 24 checks, 24/24, `f2_gate_checks.sql` |
+| ~~vitest / tsc not re-run since F2-F~~ | ✅ RESOLVED | Both call sites destructured; 474/3 and 12 re-verified on `main` |
+| **`public.referrals` insert raises 42703** | **HIGH — next workstream** | Referral capture dead since ~19 April; zero rewards ever; not backfillable |
+| **No `/admin/payments` UI for auto-approvals** | **MEDIUM — F3-C** | F2 shipped with zero `src/` changes. Backend done, frontend not started |
+| **No way to flag or revoke a bad auto-approval** | MEDIUM — F3-A/B | Evidence exists; the ability to act on it does not |
+| **Three named invariants have never fired in production** | MEDIUM | `utr_format`, `date_stale`, `required_fields_missing`. Only fixtures exercise those branches |
+| **`payee_vpa` present in only 7 of 17 extractions** | MEDIUM | Caps the achievable auto-approval rate. PRD's >70% target needs re-deriving from real data |
+| **`field_flags` readable by its uploader** | MEDIUM | Partial fraud oracle, pre-existing. Bounded — verdicts are unreachable. Revoking column SELECT would break the brochure review screen |
+| **`/extract` has no caller-ownership check** | MEDIUM | `document_id` and `tournament_id` both caller-supplied. Mitigated by the decision living at claim time, not eliminated |
+| **`FieldFlag.reason` union in `trustCheck.ts` is stale** | MEDIUM | Missing three reasons that are pushed anyway. Compiles only because `tsconfig.app.json` excludes `supabase/functions/`. F2's verdict keys are deliberately not derived from it |
+| **PRD / ARCHITECTURE carry stale content** | MEDIUM | Both still say the grant audit follows F2 (it preceded it). ARCHITECTURE §2.4 shows an early `return` that is not shipped code. F2-5's "Edge Function secret" must be amended to the feature flag. Add D39, the F2 sections, and the go-live date |
+| **Gate / helper drift risk** | MEDIUM | `my_payment_gate_status()` vs the RPC gate (R4). Nothing tests the helper side |
+| `CLAUDE.md` schema drift | MEDIUM | Says v3 active; actual is v5. Missing R1–R7, S1–S8, T1–T6, V1–V8 |
+| `MAX_ATTEMPTS=5` with no backoff | MEDIUM | A brief Resend outage permanently loses a notification. **Now more consequential: the oversight email is the primary auto-approval alert.** `f2_auto_approval_report.sql` is the backstop — run it periodically rather than trusting email alone |
+| `/admin/team-snapshots` broken | MEDIUM | `detect_missing_team_snapshots` 404; page calls `is_master(uuid)`, DB function is `is_master()` |
+| `brew unlink node` fragile | MEDIUM | Any `brew upgrade` re-shadows v22 → 9 test failures. Confirmed healthy at v22.19.0 on 20 Aug |
+| `tsconfig.app.json` scope gap | MEDIUM | Covers `src/` only |
+| Deferred verdict + checker-version tests | LOW — B6 | |
+| `net._http_response` retains ~6 hours | LOW | Live-health tool, not an audit log |
+| No watermark UI | LOW — B3 | |
+| `as never` RPC casts in `TournamentUpgrade.tsx` | LOW | |
 | Direction marker regexes lack `\b` anchors | LOW | Bounded by D27 |
 | Stale v2 tests reference `direction_label` | LOW | Pass but mislead |
-| `app`/`status_text` grounding nondeterministic | LOW | Cosmetic; excluded from the F2 gate per D28 |
-| 122 `extraction_documents` rows with `uploaded_by` NULL | LOW | Legacy (≤20 Jul). Fail-closed under F0d, but they also silently skip `amount_mismatch` — see finding 2 |
-| Repo is public | LOW — noted | Verified no secrets committed |
+| `app`/`status_text` grounding nondeterministic | LOW | Cosmetic; excluded from the gate per D28 |
+| 122 `extraction_documents` with `uploaded_by` NULL | LOW | Legacy (≤20 Jul). Land `amount_mismatch = skipped`, so they cannot auto-approve |
+| Repo is public | LOW | No secrets committed. The payee VPA is public by necessity |
 | Two parallel session paths | LOW | 16 call sites read token via `supabase.auth.getSession()` directly |
-| `platform_feature_flags` RLS | LOW → **now load-bearing** | RLS on, zero policies, no client SELECT or UPDATE. This is what makes it a valid F2 kill switch (§12.4) |
-| Payment unit tests assert literals | LOW | Tests 7–10 assert arithmetic rather than calling `paymentTrustCheck.ts` |
-| **Advisory duplicate check fails open** | Accepted residual | Bounded by the hard block + unique index (Q6) |
+| **Advisory duplicate check fails open** | Accepted residual | Bounded by the hard block + unique index (Q6). The **verdict** does not fail open |
 | **Consistent-but-wrong UTR** | Accepted residual | Only Phase 2B closes this |
-| **UTR-only valve** | Accepted residual | No screenshot = no mismatch check by construction |
-| Merge commit `7dca9fb` malformed message | COSMETIC | Left alone — amending means force-pushing a public `main` that Lovable syncs |
+| **UTR-only valve** | Accepted residual | No screenshot = no mismatch check by construction, and no auto-approval (harness case 6) |
 
 ---
 
@@ -276,22 +309,27 @@ Phase 2B (bank statement reconciliation) blocked on 2A-3. Phase 2C-D (REST API +
 **Working rules that do not change:**
 - Always `/clear` in Claude Code before a new prompt — **and verify it took.**
 - **First command in any new Terminal window is `cd ~/Desktop/prize-manager`.**
-- Edge-function changes need `supabase functions deploy <name>` — Lovable publish ships frontend only (P5).
-- **A new database function also needs `notify pgrst, 'reload schema'`** if anything reaches it over PostgREST — including edge functions using `admin.rpc(...)` (T6).
-- **Publishing is a separate step from merging.** A database-only migration is live the moment `supabase db query` runs.
+- Edge-function changes need `supabase functions deploy <name>` — Lovable publish ships frontend only (P5). **Confirm the bundle hash changed.**
+- **A new database function also needs `notify pgrst, 'reload schema'`** if anything reaches it over PostgREST (T6).
+- **Publishing is separate from merging.** A database-only migration is live the moment `supabase db query` runs — and so is an operational UPDATE like the F2 flag flip.
 - Use `git --no-pager diff`, never plain `git diff`.
-- **Always merge with `git merge --no-ff -m "message" <branch>`.** Never rely on the editor.
+- **Always merge with `git merge --no-ff -m "message" <branch>`.**
+- **Before merging, run `git --no-pager diff --name-only main...<branch>`** and check for files that also changed on `main`. Finding a conflict during the merge command is the worst time to find it.
 - Paste terminal output as **text**, never screenshots.
 - Claude (chat) verifies every Claude Code / Lovable claim against Supabase SQL before advancing.
-- Full `git diff` text is required in every build report — **and must actually be read before a deploy, not summarised from a `--stat` line.**
-- `npx tsc -p tsconfig.app.json --noEmit`; verify the 12-error baseline by stashing, not by assuming.
+- `npx tsc -p tsconfig.app.json --noEmit`; verify the 12-error baseline by stashing, not assuming.
 - Before starting a branch: `git status` must be clean.
 - Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`. `supabase db execute` does not exist.
-- **`RAISE NOTICE` is swallowed** by both `supabase db query --linked` and Supabase MCP `execute_sql`. Silence is the success signal; put failures in `RAISE EXCEPTION` and verify separately with a query.
+- **`RAISE NOTICE` is swallowed** by both `supabase db query --linked` and Supabase MCP `execute_sql`. Put failures in `RAISE EXCEPTION`. **`supabase db query` does print SELECT result tables** — confirmed 20 Aug.
 - **Every migration must self-verify and fail loudly**, in one transaction, so a failed proof rolls the whole thing back.
-- **Write guard assertions from measurement, not memory.** PF1-A's grant proof failed on first run because it asserted a state that had never been measured. The guard was right to fire; the assumption behind it was wrong. Query the current state first, then assert it.
-- **Prove the fix with a test that can only pass if the fix works.** PF1-C was proven by a flag whose `expected` value could only come from the new RPC — a broken RPC produces no flag at all. "It deployed without errors" proves nothing.
-- **Prefer deleting a duplicated rule to synchronising it.** D34 and PF1 both reached the same conclusion from opposite directions.
+- **Write guard assertions from measurement, not memory.** Query the current state first, then assert it.
+- **Prove the fix with a test that can only pass if the fix works.** Prefer *matched pairs* that differ by one value and must land on opposite sides — harness cases 7/7B are the model.
+- **Isolate capture queries from the case body in a harness**, so one bad line cannot collapse eight assertions into one opaque failure.
+- **Diff a rewritten function body against the live one before applying.**
+- **Hash-guard any scripted edit to a tracked file**, and **run it twice to watch the guard fire**. For a one-token `sed`, the equivalent is: grep the pattern and confirm the exact expected count *before*, then confirm `0` remaining and a 1-insertion/1-deletion diff *after*.
+- **Prefer `git apply` over a pasted heredoc** for multi-file source edits.
+- **Prefer deleting a duplicated rule to synchronising it.**
 - When touching allocation-adjacent files, take a SHA-256 baseline of `supabase/functions/` first and diff it afterwards.
 - **Never redirect a generator onto a tracked file (R7).** Temp file → verify → `cp`.
 - Additive migration → verify → frontend → verify → restrictive migration. Never the reverse.
+- **Do not add new tests at a phase boundary while restoring a baseline.** Restore the number first, add coverage in the next workstream (B6).
