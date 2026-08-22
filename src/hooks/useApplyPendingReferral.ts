@@ -18,6 +18,18 @@ function isDebugReferrals(): boolean {
   );
 }
 
+/**
+ * Outcomes after which the stored referral code must be discarded: it has
+ * either been recorded or can never be recorded. Every other outcome — and
+ * every hard error — leaves the code in place for a later attempt.
+ */
+const TERMINAL_REFERRAL_REASONS = new Set([
+  "applied",
+  "already_applied",
+  "self_referral_not_allowed",
+  "invalid_code",
+]);
+
 function redact(code: string): string {
   if (code.length <= 4) return "****";
   return "…" + code.slice(-4);
@@ -113,6 +125,33 @@ export function useApplyPendingReferral(user: User | null) {
 
         if (debug) {
           console.log("[referral-hook] RPC result:", rpcResult, "error:", rpcError);
+        }
+
+        // A hard RPC error means the code was never consumed. Retain every copy
+        // so the next mount can retry. Clearing here unconditionally is what
+        // made the 42703 trigger failure both unrecoverable and invisible for
+        // four months: the only copy of the code was destroyed on the failing
+        // path, and rpcError was never inspected outside debug builds.
+        if (rpcError) {
+          console.warn(
+            "[referral-hook] apply_referral_code failed, retaining code for retry:",
+            rpcError.message,
+          );
+          return;
+        }
+
+        // A successful call can still decline. Only terminal reasons mean the
+        // code is spent or can never succeed; anything else stays retryable.
+        const reason =
+          (rpcResult as { ok?: boolean; reason?: string } | null)?.reason ??
+          "unknown";
+
+        if (!TERMINAL_REFERRAL_REASONS.has(reason)) {
+          console.warn(
+            "[referral-hook] apply_referral_code did not settle, retaining code:",
+            reason,
+          );
+          return;
         }
 
         // Cleanup localStorage
