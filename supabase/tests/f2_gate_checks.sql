@@ -23,10 +23,12 @@
 --   2. platform_feature_flags.payment_auto_approve — set per case inside that
 --      case's sub-transaction, so no case depends on the order of any other.
 --      The final check asserts the switch is back where it started.
---   3. referrals — trg_referrals_set_snapshot is DISABLED for one INSERT and
---      re-enabled immediately. That trigger references two dropped columns and
---      raises 42703 on every insert, so referrals cannot be seeded any other
---      way today. DDL is transactional; the disable rolls back too.
+--   3. referrals — one INSERT seeding the reward chain for cases 1g/1h.
+--      Until 22 Aug 2026 this needed trg_referrals_set_snapshot disabled around
+--      it, because that trigger referenced two dropped columns and raised 42703
+--      on every insert. Migration 20260822120000 removed the trigger, so the
+--      insert is now plain. public.referrals carries no trigger at all; if one
+--      is ever re-added, this seed is the first thing that will break.
 --
 -- NOT SEEDED: auth.users.email_confirmed_at. Asserted as a precondition and
 --   aborts with its own message, so an unconfirmed fixture user fails loudly
@@ -128,11 +130,9 @@ BEGIN
     RAISE EXCEPTION 'F2 HARNESS ABORT: no usable referral_codes row to seed a referral chain';
   END IF;
 
-  EXECUTE 'ALTER TABLE public.referrals DISABLE TRIGGER trg_referrals_set_snapshot';
   DELETE FROM public.referrals WHERE referred_id = c_org;   -- referred_id is UNIQUE
   INSERT INTO public.referrals(referrer_id, referred_id, referral_code_id)
   VALUES (c_master, c_org, v_code);
-  EXECUTE 'ALTER TABLE public.referrals ENABLE TRIGGER trg_referrals_set_snapshot';
 
   -- Per-case fixture seeder. Temp so it dies with the session and cannot be
   -- mistaken for a real object.
