@@ -1,7 +1,7 @@
 # Architecture — Phase 2: Universal Extraction Engine
 
-**Status:** Accepted — Phase 2A, 2A-2 complete; Phase 2A-3 prerequisites F0a–F0e complete and production-verified; UI token migration complete; **F0d closeout complete (9 Aug, merge `10744a8`)**; F1 (profile verification) next
-**Date:** July–August 2026 (last revised 9 Aug 2026)
+**Status:** Accepted — Phase 2A, 2A-2 complete; F0a–F0e complete; F1 complete; **F2 (conditional auto-approval) SHIPPED AND LIVE 20 Aug 2026 17:26:33 UTC**; **referrals repair complete 22 Aug 2026**. Phase 2A-3 is closed.
+**Date:** July–August 2026 (last revised 22 Aug 2026)
 **Deciders:** Tushar (owner), Claude (architecture)
 **Predecessor:** `docs/extraction-engine/ARCHITECTURE.md` (Phase 1 — read this first)
 **Repo location:** `docs/extraction-engine/PHASE2_ARCHITECTURE.md`
@@ -17,28 +17,34 @@ Phase 1 (unchanged):
   chess_brochure → tournament + categories + prizes   [commit-extraction]
 
 Phase 2A (complete):
-  payment_screenshot → evidence on tournament_payments [review_tournament_payment, unchanged]
+  payment_screenshot → evidence on tournament_payments [review_tournament_payment]
 
 Phase 2A-2 (complete):
   payment lifecycle → notification outbox + email + dashboard banner + admin surface
 
-Phase 2A-3 (in progress):
-  F0a close extractions UPDATE policy        [DONE 2 Aug 2026]
-  F0b payment_screenshot schema v2 -> v3    [DONE 3 Aug 2026]
-  F0c three new trust invariants            [DONE 3 Aug 2026]
-  F0d UTR match + duplicate hard-block      [DONE 4 Aug 2026]
-  F0e payment-page failure states           [DONE 6 Aug 2026]
-  F0d closeout: parity + tests + UI guard   [DONE 9 Aug 2026]
-  F1  profile verification / F2 auto-approve gate
+Phase 2A-3 (COMPLETE):
+  F0a close extractions UPDATE policy        [DONE  2 Aug 2026]
+  F0b payment_screenshot schema v2 -> v3     [DONE  3 Aug 2026]
+  F0c three new trust invariants             [DONE  3 Aug 2026]
+  F0d UTR match + duplicate hard-block       [DONE  4 Aug 2026]
+  F0e payment-page failure states            [DONE  6 Aug 2026]
+  F0d closeout: parity + tests + UI guard    [DONE  9 Aug 2026]
+  F1  profile verification prerequisite      [DONE 13 Aug 2026]
+  E1-E3 client write-grant audit             [DONE 14 Aug 2026]
+  PF1 pricing basis consolidation            [DONE 16 Aug 2026]
+  F2  conditional auto-approval gate         [LIVE 20 Aug 2026]
 
-Phase 2B (blocked on 2A-3):
-  bank_statement → reconciliation report              [new read-only view]
+Referrals repair (COMPLETE 22 Aug 2026):
+  drop dead trg_referrals_set_snapshot + stop the caller destroying its input
+
+Phase 2B (unblocked):
+  bank_statement → reconciliation report               [new read-only view]
 
 Phase 2C-D (blocked on 2B):
-  REST API + MCP → external access to all doc_types   [new api_keys table + wrapper]
+  REST API + MCP → external access to all doc_types    [new api_keys table + wrapper]
 ```
 
-**Critical constraint:** `payment_screenshot` and `bank_statement` extractions must NEVER flow into `commit-extraction` or `commit_extraction_transaction`. Those RPCs write to `tournaments/categories/prizes`. Payment data has its own commit path: `review_tournament_payment` (existing, proven, handles entitlements correctly).
+**Critical constraint:** `payment_screenshot` and `bank_statement` extractions must NEVER flow into `commit-extraction` or `commit_extraction_transaction`. Those RPCs write to `tournaments/categories/prizes`. Payment data has its own commit path.
 
 ---
 
@@ -48,80 +54,70 @@ Phase 2C-D (blocked on 2B):
 
 ```
 Organizer (TournamentUpgrade.tsx)
+    │ 0. [F1-B2] my_payment_gate_status() pre-flight — Submit disabled unless ok
     │ 1. [OPTIONAL] Upload screenshot → extraction-uploads/{uid}/payments/{tournament_id}/{uuid}{ext}
     │ 2. Enter UTR text (pre-filled from extraction if available; user-editable)
     ▼
 [If screenshot provided]:
-    Upload to bucket → insert extraction_documents → POST /extract → invoke returns extraction_id
-    (payload.utr pre-fills the UTR input via a follow-up extractions read)
+    Upload to bucket → insert extraction_documents → POST /extract → extraction_id
+    /extract records {flags, verdicts}; verdicts land in payment_invariant_verdicts
     ▼
 RPC: submit_tournament_payment_claim(tournament_id, amount_inr, utr, screenshot_extraction_id, return_to)
-    │ validates owner, canonical price, UTR length ≥6, one-pending-per-tournament
-    │ return_to validated server-side (relative path only, degrades to NULL if malformed)
+    │ validates owner, [F1-B3] profile gate, canonical price, UTR length ≥6,
+    │ one-pending-per-tournament, F0d UTR duplicate/mismatch block,
+    │ then [F2-G] the auto-approval gate
     ▼
-tournament_payments (status='pending', screenshot_extraction_id=uuid|null, return_to=text|null)
+tournament_payments (status='pending' | 'approved')
 
 AFTER UPDATE OF status trigger → enqueue_payment_notification() → payment_notification_outbox
 pg_cron (*/2) → send-payment-notifications edge fn → Resend email
-    approve email: deep-links to return_to if set, else /t/{id}/setup?tab=details
-    reject email:  links to /t/{id}/payment (+ ?return_to= for resubmission flow)
 
-Master → /admin/payments → PendingPaymentsPanel (pending queue) + All Payments (full history)
-    Evidence block: extracted fields, claimed vs on-screenshot amounts, payee VPA status, flags
-    Screenshot: in-app Dialog via getSignedUrl("extraction-uploads", file_path, 3600)
+Master → /admin/payments → PendingPaymentsPanel + All Payments
     │ Master clicks Approve
     ▼
 RPC: review_tournament_payment(payment_id, 'approve', note)  ← UNCHANGED
-    │ inserts tournament_entitlements (source='manual_upi', 365 days)
-    │ trigger fires again → enqueue approve notification
-    ▼
-has_full_access = true
-
-Organizer Dashboard: banner cleared (payment_alerts query returns empty after entitlement active)
 ```
 
-### 2.2 Extraction schema — payment_screenshot v1 (current)
+### 2.2 Extraction schema — payment_screenshot v3 (current)
 
 ```json
 {
   "type": "object",
   "required": ["amount_inr", "utr"],
   "properties": {
-    "amount_inr":   { "type": "number", "description": "Payment amount in INR" },
-    "utr":          { "type": "string", "description": "UPI Transaction Reference" },
+    "amount_inr":   { "type": "number" },
+    "utr":          { "type": "string" },
     "txn_date":     { "type": "string", "format": "date" },
-    "payee_vpa":    { "type": "string", "description": "UPI VPA of the recipient" },
-    "payer_name":   { "type": "string", "description": "Sender's display name" },
-    "status_text":  { "type": "string", "description": "e.g. 'Payment Successful'" },
-    "app":          { "type": "string", "description": "GPay, PhonePe, Paytm, BHIM, etc." }
+    "payee_vpa":    { "type": "string" },
+    "payee_name":   { "type": "string" },
+    "payer_name":   { "type": "string" },
+    "txn_id":       { "type": "string" },
+    "status_text":  { "type": "string" },
+    "app":          { "type": "string" }
   }
 }
 ```
 
-**Known gaps addressed by v2 (see §2A-3):** Missing `direction` (Paid to / Received from), `payee_name` (recipient display name, distinct from `payer_name`), and `txn_id` (PhonePe Transaction ID, separate from UTR).
+### 2.3 The 8 trust invariants (current)
 
-### 2.3 The 5 trust invariants (current)
+All live in `extract/paymentTrustCheck.ts`, which returns `{flags, verdicts}`.
 
-All live in `extract/paymentTrustCheck.ts`. Fail-open paths noted — all three block auto-approval and require new invariants in v2:
+| Invariant | What it checks |
+|---|---|
+| `utr_format` | 8–22 alphanumeric, whitespace-stripped. **Frozen** (Q5). |
+| `utr_duplicate` | Server-side lookup via `utr_active_duplicate_exists`. Independent of `utr_format` (Q4). Flag fails open; **verdict does not** (D39). |
+| `amount_mismatch` | Extracted amount = expected ± ₹1, coupon-aware |
+| `payee_vpa_mismatch` | Extracted VPA = `PLATFORM_PAYEE_VPA` secret |
+| `payee_vpa_missing` | VPA null — closes the D22 fail-open |
+| `date_stale` | `txn_date` not older than 30 days |
+| `direction_not_outgoing` | Outgoing must be PROVEN — see D27 |
+| `required_fields_missing` | amount + UTR + date all null |
 
-| Invariant | What it checks | Fail-open gap |
-|---|---|---|
-| `utr_format` | 8–22 alphanumeric | None |
-| `utr_duplicate` | UTR not already in non-rejected payments | None |
-| `amount_mismatch` | Extracted amount = expected ± ₹1 | **Gap: if `amount_inr` is null (OCR fail), check is skipped entirely — zero flags** |
-| `payee_vpa_mismatch` | Extracted VPA = `PLATFORM_PAYEE_VPA` secret | **Gap: if `payee_vpa` is null (not on screenshot), check is skipped — zero flags** |
-| `date_stale` | `txn_date` not older than 30 days | None |
+### 2.4 Extraction status for payment screenshots
 
-**Third fail-open (no invariant at all):** A "Received from" receipt (incoming money) currently passes everything if the amount matches. PhonePe explicitly labels direction: "Paid to" / "Received from". This is unambiguous and parseable — the extraction just doesn't capture it yet.
+Every `payment_screenshot` extraction exits `needs_review`. `auto_ok` is unreachable for this doc_type and always has been.
 
-### 2.4 Force needs_review
-
-```typescript
-if (doc.doc_type === 'payment_screenshot') {
-  return { status: 'needs_review', confidence: computedConfidence };
-}
-```
-This is unconditional for Phase 2A. Phase 2A-3 adds a conditional auto-approve path alongside it (see D8).
+**This is not the auto-approval decision point.** Auto-approval is decided later and elsewhere, inside `submit_tournament_payment_claim` at claim time, by reading `payment_invariant_verdicts` (D39). Earlier revisions of this document showed an early `return` in `/extract` as the mechanism; **that was never shipped code** and is removed here to stop it being cited as the design.
 
 ---
 
@@ -129,405 +125,243 @@ This is unconditional for Phase 2A. Phase 2A-3 adds a conditional auto-approve p
 
 ### 3.1 Notification architecture
 
-Three components, all shipped and production-verified:
+1. **`payment_notification_outbox`** — one row per (payment_id, action), unique index enforces exactly-once. `pending → sending → sent | failed | skipped`. RLS: master read-only. Actions include `approved`, `rejected`, and `auto_approved` (F2-D).
+2. **`enqueue_payment_notification()`** — SECURITY DEFINER, `AFTER UPDATE OF status` on `tournament_payments`. Snapshots `profiles.email`, `review_note`, `return_to`. `ON CONFLICT DO NOTHING`.
+3. **`send-payment-notifications`** — `verify_jwt=false`, constant-time shared-secret auth, batch drain of 20, `MAX_ATTEMPTS=5`. Drained every 2 minutes.
+4. **`reap_stuck_payment_notifications()`** — resets `sending` rows >10 min back to `failed`.
 
-1. **`payment_notification_outbox` table** — one row per (payment_id, action), unique index enforces exactly-once. State machine: `pending → sending → sent | failed | skipped`. RLS: master read-only; no client writes.
-
-2. **`enqueue_payment_notification()` trigger function** — SECURITY DEFINER, fires `AFTER UPDATE OF status` on `tournament_payments`. Snapshots `profiles.email`, `review_note`, `return_to` into the outbox row. `ON CONFLICT (payment_id, action) DO NOTHING`.
-
-3. **`send-payment-notifications` edge function** — `verify_jwt=false`. Constant-time shared-secret auth (`x-notify-secret` header). Batch drain of 20, `MAX_ATTEMPTS=5`. `safeReturnTo` validation in-flight (defence in depth beyond the DB constraint). Drained by pg_cron every 2 minutes via `net.http_post`.
-
-4. **`reap_stuck_payment_notifications()`** — resets `sending` rows >10 min back to `failed`. Runs same cron tick before the drain.
-
-**Why a trigger rather than enqueue inside `review_tournament_payment`:** Guardrail 10 forbids touching that RPC. The trigger catches every future writer (including Phase 2A-3's auto-approval path) with no additional wiring.
+**Why a trigger rather than enqueue inside `review_tournament_payment`:** Guardrail 10 forbids touching that RPC. The trigger catches every future writer — **including F2's auto-approval path, which needed no additional wiring at all.** That prediction held exactly.
 
 ### 3.2 Admin payments surface
 
-Two components rendered on `/admin/payments`:
-- **`PendingPaymentsPanel`** — pending queue with extraction evidence, flag chips, and screenshot dialog
-- **All Payments table** (`AdminPayments.tsx`) — full history across all statuses; claimed vs extracted amounts (with MISMATCH label); attempt ordinal per (tournament_id, user_id); in-row expand chevron showing `PaymentExtractionEvidence`
+`PendingPaymentsPanel` (queue) and the All Payments table on `/admin/payments`. Shared component `src/components/payments/PaymentEvidence.tsx`. Screenshot signed on click, 3600s expiry.
 
-**Shared component:** `src/components/payments/PaymentEvidence.tsx` — used by both surfaces. Rules live here once: opaque evidence row backgrounds, `payee_vpa` null shown as active caution, `confidence` rendered as `Math.round(confidence * 100)%`.
-
-**Screenshot viewer:** In-app shadcn Dialog, image signed on click (not on mount), `filePath` passed through verbatim (two path shapes exist: old flat, new tournament-scoped). `onError` fallback visible inside Dialog. "Open in new tab" link retained inside Dialog for zooming.
+**Still open:** no auto-approved section. F2 shipped with zero `src/` changes, so F2-4 remains unbuilt. Tracked as F3-C.
 
 ### 3.3 RLS policies added in this phase
 
-| Policy | Table | Effect |
-|---|---|---|
-| `Masters read all extraction files` | `storage.objects` | Master can read any file in `extraction-uploads` |
-| `Masters read all extraction documents` | `extraction_documents` | Master can read any doc row |
-| `Masters read all extractions` | `extractions` | Master can read any extraction row |
-| `payment_notification_outbox` master read | `payment_notification_outbox` | Master can read all outbox rows |
+| Policy | Table |
+|---|---|
+| `Masters read all extraction files` | `storage.objects` |
+| `Masters read all extraction documents` | `extraction_documents` |
+| `Masters read all extractions` | `extractions` |
+| `payment_notification_outbox` master read | `payment_notification_outbox` |
 
-**RLS defect found and fixed (D21):** The `extractions` and `extraction_documents` master policies were missing despite the storage policy existing. A master reviewing another user's payment got HTTP 200 with an empty array — the evidence panel silently rendered nothing. Fixed in `20260730120000`. These three policies must always be added together.
+**RLS defect found and fixed (D21):** these three must always be added together.
 
 ---
 
-## 4. Phase 2B — Bank Statement Reconciliation (planned)
+## 4. Phase 2B — Bank Statement Reconciliation (planned, now unblocked)
 
-### 4.1 Architecture decision: local lane only
-
-Bank statements are `privacy_class='sensitive'`. Per ARCHITECTURE.md D1, free-tier cloud models are prohibited. pdfplumber (Python, free) for Pass 1. Covers ~90% of Indian bank statements (text PDFs). Scanned PDFs receive a graceful error.
-
-### 4.2 Open decision: where does pdfplumber run?
-
-Options (evaluate at Phase 2B start): Python microservice on Railway (recommended), Deno subprocess, or WASM pdfplumber in Deno. See D4.
+Bank statements are `privacy_class='sensitive'`. Free-tier cloud models are prohibited. pdfplumber (Python, free) for Pass 1. Scanned PDFs receive a graceful error. Where pdfplumber runs is still open — see D4.
 
 ---
 
 ## 5. Phase 2C–D — REST API + MCP Server (planned)
 
-New tables: `api_keys` (key_hash, tier, rate limits), `api_usage_logs`. New edge function `extract-api` with API key auth. Three MCP tools: `extract_document`, `get_extraction`, `query_documents`. Multi-tenant isolation via `uploaded_by = api_key.owner_id`. See D7.
+New tables: `api_keys`, `api_usage_logs`. New edge function `extract-api`. Three MCP tools. Multi-tenant isolation via `uploaded_by = api_key.owner_id`. See D7.
 
 ---
 
 ## 6. Decision Log
 
 **D1 — Screenshot upload is optional in Phase 2A (Accepted).**
-Making it required immediately would break mid-session organizers. Optional first; make required after 2-week validation. Controlled by a feature flag.
 
 **D2 — Commit path: FK linkage, not a new edge function (Accepted).**
-`screenshot_extraction_id` FK on `tournament_payments`, `review_tournament_payment` unchanged. Extraction data is reference evidence, not a gate.
 
 **D3 — Force `needs_review` always (SUPERSEDED by D8).**
-Original: even a clean extraction requires a human click. Superseded by conditional auto-approval (D8) in Phase 2A-3. Base 2A shipped with D3 behaviour; D8 is the evolution.
 
 **D4 — Bank statements: pdfplumber only, no Gemini (Accepted).**
-`privacy_class='sensitive'`. Local processing only. Scanned PDFs get a graceful error.
 
 **D5 — `payee_vpa` stored as Supabase secret (Accepted).**
-Platform UPI VPA never in code or logs. Read from `Deno.env.get('PLATFORM_PAYEE_VPA')` at runtime.
 
 **D6 — `tournament_id` passed to `/extract` for payment screenshots (Accepted).**
-Amount-match invariant requires the expected price. `/extract` accepts optional `tournament_id` in request body.
 
 **D7 — Phase 2A scope: Prize Manager only (Accepted).**
-Certificate Hub and Sportup consume via REST API (Phase 2C). Phase 2A internal only.
 
-**D8 — Conditional auto-approval (Accepted 26 Jul 2026; supersedes D3).**
-A payment auto-approves ONLY when: (1) all trust invariants pass with zero flags, (2) payer profile verified (email + phone), (3) server-side auto-approve secret enabled. Every auto-approval writes an admin oversight record and emails chess.tushar@gmail.com. Any flag, unverified profile, or secret off → `needs_review` + manual queue + reapply pop-up. Governed by Supabase Edge Function secret — server-only, never in frontend, instantly reversible. See PROJECT_STATE guardrail 8.
+**D8 — Conditional auto-approval (Accepted 26 Jul 2026; supersedes D3; SHIPPED 20 Aug 2026).**
+Auto-approves ONLY when all eight named invariant verdicts read `pass`, the payer meets the F1 gate, and the kill switch is on. Every auto-approval writes an oversight record and emails chess.tushar@gmail.com. **Amended:** governance is a database feature flag, not an Edge Function secret — see D39 and PRD F2-5.
 
 **D9 — Auth resolution must fail safe (Accepted 26 Jul 2026).**
-The role-resolution path must treat unresolved/errored/empty `user_roles` reads as "unknown — retry / show loading", never as "not master". See PROJECT_STATE guardrails M1–M2.
 
-**D10 — Role gates must check `authzStatus` before `is_master`; `useAuth` to become a context (Accepted 26 Jul 2026).**
-(a) Immediate: `authzStatus !== 'ready'` spinner before every `is_master` check in all 7 admin components.
-(b) Architectural: promote `useAuth` to a single `AuthProvider` context. Completed as D16. See M3–M4.
+**D10 — Role gates must check `authzStatus` before `is_master` (Accepted 26 Jul 2026).** Completed as D16.
 
 **D11 — Payment screenshots: tournament-scoped path in existing bucket (Accepted 28 Jul 2026).**
-Path: `extraction-uploads/{uid}/payments/{tournament_id}/{uuid}{ext}`. Existing upload/read RLS unchanged (folder[1] still the uid). Master read policy added on `storage.objects`.
 
 **D12 — Payment status notification: email via Resend outbox + in-app banner (Accepted 28 Jul 2026).**
-Two channels, both free with existing infrastructure. Email uses the idempotent outbox pattern (exactly-once via unique index on `(payment_id, action)`). In-app is a Dashboard banner driven by `tournament_payments` WHERE `status IN ('pending','rejected')` AND no active entitlement.
 
 **D13 — `/admin/payments` is its own route (Accepted 28 Jul 2026).**
-Separated from `/admin/users`. Payment approvals have different cadence, different eventual reviewers, and will grow significantly with auto-approval oversight in 2A-3.
 
 **D14 — Extracted UTR pre-fills but never overrides the user (Accepted 28 Jul 2026).**
-OCR is good, not perfect. Pre-fill if field is empty; clear the pre-fill indicator on any edit; submit whatever is in the field. Implemented with `utrValueRef` to handle the race between a 90-second extraction and typing.
 
 **D15 — Rejection is non-terminal; attempts are retained (Accepted 28 Jul 2026).**
-Rejected claim is a fact, not a dead end. The organizer can submit a new claim (partial unique index `WHERE status='pending'` enforces one pending at a time). Prior attempts are never deleted — they are the fraud audit trail.
 
-**D16 — `useAuth` promoted to `AuthProvider` context (Accepted 29 Jul 2026).**
-Completes D10(b). Provider: inside `QueryClientProvider`, outside `BrowserRouter`, wraps `AppInner`. M3 guard-level `authzStatus` checks retained as fail-safe. Shipped commit `a245902`.
+**D16 — `useAuth` promoted to `AuthProvider` context (Accepted 29 Jul 2026).** Shipped `a245902`.
 
 **D17 — Notification layer: dedicated outbox table + DB trigger + cron-drained sender (Accepted 29 Jul 2026).**
-Implements and refines D12. The trigger fires on any `status` transition — it catches Phase 2A-3's auto-approval path with no additional wiring. Exactly-once via `ON CONFLICT (payment_id, action) DO NOTHING`. `reap_stuck_payment_notifications()` prevents silent notification loss from dead isolates.
 
 **D18 — Function grant hygiene: both revoke paths, always (Accepted 29 Jul 2026).**
-Two independent grant paths on this project: `PUBLIC` and the direct default-privilege grant to `anon`/`authenticated`. Closing one leaves the other open. Both must be closed in every migration that creates or replaces a function. See PROJECT_STATE N1.
+Two independent grant paths: `PUBLIC` and the direct default-privilege grant to `anon`/`authenticated`. Both must be closed in every migration that creates or replaces a function.
 
 **D19 — Secret rotation for edge functions is a three-place, ordered operation (Accepted 30 Jul 2026).**
-Edge functions bake env vars at deploy time. Dashboard secret update alone does nothing to a running deployment. Order: (1) Dashboard save, (2) `supabase functions deploy`, (3) Vault update. See PROJECT_STATE N2.
 
-**D20 — L6 flow resumption needs `return_to` store (Accepted 30 Jul 2026, Option A).**
-`return_to text` added to `tournament_payments`, set at claim time via 5-arg RPC, copied to outbox by the trigger. The approve email deep-links to it. Malformed values degrade to NULL (payment still goes through). Validated client-side by `getSafeReturnToPath` (strictest of three validators: must be `/t/{id}/` + allowlisted segment).
+**D20 — L6 flow resumption needs `return_to` store (Accepted 30 Jul 2026).**
 
-**D21 — Master RLS read defect: extraction rows were invisible to master (Found and fixed 30 Jul–2 Aug 2026).**
-`extractions` and `extraction_documents` had only "Users can view own…" SELECT policies. A master reviewing a payment submitted by a different user got HTTP 200 with an empty array — the admin evidence panel silently rendered nothing. `storage.objects` had a master policy since migration `20260729120000`, but the two table policies were never added. Fixed in `20260730120000`. **Lesson:** the storage policy and the table policies must always be added together. An admin panel that displays nothing is not obviously broken.
+**D21 — Master RLS read defect: extraction rows were invisible to master (Fixed 2 Aug 2026).**
+**Lesson:** an admin panel that displays nothing is not obviously broken.
 
-**D22 — `payee_vpa` null is fail-open, not verified (Found 2 Aug 2026; pending fix in 2A-3).**
-`paymentTrustCheck` guards the VPA comparison with `if (payload.payee_vpa && allowedVpa)`. When `payee_vpa` is null — as it is on any "Received from" (incoming) receipt — the check silently skips and produces zero flags on that axis. Under manual review this is manageable because the admin panel now shows a "NOT VERIFIED" caution. Under auto-approval a null VPA means the payee allow-list was never checked. Fix: add a `payee_vpa_missing` flag when the field is null. Part of the three fail-open invariants all requiring new `required_field_missing` / `direction_not_outgoing` invariants.
+**D22 — `payee_vpa` null is fail-open, not verified (Fixed in F0c).**
 
-**D23 — Payment screenshot schema needs v2 (Decided 2 Aug 2026; pending implementation in 2A-3).**
-From examining real PhonePe receipts (both "Paid to" outgoing and "Received from" incoming):
-- `direction` (string: "outgoing" / "incoming") — PhonePe labels it unambiguously. Feeds `direction_not_outgoing` invariant.
-- `payee_name` (string) — the recipient's display name (e.g. "NEW PRASHAANT ENTERPRISES"). Distinct from `payer_name`: on an outgoing proof the payer (phone owner) is not shown; on an incoming proof the payee is not shown. Current schema only has `payer_name`, which is present on the wrong kind of receipt.
-- `txn_id` (string) — PhonePe Transaction ID (format: `T2607...`), distinct from UTR. Present on both receipt types. Doubles the duplicate-detection surface: a UTR can be edited, but faking both UTR and txn_id coherently is harder.
-New `extraction_schemas` row: v2, `is_active=true`; v1 set `is_active=false`.
+**D23 — Payment screenshot schema needs v2 (Decided 2 Aug 2026).** Partially superseded by D27.
 
-**D24 — Three fail-open trust layer paths require new invariants before auto-approval (Decided 2 Aug 2026).**
-Under manual review, fail-open paths are tolerable because a human sees the evidence. Under auto-approval, any path that produces zero flags is an auto-approve condition — meaning it can be exploited. Three new invariants required in Phase 2A-3 preprocessing:
-1. `direction_not_outgoing` — flag when `direction` is "incoming" or absent on a payment claim. A "Received from" receipt is never valid payment proof regardless of amount.
-2. `payee_vpa_missing` — flag when `payee_vpa` is null. Absence means the VPA invariant never ran.
-3. `required_fields_missing` — flag when OCR produces null on all required fields (`amount_inr`, `utr`, `txn_date` all null). Catches deliberately unreadable or cropped screenshots. Currently these produce zero flags and would auto-approve.
+**D24 — Three fail-open trust layer paths require new invariants (Implemented as F0c).**
 
-**D25 — `extractions` UPDATE policy must be investigated before auto-approval (Decided 2 Aug 2026).**
-`Users can update own extractions` has no column restriction and no `WITH CHECK`. An organiser can `UPDATE extractions SET payload='{"amount_inr":500,"utr":"GOODUTR"}', field_flags='[]'` on their own extraction row after the trust layer has written its verdict. This rewrites the evidence auto-approval reads. Under manual review: the admin sees the now-altered fields, which is bad but visible. Under auto-approval: the entire five-invariant trust layer is bypassable with one PATCH. **This must be investigated and fixed before Phase 2A-3 ships auto-approval.**
-Investigation question: does `BrochureReview.tsx` or any Phase 1 brochure review flow write back to `extractions.payload` or `extractions.field_flags`? If yes: the policy must be narrowed (column restriction or `WITH CHECK` that prevents zeroing flags). If no: revoke the UPDATE for `payment_screenshot` extractions, or revoke entirely and confirm Phase 1 still works.
+**D25 — `extractions` UPDATE policy must be investigated (Resolved by D29).**
 
-**D26 — Pass-1 OCR is a structured semantic digest, NOT a verbatim transcription (Discovered 2-3 Aug 2026).**
-This invalidates any design that grounds a value against literal on-screen wording. Real evidence, three receipts:
+**D26 — Pass-1 OCR is a structured semantic digest, NOT a verbatim transcription (2–3 Aug 2026).**
+**Corollary:** when designing a new field, check what Pass 1 actually emits before assuming the model can transcribe it.
 
-| Receipt | What the screen says | What Pass-1 OCR emitted |
-|---|---|---|
-| PhonePe outgoing | "Paid to" | `Payee Details / Name: ... / Debited from:` |
-| GPay outgoing | "To TUSHAR SARASWAT" | `Recipient Information / Sender Information` |
-| PhonePe incoming | "Received from" | `Sender Details / Recipient Details / Credited to:` |
+**D27 — Direction is derived by regex over `ocr_text` (Accepted 3 Aug 2026).**
+> Outgoing is PROVEN if EITHER `payee_vpa` equals `PLATFORM_PAYEE_VPA`, OR an outgoing marker appears in `ocr_text` and no incoming marker does.
 
-Pass 1 reorganises the receipt into labelled sections and discards the literal wording. The phrase "Paid to" appears in NO OCR output despite being printed on the screen. Any `groundString` match against expected on-screen text will therefore fail, and `trustCheck.ts:297-306` blanks ungrounded leaves to null. **Corollary:** when designing a new field, check what Pass 1 actually emits for it before assuming the model can transcribe it.
+"Neither marker present" is deliberately NOT an automatic flag — GPay prints no direction phrase and must clear on the VPA match.
 
-**D27 — Direction is derived by regex over `ocr_text`, not from a model-filled field (Accepted 3 Aug 2026; supersedes D23's `direction` field).**
-`direction_label` was added in schema v2 per D23 and removed in v3 after three fixtures. It returned `null` (PhonePe outgoing), `"Recipient Name:"` (GPay outgoing) and `"Credited to"` (PhonePe incoming) — inconsistent, and the null case fired a HIGH `ungrounded` flag on a *legitimate* outgoing payment, a false positive that would block auto-approval for real customers.
+**D28 — Auto-approval must gate on NAMED flag reasons, not flag count (Accepted 3 Aug 2026).**
+The same GPay screenshot uploaded twice, with byte-identical `ocr_text`, produced `app = "G Pay"` on one run and `app = null` on the next. Under a zero-flags rule the same customer auto-approves or not on a coin flip. Cosmetic `ungrounded` flags remain visible but must not block.
 
-Replacement rule, implemented in `paymentTrustCheck.ts`:
+**D29 — Client writes to `extractions` are closed by column grants + a doc_type-whitelisted policy (Accepted 2 Aug 2026).**
+**Both tables must close together or neither closes.**
 
-> **Outgoing is PROVEN if EITHER (a) `payee_vpa` is present and equals `PLATFORM_PAYEE_VPA`, OR (b) an outgoing marker appears in `ocr_text` and no incoming marker does. Otherwise flag `direction_not_outgoing`.**
+**D30 — UTR comparison is normalized and case-insensitive (Accepted 4 Aug 2026).**
+`public.normalize_utr(text)`, IMMUTABLE. Storage remains verbatim-trimmed.
 
-Outgoing markers: `debited from`, `debit amount`, `paid to`, `money sent`, `sent to`. Incoming markers: `credited to`, `received from`, `money received`, `credit amount`.
-
-"Neither marker present" is deliberately NOT an automatic flag — GPay prints no direction phrase at all and must clear on the VPA match. Two properties make this safe:
-- `ocr_text` lives on `extraction_documents`, which F0a made immutable to clients, so the signal is tamper-resistant. The model gets no vote on direction.
-- `direction_not_outgoing` can never *uniquely* block a legitimate payment: it only fires when `payeeVpaIsPlatform` is false, which already raises `payee_vpa_missing` or `payee_vpa_mismatch`.
-
-Known caveat: if `PLATFORM_PAYEE_VPA` is unset/misconfigured, all GPay receipts flag (fail-closed, but would look like a mystery outage).
-
-**D28 — Auto-approval must gate on a NAMED set of flag reasons, not on flag count (Accepted 3 Aug 2026).**
-The PRD originally defined auto-approval as "all trust invariants pass with zero flags". Production evidence shows that is unworkable. The same GPay screenshot uploaded twice, with **byte-identical `ocr_text`**, produced:
-- run 1: `app` = `"G Pay"`, grounded, no flag
-- run 2: `app` = `null`, **HIGH `ungrounded` flag**
-
-Pass-2 model nondeterminism on a cosmetic field. Under a zero-flags rule the same customer paying the same amount auto-approves or not on a coin flip. **Decision:** F2's gate keys on a security-relevant allow-list — `utr_format`, `utr_duplicate`, `amount_mismatch`, `payee_vpa_mismatch`, `payee_vpa_missing`, `date_stale`, `direction_not_outgoing`, `required_fields_missing`. Cosmetic `ungrounded` flags on `app`/`status_text`/`payer_name` remain visible in `/admin/payments` but must not block.
-
-**D29 — Client writes to `extractions` are closed by column grants + a doc_type-whitelisted policy (Accepted 2 Aug 2026; resolves D25).**
-Investigation answered D25's question: `BrochureReview.tsx` DOES write back to `extractions.payload` (approveMutation, load-bearing — `commit-extraction:125` re-reads payload from the DB) and `extractions.status` (discardMutation). It never writes `field_flags`. So revoking UPDATE entirely was not an option; narrowing was.
-
-Implemented in `20260802124253`:
-- Column privileges (RLS cannot restrict columns; GRANT can): `authenticated` keeps UPDATE on `payload`, `status`, `updated_at` only. `field_flags`, `grounding`, `confidence`, `reviewed_*`, `linked_tournament_id` are unwritable by any client for every doc_type.
-- Policy `Users can update own extractions` narrowed with a `doc_type = 'chess_brochure'` **whitelist** (not a `payment_screenshot` blacklist), so `bank_statement` arrives closed by default in Phase 2B.
-- **New finding beyond D25:** `extraction_documents` had an unused `Users can update own documents` UPDATE policy with no column restriction. `doc_type` lives on that table, so a doc_type-only fix would have been defeated by flipping `doc_type` first. Dropped. **Both tables must close together or neither closes.**
-
-Negative-tested as the owning organiser inside rolled-back transactions: rewriting `field_flags` → `42501 permission denied` (grant layer); rewriting only `payload` on a payment screenshot → `0 rows` (RLS layer). Tested separately because the grant layer alone would not have stopped the second case.
-
-**D30 — UTR comparison is normalized and case-insensitive; "wrong identifier" is a distinct outcome (Accepted 4 Aug 2026).**
-
-F0d compares UTRs in two places: duplicate detection at submit, and submitted-vs-extracted matching. Both use one canonical form: `upper(regexp_replace(utr, '[^A-Za-z0-9]', '', 'g'))`, implemented once as `public.normalize_utr(text)` (IMMUTABLE) and mirrored in `paymentTrustCheck.ts`. Storage remains verbatim-trimmed — the value the organizer typed is the audit trail.
-
-*Case-insensitive:* a UPI RRN is 12 numeric digits (NPCI: YDDD + 8-digit STAN), so case cannot distinguish two references. Letters appear only on NEFT (~16 char) and RTGS (~22 char) references, where they are fixed uppercase bank codes. Two distinct references differing only in case is therefore not a reachable state, while a case-sensitive check would let a reused UTR through on a typing variation. Asymmetric risk.
-
-*Separator-stripping:* bank e-statements render UPI references as `UPI/DR/123456789012/Name`, and OCR introduces spacing — the reason `groundDigits` already exists. Stripping non-alphanumerics loses nothing the format invariant permits. Note the limit: normalization handles separators *within* the reference (`1234 5678 9012`), not a full pasted statement line — that still fails the mismatch check, correctly.
-
-*Wrong-identifier branch:* PhonePe and GPay each print two identifiers per receipt (UTR/UPI Ref No, plus an app-native transaction ID). Production data already contains both shapes in `payload.txn_id` (`T2607…`, `CICAgLii79OjJA`). A submitted value matching `txn_id` rather than `utr` is a predictable user error, not tampering, and resolves self-serve with a correction prompt. Only an unmatched value gets the contact-details escape hatch.
-
-*Not a unique index:* two `approved` rows already share UTR `028862663052`. Enforcement lives in the RPC, where the "non-rejected only" semantics that make D15 resubmission work can be expressed. A partial unique index remains available as later hardening once historical test rows are resolved. *(Resolved 4 Aug — see D31: the index is now in F0d scope.)*
-
-*Out of scope:* the `utr_format` invariant stays at 8–22 alphanumeric. Tightening to 12 numeric would be correct for UPI-only but forecloses NEFT/RTGS in Phase 3.
-
-**D31 — F0d enforcement architecture: the RPC becomes the only client writer; the unique index is the concurrency backstop (Accepted 4 Aug 2026).**
-
-Pre-work audit (4 Aug) found the submit-time checks would be decorative without closing three doors first: `tournament_payments` carried full-column INSERT/UPDATE (plus DELETE/TRUNCATE/TRIGGER) grants for `anon`/`authenticated` with permissive `users_insert_own_payments` and `users_update_own_pending_payments` policies, and the dead 3-arg/4-arg claim overloads were still live and `anon`-executable. Grep confirmed every client touch of the table in the repo is `.select(...)` — both policies are unused.
-
-**Migration A — close the write surface (one migration, one rollback unit):**
-- Drop `users_insert_own_payments` and `users_update_own_pending_payments`.
-- Revoke INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, REFERENCES on `tournament_payments` from `anon` and `authenticated`; revoke SELECT from `anon`. `authenticated` keeps SELECT (Dashboard banner, payment page status, admin tables, martech hooks all read via existing policies).
-- Drop the 3-arg and 4-arg `submit_tournament_payment_claim` overloads (zero callers, verified). Same migration as the surface closure: no window where unchecked doors coexist with new checks, and any breakage surfaces during Migration A verification before behaviour changes in Migration B.
-- `review_tournament_payment`: revoke EXECUTE from `public` and `anon`, re-grant to `authenticated` (masters invoke it from the browser) and `service_role`. Grant-only — the body is untouched per guardrail 10. Verified 4 Aug that the body's first statement is a master check (`FORBIDDEN`), so the open `anon` grant was defense-in-depth debt, not a live hole.
-- Side effect, accepted and deliberate: `master_full_payments` becomes read-only in practice, because the grant layer now blocks direct writes even where RLS would allow them. All master writes flow through `review_tournament_payment` (SECURITY DEFINER). Do not "fix" this later by re-granting.
-
-**Migration B — checks inside the 5-arg RPC + backstop index:**
-- `public.normalize_utr(text)` — IMMUTABLE, pure SQL, single definition per D30; mirrored in `paymentTrustCheck.ts`.
-- **Duplicate hard-block:** `normalize_utr(p_utr)` found among non-rejected rows → raise `UTR_ALREADY_USED`. Rejected rows excluded so D15 resubmission with the same real UTR keeps working.
-- **Mismatch, three-way branch** (only when `p_screenshot_extraction_id` is not null):
-  1. normalized match against `payload.utr` → proceed;
-  2. no match against `utr` but normalized match against `payload.txn_id` → raise `UTR_IS_TXN_ID` (frontend shows the correct UTR with a one-tap fill — self-serve, no contact needed);
-  3. no match against either → raise `UTR_MISMATCH` (contact escape hatch).
-- **Fail-closed on unreadable extracted UTR:** screenshot attached but `payload.utr` is null → raise `UTR_EXTRACTION_UNREADABLE` with guidance to retake the screenshot or submit without one. This closes the cropped-UTR replay shape before F2 (a screenshot with the UTR cropped out would otherwise pair with a freshly invented UTR each attempt, blinding duplicate detection). The honest-blurry cost is one extra step, and the UTR-only path remains available. Production has already seen this case once (26 Jul, extracted null).
-- **Extraction ownership gate:** the linked extraction must be `doc_type='payment_screenshot'` and uploaded by the caller — OR the caller is master (the RPC already permits master-on-behalf submission; without the carve-out those would falsely fail).
-- **Backstop index:** `CREATE UNIQUE INDEX ... ON tournament_payments (public.normalize_utr(utr)) WHERE status <> 'rejected'` — closes the TOCTOU race where two parallel submissions both pass the EXISTS check. The RPC catches `unique_violation` on it and re-raises `UTR_ALREADY_USED` so the client sees one error shape. Unblocked 4 Aug by rejecting test row `270dfc95` (28 Jul duplicate; the 29 Jul row remains the approved record; notification trigger fired correctly, one self-addressed cleanup email).
-- `notify pgrst, 'reload schema'` in both migrations (overload drop and RPC replace both need cache reload).
-
-**Frontend (step C):**
-- Error handling for all four new codes. **Both** the duplicate and the mismatch dialogs carry the contact escape hatch (email + phone) — a normalization false positive, however unlikely, must have a human path, and my earlier plan gave the hatch to mismatch only.
-- Early advisory duplicate warning: `/extract` already returns `field_flags` in its response, so a `utr_duplicate` flag surfaces a warning banner seconds after upload, before Submit. Advisory only — it never disables the button (the extracted UTR could be a misread); the server check is the truth.
-- Every server-side block fires `logAuditEvent` so the false-positive rate is measured in week one. Softening, if needed, happens before F2 — not after.
-
-**Known residuals, accepted:**
-- *Consistent-but-wrong UTR:* OCR misreads a digit, organizer accepts the pre-fill → submitted and extracted agree, both wrong vs the bank. Only Phase 2B reconciliation closes this. F0d is a tamper-and-carelessness check, not a payment-truth check.
-- *UTR-only valve:* submissions without a screenshot skip the mismatch check by construction (D1 keeps screenshots optional). Deliberate relief valve; safe under F2 because no-extraction claims can never auto-approve.
-- *Screenshot replay via `file_hash`:* the same image resubmitted produces a new `extraction_documents` row with the same `file_hash`, and no invariant checks it. Narrow residual — readable-UTR replays are caught by the UTR duplicate checks, cropped-UTR replays by `UTR_EXTRACTION_UNREADABLE` — but a `file_hash` duplicate check belongs in the F2 gate. Tracked as new debt.
-- *F0a dependency:* the mismatch check is only as strong as `payload.utr` immutability. If the F0a column grants or doc_type whitelist ever re-broaden (guardrail P1), this check compares against attacker-writable data.
-
-**Maintenance rules created by this decision:**
-- `normalize_utr` is **frozen** once the index exists: index entries are built with the function as-of creation, and Postgres never re-evaluates them. Any change requires drop-index → replace-function → recreate-index.
-- Deliberate N1 exception: `normalize_utr` keeps EXECUTE for `authenticated`. Expression-index evaluation during DML runs as the invoking role; a blanket N1 revoke would make any future authenticated-role direct write (e.g. master via `master_full_payments` if grants were ever restored) fail with a confusing permission error on a pure string function that exposes nothing.
-- One legitimate flow is knowingly blocked: one UPI transaction paying for two tournaments (single UTR, second submission → `UTR_ALREADY_USED`). No combined-payment product exists; the dialog copy must say "one payment per tournament" so the organizer understands it's policy, not a bug.
+**D31 — F0d enforcement: the RPC is the only client writer; the unique index is the concurrency backstop (Accepted 4 Aug 2026).**
 
 **D32 — A failed query must render an explicit state, never blank space (Accepted 6 Aug 2026).**
-
-Found in production during F0d testing. `get_tournament_pro_price` raises `UNAUTHORIZED` for a non-owner; the payment page read only `data` and `isLoading` from that query and never `isError`. The result was a half-rendered page: the "Upgrade to Pro" card (which does not depend on pricing) drew normally, while the coupon and UPI sections vanished because they gated on `!pricingLoading`. Worse, `baseAmount` and `amountDue` both fall back to `0`, so the page offered "Pay ₹0" against a live QR code with an enabled Submit button. React Query then retried a permanently-failing error, producing visible flicker — 24 attempts captured in one HAR.
-
-Three rules follow, and they generalise beyond this page:
-1. **Gate on success, not on "not loading."** Sections that depend on a query must render only when that query's data is present. `!isLoading` is true in the error state too.
-2. **Never retry a permanent error.** `UNAUTHORIZED` and `TOURNAMENT_NOT_FOUND` will not succeed on retry; retrying them costs backend calls and looks like a broken page.
-3. **A money-bearing control must be disabled when its amount is unknown.** `amountDue <= 0` now disables Submit.
-
-This is the same failure shape as D21: a surface that renders nothing is not obviously broken. Fixed in F0e.
+Gate on success not on "not loading"; never retry a permanent error; a money-bearing control must be disabled when its amount is unknown. Same failure shape as D21.
 
 **D33 — The app is permanently dark; styling uses semantic tokens (Accepted 6–8 Aug 2026).**
 
-`tailwind.config.ts` sets `darkMode: ["class"]`, but nothing ever adds a `dark` class to `<html>` and no `.dark` block exists in `index.css` — the dark palette lives directly in `:root`. Two consequences, both verified by grep across the tree: all 185 `dark:` utilities were dead code that had never rendered, and 529 raw light-palette utilities (`bg-amber-100`, `text-amber-800`, …) rendered literally, painting near-white blocks on a near-black page. The `/admin/payments` evidence panel was the visible symptom; the defect was app-wide.
+**D34 — The advisory duplicate check compares server-side (Accepted 9 Aug 2026).**
+PostgREST **cannot apply a function to a column**, so a TS-only mirror would have looked resolved while leaving half the case open.
 
-Rejected fix: adding `class="dark"` to `<html>`. It would have activated 185 never-rendered variants at once — trading an obvious bug for a subtle one — and left every literal utility without a `dark:` sibling still broken.
+**D35 — `UI_CONVENTIONS.md` is enforced mechanically (Accepted 9 Aug 2026).**
+The guard was verified to **fail** on three injected violations before being trusted. A guard test that has never been observed failing is an assumption, not a check.
 
-Accepted fix: migrate to the semantic tokens already defined in `index.css` (`--success`, `--warning`, `--info`, `--destructive`, `--accent`, `--status-*`), delete dead `dark:` variants, and codify the rules in `docs/design/UI_CONVENTIONS.md`. Four batches, ~45 files.
+**D36 — `profiles` writes are server-owned; RLS was never the defence it appeared to be (Accepted 12 Aug 2026).**
+`profiles` had RLS enabled, an owner-scoped policy, and **no column-level grants** — so `authenticated` held UPDATE on all 11 columns. An ordinary organizer could reset `profile_reward_claimed` and mint unlimited 100%-off Pro coupons. Negative-tested live, then closed in three ordered parts: additive RPC → frontend switch → restrictive revoke.
+**Generalisation: RLS restricts rows, never columns.**
 
-One bounded exception, documented in UI_CONVENTIONS §6: category chips in `CategoryCriteriaChips.tsx` encode a *kind of criterion*, not a status. Forcing them onto status tokens would assert meaning that does not exist; forcing them all to neutral would destroy information used for scanning. They keep raw hues at `bg-<hue>-500/15 text-<hue>-300 border-<hue>-500/30` — the `-300` shade being the actual fix, since `-700` was the dark-on-dark bug.
+**D37 — F1 gates on confirmed email + a validated phone; OTP deliberately deferred (Accepted 12–13 Aug 2026).**
+SMS OTP in India requires TRAI DLT registration before a single transactional message; against 36 users and 7 payments that fails guardrail 5. Recorded honestly: **phone-without-OTP is weak anti-sybil.** F2's identity strength comes from the verdict allow-list and confirmed email, not the phone field.
+**Also generalised:** any `supabase.rpc` error a named-code branch will inspect must be rethrown as a real `Error`, not a bare `PostgrestError`.
 
-Allocation-engine safety: the engine is not in the frontend — it lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes` and `backfillTeamAllocations`, invoked by string name. A SHA-256 baseline of all 408 source files was taken before the sweep and re-diffed after every batch; the 9 engine files stayed byte-identical and nothing under `supabase/` changed. Each allocation-adjacent batch also proved, mechanically, that only `className` lines had changed and that non-className line counts were unmoved.
+**D38 — A SECURITY DEFINER function's EXECUTE grant is a write path RLS cannot see (Accepted 14 Aug 2026).**
+The E1–E3 audit found `issue_referral_rewards` executable by clients. A table-grant-only audit is structurally incomplete: the dangerous surface is the set of definer functions a role may call, not the set of tables it may write.
 
-**D34 — The advisory duplicate check compares server-side; format and duplicate are independent blocks (Accepted 9 Aug 2026; completes D30).**
+**D39 — Absence of a flag is not evidence a check passed (Accepted 17 Aug 2026; extends D22, D27, D28).**
+Five of the eight invariants have skip paths. A gate reading "no allow-listed reason is present" auto-approves every one of them. `extract` therefore records a **verdict** per named invariant into `payment_invariant_verdicts`, and F2 requires all eight to read `pass`. `skipped` is not `pass`.
 
-D30 said `normalize_utr` would be "mirrored in `paymentTrustCheck.ts`". Implementing it exposed that a mirror alone cannot close the gap. The edge function's check was `.eq("utr", utrClean)` — PostgREST's filter builder **cannot apply a function to a column**, so however thoroughly the probe is normalised, the stored side is still compared raw. A TS-only mirror would have closed the case-folding half and left the stored-separator half open, while looking resolved.
+Proven on live data before launch. A CRED receipt produced **zero flags** with `utr_format = skipped` and `utr_duplicate = skipped` — a flags-only rule would have auto-approved a ₹500 claim from a receipt that never printed a UTR.
 
-Resolution: `public.utr_active_duplicate_exists(text)` (migration `20260808172212`) — STABLE, SECURITY DEFINER, EXECUTE granted to `service_role` only (both N1 paths closed), wrapping the same `EXISTS` predicate the RPC uses. One definition of "same UTR", index-backed by `uq_tournament_payments_utr_active`. `normalize_utr` itself is untouched, so the Q2 freeze holds. Rejected alternatives: fetching all non-rejected rows and normalising in TypeScript (correct at 2 rows, cannot use the index, quietly wrong at 5,000); and the TS-only mirror above.
+**The asymmetry is deliberate:** the duplicate and price RPCs fail **open** for the *flag* (advisory) and **closed** for the *verdict* (authoritative, money-bearing).
 
-Three contracts follow, and each is a guardrail because each is individually reversible by a well-meaning edit:
+**Governance is a database feature flag, not an Edge Function secret.** `platform_feature_flags.payment_auto_approve` — RLS on, zero policies, no client grants. An Edge Function secret is unreadable from a database RPC, and the decision lives in the RPC.
 
-1. **Format and duplicate are independent blocks.** The duplicate lookup previously sat inside the format check's `else`, so a hyphenated UTR flagged `utr_format` and was never duplicate-checked — a hyphen was enough to skip the lookup. They are now separate `if` blocks over the same trimmed value, and both flags may fire on `utr`. Harmless under D28, where any named reason blocks.
-2. **`utr_format` semantics stay frozen.** It still tests the whitespace-stripped value against `^[A-Za-z0-9]{8,22}$` at severity `high`. Normalising before the format test was the tempting shortcut and would have relaxed a security-relevant flag as a side effect of a banner fix.
-3. **Pass the raw trimmed string to the RPC, never `normalizeUtr()` output.** The SQL function normalises both sides itself, so TS-mirror drift cannot become a false negative — the failure mode that would matter.
+**Accepted cost:** false declines rise. A false decline costs a click; a false approval costs revenue and is invisible.
 
-The lookup **fails open**: on RPC error or throw, `paymentTrustCheck.ts` logs and emits no flag. Safe only because the hard block is the RPC plus the unique index, so a failed advisory can never let a duplicate be inserted; flagging on error would punish an honest payer for our outage. The cost is that no unit test can distinguish a working RPC from one that fails every time — which is why the wiring was proven in production rather than in CI: re-uploading a screenshot whose UTR sits on an approved row produced `utr_duplicate` on extraction `b63c6152` under `extract` v45.
+**D40 — A trigger that writes a column is a dependency of that column, and Postgres will not tell you (Accepted 22 Aug 2026).**
 
-**Testing split, by what each runner can actually prove.** Vitest owns normalisation parity, flag behaviour, and the format/duplicate decoupling; the plpgsql branches go to `supabase/tests/f0d_rpc_checks.sql`, a self-aborting harness, because a mocked client asserting `UTR_MISMATCH` would only be testing the mock. Two findings from writing it:
+`public.tg_referrals_set_snapshot()` populated `new.referred_email` and `new.referred_label`. Migration `20260512184720` dropped both columns and left the trigger attached. Every INSERT into `public.referrals` raised `42703` from 12 May 2026 18:47 UTC until 22 August. Referral capture was dead for three months; `referral_rewards` has zero rows ever.
 
-- `tests/extraction-grounding.spec.ts` had a fake admin client with no `.rpc`, so the new call threw into the `catch`. Left unfixed, the suite would have stayed green against an implementation whose duplicate check failed 100% of the time. Stderr noise is not a gate.
-- **`EXTRACTION_NOT_OWNED` is verifiable in production after all.** The earlier note that "every extraction belongs to one account" is superseded: `extraction_documents` has four distinct uploaders. Harness case H runs it against a genuinely foreign extraction, with the caller confirmed **not** master — without that confirmation the master carve-out would have made H, I and J falsely pass.
+`ALTER TABLE ... DROP COLUMN` does not inspect trigger bodies. PL/pgSQL resolves `new.<field>` at execution time, so the trigger stayed perfectly valid until the next insert. Nothing in the migration output, the schema, or any linter reported it.
 
-**Ordering note for anyone extending the RPC:** the duplicate check runs *before* the extraction gate. Any new test asserting a mismatch or ownership branch must use a UTR that is not already active, or it will get `UTR_ALREADY_USED` first and appear to pass for the wrong reason.
+**It was silent for a second reason, and that one is worse.** The sole caller — `useApplyPendingReferral` — destructured `rpcError`, never inspected it, logged it only behind a debug flag that is false in production, and then **cleared localStorage and `user_metadata` unconditionally**. Every failure destroyed all three copies of the referral code. That is why the lost referrals are not backfillable: the link was never recorded anywhere.
 
-**D35 — `UI_CONVENTIONS.md` is enforced mechanically (Accepted 9 Aug 2026; completes D33).**
+Same failure shape as D21 and D32: *a surface that produces nothing is not obviously broken.*
 
-D33 codified the dark-only rules in prose. Prose is enforced by memory, and the original defect (529 raw utilities, 185 dead `dark:` variants) accumulated precisely because nothing mechanical objected. `tests/ui-conventions.spec.ts` now checks all 255 files in `src/` on every run: no `dark:` variants; no numbered-shade palette utilities outside `CategoryCriteriaChips.tsx`; inside that file only the exact §6 shape and the nine listed hues; no `text-<hue>-600..950` anywhere; and the exception list must contain exactly one file, so widening it is a deliberate edit that forces the §6 justification to be argued.
+**Three standing rules:**
+1. **When dropping a column, grep every trigger body on that table first** — via `pg_get_functiondef` over `pg_trigger`, not the repo, because the object may not be in the repo at all.
+2. **A write path with no successful writes for a month is a bug until proven otherwise.** "Zero referral rewards ever" sat in the documentation as a fact rather than an alarm.
+3. **Never let an error handler discard the input that caused the error.** Afterwards, neither retry nor diagnosis is possible.
 
-Two scoping decisions worth recording. **White and black literals are out of scope** — `text-black` and `bg-white` appear ~100 times across the print and public poster surfaces, which are deliberately light per §5; flagging them would be the test disagreeing with the document. **The `dark:` lookahead is `(?=\S)`, not `(?=[A-Za-z[])`** — the narrower form was written to exclude the one legitimate `{ dark: ".dark" }` object key in `chart.tsx`, but it also let `dark:-mt-2` and `dark:!bg-red-500` through. `(?=\S)` catches both and still excludes the object key, which has a space after the colon. Known residual, accepted: an object key formatted without that space would false-positive — the correct direction for a guard to fail.
+**Scope discipline recorded, because the temptation was real.** The live `apply_referral_code` body also contains an `email_confirmed_at` check, a 300-second attribution window and an `ON CONFLICT` clause that appear in **no migration**, and the last referral row (19 Apr) predates the column drop (12 May) by 23 days — which looked like a second bug. Measurement said otherwise: median `|last_sign_in_at − email_confirmed_at|` across all 36 users is 45 seconds, 20 of 36 pass the window today, and in the canonical flow the confirmation click *is* the sign-in, so the delta is ≈0. The gap is explained by volume, not by a defect. **The function was left unmodified** — widening an anti-abuse window on an unproven hypothesis is exactly what guardrail 3 forbids. The drift is recorded as debt instead.
 
-The guard was verified to **fail** on three injected violations before being trusted, each then reverted. A guard test that has never been observed failing is an assumption, not a check.
+**The provenance finding this exposed:** neither the trigger nor `apply_referral_code`'s live body ever appeared in a migration, and they are not alone — **9 of 53 functions in `public` exist only in the live database.** Every audit that reads migrations is blind to them, which is how a three-month outage survived. Tracked as its own workstream.
 
 ---
 
 ## 7. Security & Privacy
 
-- `payment_screenshot` extractions: `privacy_class='public'`. Gemini free tier permitted.
-- `bank_statement` extractions: `privacy_class='sensitive'`. Local processing only. Gemini prohibited.
-- Payee VPA: Supabase secret, never in code, never in logs, never in frontend.
-- `screenshot_extraction_id` on `tournament_payments`: FK with `ON DELETE SET NULL`.
-- `return_to` on `tournament_payments`: CHECK constraint enforces same-site relative path. Validated independently in the 5-arg RPC (degrades to NULL on malformed input) and in `send-payment-notifications/index.ts` (`safeReturnTo`).
-- Screenshot viewer: signed URL generated on click, 3600s expiry, `filePath` passed verbatim — never parsed or reconstructed. Raw storage URL never shown in address bar.
-- API keys (Phase 2C): actual key shown once, then discarded. Only SHA-256 hash stored.
-- Escape-hatch contact details (email + phone, D31) ship in the frontend bundle and the public repo. Accepted: the phone number is already user-facing via the payment-page UPI ID. Business contact only; nothing secret.
+- `payment_screenshot`: `privacy_class='public'`. Gemini free tier permitted.
+- `bank_statement`: `privacy_class='sensitive'`. Local processing only.
+- Payee VPA: Supabase secret, never in logs. Necessarily public in the frontend bundle; **not** covered by the kill-switch guardrail.
+- **Auto-approve kill switch:** `platform_feature_flags.payment_auto_approve`. Never in frontend code or logs.
+- `payment_invariant_verdicts`: RLS on, zero policies, no client grants. Unreachable from any client path.
+- **`profiles`:** `authenticated` holds SELECT only; all writes via `update_my_profile` (D36).
+- **`profiles.phone`:** canonical `+91XXXXXXXXXX` under a CHECK. Not verified (D37). Not unique (D37).
+- **`referrals`:** `anon` and `authenticated` hold SELECT only; two SELECT-only policies; **no triggers**. Sole writer is `apply_referral_code` (SECURITY DEFINER).
+- API keys (Phase 2C): shown once, only SHA-256 hash stored.
 
 ---
 
 ## 8. Known Debt from Audit
 
+See `PROJECT_STATE.md` §19 for the live list. Resolved in this document's period:
+
 | Debt | Status |
 |---|---|
-| `tournament_payments` no repo DDL | ✅ Fixed `20260725120000` |
-| `platform_feature_flags` no repo DDL | ✅ Fixed `20260725130000` |
-| `doc_type` enum missing `payment_screenshot` | ✅ Fixed `20260725140000` |
-| `extraction_schemas.notes` vs `description` column name | ✅ Fixed (uses `description`) |
-| `submit_tournament_payment_claim` had no `screenshot_extraction_id` param | ✅ 4-arg overload added `20260729130000` |
-| Client wrote `screenshot_extraction_id` directly via loose UPDATE policy | ✅ 5-arg overload closes this; frontend switched |
-| Master could not read extraction rows under RLS | ✅ Fixed `20260730120000` |
-| Both 3-arg and 4-arg claim overloads live with 5-arg | ✅ Dropped in F0d Migration A |
-| Notification `MAX_ATTEMPTS=5` with no backoff | ⏳ Raise cap or add age-based backoff |
-| L6 `return_to` — OPEN at 30 Jul, resolved as Option A | ✅ Done `20260730100000` |
-| `supabase db execute` does not exist; correct is `supabase db query --linked -f` | ✅ Corrected; record in CLAUDE.md |
-| CLAUDE.md says schema v3 active; actual is v5 | ⏳ Update CLAUDE.md after Phase 2A-3 |
-| Supabase CLI migration drift (51 Lovable-managed migrations without local files) | ⏳ Fix with `supabase migration repair --status applied` per version |
-| Root `npx tsc --noEmit` checks nothing (project-reference stub) | ✅ Identified; correct command is `npx tsc -p tsconfig.app.json --noEmit` (12 pre-existing errors baseline) |
-| `extractions` UPDATE policy too broad — blocks auto-approval | ✅ Fixed `20260802124253` (F0a); see D29 |
-| Three fail-open trust invariants | ✅ Fixed (F0c); see D27 |
-| `payment_screenshot` schema v2 fields | ✅ v2 `20260802165554`, v3 `20260803181034` (F0b) |
-| UTR-match enforcement (submitted UTR must match extracted UTR) | ✅ Done F0d Migration B `20260804160000` |
-| Hard-block duplicate UTR at submission | ✅ Done F0d Migration B `20260804160000` |
-| Direction marker regexes lack `\b` word boundaries | ⏳ LOW — `sent to` also matches inside `present to`; bounded by D27's non-unique-block property |
-| Auto-approve gate must use named reasons, not flag count | ⏳ **HIGH — implement in F2**; see D28 |
-| `tsconfig.app.json` does not cover `supabase/functions/` or `tests/` | ⏳ MEDIUM — the tsc check is blind to all edge-function work |
-| `tournament_payments` client write grants + unused write policies | ✅ Done F0d Migration A `20260804120000` |
-| `review_tournament_payment` EXECUTE-able by `anon` | ✅ Done F0d Migration A (grant-only) |
-| No duplicate-screenshot (`file_hash`) invariant | ⏳ MEDIUM — F2 scope. Readable-UTR replays are caught by UTR duplicate checks; cropped-UTR replays by `UTR_EXTRACTION_UNREADABLE` (D31); the `file_hash` check closes the remainder |
-| `normalize_utr` frozen once backstop index exists | ⏳ Standing rule (D31) — changing it requires drop-index → replace → recreate |
-| `normalize_utr` parity between banner and server | ✅ Done 9 Aug — `utr_active_duplicate_exists` (`20260808172212`); see D34. A TS-only mirror would NOT have sufficed |
-| F0d test suite | ✅ Done 9 Aug — 21 vitest cases + 13-branch `supabase/tests/f0d_rpc_checks.sql`. `EXTRACTION_NOT_OWNED` covered three ways |
-| No UI guard test enforcing UI_CONVENTIONS.md | ✅ Done 9 Aug — `tests/ui-conventions.spec.ts`, 5 rules, sabotage-verified; see D35 |
-| Advisory duplicate check fails open with no alerting | ⏳ Accepted residual — bounded by the RPC hard block + unique index (D34). Only a missing `utr_duplicate` on a known-duplicate upload would reveal a silent RPC failure |
-| `import.meta.url` vs `process.cwd()` root resolution differs between the two new spec files | ⏳ LOW — both work; the `process.cwd()` justification comment looks incorrect. Harmonise when either is next touched |
-| F2 decline messages are a fraud oracle | ⏳ HIGH — F2 design. Naming the failed invariant lets an attacker iterate; recommend generic message to organizer, itemised reasons in /admin/payments only |
+| `extractions` UPDATE policy too broad | ✅ F0a; see D29 |
+| Three fail-open trust invariants | ✅ F0c; see D27 |
+| UTR-match + duplicate hard-block | ✅ F0d |
+| `profiles` client-writable at column level | ✅ F1-A2; see D36 |
+| Client write-grant audit (E1–E3) | ✅ 14 Aug; see D38 |
+| Auto-approve gate must use named reasons | ✅ F2-G; see D28, D39 |
+| `file_hash` duplicate invariant | ✅ F2-G |
+| `source` CHECK widened for `auto_upi` | ✅ F2-B |
+| **`public.referrals` insert raised 42703** | ✅ **`20260822120000`; see D40** |
+| **Referral error swallowed and input destroyed** | ✅ **22 Aug; see D40, W4** |
+| F2 decline messages are a fraud oracle | ✅ Generic to organizer, itemised in `/admin/payments` |
+| No `/admin/payments` auto-approved view | ⏳ MEDIUM — F2-4, now F3-C |
+| **9 untracked functions in `public`** | ⏳ **MEDIUM — new workstream; see D40** |
+| `apply_referral_code` body is untracked drift | ⏳ MEDIUM — capture with zero behaviour change |
+| Gate / helper drift risk | ⏳ MEDIUM — nothing tests `my_payment_gate_status()` |
+| Notification `MAX_ATTEMPTS=5` with no backoff | ⏳ MEDIUM — more consequential now the oversight email is the primary alert |
+| `tsconfig.app.json` does not cover `supabase/functions/` or `tests/` | ⏳ MEDIUM |
+| Direction marker regexes lack `\b` word boundaries | ⏳ LOW — bounded by D27 |
 
 ---
 
 ## 9. Phase 2 Test Strategy
 
-### Phase 2A-3 test additions (add to test suite)
+### F2 gate harness — `supabase/tests/f2_gate_checks.sql`
+
+24 checks, self-aborting, everything rolled back. Pass condition is `24 passed, 0 failed` inside an `ERROR:`. **24/24 as of 22 Aug 2026.**
 
 ```
-- direction_not_outgoing: "Received from" screenshot → flag direction_not_outgoing
-- direction_not_outgoing: "Paid to" screenshot → no direction flag
-- payee_vpa_missing: null payee_vpa → flag payee_vpa_missing
-- required_fields_missing: all null payload → flag required_fields_missing
-- UTR match: submitted UTR ≠ extracted UTR → block with pop-up
-- UTR match: submitted UTR = extracted UTR → proceed normally
-- auto-approve: all invariants pass + verified profile + secret on → source='auto_upi'
-- auto-approve: any flag → needs_review, no auto-approval
-- auto-approve: unverified profile → needs_review, no auto-approval
-- auto-approve: secret off → needs_review even if all invariants pass
+1a-1h  all eight verdicts pass, flag ON, organizer, screenshot → APPROVED (+8 sub-assertions)
+2      one verdict 'fail'                                      → pending
+3      one verdict 'skipped'                                   → pending   ← D39
+4      flag OFF                                                → pending
+5      master submits                                          → pending
+6      no screenshot pinned                                    → pending
+7      file_hash on a NON-REJECTED payment                     → pending
+7B     same fixture, other payment REJECTED                    → APPROVED  ← D15
+8      all eight pass at checker_version = 2                   → pending
+S1-S8  structural assertions + kill-switch leak check
 ```
 
-### F0d additions (D30/D31) — ALL COVERED as of 9 Aug 2026
+**Cases 7 and 7B are a matched pair.** They differ by one column value and land on opposite sides. Case 7 alone would pass even if the fixture were broken.
 
-Split by runner, because most of these live inside a plpgsql function where a mocked
-client would only be testing the mock. See D34.
+**Amended 22 Aug:** the referral seed for 1g/1h previously wrapped its INSERT in `ALTER TABLE ... DISABLE/ENABLE TRIGGER trg_referrals_set_snapshot`, because that trigger raised 42703 on every insert. The trigger is gone, so both lines were removed and the header comment updated. If `public.referrals` ever acquires a trigger again, this seed is the first thing that breaks — which is the intended alarm.
 
-**`supabase/tests/f0d_rpc_checks.sql`** — self-aborting harness, run with
-`supabase db query --linked -f`. Always ends with `ERROR: HARNESS RESULTS`; that is
-the pass condition, and the closing `RAISE` is what rolls the fixtures back.
+### F0d + F1 harness — `supabase/tests/f0d_rpc_checks.sql`
 
-```
-A duplicate: normalized UTR on a non-rejected row      → UTR_ALREADY_USED
-B duplicate: separator variant " 1272-8704 2392 "      → UTR_ALREADY_USED
-C duplicate: case variant "sbin 1234-abcd"             → UTR_ALREADY_USED
-D duplicate: UTR exists only on rejected rows          → proceeds (D15 resubmission)
-E mismatch:  submitted = extracted txn_id              → UTR_IS_TXN_ID
-F mismatch:  submitted matches neither                 → UTR_MISMATCH
-G unreadable: screenshot linked, payload.utr null      → UTR_EXTRACTION_UNREADABLE
-H ownership: extraction uploaded by another user       → EXTRACTION_NOT_OWNED
-I ownership: extraction id does not exist              → EXTRACTION_NOT_OWNED
-J ownership: extraction is a chess_brochure            → EXTRACTION_NOT_OWNED
-K ownership: master submits with organizer's extraction → proceeds (carve-out)
-L race backstop: two normalized-equal active UTRs      → unique_violation on
-                                                          uq_tournament_payments_utr_active
-M normalize_utr parity: 11 fixtures                    → all match the TS mirror
-```
+17 branches. **Case Q is the ordering guard:** if it returns `UTR_ALREADY_USED` instead of `PROFILE_INCOMPLETE`, the F1 gate has been moved below the F0d block and is bypassable by ordering.
 
-Case L tests the *index*, not concurrency: true parallelism cannot be simulated from one
-session, and the index is the mechanism that makes the TOCTOU race safe. Case D and case K
-succeed and are rolled back by per-case sub-transactions, so they cannot leak into later cases.
+The harness **seeds `profiles.phone` on both fixture users**. Before 13 Aug it did not, and passed only because both accounts happened to have phones that day — testing the live profile rather than the RPC.
 
-**`tests/payment-utr-normalization.spec.ts`** — the 11 parity fixtures (expected values
-captured from live Postgres, not predicted), the strip-before-upper ordering proof
-(`utr\u00DF1234\u0131` → `UTR1234`, where upper-then-strip would give `UTRSS1234I`),
-duplicate-flag behaviour on rpc true / false / error, the raw-not-normalized argument
-contract, the format-fails-but-duplicate-still-runs regression, and a guard that the
-migration still compares on `normalize_utr` and still excludes rejected rows.
-
-**Fixture list is shared:** `tests/fixtures/utrNormalizationFixtures.ts` and the `M` block
-of the SQL harness must stay identical. If they diverge, parity is no longer proven.
-
-### Phase 2A verification (existing, keep running)
+### Standing verification queries
 
 ```sql
 -- All payment extractions must be needs_review, never auto_ok
@@ -535,8 +369,9 @@ select status, count(*) from extractions
 join extraction_documents d on d.id = document_id
 where d.doc_type = 'payment_screenshot'
 group by status;
--- Expected: all rows have status = 'needs_review'
 
--- Master can read extractions from other users
-select count(*) from extractions; -- run as master, must match total row count
+-- referrals must accept an insert (D40 regression guard, run rolled back)
+-- and must carry zero triggers
+select count(*) from pg_trigger
+where tgrelid = 'public.referrals'::regclass and not tgisinternal;  -- expect 0
 ```
