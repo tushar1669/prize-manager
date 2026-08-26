@@ -1,7 +1,7 @@
 # Architecture — Phase 2: Universal Extraction Engine
 
-**Status:** Accepted — Phase 2A, 2A-2 complete; F0a–F0e complete; F1 complete; **F2 (conditional auto-approval) SHIPPED AND LIVE 20 Aug 2026 17:26:33 UTC**; **referrals repair complete 22 Aug 2026**. Phase 2A-3 is closed.
-**Date:** July–August 2026 (last revised 22 Aug 2026)
+**Status:** Accepted — Phase 2A, 2A-2 complete; F0a–F0e complete; F1 complete; **F2 (conditional auto-approval) SHIPPED AND LIVE 20 Aug 2026 17:26:33 UTC**; **referrals repair complete 22 Aug 2026, validated end to end in production 25–26 Aug 2026**. Phase 2A-3 is closed.
+**Date:** July–August 2026 (last revised 26 Aug 2026)
 **Deciders:** Tushar (owner), Claude (architecture)
 **Predecessor:** `docs/extraction-engine/ARCHITECTURE.md` (Phase 1 — read this first)
 **Repo location:** `docs/extraction-engine/PHASE2_ARCHITECTURE.md`
@@ -289,6 +289,25 @@ Same failure shape as D21 and D32: *a surface that produces nothing is not obvio
 
 **The provenance finding this exposed:** neither the trigger nor `apply_referral_code`'s live body ever appeared in a migration, and they are not alone — **9 of 53 functions in `public` exist only in the live database.** Every audit that reads migrations is blind to them, which is how a three-month outage survived. Tracked as its own workstream.
 
+**D41 — Fewer flags is not a better extraction; it can be silent data loss (Accepted 26 Aug 2026; same family as D21, D32, D40).**
+
+The Shahdol brochure was extracted twice from the same file with the same model, months apart:
+
+| Run | Categories | Named | Prize rows | Flags |
+|---|---|---|---|---|
+| 20 Jul | 6 | 6 | 17 | **1** |
+| 26 Aug | **20** | 6 | **59** | **15** |
+
+The 1-flag run looked clean. It had **silently dropped all 14 age-group categories and their 42 trophies.** The 15-flag run found the complete structure — cross-checked against the brochure's own advertised "56 Attractive trophies", which the August extraction matches exactly — and merely failed to *name* 14 categories.
+
+**A reviewer optimising for a low flag count would have approved the lossy extraction and rejected the complete one.** Flag count is a measure of what the trust layer noticed, not of what the extraction got right. Any future tuning must be judged against expected output on a fixture set, never against flag count.
+
+**This decision also records a false positive in our own trust layer.** `sum_mismatch` sums `cash_amount` once per prize row and ignores `rank_from`/`rank_to`. On Shahdol the naive sum is ₹44,500 against a declared ₹51,000; the rank-aware sum — `cash_amount × (rank_to − rank_from + 1)` — is **exactly ₹51,000**. A row reading "4th & 5th Prize ₹3,000" was counted once instead of twice. **The extraction was correct and the invariant was wrong**, and it will misfire on any brochure using rank ranges, which is most of them.
+
+Correcting a false positive is not weakening a check — guardrail 3 forbids loosening a check that is working, not fixing one that is doing the wrong arithmetic. Tracked as B8.
+
+**Third structural point:** the failing categories are precisely those printed as **column headers** in a wide grid. Every category the model named had a row label or section heading. A category emitted with a null name is malformed input and should fail once, clearly, rather than producing N generic `ungrounded` flags that bury the real cause.
+
 ---
 
 ## 7. Security & Privacy
@@ -328,6 +347,9 @@ See `PROJECT_STATE.md` §19 for the live list. Resolved in this document's perio
 | Gate / helper drift risk | ⏳ MEDIUM — nothing tests `my_payment_gate_status()` |
 | Notification `MAX_ATTEMPTS=5` with no backoff | ⏳ MEDIUM — more consequential now the oversight email is the primary alert |
 | `tsconfig.app.json` does not cover `supabase/functions/` or `tests/` | ⏳ MEDIUM |
+| **`sum_mismatch` ignores rank ranges — false positive** | ⏳ **MEDIUM — B8a; see D41** |
+| **Brochure column-header category names lost** | ⏳ **MEDIUM — B8b; see D41** |
+| **Five UI defects from production validation** | ⏳ **MEDIUM — B13, all F3-C** |
 | Direction marker regexes lack `\b` word boundaries | ⏳ LOW — bounded by D27 |
 
 ---

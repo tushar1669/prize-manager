@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 22 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 26 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -41,10 +41,10 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
 | Pending index | `uq_tournament_payments_pending` — UNIQUE `(tournament_id, user_id)` WHERE pending |
 | Outbox uniqueness | `uq_payment_notification_outbox_payment_action` — UNIQUE **INDEX** on `(payment_id, action)` |
-| Verification harnesses | `supabase/tests/f2_gate_checks.sql` — **24 checks**, ends `ERROR: F2 GATE HARNESS RESULTS` (pass condition). **24/24 re-confirmed live on 22 Aug after the trigger removal**<br>`supabase/tests/f0d_rpc_checks.sql` — 17 branches, `ERROR: HARNESS RESULTS`. 17/17 on 19 Aug<br>`supabase/tests/pf1b_expected_amount.sql` — 9 cases. 9/9 on 19 Aug |
+| Verification harnesses | `supabase/tests/f2_gate_checks.sql` — **24 checks**, ends `ERROR: F2 GATE HARNESS RESULTS` (pass condition). **24/24 re-confirmed live on 22 Aug after the trigger removal; end-to-end production validation 25-26 Aug**<br>`supabase/tests/f0d_rpc_checks.sql` — 17 branches, `ERROR: HARNESS RESULTS`. 17/17 on 19 Aug<br>`supabase/tests/pf1b_expected_amount.sql` — 9 cases. 9/9 on 19 Aug |
 | Operational scripts | `supabase/ops/f2_auto_approve_on.sql` · `f2_auto_approve_off.sql` · `f2_auto_approval_report.sql`. **Not migrations — never `migration repair` them** |
 | Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
-| Live counts (22 Aug) | **97 live tournaments** (+20 soft-deleted = 117 rows) · 13,699 players · 7 payments · 9 entitlements (**0 `auto_upi`**) · 31 coupons · 174 extraction_documents · 172 extractions · 2 verdict rows · 6 outbox rows · 36 profiles (4 with a phone) · **3 referrals (last 19 Apr)** · **0 referral_rewards ever** · 9 referral_codes |
+| Live counts (26 Aug) | **105 live tournaments** (128 rows) · 15,553 players · 11 payments (**1 auto-approved**) · 12 entitlements (**1 `auto_upi`**, 8 `coupon`) · 42 coupons · 193 extraction_documents · 191 extractions · 8 verdict rows · 11 outbox rows · 38 users / 38 profiles (8 with a phone) · **6 referrals** · **5 referral_rewards** · 13 referral_codes |
 | Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as the `PLATFORM_PAYEE_VPA` secret. Verified in agreement |
 
 ### Migrations (all applied, repaired, and version-matched to repo filenames)
@@ -232,13 +232,72 @@ This is why the bug survived: **every audit that reads migrations is blind to th
 
 ---
 
+## 12.5 End-to-end production validation — COMPLETE ✅ (25–26 August 2026)
+
+The repair was verified in the product, on live money, not just in SQL. **This is the first time the referral system has ever been observed working.**
+
+### The chain
+
+Four accounts using Gmail plus-addressing (`tusharsaraswat68+r1/r2/r3@gmail.com`), each signed up through the previous one's referral link:
+
+```
+tusharsaraswat68  →  +r1  →  +r2  →  +r3
+```
+
+All four `referrals` rows carry `referral_code_id` whose owner matches `referrer_id` — attribution integrity is exact, verified by join.
+
+### What fired
+
+**+r3 paid ₹500 by UPI and was auto-approved with no human involvement.** Payment `30ba866e`, UTR `660369142867`, `reviewed_by` NULL, `review_note = "Auto-approved."`, entitlement `auto_upi` 2026-08-25 → 2027-08-25, both outbox rows (`approved` + `auto_approved`) sent first attempt. All eight verdicts `pass` at `checker_version = 1`. **F2's first real auto-approval on live money.**
+
+That payment issued the **first three `referral_rewards` rows in the project's history**: 100% to +r2, 50% to +r1, 25% to the root.
+
+**+r2 then redeemed their 100% coupon** (`REF1-4DC17AB9`), taking ₹500 → ₹0 with `source='coupon'`. That redemption **cascaded a second wave** — 100% to +r1, 50% to the root — proving `redeem_coupon_for_tournament` fires `issue_referral_rewards` exactly as paying does.
+
+Final: **5 reward rows, 2 distinct triggers, 0 rewards missing a coupon, 5 `REF%` coupons, 1 redeemed.**
+
+### Adversarial testing — 8 cases, all correct
+
+| Test | Result |
+|---|---|
+| Coupon reuse | blocked — limit reached |
+| Another user's coupon | blocked — "not assigned to your account" |
+| Duplicate UTR | blocked — F0d hard block |
+| UTR-only, no screenshot | pending, never auto-approved (guardrail 11) |
+| Wrong amount (₹1 vs ₹500) | pending — `amount_mismatch` |
+| Wrong payee VPA | pending — `payee_vpa_mismatch` |
+| Fraud-oracle check | organizer saw generic text only; itemised reasons master-side only (F2-2) |
+| Free tier | verified at boundaries: 150→₹0, 151→₹500, 500→₹500, 501→₹1000 |
+
+**The load-bearing assertion:** across all 11 payments, exactly **one** is `approved` with `reviewed_by IS NULL`, and it is the legitimate auto-approval. **Zero false auto-approvals.** That is the F2 success metric, met on real adversarial input.
+
+### Self-referral is refused, but not by the guard you would expect
+
+Probed directly (rolled back) as `+r1` applying `+r1`'s own code: returns `not_new_signup_event`, **not** `self_referral_not_allowed`. The 300-second window is evaluated first, so the self-referral branch is unreachable for anyone who has signed in more than once. Outcome is still a refusal, so there is no security gap. Recorded as B12; `apply_referral_code` stays unmodified (W3).
+
+### Client write surface, from a production HAR
+
+A browser HAR captured across the whole test run contains only OPTIONS and GET — no POST bodies — so it is **not** sufficient evidence for B1. But the CORS preflight `Access-Control-Request-Method` headers reveal intent:
+
+| Table | Preflighted methods |
+|---|---|
+| `coupons` | **GET only** |
+| `referrals` / `referral_rewards` | **GET only** |
+| `extraction_documents` | GET + POST |
+| `extractions` | GET + PATCH |
+| `tournaments` | GET + PATCH |
+
+Coupon redemption went through `rpc/redeem_coupon_for_tournament`, not a table write — **one of B1's preconditions met**, though a single session is not proof of the whole app. Also visible: `rpc/issue_welcome_onboarding_reward`, one of the nine untracked B7 functions, live on the signup path.
+
+---
+
 ## 13. Immediate next step
 
 **F3 — the auto-approval oversight loop.** Fresh chat. See B5 below.
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §11, §12 and §13. F2 is shipped and live (20 Aug, gate harness 24/24); `main` is `1ee42db`. The referrals repair shipped 22 Aug: `trg_referrals_set_snapshot` and its function are dropped (`20260822120000`), the F2 harness seed no longer disables a trigger, and `useApplyPendingReferral` no longer destroys the referral code on failure. `apply_referral_code` was deliberately left unmodified — see W3. Next workstream: F3, the auto-approval oversight loop (B5) — `payment_auto_approval_audit`, `revoke_auto_entitlement`, and the `/admin/payments` auto-approved section that closes F2-4. Audit before code: confirm the current auto-approval count via `supabase/ops/f2_auto_approval_report.sql` and check whether any auto-approval has occurred yet. Show me the plan before writing the migration.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §11, §12, §12.5 and §13. F2 is shipped and live (20 Aug); `main` is `1ee42db`. The referrals repair shipped 22 Aug (`20260822120000`) and was **validated end to end in production on 25–26 Aug**: a 4-deep referral chain, F2's first real auto-approval on live money, the first 5 `referral_rewards` rows ever, a coupon-redemption cascade, and 8 adversarial tests with zero false auto-approvals. `apply_referral_code` remains deliberately unmodified (W3). Next workstream: F3, the auto-approval oversight loop (B5) — `payment_auto_approval_audit`, `revoke_auto_entitlement`, and the `/admin/payments` auto-approved section that closes F2-4. **F3-C now has five concrete UI defects waiting for it — see B13.** Audit before code: run `supabase/ops/f2_auto_approval_report.sql` and confirm it now returns exactly 1 auto-approval. Show me the plan before writing the migration.*
 
 ---
 
@@ -262,6 +321,36 @@ Add a third while in there: **a failure-path test for `useApplyPendingReferral`*
 
 ### B7 — nine untracked functions in `public` · **MEDIUM, new 22 Aug**
 9 of 53 `public` functions appear in no migration and exist only in the live database, so migration-reading audits cannot see them. One of them (`tg_referrals_set_snapshot`) had been broken for three months. Two more (`admin_create_coupon`, `admin_list_coupons`) are on the coupons write path that B1 concerns, and `detect_missing_team_snapshots` is already known-broken in §18. Work: dump each with `pg_get_functiondef`, sanity-check it against the tables it touches, and land them as one no-behaviour-change "capture drift" migration so the repo matches reality. **Read-only audit first; do not rewrite a working function to make a document tidy.**
+
+### B13 — five UI defects found in production validation · **MEDIUM, all belong to F3-C**
+
+Found by using the product, not by reading it. All five confirmed at source.
+
+1. **"Awaiting admin approval" is shown on an auto-approved payment.** `TournamentUpgrade.tsx:472` hardcodes the toast; the claim RPC returns only a uuid so the frontend cannot tell. The access query then refreshes and line 660 adds "already has Pro access". Two contradictory messages, the first one false. **This is the user-visible face of F2 shipping with zero `src/` changes.** Fix by re-reading payment status after submit and branching the message — do **not** change the RPC's return type (it is 5-arg `RETURNS uuid`, guardrail).
+2. **`/account` is a dead end from the payment gate.** `TournamentUpgrade.tsx:734` is a bare `<Link to="/account">`; `Account.tsx` has no `return_to`, no `searchParams`, no `navigate(-1)`. The `returnToForClaim` mechanism (D20/L6) already exists and was simply never applied here.
+3. **Spent coupons still look available.** `Account.tsx:284` selects coupons by `issued_to_user_id` and never joins `coupon_redemptions`; `is_active` stays `true` after redemption. Proven: `REF1-4DC17AB9` has `times_used = 1` and still reads active, so the owner sees a 100% coupon that will be refused.
+4. **Rejection notes are optional but are the only channel that explains a rejection.** All three rejections on 26 Aug emailed an **empty** reason because the note was skipped. The design is right — generic at submit (F2-2), specific at rejection (L3) — but the dialog lets you skip the only field that carries it. Make it required, or add canned reasons ("Wrong UPI ID", "Amount does not match", "Screenshot unreadable").
+5. **Screenshot "optional" copy understates the trade-off.** It is optional to submit and mandatory for auto-approval. Say so: "Optional. Without a screenshot your payment waits for manual approval."
+
+### B8 — brochure category structuring + `sum_mismatch` false positive · **MEDIUM, new 26 Aug**
+
+Two separate defects, both fully diagnosed against live extractions.
+
+**8a — `sum_mismatch` fires on correct data.** The check sums `cash_amount` once per prize row, ignoring `rank_from`/`rank_to`. On the Shahdol brochure: naive sum **₹44,500**, rank-aware sum **₹51,000**, declared fund **₹51,000**. A "4th & 5th Prize ₹3,000" row counts once instead of twice; across three range rows it loses exactly ₹6,500. **The extraction was correct and the invariant was wrong.** Fix: multiply by `(rank_to − rank_from + 1)` when both are present. Correcting a false positive is not weakening a check (guardrail 3), and there is a known-good test case. Do this one first — it is arithmetic.
+
+**8b — column-header category names are lost.** The model names categories that have row labels or section headings, and fails on categories printed as **column headers** in a wide grid. Shahdol: 20 categories found, 6 named, **14 unnamed** — exactly the 14 age-group columns (BEST UNDER 07/09/11/13/15/17/19 × BOYS and GIRLS). Vijaywada fails identically.
+
+**The dangerous part:** an earlier run of the same file produced 6 categories and **1 flag**, which looked clean but had **silently dropped all 14 age-group categories and their 42 trophies**. The 15-flag run is the *better* extraction — it found all 20 categories and all 59 prize rows (cross-checked against the brochure's advertised "56 Attractive trophies", which the August extraction matches exactly). **Fewer flags meant more data loss.**
+
+Work: build a brochure fixture suite with expected outputs and measure run-to-run variance **first**; then address Pass-2 category naming. Add a structural invariant so a null category name fails once, clearly, instead of emitting N generic `ungrounded` flags that bury the real problem.
+
+Evidence: `80f12c60-8682-43d8-890f-bc051bccaf0e` (20 cats / 15 flags) vs `33cd41e2-7185-4bdc-b01d-03c070442a6f` (6 cats / 1 flag), same file, same model.
+
+### B10 — deleting a user silently orphans their referral history · LOW
+`referrals` has no FK on `referrer_id`/`referred_id`, so 2 of 6 rows now point at users that no longer exist. **Predates this session** — the pre-delete audit showed 0 referrals for both accounts removed on 26 Aug. Decide whether to add FKs with `ON DELETE SET NULL`, or accept it and make reports orphan-aware.
+
+### B12 — `self_referral_not_allowed` is unreachable in practice · LOW
+Shadowed by the 300-second window, which is evaluated first; a self-referral attempt returns `not_new_signup_event`. Refusal still occurs, so there is no security gap. **Do not touch `apply_referral_code`** (W3).
 
 ### B1 — `coupons` admin hardening · MEDIUM, defence-in-depth
 Not currently exploitable — `coupons`, `coupon_redemptions` and `tournament_entitlements` hold client write grants but are fully closed by master-only RLS, control-tested `42501`. Ordering is the decision (D36 pattern), never revoke before the write path exists: additive `admin_update_coupon(...)` → frontend off direct table writes → **production HAR proving zero PATCH/POST to `/rest/v1/coupons`** → revoke and drop the write policies together. Note B7 overlaps: `admin_create_coupon`/`admin_list_coupons` are untracked.
@@ -294,6 +383,13 @@ Phase 2B (bank statement reconciliation) blocked on 2A-3, which is **complete**.
 | ~~`public.referrals` insert raises 42703~~ | ✅ **RESOLVED 22 Aug** | `20260822120000`. Trigger and function dropped, behavioural proof in the migration |
 | ~~Referral error swallowed and code destroyed~~ | ✅ **RESOLVED 22 Aug** | `useApplyPendingReferral` retains on non-terminal outcomes and warns |
 | **3 referrals lost between 12 May and 22 Aug are unrecoverable** | Accepted residual | The code was destroyed client-side on each failure, so nothing records who referred whom. **Not backfillable.** 14 signups fell in the window; an unknown subset carried a code |
+| ~~Referral system never observed working end to end~~ | ✅ **RESOLVED 26 Aug** | 4-deep chain, first auto-approval on live money, first 5 `referral_rewards` rows, coupon-redemption cascade, 8 adversarial tests. See §12.5 |
+| ~~F2 false auto-approval rate unmeasured~~ | ✅ **RESOLVED 26 Aug** | 8 adversarial cases; exactly 1 `approved` + `reviewed_by IS NULL` across all 11 payments, and it is the legitimate one. **0% false auto-approval** |
+| **`sum_mismatch` fires on correct data (rank ranges)** | MEDIUM — B8a | Sums `cash_amount` once per row, ignoring `rank_from`/`rank_to`. Shahdol: naive ₹44,500 vs rank-aware ₹51,000 vs declared ₹51,000. **False positive on most Indian brochures.** Arithmetic fix, known-good test case |
+| **Brochure column-header category names are lost** | MEDIUM — B8b | 14 of 20 Shahdol categories unnamed. An earlier run of the same file silently dropped those 14 entirely while showing only 1 flag — **fewer flags, more data loss** |
+| **Five UI defects from production validation** | MEDIUM — B13 | Auto-approval shows "awaiting admin approval"; `/account` dead end; spent coupons look available; rejection notes optional; screenshot "optional" copy. All belong to F3-C |
+| **Deleting a user orphans their referral rows** | LOW — B10 | No FK on `referrer_id`/`referred_id`; 2 of 6 rows now dangle. Predates this session |
+| **`self_referral_not_allowed` unreachable** | LOW — B12 | Shadowed by the 300s window. Still refused, no security gap |
 | **`apply_referral_code` body is untracked drift** | MEDIUM | Live body has an `email_confirmed_at` check, a 300s attribution window and `ON CONFLICT` that appear in no migration. **Measured and left alone** (median delta 45s; 20/36 pass now; canonical flow ≈0). Capture it in B7's drift migration with **zero behaviour change** |
 | **9 untracked functions in `public`** | MEDIUM — B7 | Migration-reading audits are blind to them. This is how the trigger bug survived three months |
 | **No `/admin/payments` UI for auto-approvals** | MEDIUM — F3-C | F2 shipped with zero `src/` changes |

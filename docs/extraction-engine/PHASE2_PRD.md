@@ -1,9 +1,9 @@
 # PRD — Phase 2: Universal Extraction Engine
 
 **Product:** Universal Extraction Engine (prize-manager.com first, then certificate-hub.com and sportup.online via API)
-**Status:** Phase 2A and 2A-2 complete; Phase 2A-3 prerequisites F0a/F0b/F0c complete and production-verified, F0d next
+**Status:** **Phase 2A-3 is COMPLETE.** F0a–F0e, F1, the client write-grant audit, PF1 and **F2 (conditional auto-approval, live 20 Aug 2026)** are all shipped. Referral capture repaired 22 Aug 2026 and **validated end to end in production 25–26 Aug 2026**. **Next: F3 (auto-approval oversight loop), then Phase 2B.**
 **Owner:** Tushar (Product/Eng), Claude (architecture & QA support)
-**Version:** 1.2 — 3 August 2026
+**Version:** 1.5 — 26 August 2026
 **Repo location:** `docs/extraction-engine/PHASE2_PRD.md`
 **Predecessor:** `docs/extraction-engine/PRD.md` (Phase 1 — brochure extraction, shipped)
 
@@ -11,48 +11,57 @@
 
 ## Platform Ecosystem
 
-Three platforms share the extraction engine. Phase 2A/2A-2 serves Prize Manager directly. Phase 2C–D exposes the engine as an API that Certificate Hub and Sportup consume.
-
-| Platform | What it does | Payment verification use case | Phase when it gets it |
+| Platform | What it does | Payment verification use case | Phase |
 |---|---|---|---|
-| prize-manager.com | Tournament prize management | Organizer pays per-tournament Pro fee via UPI; screenshot proves payment | 2A ✅ (direct integration) |
-| certificate-hub.com | Certificate creation (paywalled) | User pays to unlock service; screenshot proves payment | 2C (via REST API) |
-| sportup.online | Discovery + tournament management | Player pays entry fee; screenshot proves registration payment | 2C (via REST API) |
+| prize-manager.com | Tournament prize management | Organizer pays per-tournament Pro fee via UPI | 2A ✅ direct |
+| certificate-hub.com | Certificate creation (paywalled) | User pays to unlock service | 2C via REST API |
+| sportup.online | Discovery + tournament management | Player pays entry fee | 2C via REST API |
 
 ---
 
 ## Problem Statement
 
-**Immediate (Phase 2A — SOLVED):** Tournament organizers submit payment proof as a UTR text string only. Tushar manually verifies every claim by checking his bank account. Phase 2A adds optional UPI screenshot upload with five business-rule pre-verification invariants and a complete review UI before claims reach manual review.
+**Immediate (Phase 2A — SOLVED):** Organizers submitted payment proof as a UTR string only, verified by hand against a bank account. Phase 2A added optional screenshot upload, pre-verification invariants, and a review UI.
 
-**Payment lifecycle (Phase 2A-2 — SOLVED):** Even with extraction evidence, there was no notification path (organizer didn't know if their payment was approved or rejected), no persistent in-app status, no dedicated admin payment surface, and no audit trail for repeated attempts. Phase 2A-2 added the full lifecycle: outbox, trigger, email (with deep-link flow resumption), Dashboard banner, `/admin/payments` page, full payment history table, and screenshot viewer.
+**Payment lifecycle (Phase 2A-2 — SOLVED):** Added the outbox, trigger, email with deep-link resumption, Dashboard banner, `/admin/payments`, full history, and screenshot viewer.
 
-**Trust hardening + auto-approval (Phase 2A-3 — NEXT):** The trust layer has three fail-open paths (see below). Manual review is still required for every payment. At 50+ organizers this blocks live events when Tushar is unavailable. Auto-approval is the fix, but requires closing the trust gaps first.
+**Trust hardening (F0a–F0e — SOLVED):** Eight invariants, `extractions` writes column-scoped, UTR duplicate and mismatch hard-blocked with a unique-index backstop, explicit payment-page failure states.
 
-**Medium-term (Phase 2B):** No automated bank reconciliation. Manual month-end matching is error-prone.
+**Payer identity (F1 — SOLVED):** Gated on confirmed email + validated Indian phone. Also closed a confirmed vulnerability: `profiles` was client-writable at column level, making an unbounded free-Pro coupon loop reachable.
 
-**Revenue (Phase 2C–D):** Extraction engine has no API surface. Certificate Hub and Sportup cannot consume it programmatically.
+**Manual review (F2 — SOLVED, live 20 Aug 2026):** Every payment required a manual Approve, which blocked live events whenever Tushar was unavailable. Clean, verified submissions now unlock Pro automatically.
+
+**Referral capture (SOLVED 22 Aug 2026):** Referral attribution had been dead since 12 May. A dropped-column trigger raised `42703` on every insert into `public.referrals`, and the sole caller swallowed the error while destroying the referral code. Zero rewards were ever issued. Both defects closed; the lost window is not backfillable.
+
+**Auto-approval oversight (F3 — NEXT):** Auto-approvals are recorded with full evidence but there is no way to *act* on a bad one — no flagging, no revocation, and no admin view.
+
+**Medium-term (Phase 2B):** No automated bank reconciliation.
+
+**Revenue (Phase 2C–D):** Extraction engine has no API surface.
 
 ---
 
 ## Goals
 
-1. **Automate payment verification** ✅ — Screenshot + UTR submitted; five invariants pre-verify; admin sees extracted evidence with flag reasons.
-2. **Remove Tushar as a bottleneck** — Target: clean, verified submissions unlock Pro automatically (Phase 2A-3).
-3. **Enable bank reconciliation** — Phase 2B.
-4. **Expose extraction engine as API** — Phase 2C–D.
-5. **Prove the engine earns revenue** — Phase 2C–D.
+1. **Automate payment verification** ✅
+2. **Remove Tushar as a bottleneck** ✅ — F2 live 20 Aug 2026
+3. **Enable bank reconciliation** — Phase 2B
+4. **Expose extraction engine as API** — Phase 2C–D
+5. **Prove the engine earns revenue** — Phase 2C–D
 
 ---
 
 ## Non-Goals (Phase 2)
 
 - No payment gateway integration. UPI verification layer only.
-- No automatic approval of payments without all safeguards in place (Phase 2A-3 adds conditional auto-approval with full audit trail).
+- No automatic approval without all safeguards in place.
 - No modification to the allocation engine.
-- No support for non-UPI payment screenshots in Phase 2A. NEFT/RTGS is Phase 3.
-- No support for scanned bank statements in Phase 2B. Text PDFs only.
+- **No SMS OTP.** Deferred with reasons recorded — see D37.
+- **No phone uniqueness constraint** until OTP exists.
+- No non-UPI payment screenshots in Phase 2A. NEFT/RTGS is Phase 3.
+- No scanned bank statements in Phase 2B. Text PDFs only.
 - No Certificate Hub or Sportup direct integration in Phase 2A–B.
+- **No change to `apply_referral_code`'s attribution window.** Investigated 22 Aug and left alone on measurement — see Resolved Decisions.
 
 ---
 
@@ -60,35 +69,51 @@ Three platforms share the extraction engine. Phase 2A/2A-2 serves Prize Manager 
 
 ### Phase 2A / 2A-2 — Delivered ✅
 
-- As a **tournament organizer**, I can upload a payment screenshot alongside my UTR so the system pre-verifies my payment and my claim is approved faster.
-- As a **tournament organizer**, I still submit a UTR text claim without a screenshot and the existing flow is not broken.
-- As a **tournament organizer**, I see a persistent banner on my Dashboard when my payment claim is pending or rejected, linking me directly to the payment page. The banner clears when my payment is approved.
-- As a **tournament organizer**, when my payment is rejected, I receive an email with the reason and a direct link back to the payment page to resubmit. When approved, I receive an email with a one-click link back to where I was when I hit the paywall.
-- As a **tournament organizer**, when I upload a screenshot, the UTR field is pre-filled from the screenshot (I can edit it before submitting).
-- As **Tushar (admin)**, I see extracted payment details (amount, date, UTR, payee, payer) alongside each claim at `/admin/payments`.
-- As **Tushar (admin)**, flagged claims show the specific flag reason with clear labelling; a missing payee VPA is shown as "NOT VERIFIED" (not as a neutral dash).
-- As **Tushar (admin)**, I can see the actual payment screenshot in an in-app dialog, with an "Open in new tab" option for zooming.
-- As **Tushar (admin)**, I see the claimed amount and the extracted amount side by side, with a MISMATCH label when they differ.
-- As **Tushar (admin)**, I see all payments ever submitted (all statuses, all amounts), the attempt ordinal for each, and the dates submitted and reviewed.
+- As a **tournament organizer**, I can upload a payment screenshot alongside my UTR so my claim is pre-verified and approved faster.
+- As a **tournament organizer**, I can still submit a UTR-only claim and the existing flow is not broken.
+- As a **tournament organizer**, I see a persistent Dashboard banner when my claim is pending or rejected, and it clears on approval.
+- As a **tournament organizer**, rejection emails carry the reason and a direct resubmit link; approval emails return me to where I hit the paywall.
+- As **Tushar (admin)**, I see extracted evidence at `/admin/payments` with flag reasons, claimed-vs-extracted amounts, the screenshot in-app, and every payment ever with its attempt ordinal.
 
-### Phase 2A-3 — Planned
+### F0a–F0e — Delivered ✅
 
-- As an **organizer with a verified profile**, when I pay the exact amount to the correct UPI ID with a fresh valid screenshot with a readable direction and payee, Pro unlocks immediately.
-- As an **organizer whose screenshot is wrong** (old date, wrong amount, wrong payee, unreadable UTR, incoming receipt), I get an immediate pop-up telling me exactly what's wrong and asking me to reapply.
-- As an **organizer with an incomplete profile**, I'm prompted to complete and verify my email and phone before I can submit a payment.
-- As **Tushar (admin)**, every auto-approved payment appears in an admin view with the extracted evidence, and I get an email notification for post-hoc verification.
-- As **Tushar (admin)**, I can disable auto-approval instantly by flipping a server-side secret, reverting to full manual approval with no code change.
+- Extracted evidence cannot be rewritten by the organizer who uploaded it.
+- An incoming "Received from" receipt is flagged rather than passing on amount alone.
+- A UTR already used on a non-rejected payment is hard-blocked at submission.
+- Pasting the app's transaction ID instead of the UTR is named exactly, with the right value shown.
+- A payment page that cannot load pricing shows an explicit error rather than offering to "Pay ₹0".
 
-### Phase 2B — Planned
+### F1 — Delivered ✅
 
-- As **Tushar**, I upload my monthly bank statement PDF so the system matches all UTRs against `tournament_payments` and shows me confirmed, missing, and unmatched transactions.
-- As **Tushar**, I get a reconciliation export (CSV or summary) for month-end audit.
+- Organizers are asked for a phone number *before* paying, told so on the payment page.
+- An invalid Indian mobile is rejected inline at save time, with no support reference code.
+- An incomplete profile disables Submit and names exactly what is missing.
+- Master can still submit on an organizer's behalf without meeting the gate.
+- An organizer cannot reset their own profile-reward flag to mint free Pro coupons.
 
-### Phase 2C–D — Planned
+### F2 — Delivered ✅ (live 20 Aug 2026)
 
-- As a **certificate-hub.com developer** (Tushar), I call an API endpoint with a payment screenshot to get back a structured extraction result.
-- As a **sportup.online developer** (Tushar), I POST a player's payment screenshot and get back verified payment data.
-- As an **external developer**, I have API key authentication and usage-based pricing.
+- As an **organizer with a verified profile**, paying the exact amount to the correct UPI ID with a fresh valid screenshot unlocks Pro immediately.
+- As an **organizer whose screenshot is wrong**, I get an immediate *generic* message asking me to check and reapply — deliberately not naming which check failed.
+- As **Tushar**, every auto-approval carries the extracted evidence and the exact eight verdicts the gate acted on, and I get an oversight email.
+- As **Tushar**, I can disable auto-approval instantly by flipping a database feature flag, reverting to full manual approval with no code change.
+
+### Referrals — Delivered ✅ (22 Aug 2026)
+
+- As a **new user arriving on a referral link**, my referral is actually recorded. It was not, for three months.
+- As a **referrer**, the reward chain can now fire. `issue_referral_rewards` was proven end-to-end by harness case 1g/1h and was never the broken link.
+- As a **new user whose referral attempt fails**, my code is retained for a later attempt instead of being silently destroyed.
+
+### F3 — Next
+
+- As **Tushar**, I can see all auto-approved payments in `/admin/payments` in their own section.
+- As **Tushar**, I can mark an auto-approval as `ok`, `loophole`, or `uncertain`, with a reason.
+- As **Tushar**, I can revoke a bad auto-approval's entitlement without deleting the evidence.
+
+### Phase 2B / 2C–D — Planned
+
+- Bank statement upload → UTR matching → confirmed/missing/unmatched report with CSV export.
+- External developers call an API endpoint with a screenshot and get a structured result, with API key auth and usage-based pricing.
 
 ---
 
@@ -96,149 +121,147 @@ Three platforms share the extraction engine. Phase 2A/2A-2 serves Prize Manager 
 
 ### Phase 2A — COMPLETE ✅
 
-**F1 — Optional screenshot upload.** `TournamentUpgrade.tsx` has an optional file input (jpeg/png/webp/heic, ≤10MB). Upload path: `extraction-uploads/{uid}/payments/{tournament_id}/{uuid}{ext}`. `/extract` invoked with `doc_type='payment_screenshot'`. UTR-text-only path unchanged.
-
-**F2 — Payment schema extraction.** `extraction_schemas` v1, `payment_screenshot`, `is_active=true`. Fields: `amount_inr` (required), `utr` (required), `txn_date`, `payee_vpa`, `payer_name`, `status_text`, `app`. Two-pass OCR flow unchanged.
-
-**F3 — Payment trust invariants.** Five invariants in `extract/paymentTrustCheck.ts`: `utr_format`, `utr_duplicate`, `amount_mismatch` (coupon-aware, ±₹1 tolerance), `payee_vpa_mismatch` (vs secret), `date_stale` (>30 days).
-
-**F4 — Force `needs_review`.** All `payment_screenshot` extractions exit with `status='needs_review'` regardless of flags or confidence. `auto_ok` is never reachable for this doc_type (until Phase 2A-3 conditional auto-approval).
-
-**F5 — Admin evidence panel.** `PendingPaymentsPanel.tsx` shows extracted fields with trust indicators. Grounded fields show ✓ in green; flagged fields show reason in amber/red. Null `payee_vpa` shows active "NOT VERIFIED" caution. Unextracted claims show "UTR only — manual check required".
-
-**F6 — No change to approval path.** `review_tournament_payment` RPC unchanged. Extraction result is reference evidence, not a gate.
-
-**F7 — Migration hygiene.** Baseline migrations for `tournament_payments` and `platform_feature_flags` applied before Phase 2A code.
+**F1** optional screenshot upload · **F2** `payment_screenshot` schema, now **v3** · **F3** eight trust invariants in `extract/paymentTrustCheck.ts`, returning `{flags, verdicts}` · **F4** all `payment_screenshot` extractions exit `needs_review`; `auto_ok` unreachable for this doc_type · **F5** admin evidence panel · **F6** `review_tournament_payment` unchanged · **F7** migration hygiene.
 
 ### Phase 2A-2 — COMPLETE ✅
 
-**L1 — Dedicated `/admin/payments` route.** Payment Approvals moved out of `/admin/users`. `/admin/users` keeps only user/role management (organizer-access toggle).
+**L1** `/admin/payments` route · **L2** tournament-scoped screenshot storage · **L3** email on approve and reject, exactly-once · **L4** persistent status banner · **L5** editable extracted UTR · **L6** flow resumption via `return_to` · **L7** rejection non-terminal.
 
-**L2 — Tournament-scoped screenshot storage + admin viewing.** Upload path: `{uid}/payments/{tournament_id}/{uuid}{ext}`. Master read policy on `storage.objects`, `extractions`, and `extraction_documents`. In-app screenshot dialog via signed URL.
+### Phase 2A-3 — COMPLETE ✅
 
-**L3 — Email on approve and reject.** Resend outbox pattern, exactly-once delivery via `(payment_id, action)` unique index. Reject email includes reason and payment page link. Approve email includes deep-link back to the interrupted flow.
+**F0a** close `extractions` UPDATE policy · **F0b** schema v2 → v3 · **F0c** three new trust invariants · **F0d** UTR-match and duplicate enforcement + backstop index · **F0e** payment-page failure states · **F1** profile verification prerequisite.
 
-**L4 — Persistent in-app status.** Dashboard shows a banner for owned tournaments with `pending` or `rejected` payment. Suppressed when an active entitlement exists. Clears on approval (query re-runs on mount/focus).
+**E1–E3 client write-grant audit** ✅ 14 Aug — `issue_referral_rewards` EXECUTE revoked from clients, `publish_tournament` ownership check, high-water-mark billing. **This audit preceded F2; earlier revisions of this document scheduled it afterwards.**
 
-**L5 — Editable extracted UTR.** When extraction returns a `utr`, it pre-fills the UTR input. User can edit before submitting. Pre-fill cleared on any edit (`utrValueRef` handles race with 90-second extraction).
+**PF1 pricing basis consolidation** ✅ 16 Aug — `tournament_billing_basis`, `tournament_pro_tier` and `expected_payment_amount_inr` are the single canonical implementations.
 
-**L6 — Flow resumption on approval.** 5-arg `submit_tournament_payment_claim` stores `return_to` (validated relative path). Trigger copies it to the outbox row. Approve email deep-links to that path.
+### F2 — COMPLETE ✅ (live 20 Aug 2026 17:26:33 UTC)
 
-**L7 — Rejection is non-terminal + attempts auditable.** Rejected organizer can submit a new claim. All attempts retained in `tournament_payments`. Attempt ordinal ("N of M") visible in All Payments table.
+**F2-1 — Conditional auto-approval, server-side only.** ✅ Auto-approves only when **all eight named invariant verdicts read `pass`**, the payer meets the F1 gate, and the kill switch is on. **NOT "zero flags of any kind"** — cosmetic `ungrounded` flags are nondeterministic across identical uploads and would make auto-approval a coin flip (D28). **And not "no allow-listed reason present"** — five invariants have skip paths, and `skipped` is not `pass` (D39). Pro unlocks via `source='auto_upi'`. The `AFTER UPDATE OF status` trigger enqueues the notification with no extra wiring.
 
-### Phase 2A-3 — Must-Have (P0)
+**F2-2 — Decline messages must not be a fraud oracle.** ✅ Generic message to the organizer; itemised reasons only in `/admin/payments`.
 
-**Note:** The following trust-hardening requirements (F0a–F0d) are prerequisites that must be completed before the auto-approval gate (F2) is built.
+**F2-3 — `file_hash` duplicate-screenshot invariant.** ✅ Global scope, restricted to non-rejected payments. The `tp.id <> v_payment_id` predicate is load-bearing — remove it and the gate silently never fires (harness cases 7 and 7B).
 
-**F0a — Close `extractions` UPDATE policy. ✅ COMPLETE (2 Aug 2026, migration `20260802124253`).**
-Investigation found `BrochureReview.tsx` DOES write `payload` (load-bearing) and `status`, never `field_flags`. Narrowed rather than revoked: column grants limit `authenticated` to `payload`/`status`/`updated_at`, and the policy is doc_type-whitelisted to `chess_brochure`. Also closed an unused `extraction_documents` UPDATE policy that would have defeated the doc_type gate by allowing `doc_type` itself to be flipped. Negative-tested on both layers. See PHASE2_ARCHITECTURE.md D29.
+**F2-4 — Admin oversight record + email for auto-approvals.** ⚠️ **Partially delivered.** The email ships and the oversight record carries the exact eight verdicts. **The `/admin/payments` auto-approved section was not built** — F2 touched zero files under `src/`. Carried into F3-C.
 
-**F0b — `payment_screenshot` schema v2 → v3. ✅ COMPLETE (2-3 Aug 2026, migrations `20260802165554`, `20260803181034`).**
-v2 added `direction_label`, `payee_name`, `txn_id`. v3 **removed `direction_label`** after three production fixtures showed it inconsistent across apps and false-positiving on legitimate payments. `payee_name` and `txn_id` retained — both grounded correctly on every fixture. Direction moved to a regex over `ocr_text`. See PHASE2_ARCHITECTURE.md D26, D27.
+**F2-5 — Kill-switch-governed gate.** ✅ **Amended from the original requirement.** The original specified a Supabase Edge Function secret. That is unimplementable: the decision lives in a database RPC, and an Edge Function secret is unreadable from one. Delivered as `platform_feature_flags.payment_auto_approve` — RLS on, zero policies, no client grants, control-tested unreadable by `authenticated`. Never in frontend code or logs. Off switch: `supabase/ops/f2_auto_approve_off.sql`, safe to run at any time.
 
-**F0c — Three new trust invariants. ✅ COMPLETE (3 Aug 2026, `extract` v44).**
-`direction_not_outgoing` (outgoing must be PROVEN — see D27), `payee_vpa_missing` (closes the D22 fail-open), `required_fields_missing` (amount + UTR + date all null). Also fixed vacuous `txn_id` grounding: GPay's `CICAgLii79OjJA` strips to `79` under `groundDigits` and matched any receipt; below a 6-digit floor it now grounds the literal string.
+**F2-6 — Manual path preserved.** ✅ Anything that does not auto-approve flows to `PendingPaymentsPanel`. `review_tournament_payment` untouched — F2 mirrors its entitlement logic rather than calling it.
 
-**Verified in production, both directions, on the same screenshots:**
-- PhonePe incoming (the attack): 1 flag before → **3 flags after** (`amount_mismatch`, `payee_vpa_missing`, `direction_not_outgoing`)
-- GPay outgoing (the legitimate case): **no** `direction_not_outgoing`, **no** `payee_vpa_missing` — clears on the platform VPA match
+**F2-7 — `source` CHECK widened.** ✅ `tournament_entitlements.source` admits `auto_upi`.
 
-Tests: 448 passing / 3 known pre-existing failures.
+### Referrals repair — COMPLETE ✅ (22 August 2026)
 
-**F0d — UTR-match and duplicate enforcement.** Hard-block at submission (not just admin-panel warning) when: (a) UTR already exists in non-rejected payments; (b) submitted UTR does not match `payload.utr` from the extraction. For (b): visible pop-up with contact details as escape hatch for OCR misreads. Requires F0a first (payload.utr is mutable until then).
+**R-1 — Restore inserts into `public.referrals`.** ✅ `20260822120000`. `trg_referrals_set_snapshot` and its function dropped — the body did nothing but populate two columns dropped on 12 May, so there was no behaviour to preserve. Migration carries a pre-flight, a structural post-check, a behavioural proof that inserts a real referral and unwinds it, and a leak check.
 
-**F1 — Profile verification prerequisite.** Verified email + verified phone required before payment submission. On app open with incomplete profile, show completion prompt.
+**R-2 — Stop the caller destroying its own input.** ✅ `useApplyPendingReferral` now inspects `rpcError`, warns in production rather than only in debug builds, and retains the code on every non-terminal outcome. Terminal set: `applied`, `already_applied`, `self_referral_not_allowed`, `invalid_code`.
 
-**F2 — Conditional auto-approval (server-side only).** Auto-approves ONLY when: no flag fires whose `reason` is in the security-relevant allow-list (`utr_format`, `utr_duplicate`, `amount_mismatch`, `payee_vpa_mismatch`, `payee_vpa_missing`, `date_stale`, `direction_not_outgoing`, `required_fields_missing`), payer profile is verified, server-side auto-approve secret is enabled. **NOT "zero flags of any kind"** — cosmetic `ungrounded` flags are nondeterministic across identical uploads and would make auto-approval a coin flip. See PHASE2_ARCHITECTURE.md D28. On auto-approval: Pro unlocks via `source='auto_upi'` (same entitlement grant as `review_tournament_payment`). `AFTER UPDATE OF status` trigger automatically enqueues the notification — no additional wiring needed.
+**R-3 — Keep the F2 harness green.** ✅ The referral seed for cases 1g/1h no longer disables a trigger around its INSERT. Re-run confirmed 24/24.
 
-**F3 — Reapply pop-up on any flag.** Specific, human-readable pop-up (what's wrong + reapply action). No auto-approval when any flag fires.
+**Not in scope, deliberately:** `apply_referral_code`'s attribution window. See Resolved Decisions.
 
-**F4 — Admin oversight record + email for auto-approvals.** Every auto-approval visible in `/admin/payments` with an "auto-approved" filter/section. Email to chess.tushar@gmail.com via existing Resend outbox pattern.
+### F3 — Must-Have (P0), NEXT
 
-**F5 — Secret-governed gate.** Supabase Edge Function secret only. Never in frontend. Never logged. Flipping it off reverts to full manual approval (Phase 2A behaviour) with no code change.
+**F3-A — `payment_auto_approval_audit`.** One row per audited auto-approval: `payment_id` PK, `outcome` CHECK (`ok` | `loophole` | `uncertain`), `reason`, `action_taken`, `audited_by`, `audited_at`. Same lockdown as `payment_invariant_verdicts`: RLS on, zero policies, no client grants, written only by a master-only SECURITY DEFINER RPC.
 
-**F6 — Manual path preserved.** Anything that doesn't auto-approve (flags, unverified profile, secret off) flows to existing `PendingPaymentsPanel` with reasons. `review_tournament_payment` core entitlement logic unchanged.
+**F3-B — `revoke_auto_entitlement(payment_id, reason)`.** Sets `ends_at = now()` rather than deleting, so evidence survives. Flips the payment to `rejected`, firing the existing trigger. Must not touch `review_tournament_payment`. **Open question: is the organizer emailed on revocation, or is there a quieter path?**
 
-### Phase 2A-3 — Nice-to-Have (P1)
+**F3-C — `/admin/payments` auto-approved section, plus five UI defects.** Closes F2-4. Predicate `status='approved' AND reviewed_by IS NULL`, re-verified 26 Aug: exactly 1 match, and every pre-F2 payment carries a reviewer, so zero false positives.
 
-- Reapply attempt limit: flag to admin after N rejections for same tournament (suggest 3), unlimited otherwise.
-- Dashboard banner also briefly surfaces approved payments before clearing (vs current silent clear).
+Production validation surfaced five concrete defects that belong here (PROJECT_STATE B13): the post-submit toast says "awaiting admin approval" even when the payment auto-approved; `/account` is a dead end from the payment gate; spent coupons still display as available; rejection notes are optional yet are the only channel explaining a rejection; and the screenshot "optional" label understates that omitting it forfeits auto-approval.
 
-### Phase 2B — Must-Have (P0)
+### Phase 2B / 2C–D — Must-Have (P0)
 
-**F1 — Bank statement upload.** Admin page. PDF only. `privacy_class='sensitive'`.
+**2B:** bank statement upload (PDF, `sensitive`) · local pdfplumber extraction, never Gemini · UTR-to-payment matching · reconciliation report · no cloud model for statement content.
 
-**F2 — Local text extraction.** pdfplumber (not Gemini) for Pass 1. Returns transaction rows as JSON. Graceful error for scanned PDFs.
+**2C–D:** `api_keys` table · `POST /functions/v1/extract-api` with key auth · `api_usage_logs` metering · MCP tools · multi-tenant isolation.
 
-**F3 — Transaction matching.** UTR-to-payment matching: `reconciled`, `bank_only`, `system_only`.
+---
 
-**F4 — Reconciliation report.** Summary in admin UI: counts + per-payment reconciliation status.
+## Resolved Decisions
 
-**F5 — No cloud model for bank statement content.** pdfplumber only.
+**RESOLVED — Auto-approve gate shape.** Named invariant **verdicts**, all eight reading `pass`. Not flag count (D28), and not "no allow-listed reason present" (D39). Proven on live data: a CRED receipt produced zero flags with two invariants `skipped`, and a flags-only rule would have auto-approved a ₹500 claim from a receipt that never printed a UTR.
 
-### Phase 2C–D — Must-Have (P0)
+**RESOLVED — Kill switch mechanism.** Database feature flag, not an Edge Function secret. Amends F2-5 as originally written.
 
-**F1 — API key management.** `api_keys` table with key generation, owner, rate limit tier, usage counts.
+**RESOLVED — Auto-approval decision location.** In the claim-time RPC `submit_tournament_payment_claim`, not inside `/extract` and not in a separate async path. `/extract` records verdicts; the RPC decides.
 
-**F2 — REST API endpoint.** `POST /functions/v1/extract-api`. API key auth. Same request body and response as internal `/extract`.
+**RESOLVED — `file_hash` scope.** Global, restricted to non-rejected payments, and never matching the payment row being evaluated.
 
-**F3 — Usage metering.** `api_usage_logs` table per call.
+**RESOLVED — Phone verification provider and cost.** No provider. OTP deferred. TRAI DLT registration is the real cost, and against 36 users and 7 payments it fails guardrail 5. **F2's identity strength comes from the verdict allow-list and confirmed email, not the phone field.**
 
-**F4 — MCP server tools.** `extract_document`, `get_extraction`, `query_documents`.
+**RESOLVED — Gate scope.** Email + phone only, not the full five-field profile.
 
-**F5 — Multi-tenant isolation.** Each API key sees only its own extraction rows.
+**RESOLVED — Phone uniqueness.** None until OTP exists. Uniqueness over unverified data is a squatting attack.
+
+**RESOLVED — Decline message content.** Generic to the organizer, itemised in `/admin/payments`.
+
+**RESOLVED — `apply_referral_code` attribution window stays as-is (22 Aug 2026).** The live function body contains an `email_confirmed_at` check, a 300-second window requiring `abs(last_sign_in_at − email_confirmed_at) ≤ 300`, and an `ON CONFLICT` clause — **none of which appear in any migration.** The last referral row (19 Apr) predates the column drop (12 May) by 23 days, which looked like a second independent bug.
+
+Measurement did not support that. Median `|last_sign_in_at − email_confirmed_at|` across all 36 users is **45 seconds**; 20 of 36 pass the window today; and in the canonical flow the confirmation click *is* the sign-in, so the delta is ≈0. The 23-day gap is adequately explained by volume — 14 signups since 19 April, referral links shared informally.
+
+**Widening it would weaken an anti-abuse check on an unproven hypothesis, which guardrail 3 forbids.** Recorded as untracked drift to be captured with zero behaviour change, not as a defect.
 
 ---
 
 ## Open Questions
 
-### Phase 2A-3
+### F3
+- **Revocation notification.** Email the organizer on revocation, or a quieter path?
+- **Audit cadence.** How often is `f2_auto_approval_report.sql` run, and does an unaudited auto-approval age into an alert?
 
-- **Phone verification provider and cost.** OTP SMS is not free. Which provider, what budget, or is there a free/low-cost path? Email verification likely reuses existing Supabase auth email.
-- **Reapply UX.** Modal vs inline. How many reapply attempts before forcing manual review?
-- **`auto_upi` source value.** Needs the `source` CHECK on `tournament_entitlements` widened (mirroring how `manual_upi` was added).
-- **Auto-approval decision location.** Inside `/extract` (has fresh flags and doc context, harder to tamper) vs a separate step invoked after extraction returns. Inside `/extract` is preferred — avoids a window where a tampered extraction row could affect the decision. *Note: F0a substantially reduces the tamper risk either way — `payload` and `field_flags` are no longer client-writable for `payment_screenshot`.*
-- **RESOLVED — auto-approve gate shape.** Named security-relevant flag reasons, not flag count. See D28.
+### Referrals follow-up
+- **Nine untracked `public` functions.** Capture them into a drift migration with zero behaviour change. Read-only audit first — do not rewrite a working function to make a document tidy.
+
+### Brochure extraction (new 26 Aug)
+- **`sum_mismatch` is a false positive on rank ranges.** Fix the arithmetic first (known-good test case: Shahdol, ₹51,000). Then decide how much effort category naming deserves, and build a fixture suite before touching any prompt — see D41.
 
 ### Phase 2B
-
-- **Where does pdfplumber run?** Options: Python microservice on Railway, Deno subprocess, WASM in Deno. Evaluate at Phase 2B start.
+- **Where does pdfplumber run?** Python microservice on Railway, Deno subprocess, or WASM in Deno.
 
 ### Phase 2C–D
-
 - **Pricing model.** Per-call (₹2–5/verification) or monthly tiers (₹500–2000/month)?
 
 ---
 
 ## Success Metrics
 
-**Phase 2A (2 weeks post-deploy — measuring now):**
-- Time from claim submission to admin approval decision: target <30 seconds for screenshot-backed claims.
-- Flag accuracy: <5% false positives on clean legitimate screenshots.
-- Fraudulent claim detection: >80% of deliberately wrong-amount or old-date screenshots flagged.
-- Zero `auto_ok` statuses in `extractions` for `doc_type='payment_screenshot'`. ✅ Confirmed.
+**Phase 2A (measured):** zero `auto_ok` for `payment_screenshot` ✅. The PhonePe incoming-receipt attack went from 1 flag to 3 after F0c ✅.
 
-**Phase 2A-3 (2 weeks post-deploy):**
-- Auto-approval rate for clean submissions with verified profiles: target >70%.
-- False auto-approval rate: target 0% (zero payments auto-approved that should have been flagged).
-- Reapply pop-up accuracy: target >95% (flag fires only when something is genuinely wrong).
+**F1 (measure over 2 weeks):** organizers who hit the gate and complete their profile rather than abandoning — target >80%.
 
-**Phase 2B:**
-- Upload to reconciliation report: <2 minutes for a 3-month statement.
-- Match rate on known good UTRs: >95%.
+**F2 — MEASURED 25–26 Aug 2026 ✅**
+- **False auto-approval rate: 0%, target met.** Eight adversarial cases (wrong amount, wrong payee, duplicate UTR, no screenshot, coupon reuse, another user's coupon, self-referral, free tier). Across all 11 payments in the system exactly **one** is `approved` with `reviewed_by IS NULL`, and it is the legitimate one.
+- **First real auto-approval on live money:** ₹500, all eight verdicts `pass` at `checker_version = 1`, entitlement `auto_upi`, both outbox rows sent first attempt.
+- **Free tier verified at the boundaries:** 150→₹0, 151→₹500, 500→₹500, 501→₹1000.
+- Auto-approval rate for clean submissions — **the original >70% target must still be re-derived from real data.** `payee_vpa` is present in only 7 of 17 payment extractions, and absent VPA is a hard decline (it fails, it does not skip). Bank-account transfers carry no VPA and can never auto-approve. That is correct security behaviour and must not be loosened, but it caps the achievable rate. The historical sample is dominated by deliberate test and attack screenshots and is not representative.
 
-**Phase 2C–D:**
-- First external API call from Certificate Hub.
-- First revenue from external API consumer within 4 weeks of Phase 2C launch.
+**Referrals — MEASURED 25–26 Aug 2026 ✅ (target was 4 weeks; met in 4 days)**
+- **6 `referrals` rows** (was 3, last one 19 April) — a 4-deep chain captured through the live signup flow, every row's `referral_code_id` owner matching its `referrer_id`.
+- **5 `referral_rewards` rows — the first this project has ever produced.** Zero rewards was the symptom that should have raised the alarm three months earlier.
+- **Both trigger paths proven:** a UPI payment issued 3 rewards (100/50/25%), and a coupon redemption cascaded a further 2, confirming `redeem_coupon_for_tournament` fires the chain exactly as paying does.
+- 5 `REF%` coupons minted, 1 redeemed to a `source='coupon'` entitlement.
+
+**Phase 2B:** reconciliation report <2 minutes for a 3-month statement; match rate >95%.
+
+**Phase 2C–D:** first external API call from Certificate Hub; first revenue within 4 weeks of launch.
 
 ---
 
 ## Timeline
 
-- **Phase 2A:** ✅ Complete (shipped Jul 2026)
-- **Phase 2A-2:** ✅ Complete (shipped Aug 2026)
-- **Phase 2A-3:** 3–4 Claude Code sessions. Start with trust-hardening prerequisites (3b-4 scope) then auto-approval. New chat.
-- **Phase 2B:** 2–3 sessions after 2A-3. New chat.
+- **Phase 2A:** ✅ shipped Jul 2026
+- **Phase 2A-2:** ✅ shipped Aug 2026
+- **F0a–F0e + closeout:** ✅ 2–9 Aug 2026
+- **F1:** ✅ 12–13 Aug 2026
+- **Client write-grant audit (E1–E3):** ✅ 14 Aug 2026 — **preceded F2**
+- **PF1:** ✅ 16 Aug 2026
+- **F2:** ✅ 17–20 Aug 2026, live 20 Aug 17:26 UTC
+- **Referrals repair:** ✅ 22 Aug 2026
+- **End-to-end production validation:** ✅ 25–26 Aug 2026 — referral chain, first auto-approval, first rewards, 8 adversarial tests
+- **F3 (auto-approval oversight loop):** next. New chat.
+- **Untracked-function drift capture:** after F3, before Phase 2B.
+- **Phase 2B:** 2–3 sessions after that. New chat.
 - **Phase 2C–D:** 4–5 sessions after 2B. New chat.
-- **Phase 3 (Document Intelligence):** Separate PRD. After 2C–D.
-- **Phase 4 (Gallery + Document Scanner):** Separate PRD. After Phase 3.
+- **Phase 3 (Document Intelligence) / Phase 4 (Gallery + Scanner):** separate PRDs.
