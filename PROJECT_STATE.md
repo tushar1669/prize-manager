@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 26 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 27 August 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -336,7 +336,13 @@ Found by using the product, not by reading it. All five confirmed at source.
 
 Two separate defects, both fully diagnosed against live extractions.
 
-**8a — `sum_mismatch` fires on correct data.** The check sums `cash_amount` once per prize row, ignoring `rank_from`/`rank_to`. On the Shahdol brochure: naive sum **₹44,500**, rank-aware sum **₹51,000**, declared fund **₹51,000**. A "4th & 5th Prize ₹3,000" row counts once instead of twice; across three range rows it loses exactly ₹6,500. **The extraction was correct and the invariant was wrong.** Fix: multiply by `(rank_to − rank_from + 1)` when both are present. Correcting a false positive is not weakening a check (guardrail 3), and there is a known-good test case. Do this one first — it is arithmetic.
+**8a — WITHDRAWN 27 Aug. `sum_mismatch` is correct and already rank-aware.** The 26 Aug entry claimed a false positive on rank ranges. That was wrong, and it was inferred from arithmetic without checking whether the flag had actually fired. Verified since:
+
+- `trustCheck.ts` already computes `span = rank_to − rank_from + 1` and adds `amount × span`. The fix I was about to write is in the code and deployed.
+- **Shahdol raised no `sum_mismatch` at all** — its 15 flags are all `ungrounded`. Rank-aware sum ₹51,000 = declared ₹51,000, so the check correctly stayed silent.
+- Vijaywada's flag records `expected: 530000` against `stated: 800000`. Recomputing the payload rank-aware gives **exactly ₹530,000**, matching the deployed function. That flag is a **true positive** — the extraction genuinely missed ₹270,000 of prizes.
+
+No code change. The lesson is recorded rather than the fix: an invariant is only proven to misfire when the flag is observed firing on data known to be correct.
 
 **8b — column-header category names are lost.** The model names categories that have row labels or section headings, and fails on categories printed as **column headers** in a wide grid. Shahdol: 20 categories found, 6 named, **14 unnamed** — exactly the 14 age-group columns (BEST UNDER 07/09/11/13/15/17/19 × BOYS and GIRLS). Vijaywada fails identically.
 
@@ -385,7 +391,7 @@ Phase 2B (bank statement reconciliation) blocked on 2A-3, which is **complete**.
 | **3 referrals lost between 12 May and 22 Aug are unrecoverable** | Accepted residual | The code was destroyed client-side on each failure, so nothing records who referred whom. **Not backfillable.** 14 signups fell in the window; an unknown subset carried a code |
 | ~~Referral system never observed working end to end~~ | ✅ **RESOLVED 26 Aug** | 4-deep chain, first auto-approval on live money, first 5 `referral_rewards` rows, coupon-redemption cascade, 8 adversarial tests. See §12.5 |
 | ~~F2 false auto-approval rate unmeasured~~ | ✅ **RESOLVED 26 Aug** | 8 adversarial cases; exactly 1 `approved` + `reviewed_by IS NULL` across all 11 payments, and it is the legitimate one. **0% false auto-approval** |
-| **`sum_mismatch` fires on correct data (rank ranges)** | MEDIUM — B8a | Sums `cash_amount` once per row, ignoring `rank_from`/`rank_to`. Shahdol: naive ₹44,500 vs rank-aware ₹51,000 vs declared ₹51,000. **False positive on most Indian brochures.** Arithmetic fix, known-good test case |
+| ~~`sum_mismatch` fires on correct data (rank ranges)~~ | ✅ **WITHDRAWN 27 Aug — not a defect** | The check is already rank-aware in `trustCheck.ts` and deployed. Shahdol raised no `sum_mismatch`; vijaywada's is a true positive (`expected: 530000` matches a rank-aware recompute of the payload). The 26 Aug entry inferred a false positive from arithmetic without checking whether the flag fired |
 | **Brochure column-header category names are lost** | MEDIUM — B8b | 14 of 20 Shahdol categories unnamed. An earlier run of the same file silently dropped those 14 entirely while showing only 1 flag — **fewer flags, more data loss** |
 | **Five UI defects from production validation** | MEDIUM — B13 | Auto-approval shows "awaiting admin approval"; `/account` dead end; spent coupons look available; rejection notes optional; screenshot "optional" copy. All belong to F3-C |
 | **Deleting a user orphans their referral rows** | LOW — B10 | No FK on `referrer_id`/`referred_id`; 2 of 6 rows now dangle. Predates this session |

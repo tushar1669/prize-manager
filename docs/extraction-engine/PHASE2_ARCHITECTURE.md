@@ -1,7 +1,7 @@
 # Architecture — Phase 2: Universal Extraction Engine
 
 **Status:** Accepted — Phase 2A, 2A-2 complete; F0a–F0e complete; F1 complete; **F2 (conditional auto-approval) SHIPPED AND LIVE 20 Aug 2026 17:26:33 UTC**; **referrals repair complete 22 Aug 2026, validated end to end in production 25–26 Aug 2026**. Phase 2A-3 is closed.
-**Date:** July–August 2026 (last revised 26 Aug 2026)
+**Date:** July–August 2026 (last revised 27 Aug 2026)
 **Deciders:** Tushar (owner), Claude (architecture)
 **Predecessor:** `docs/extraction-engine/ARCHITECTURE.md` (Phase 1 — read this first)
 **Repo location:** `docs/extraction-engine/PHASE2_ARCHITECTURE.md`
@@ -302,9 +302,11 @@ The 1-flag run looked clean. It had **silently dropped all 14 age-group categori
 
 **A reviewer optimising for a low flag count would have approved the lossy extraction and rejected the complete one.** Flag count is a measure of what the trust layer noticed, not of what the extraction got right. Any future tuning must be judged against expected output on a fixture set, never against flag count.
 
-**This decision also records a false positive in our own trust layer.** `sum_mismatch` sums `cash_amount` once per prize row and ignores `rank_from`/`rank_to`. On Shahdol the naive sum is ₹44,500 against a declared ₹51,000; the rank-aware sum — `cash_amount × (rank_to − rank_from + 1)` — is **exactly ₹51,000**. A row reading "4th & 5th Prize ₹3,000" was counted once instead of twice. **The extraction was correct and the invariant was wrong**, and it will misfire on any brochure using rank ranges, which is most of them.
+**A correction, recorded because the error is instructive.** The first version of this decision claimed `sum_mismatch` was a false positive that ignored rank ranges. It was not. `trustCheck.ts` already computes `amount × (rank_to − rank_from + 1)`, and that code is deployed.
 
-Correcting a false positive is not weakening a check — guardrail 3 forbids loosening a check that is working, not fixing one that is doing the wrong arithmetic. Tracked as B8.
+The mistake was inferring a false positive from arithmetic alone. Shahdol's rank-aware sum (₹51,000) equals its declared fund, so the check correctly **stayed silent** — its 15 flags are all `ungrounded`. Nobody checked whether `sum_mismatch` had actually fired before concluding it had misfired. Vijaywada's flag, meanwhile, records `expected: 530000` against `stated: 800000`, and a rank-aware recompute of its payload gives exactly ₹530,000 — a **true positive** on an extraction that genuinely lost ₹270,000 of prizes.
+
+**Generalisation: an invariant is only proven to misfire when you observe the flag firing on data you have independently established is correct.** Reproducing the check's arithmetic and disagreeing with it proves nothing about which arithmetic the deployed code actually ran. Verify the artifact, not your model of it — the same discipline that D40 demanded for triggers that are not in the repo.
 
 **Third structural point:** the failing categories are precisely those printed as **column headers** in a wide grid. Every category the model named had a row label or section heading. A category emitted with a null name is malformed input and should fail once, clearly, rather than producing N generic `ungrounded` flags that bury the real cause.
 
@@ -347,7 +349,6 @@ See `PROJECT_STATE.md` §19 for the live list. Resolved in this document's perio
 | Gate / helper drift risk | ⏳ MEDIUM — nothing tests `my_payment_gate_status()` |
 | Notification `MAX_ATTEMPTS=5` with no backoff | ⏳ MEDIUM — more consequential now the oversight email is the primary alert |
 | `tsconfig.app.json` does not cover `supabase/functions/` or `tests/` | ⏳ MEDIUM |
-| **`sum_mismatch` ignores rank ranges — false positive** | ⏳ **MEDIUM — B8a; see D41** |
 | **Brochure column-header category names lost** | ⏳ **MEDIUM — B8b; see D41** |
 | **Five UI defects from production validation** | ⏳ **MEDIUM — B13, all F3-C** |
 | Direction marker regexes lack `\b` word boundaries | ⏳ LOW — bounded by D27 |

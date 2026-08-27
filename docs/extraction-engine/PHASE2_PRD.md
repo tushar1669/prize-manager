@@ -3,7 +3,7 @@
 **Product:** Universal Extraction Engine (prize-manager.com first, then certificate-hub.com and sportup.online via API)
 **Status:** **Phase 2A-3 is COMPLETE.** F0a–F0e, F1, the client write-grant audit, PF1 and **F2 (conditional auto-approval, live 20 Aug 2026)** are all shipped. Referral capture repaired 22 Aug 2026 and **validated end to end in production 25–26 Aug 2026**. **Next: F3 (auto-approval oversight loop), then Phase 2B.**
 **Owner:** Tushar (Product/Eng), Claude (architecture & QA support)
-**Version:** 1.5 — 26 August 2026
+**Version:** 1.6 — 27 August 2026
 **Repo location:** `docs/extraction-engine/PHASE2_PRD.md`
 **Predecessor:** `docs/extraction-engine/PRD.md` (Phase 1 — brochure extraction, shipped)
 
@@ -214,8 +214,9 @@ Measurement did not support that. Median `|last_sign_in_at − email_confirmed_a
 ### Referrals follow-up
 - **Nine untracked `public` functions.** Capture them into a drift migration with zero behaviour change. Read-only audit first — do not rewrite a working function to make a document tidy.
 
-### Brochure extraction (new 26 Aug)
-- **`sum_mismatch` is a false positive on rank ranges.** Fix the arithmetic first (known-good test case: Shahdol, ₹51,000). Then decide how much effort category naming deserves, and build a fixture suite before touching any prompt — see D41.
+### Brochure extraction (new 26 Aug, revised 27 Aug)
+- **`sum_mismatch` needs no fix.** The rank-range false positive reported on 26 Aug was not real — the check is already rank-aware and deployed. Withdrawn; see D41.
+- **Category naming from column headers is the real defect (B8b).** Build a brochure fixture suite with expected outputs and measure run-to-run variance before touching any prompt. Judge against expected output, never against flag count.
 
 ### Phase 2B
 - **Where does pdfplumber run?** Python microservice on Railway, Deno subprocess, or WASM in Deno.
