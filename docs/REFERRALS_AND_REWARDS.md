@@ -5,6 +5,10 @@
 Prize-Manager includes a 3-level referral program to help organizers invite other organizers.
 When referred users upgrade to Pro, the referrer earns discount coupons (L1/L2/L3).
 
+**Audience: developers and admins.** For the plain-language version to share with organizers, see [REFERRAL_PROGRAM_EXPLAINER.md](./REFERRAL_PROGRAM_EXPLAINER.md).
+
+*Last verified against the live database 26 August 2026, after the referrals repair (`20260822120000`) and end-to-end production validation.*
+
 This doc is the canonical reference for:
 
 - Referral code format + sharing links
@@ -22,7 +26,12 @@ This doc is the canonical reference for:
 
 ## Reward Levels
 
-Rewards are issued when a referred organizer upgrades.
+Rewards are issued when a referred organizer upgrades. **Two things count as an upgrade:**
+
+1. Paying for Pro by UPI (manual approval **or** F2 auto-approval)
+2. **Redeeming a Pro coupon** — `redeem_coupon_for_tournament` calls `issue_referral_rewards` exactly as paying does, so a chain keeps paying out
+
+Rewards walk **up** the chain from whoever upgraded, stopping after 3 levels.
 
 | Level | Who triggers it | Discount | Coupon prefix | coupons.origin |
 |------:|------------------|---------:|---------------|----------------|
@@ -55,7 +64,23 @@ A global hook runs once per authenticated session:
 - **Hook:** `src/hooks/useApplyPendingReferral.ts` (wired in `src/App.tsx`)
 - **Priority:** URL param → user_metadata → localStorage
 - Calls RPC: `apply_referral_code` (idempotent; never blocks login)
-- Cleans up: removes localStorage key + clears `user_metadata.pending_referral_code`
+- **Cleans up only on a terminal outcome.** The terminal set is `applied`, `already_applied`, `self_referral_not_allowed`, `invalid_code`. On a hard `rpcError` or any non-terminal reason the code is **retained in all three places** so a later mount can retry, and a warning is logged in production.
+
+> Until 22 Aug 2026 the cleanup ran unconditionally after the RPC, so every failure destroyed the only copy of the code. That is why referrals lost between 12 May and 22 Aug are not backfillable. Never let an error handler discard the input that caused the error.
+
+## Attribution window (important, and easy to trip over in testing)
+
+`apply_referral_code` only attributes a referral when **all** of these hold:
+
+- the user's email is confirmed
+- `abs(last_sign_in_at − email_confirmed_at) ≤ 300` seconds
+- the user has no referral row yet (`ON CONFLICT (referred_id) DO NOTHING`)
+
+In the canonical flow this is automatic: clicking the confirmation link *is* the sign-in, so the delta is ≈0. But `last_sign_in_at` advances on every sign-in, so **the window closes permanently once the user signs in a second time.** A tester who signs up today and confirms tomorrow will get `not_new_signup_event`, not an error.
+
+One consequence: `self_referral_not_allowed` is unreachable in practice, because the window is evaluated first. A self-referral attempt returns `not_new_signup_event`. The refusal still happens, so there is no security gap.
+
+**This function's live body appears in no migration.** It is tracked drift — do not modify it casually.
 
 ## Key DB objects
 
@@ -63,9 +88,9 @@ A global hook runs once per authenticated session:
 
 - `referral_codes` — maps `user_id` → `code`
 - `referrals` — links `referrer_id` → `referred_id`
-  - Snapshot fields for better UX:
-    - `referred_email`
-    - `referred_label`
+  - **No snapshot columns.** `referred_email` and `referred_label` were dropped on 12 May 2026 by migration `20260512184720`. Display names are resolved by profile lookup with a `User …xxxx` fallback.
+  - **No triggers.** `trg_referrals_set_snapshot` populated those two columns and was left attached after the drop, raising `42703` on every insert for three months. Dropped by `20260822120000`. Do not add a BEFORE INSERT trigger here without a rolled-back insert proving inserts still succeed.
+  - **No FK on `referrer_id` / `referred_id`.** Deleting a user silently orphans their referral rows. Reports must tolerate dangling ids.
 - `referral_rewards` — tracks reward issuance (level, beneficiary, trigger user/tournament, coupon_id)
 - `coupons` — issued coupons with `origin` and `issued_to_email` snapshots
 
@@ -84,7 +109,8 @@ Admin-created coupons typically have origin `admin` or null.
 
 - Shows referral code + "Copy referral signup link"
 - Shows "Referred Users" list
-- Uses referral snapshots (`referred_email` / `referred_label`) first, then profile lookup, then fallback `User …xxxx`
+- Resolves referred users by profile lookup (`display_name` → `email`), falling back to `User …xxxx` when RLS hides the profile (`Account.tsx:333`). The old `referred_email` / `referred_label` snapshots are gone and are no longer consulted.
+- **Known gap (B13):** the coupon list does not join `coupon_redemptions`, so a spent coupon still displays as active.
 
 ### Admin: /admin/coupons
 
@@ -112,8 +138,10 @@ To debug referral capture in the browser:
 | Symptom | Likely cause | First check |
 |---------|-------------|-------------|
 | Referral not in DB after cross-device confirm | `user_metadata.pending_referral_code` not set at signup | Verify `Auth.tsx` passes `pending_referral_code` in `signUp` options |
-| Referred user shows as "User …xxxx" | `referred_email` snapshot is null | Check `apply_referral_code` RPC populates snapshot fields |
-| Reward coupon not issued after upgrade | Payment not yet approved | Approve payment in `/master-dashboard`; rewards trigger on approval |
+| Referral not in DB, no error shown | Attribution window missed — user signed in more than once before the hook ran | Expect `not_new_signup_event`. Working as designed; see Attribution window above |
+| Referred user shows as "User …xxxx" | Profile lookup blocked by RLS, or no profile row | Expected fallback. The old `referred_email` snapshot no longer exists |
+| Reward coupon not issued after upgrade | Payment not yet approved, or tournament is under 151 players (free tier — nothing to upgrade) | Check `/admin/payments`; rewards fire on approval **and** on coupon redemption |
+| `42703 record "new" has no field …` on insert | A trigger was re-added to `public.referrals` | There must be **zero** triggers on that table. See `20260822120000` |
 
 See also: [Troubleshooting](./TROUBLESHOOTING.md)
 
@@ -122,11 +150,20 @@ See also: [Troubleshooting](./TROUBLESHOOTING.md)
 Use these in the Supabase SQL editor to confirm state:
 
 ```sql
--- Latest referral links
-SELECT id, referrer_id, referred_id, referred_email, referred_label, created_at
-FROM referrals
-ORDER BY created_at DESC
+-- Latest referral links (resolved to emails; orphan-tolerant)
+SELECT r.created_at,
+       COALESCE(ur.email, '<deleted ' || r.referrer_id::text || '>') AS referrer,
+       COALESCE(ue.email, '<deleted ' || r.referred_id::text || '>') AS referred
+FROM referrals r
+LEFT JOIN auth.users ur ON ur.id = r.referrer_id
+LEFT JOIN auth.users ue ON ue.id = r.referred_id
+ORDER BY r.created_at DESC
 LIMIT 20;
+
+-- referrals must carry zero triggers (D40 regression guard)
+SELECT count(*) AS trigger_count
+FROM pg_trigger
+WHERE tgrelid = 'public.referrals'::regclass AND NOT tgisinternal;  -- expect 0
 
 -- Latest referral rewards issued
 SELECT id, level, reward_type, coupon_id, beneficiary_id, trigger_user_id, trigger_tournament_id, created_at
@@ -144,6 +181,7 @@ LIMIT 50;
 
 ## Related docs
 
+- [Referral Program Explainer](./REFERRAL_PROGRAM_EXPLAINER.md) — the plain-language version to share with organizers
 - [Coupons Lifecycle](./COUPONS_LIFECYCLE.md) — coupon states, analytics metrics, security
 - [Auth Callback](./AUTH_CALLBACK.md) — PKCE, hash tokens, redirect rules
 - [Security & Access Control](./SECURITY_ACCESS_CONTROL.md) — roles, RLS, route guards

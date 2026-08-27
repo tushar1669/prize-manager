@@ -173,7 +173,10 @@ A: Go to `/account` → "My Referral Code" → click "Copy referral signup link"
 A: Complete all 5 profile fields → click "Claim Reward" for a one-time Pro discount coupon (`PROFILE-` prefix). See [Referrals and Rewards](./REFERRALS_AND_REWARDS.md).
 
 **Q: How do I upgrade a tournament to Pro?**
-A: `/t/:id/upgrade` — pay ₹2,000 via UPI + submit UTR, or apply a coupon code.
+A: `/t/:id/payment` (`/t/:id/upgrade` is a legacy redirect). Pricing is by tournament size: **0–150 players free, 151–500 ₹500, 501+ ₹1,000.** Pay via UPI and submit the UTR, or apply a coupon code. A clean payment screenshot can unlock Pro immediately without waiting for admin approval.
+
+**Q: How does the referral program work?**
+A: Three levels — 100% / 50% / 25% off, paid when someone in your chain upgrades a tournament (not when they sign up). See [Referral Program Explainer](./REFERRAL_PROGRAM_EXPLAINER.md).
 
 **Q: My referral wasn't captured after cross-device signup.**
 A: See [Troubleshooting](./TROUBLESHOOTING.md) playbook #6. Use `?debug_referrals=1` to debug.
@@ -190,7 +193,8 @@ A: `/pending-approval` is now a legacy fallback route. Use `Refresh Status`; if 
 A: Protected routes require authentication; master-only routes additionally require master role.
 
 ## Related docs
-- [Referrals and Rewards](./REFERRALS_AND_REWARDS.md)
+- [Referral Program Explainer](./REFERRAL_PROGRAM_EXPLAINER.md) — plain language, for organizers
+- [Referrals and Rewards](./REFERRALS_AND_REWARDS.md) — developer reference
 - [Coupons Lifecycle](./COUPONS_LIFECYCLE.md)
 - [Auth Callback](./AUTH_CALLBACK.md)
 - [Troubleshooting](./TROUBLESHOOTING.md)
