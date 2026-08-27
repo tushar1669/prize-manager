@@ -25,7 +25,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17) |
 | Edge functions | `extract` (**v47**, bundle `704f5074`), `send-payment-notifications` (**v8**, bundle `ccf8c3be`, `verify_jwt=false`), `commit-extraction` (v13), `sendWelcomeOnboardingEmail` (v20), `allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `finalize`, `publicTeamPrizes`, `generatePdf`, `parseWorkbook`, `pmPing` |
 | Active extraction schema | v5 (chess_brochure), v3 (payment_screenshot, id `4e8beb4d-4a07-4ef8-a774-18b22f722522`) |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`1ee42db`** (referrals repair merge, 22 Aug) · previous `main` `57e2b09` · F2 merge `a5bebf8` |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`7bb9083`** (docs correction, 27 Aug) · referrals repair merge `1ee42db` · F2 merge `a5bebf8`. **`PROJECT_STATE.md` lives at the repo root only** — the `docs/extraction-engine/` copy was deleted on 27 Aug after sitting 13 days stale while claiming to be the source of truth |
 | Gemini model | `GEMINI_MODEL` = `gemini-3.1-flash-lite` |
 | Local paths | repo `~/Desktop/prize-manager`, test PDFs `~/Desktop/prize-manager/test-brochures/` |
 | Payment trust invariants | 8 in `extract/paymentTrustCheck.ts` · returns `{flags, verdicts}` |
@@ -297,7 +297,7 @@ Coupon redemption went through `rpc/redeem_coupon_for_tournament`, not a table w
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §11, §12, §12.5 and §13. F2 is shipped and live (20 Aug); `main` is `1ee42db`. The referrals repair shipped 22 Aug (`20260822120000`) and was **validated end to end in production on 25–26 Aug**: a 4-deep referral chain, F2's first real auto-approval on live money, the first 5 `referral_rewards` rows ever, a coupon-redemption cascade, and 8 adversarial tests with zero false auto-approvals. `apply_referral_code` remains deliberately unmodified (W3). Next workstream: F3, the auto-approval oversight loop (B5) — `payment_auto_approval_audit`, `revoke_auto_entitlement`, and the `/admin/payments` auto-approved section that closes F2-4. **F3-C now has five concrete UI defects waiting for it — see B13.** Audit before code: run `supabase/ops/f2_auto_approval_report.sql` and confirm it now returns exactly 1 auto-approval. Show me the plan before writing the migration.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §11, §12, §12.5 and §13. F2 is shipped and live (20 Aug); `main` is `7bb9083`. The referrals repair shipped 22 Aug (`20260822120000`) and was **validated end to end in production on 25–26 Aug**: a 4-deep referral chain, F2's first real auto-approval on live money, the first 5 `referral_rewards` rows ever, a coupon-redemption cascade, and 8 adversarial tests with zero false auto-approvals. `apply_referral_code` remains deliberately unmodified (W3). Next workstream: F3, the auto-approval oversight loop (B5) — `payment_auto_approval_audit`, `revoke_auto_entitlement`, and the `/admin/payments` auto-approved section that closes F2-4. **F3-C now has five concrete UI defects waiting for it — see B13.** Audit before code: run `supabase/ops/f2_auto_approval_report.sql` and confirm it now returns exactly 1 auto-approval. Show me the plan before writing the migration.*
 
 ---
 
