@@ -143,10 +143,10 @@ begin
                    'review_note','screenshot_extraction_id','file_hash','entitlement_id',
                    'entitlement_starts_at','entitlement_ends_at','entitlement_active',
                    'auto_entitlement_count','pro_still_active','active_sources',
-                   'checker_version','verdicts','audit']) k
+                                      'checker_version','verdicts','audit','file_path','file_name']) k
      where not (r ? k));
   if v_ok then v_pass:=v_pass+1; else v_fail:=v_fail+1; end if;
-  v_out := v_out || format('  V9  all 24 contract keys present on every row      | %s%s',
+  v_out := v_out || format('  V9  all 26 contract keys present on every row      | %s%s',
                            case when v_ok then 'pass' else 'FAIL' end, chr(10));
 
   -- V10
