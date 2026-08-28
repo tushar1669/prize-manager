@@ -19,6 +19,7 @@ import {
   type ExtractionPayload,
 } from "@/components/payments/PaymentEvidence";
 import { evidenceRowClass } from "@/components/payments/evidenceStyles";
+import { AutoApprovedPanel } from "@/components/payments/AutoApprovedPanel";
 
 interface HistoryRow {
   id: string;
@@ -191,6 +192,10 @@ export default function AdminPayments() {
   return (
     <div className="space-y-6">
       <PendingPaymentsPanel />
+
+      {/* F3-C1. Sits above All Payments: these rows were never seen by a human,
+          so they are the ones that need looking at first. */}
+      <AutoApprovedPanel />
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
