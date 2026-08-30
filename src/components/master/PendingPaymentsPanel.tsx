@@ -194,6 +194,10 @@ export function PendingPaymentsPanel() {
                 const hasFlags = extractionFlags.length > 0;
                 const extractedAmount = p.extraction?.payload.amount_inr ?? null;
                 const amountMismatch = extractedAmount != null && extractedAmount !== p.amount_inr;
+                // The note is the only thing the organizer sees about a rejection,
+                // so an empty (or whitespace-only) one blocks the Reject button.
+                const rejectNote = (rejectNotes[p.id] ?? "").trim();
+                const rejectNoteMissing = rejectNote.length === 0;
                 return (
                   <Fragment key={p.id}>
                     <TableRow>
@@ -274,10 +278,10 @@ export function PendingPaymentsPanel() {
                                 reviewMutation.mutate({
                                   paymentId: p.id,
                                   decision: "reject",
-                                  note: rejectNotes[p.id] || undefined,
+                                  note: rejectNote,
                                 })
                               }
-                              disabled={reviewMutation.isPending}
+                              disabled={reviewMutation.isPending || rejectNoteMissing}
                             >
                               {reviewMutation.isPending ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -288,11 +292,17 @@ export function PendingPaymentsPanel() {
                             </Button>
                           </div>
                           <Input
-                            placeholder="Rejection note (optional)"
+                            placeholder="Rejection reason (required)"
+                            aria-label="Rejection reason"
                             className="h-7 text-xs w-48"
                             value={rejectNotes[p.id] ?? ""}
                             onChange={(e) => setRejectNotes((prev) => ({ ...prev, [p.id]: e.target.value }))}
                           />
+                          {rejectNoteMissing && (
+                            <span className="w-48 text-right text-[11px] font-medium text-warning">
+                              A reason is required to reject. The organizer sees only this text.
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

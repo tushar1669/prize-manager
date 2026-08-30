@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -210,6 +212,16 @@ export function AutoApprovedPanel() {
   // answer; this is the historical one, and both are labelled as such.
   const [revokeResults, setRevokeResults] = useState<Record<string, RevokeRecord>>({});
 
+  // Which rows are open. A row's default is decided ONCE, the first time the
+  // row is seen (the effect below), and is the user's from then on.
+  //
+  // It is deliberately NOT `row.audit === null` evaluated every render: recording
+  // an audit refetches, which flips row.audit from null to non-null, so a derived
+  // reading would collapse the row the master is working in at the exact moment
+  // they press Record audit — hiding the revoke result, the reason they typed and
+  // the outcome they chose. A mutation must never close a row.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   const {
     data: rows,
     isLoading,
@@ -226,6 +238,24 @@ export function AutoApprovedPanel() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+
+  // Seeds only keys that are absent — a row that is already in the map keeps
+  // exactly the state the user left it in, and nothing is ever deleted, so a
+  // refetch cannot reset an open row. Un-audited rows, the only ones needing
+  // action, open themselves the first time they appear.
+  useEffect(() => {
+    if (!rows) return;
+    setExpanded((prev) => {
+      const next = { ...prev };
+      let added = false;
+      for (const row of rows) {
+        if (row.payment_id in next) continue;
+        next[row.payment_id] = row.audit === null;
+        added = true;
+      }
+      return added ? next : prev;
+    });
+  }, [rows]);
 
   const auditMutation = useMutation({
     mutationFn: ({
@@ -300,6 +330,26 @@ export function AutoApprovedPanel() {
   const total = rows?.length ?? 0;
   const unaudited = (rows ?? []).filter((row) => row.audit === null).length;
 
+  // A user action, so unlike the seeding effect it DOES overwrite existing keys:
+  // asking for everything open means everything open.
+  const setAllExpanded = (open: boolean) => {
+    setExpanded((prev) => {
+      const next = { ...prev };
+      for (const row of rows ?? []) next[row.payment_id] = open;
+      return next;
+    });
+  };
+
+  // Derived on every render on purpose: it only describes the state the rows are
+  // in right now, so the button can name the action still available. It decides
+  // nothing, unlike the per-row `expanded` map, which is seeded once and then
+  // belongs to the user. The `?? row.audit === null` fallback must stay
+  // identical to the one behind `isOpen` below, or the button will describe a
+  // state the rows are not in on first render.
+  const allOpen =
+    total > 0 &&
+    (rows ?? []).every((row) => expanded[row.payment_id] ?? row.audit === null);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
@@ -327,10 +377,25 @@ export function AutoApprovedPanel() {
             revoke the entitlement if it should not have passed.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`mr-1 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAllExpanded(!allOpen)}
+            disabled={total === 0}
+          >
+            {allOpen ? (
+              <ChevronRight className="mr-1 h-4 w-4" />
+            ) : (
+              <ChevronDown className="mr-1 h-4 w-4" />
+            )}
+            {allOpen ? "Collapse all" : "Expand all"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`mr-1 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -372,29 +437,65 @@ export function AutoApprovedPanel() {
               const revokeRecord = revokeResults[row.payment_id] ?? null;
               const revokeResult = revokeRecord?.result ?? null;
               const outcomeMessage = revokeResult ? revokeOutcomeMessage(revokeResult) : null;
+              // Read from the map, never re-derived from row.audit for a key the
+              // map already holds. The fallback covers only the first render of a
+              // brand-new row, before the seeding effect commits.
+              const isOpen = expanded[row.payment_id] ?? row.audit === null;
+              const toggleOpen = () =>
+                setExpanded((prev) => ({ ...prev, [row.payment_id]: !isOpen }));
 
               return (
                 <div
                   key={row.payment_id}
                   className="space-y-3 rounded-lg border border-border bg-card p-4"
                 >
-                  {/* ---- identity ---- */}
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-0.5">
-                      <Link
-                        to={`/t/${row.tournament_id}/setup?tab=details`}
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-foreground underline underline-offset-2"
+                  {/* ---- identity: the collapsed header, always visible ---- */}
+                  <div
+                    className="flex cursor-pointer flex-wrap items-start justify-between gap-3"
+                    onClick={toggleOpen}
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 shrink-0 p-0 text-muted-foreground"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? "Collapse" : "Expand"} the row for UTR ${row.utr}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleOpen();
+                        }}
                       >
-                        {row.tournament_title ?? `Tournament ${row.tournament_id.slice(0, 8)}…`}
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                      </Link>
-                      <p className="text-xs text-foreground/80">
-                        {row.organizer_email ?? (
-                          <span className="font-mono">{row.user_id.slice(0, 8)}…</span>
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
                         )}
-                      </p>
+                      </Button>
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        {/* The header toggles on click, so the link stops propagation —
+                            it has to navigate, not open and close the row. */}
+                        <Link
+                          to={`/t/${row.tournament_id}/setup?tab=details`}
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-foreground underline underline-offset-2"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {row.tournament_title ?? `Tournament ${row.tournament_id.slice(0, 8)}…`}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </Link>
+                        <span className="text-xs text-foreground/80">
+                          {row.organizer_email ?? (
+                            <span className="font-mono">{row.user_id.slice(0, 8)}…</span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Compact copy of the claim's Amount — a collapsed row still has
+                          to say how much money it let through. */}
+                      <span className={`${CHIP_BASE} bg-muted/40 text-foreground border-border`}>
+                        {formatCurrencyINR(row.amount_inr)}
+                      </span>
                       <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border">
                         {row.payment_status}
                       </Badge>
@@ -407,312 +508,329 @@ export function AutoApprovedPanel() {
                           not audited
                         </Badge>
                       )}
-                    </div>
-                  </div>
-
-                  {/* ---- the claim ---- */}
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="flex items-baseline gap-1">
-                      <span className="shrink-0 font-medium text-foreground/70">Amount:</span>
-                      <span className="font-semibold text-foreground">
-                        {formatCurrencyINR(row.amount_inr)}
-                      </span>
-                    </div>
-                    <div className="flex min-w-0 items-baseline gap-1">
-                      <span className="shrink-0 font-medium text-foreground/70">UTR:</span>
-                      <span className="truncate font-mono text-foreground">{row.utr}</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="shrink-0 font-medium text-foreground/70">Submitted:</span>
-                      <span className="text-foreground">{formatDateTime(row.created_at)}</span>
-                    </div>
-                    <div className="flex min-w-0 items-baseline gap-1 sm:col-span-2 lg:col-span-3">
-                      <span className="shrink-0 font-medium text-foreground/70">
-                        Entitlement window:
-                      </span>
-                      <span className="text-foreground">
-                        {formatDateTime(row.entitlement_starts_at)} →{" "}
-                        {formatDateTime(row.entitlement_ends_at)}
-                      </span>
+                      {/* Compact copy of "current access". Whether Pro is live right now
+                          is the one fact collapsing must not hide. */}
                       <span
                         className={`${CHIP_BASE} ${
-                          row.entitlement_active
+                          row.pro_still_active
                             ? "bg-success/15 text-success border-success/30"
                             : "bg-muted/40 text-muted-foreground border-border"
                         }`}
                       >
-                        {row.entitlement_active ? "active" : "not active"}
+                        Pro access now: {row.pro_still_active ? "active" : "none"}
                       </span>
                     </div>
                   </div>
 
-                  {countUnexpected && (
-                    <div className="flex items-start gap-1.5 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs">
-                      <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
-                      <span className="font-semibold text-warning">
-                        {row.auto_entitlement_count} auto_upi entitlements for this one payment —
-                        expected exactly 1.
-                        <span className="block font-normal">
-                          Revoking ends every one of them, so read the result below rather than
-                          assuming a single window was closed.
-                        </span>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* ---- evidence ---- */}
-                  <div className="space-y-1 text-xs">
-                    {/* Three distinct facts, three distinct renderings. Collapsing any
-                        two of them would state something false about the evidence. */}
-                    {row.screenshot_extraction_id === null ? (
-                      <NoScreenshotNotice />
-                    ) : row.file_path !== null ? (
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                        <ViewScreenshotButton filePath={row.file_path} />
-                        <span className="truncate font-mono text-foreground/80">
-                          {row.file_name ?? row.file_path}
-                        </span>
-                      </div>
-                    ) : (
-                      /* Unreachable while extraction_documents.file_path is NOT NULL,
-                         but it must stay honest if it ever fires. ViewScreenshotButton
-                         cannot be used here: its null-path copy reads "No stored file
-                         for this extraction", which would be a claim about storage
-                         this panel has no basis to make — all it knows is that the
-                         read path returned no path. */
-                      <div className="flex items-start gap-1.5">
-                        <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
-                        <span className="font-medium text-warning">
-                          A screenshot was submitted and extracted, but this read path returned
-                          no file path for it, so it cannot be opened here.
-                          <span className="block font-normal text-foreground/80">
-                            Find it in All Payments below, by UTR {row.utr}.
+                  {/* Everything from the claim to the actions is mounted only while
+                      the row is open; the identity header above stays visible. */}
+                  {isOpen && (
+                    <>
+                      {/* ---- the claim ---- */}
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex items-baseline gap-1">
+                          <span className="shrink-0 font-medium text-foreground/70">Amount:</span>
+                          <span className="font-semibold text-foreground">
+                            {formatCurrencyINR(row.amount_inr)}
                           </span>
-                        </span>
+                        </div>
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className="shrink-0 font-medium text-foreground/70">UTR:</span>
+                          <span className="truncate font-mono text-foreground">{row.utr}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="shrink-0 font-medium text-foreground/70">Submitted:</span>
+                          <span className="text-foreground">{formatDateTime(row.created_at)}</span>
+                        </div>
+                        <div className="flex min-w-0 items-baseline gap-1 sm:col-span-2 lg:col-span-3">
+                          <span className="shrink-0 font-medium text-foreground/70">
+                            Entitlement window:
+                          </span>
+                          <span className="text-foreground">
+                            {formatDateTime(row.entitlement_starts_at)} →{" "}
+                            {formatDateTime(row.entitlement_ends_at)}
+                          </span>
+                          <span
+                            className={`${CHIP_BASE} ${
+                              row.entitlement_active
+                                ? "bg-success/15 text-success border-success/30"
+                                : "bg-muted/40 text-muted-foreground border-border"
+                            }`}
+                          >
+                            {row.entitlement_active ? "active" : "not active"}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex min-w-0 items-baseline gap-1">
-                      <span className="shrink-0 font-medium text-foreground/70">File hash:</span>
-                      {row.file_hash ? (
-                        <span className="truncate font-mono text-foreground">{row.file_hash}</span>
-                      ) : (
-                        <span className="font-normal italic text-foreground/70">
-                          none recorded — the duplicate-screenshot invariant had nothing to compare
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* ---- invariant verdicts ---- */}
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-medium text-foreground/70">Invariant verdicts</span>
-                      <span
-                        className={`${CHIP_BASE} ${
-                          checkerMismatch
-                            ? "bg-warning/15 text-warning border-warning/30"
-                            : "bg-muted/40 text-muted-foreground border-border"
-                        }`}
-                      >
-                        {checkerMismatch && <AlertCircle className="h-3 w-3 shrink-0" />}
-                        checker version {row.checker_version ?? "unknown"}
-                      </span>
-                      {checkerMismatch && (
-                        <span className="text-[11px] font-semibold text-warning">
-                          not version {EXPECTED_CHECKER_VERSION} — these verdicts may not mean what
-                          this panel says they mean.
-                        </span>
-                      )}
-                    </div>
-
-                    {row.verdicts === null ? (
-                      <div className="flex items-start gap-1.5 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs">
-                        <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
-                        <span className="font-semibold text-warning">
-                          No invariant verdicts were recorded for this payment — nothing was
-                          checked, or the record is gone. Treat it as unverified.
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {VERDICT_NAMES.map((name) => {
-                          const verdict = row.verdicts?.[name];
-                          return (
-                            <span
-                              key={name}
-                              className={`${CHIP_BASE} ${
-                                verdict
-                                  ? VERDICT_CHIP[verdict]
-                                  : "bg-muted/40 text-muted-foreground border-border"
-                              }`}
-                            >
-                              {humanLabel(name)}: {verdict ?? "not recorded"}
+                      {countUnexpected && (
+                        <div className="flex items-start gap-1.5 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs">
+                          <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
+                          <span className="font-semibold text-warning">
+                            {row.auto_entitlement_count} auto_upi entitlements for this one payment —
+                            expected exactly 1.
+                            <span className="block font-normal">
+                              Revoking ends every one of them, so read the result below rather than
+                              assuming a single window was closed.
                             </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ---- current access, straight from the server ---- */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-medium text-foreground/70">Pro access now:</span>
-                    <span
-                      className={`${CHIP_BASE} ${
-                        row.pro_still_active
-                          ? "bg-success/15 text-success border-success/30"
-                          : "bg-muted/40 text-muted-foreground border-border"
-                      }`}
-                    >
-                      {row.pro_still_active ? "active" : "none"}
-                    </span>
-                    <span className="text-foreground/80">
-                      {row.active_sources.length > 0
-                        ? `sources: ${row.active_sources.join(", ")}`
-                        : "no active entitlement sources"}
-                    </span>
-                  </div>
-
-                  {/* ---- the revoke result: a dated record of the RPC response ---- */}
-                  {outcomeMessage && revokeResult && revokeRecord && (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      className={`flex items-start gap-1.5 rounded border px-2 py-1.5 text-xs ${
-                        outcomeMessage.tone === "warning"
-                          ? "border-warning/30 bg-warning/10"
-                          : "border-success/30 bg-success/10"
-                      }`}
-                    >
-                      {outcomeMessage.tone === "warning" ? (
-                        <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
-                      ) : (
-                        <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0 text-success" />
+                          </span>
+                        </div>
                       )}
-                      <span
-                        className={`font-semibold ${
-                          outcomeMessage.tone === "warning" ? "text-warning" : "text-success"
-                        }`}
-                      >
-                        <span className="block font-normal text-foreground/80">
-                          When you revoked at {formatDateTime(revokeRecord.at)} —
-                        </span>
-                        {outcomeMessage.text}
-                        <span className="block font-normal text-foreground/80">
-                          The organizer was not emailed. The payment status is still “
-                          {revokeResult.payment_status}”. Audit recorded as “loophole”.
-                        </span>
-                      </span>
-                    </div>
-                  )}
 
-                  {/* ---- existing audit ---- */}
-                  {row.audit && (
-                    <div className="rounded border border-border bg-muted/40 px-2 py-1.5 text-xs">
-                      <p className="font-medium text-foreground">
-                        Audited {formatDateTime(row.audit.audited_at)} — {row.audit.outcome} (
-                        {humanLabel(row.audit.action_taken)})
-                      </p>
-                      <p className="text-foreground/80">{row.audit.reason}</p>
-                    </div>
-                  )}
-
-                  {/* ---- actions ---- */}
-                  <div className="space-y-2 border-t border-border pt-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium text-foreground/70">Outcome</span>
-                      <Select
-                        value={draftOutcome}
-                        onValueChange={(value) =>
-                          setOutcomeDraft((prev) => ({
-                            ...prev,
-                            [row.payment_id]: value as AuditOutcome,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-[19rem] text-xs">
-                          <SelectValue placeholder="Choose an outcome" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {OUTCOME_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value} className="text-xs">
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <Textarea
-                      value={draftReason}
-                      onChange={(event) =>
-                        setReasonDraft((prev) => ({
-                          ...prev,
-                          [row.payment_id]: event.target.value,
-                        }))
-                      }
-                      placeholder="Reason — what you checked and what you concluded (required)"
-                      className="min-h-[4.5rem] text-xs"
-                      aria-label={`Audit reason for ${row.utr}`}
-                    />
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={outcomeMissing || reasonBlank || savingAudit}
-                        onClick={() => {
-                          // The server enforces the reason too ('reason_required');
-                          // checking here keeps an obvious mistake off the wire. The
-                          // empty outcome has no server token because it is never
-                          // sent — it is not a value the RPC accepts.
-                          if (draftOutcome === "" || draftReason.trim().length === 0) return;
-                          auditMutation.mutate({
-                            paymentId: row.payment_id,
-                            outcome: draftOutcome,
-                            reason: draftReason.trim(),
-                            // Carry the row's existing action forward. The RPC
-                            // upserts action_taken from this argument, so sending
-                            // the default "none" over a row already marked
-                            // 'entitlement_revoked' would erase the record that the
-                            // entitlement was pulled. A revocation is a fact that
-                            // happened; re-auditing must not un-record it.
-                            actionTaken: row.audit?.action_taken ?? "none",
-                          });
-                        }}
-                      >
-                        {savingAudit ? (
-                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      {/* ---- evidence ---- */}
+                      <div className="space-y-1 text-xs">
+                        {/* Three distinct facts, three distinct renderings. Collapsing any
+                            two of them would state something false about the evidence. */}
+                        {row.screenshot_extraction_id === null ? (
+                          <NoScreenshotNotice />
+                        ) : row.file_path !== null ? (
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <ViewScreenshotButton filePath={row.file_path} />
+                            <span className="truncate font-mono text-foreground/80">
+                              {row.file_name ?? row.file_path}
+                            </span>
+                          </div>
                         ) : (
-                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                          /* Unreachable while extraction_documents.file_path is NOT NULL,
+                             but it must stay honest if it ever fires. ViewScreenshotButton
+                             cannot be used here: its null-path copy reads "No stored file
+                             for this extraction", which would be a claim about storage
+                             this panel has no basis to make — all it knows is that the
+                             read path returned no path. */
+                          <div className="flex items-start gap-1.5">
+                            <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
+                            <span className="font-medium text-warning">
+                              A screenshot was submitted and extracted, but this read path returned
+                              no file path for it, so it cannot be opened here.
+                              <span className="block font-normal text-foreground/80">
+                                Find it in All Payments below, by UTR {row.utr}.
+                              </span>
+                            </span>
+                          </div>
                         )}
-                        Record audit
-                      </Button>
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className="shrink-0 font-medium text-foreground/70">File hash:</span>
+                          {row.file_hash ? (
+                            <span className="truncate font-mono text-foreground">{row.file_hash}</span>
+                          ) : (
+                            <span className="font-normal italic text-foreground/70">
+                              none recorded — the duplicate-screenshot invariant had nothing to compare
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => {
-                          setRevokeTarget(row);
-                          setRevokeReason(draftReason);
-                        }}
-                      >
-                        <ShieldAlert className="mr-1 h-3.5 w-3.5" />
-                        Revoke entitlement…
-                      </Button>
+                      {/* ---- invariant verdicts ---- */}
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-medium text-foreground/70">Invariant verdicts</span>
+                          <span
+                            className={`${CHIP_BASE} ${
+                              checkerMismatch
+                                ? "bg-warning/15 text-warning border-warning/30"
+                                : "bg-muted/40 text-muted-foreground border-border"
+                            }`}
+                          >
+                            {checkerMismatch && <AlertCircle className="h-3 w-3 shrink-0" />}
+                            checker version {row.checker_version ?? "unknown"}
+                          </span>
+                          {checkerMismatch && (
+                            <span className="text-[11px] font-semibold text-warning">
+                              not version {EXPECTED_CHECKER_VERSION} — these verdicts may not mean what
+                              this panel says they mean.
+                            </span>
+                          )}
+                        </div>
 
-                      {(outcomeMissing || reasonBlank) && (
-                        <span className="text-[11px] font-medium text-warning">
-                          {outcomeMissing && reasonBlank
-                            ? "Choose an outcome and write a reason before recording an audit."
-                            : outcomeMissing
-                              ? "Choose an outcome before recording an audit — there is no default."
-                              : "A reason is required before an audit can be recorded."}
+                        {row.verdicts === null ? (
+                          <div className="flex items-start gap-1.5 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs">
+                            <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
+                            <span className="font-semibold text-warning">
+                              No invariant verdicts were recorded for this payment — nothing was
+                              checked, or the record is gone. Treat it as unverified.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {VERDICT_NAMES.map((name) => {
+                              const verdict = row.verdicts?.[name];
+                              return (
+                                <span
+                                  key={name}
+                                  className={`${CHIP_BASE} ${
+                                    verdict
+                                      ? VERDICT_CHIP[verdict]
+                                      : "bg-muted/40 text-muted-foreground border-border"
+                                  }`}
+                                >
+                                  {humanLabel(name)}: {verdict ?? "not recorded"}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ---- current access, straight from the server ---- */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium text-foreground/70">Pro access now:</span>
+                        <span
+                          className={`${CHIP_BASE} ${
+                            row.pro_still_active
+                              ? "bg-success/15 text-success border-success/30"
+                              : "bg-muted/40 text-muted-foreground border-border"
+                          }`}
+                        >
+                          {row.pro_still_active ? "active" : "none"}
                         </span>
+                        <span className="text-foreground/80">
+                          {row.active_sources.length > 0
+                            ? `sources: ${row.active_sources.join(", ")}`
+                            : "no active entitlement sources"}
+                        </span>
+                      </div>
+
+                      {/* ---- the revoke result: a dated record of the RPC response ---- */}
+                      {outcomeMessage && revokeResult && revokeRecord && (
+                        <div
+                          role="status"
+                          aria-live="polite"
+                          className={`flex items-start gap-1.5 rounded border px-2 py-1.5 text-xs ${
+                            outcomeMessage.tone === "warning"
+                              ? "border-warning/30 bg-warning/10"
+                              : "border-success/30 bg-success/10"
+                          }`}
+                        >
+                          {outcomeMessage.tone === "warning" ? (
+                            <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0 text-warning" />
+                          ) : (
+                            <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0 text-success" />
+                          )}
+                          <span
+                            className={`font-semibold ${
+                              outcomeMessage.tone === "warning" ? "text-warning" : "text-success"
+                            }`}
+                          >
+                            <span className="block font-normal text-foreground/80">
+                              When you revoked at {formatDateTime(revokeRecord.at)} —
+                            </span>
+                            {outcomeMessage.text}
+                            <span className="block font-normal text-foreground/80">
+                              The organizer was not emailed. The payment status is still “
+                              {revokeResult.payment_status}”. Audit recorded as “loophole”.
+                            </span>
+                          </span>
+                        </div>
                       )}
-                    </div>
-                  </div>
+
+                      {/* ---- existing audit ---- */}
+                      {row.audit && (
+                        <div className="rounded border border-border bg-muted/40 px-2 py-1.5 text-xs">
+                          <p className="font-medium text-foreground">
+                            Audited {formatDateTime(row.audit.audited_at)} — {row.audit.outcome} (
+                            {humanLabel(row.audit.action_taken)})
+                          </p>
+                          <p className="text-foreground/80">{row.audit.reason}</p>
+                        </div>
+                      )}
+
+                      {/* ---- actions ---- */}
+                      <div className="space-y-2 border-t border-border pt-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-foreground/70">Outcome</span>
+                          <Select
+                            value={draftOutcome}
+                            onValueChange={(value) =>
+                              setOutcomeDraft((prev) => ({
+                                ...prev,
+                                [row.payment_id]: value as AuditOutcome,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[19rem] text-xs">
+                              <SelectValue placeholder="Choose an outcome" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {OUTCOME_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value} className="text-xs">
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <Textarea
+                          value={draftReason}
+                          onChange={(event) =>
+                            setReasonDraft((prev) => ({
+                              ...prev,
+                              [row.payment_id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Reason — what you checked and what you concluded (required)"
+                          className="min-h-[4.5rem] text-xs"
+                          aria-label={`Audit reason for ${row.utr}`}
+                        />
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={outcomeMissing || reasonBlank || savingAudit}
+                            onClick={() => {
+                              // The server enforces the reason too ('reason_required');
+                              // checking here keeps an obvious mistake off the wire. The
+                              // empty outcome has no server token because it is never
+                              // sent — it is not a value the RPC accepts.
+                              if (draftOutcome === "" || draftReason.trim().length === 0) return;
+                              auditMutation.mutate({
+                                paymentId: row.payment_id,
+                                outcome: draftOutcome,
+                                reason: draftReason.trim(),
+                                // Carry the row's existing action forward. The RPC
+                                // upserts action_taken from this argument, so sending
+                                // the default "none" over a row already marked
+                                // 'entitlement_revoked' would erase the record that the
+                                // entitlement was pulled. A revocation is a fact that
+                                // happened; re-auditing must not un-record it.
+                                actionTaken: row.audit?.action_taken ?? "none",
+                              });
+                            }}
+                          >
+                            {savingAudit ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            Record audit
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                            onClick={() => {
+                              setRevokeTarget(row);
+                              setRevokeReason(draftReason);
+                            }}
+                          >
+                            <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                            Revoke entitlement…
+                          </Button>
+
+                          {(outcomeMissing || reasonBlank) && (
+                            <span className="text-[11px] font-medium text-warning">
+                              {outcomeMissing && reasonBlank
+                                ? "Choose an outcome and write a reason before recording an audit."
+                                : outcomeMissing
+                                  ? "Choose an outcome before recording an audit — there is no default."
+                                  : "A reason is required before an audit can be recorded."}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
