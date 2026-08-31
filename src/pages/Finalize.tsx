@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, ArrowRight, Download, Printer, Info } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { normalizeError, toastMessage } from "@/lib/errors/normalizeError";
 import { logAuditEvent } from "@/lib/audit/logAuditEvent";
@@ -126,7 +125,6 @@ export default function Finalize() {
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
   const hasAutoFinalizedRef = useRef(false);
   const [activeView, setActiveView] = useState<FinalViewTab>('v1');
-  const [hasPendingTeamTies, setHasPendingTeamTies] = useState(false);
   // Debug log: which source was used (once per mount)
   useEffect(() => {
     console.log('[finalize] Page loaded', {
@@ -197,7 +195,7 @@ export default function Finalize() {
     },
   });
 
-  const publishVersion = finalizeResult?.version ?? nextVersion ?? 1;
+  const allocationVersion = finalizeResult?.version ?? nextVersion ?? 1;
 
   // Fetch summary data including organizer-entered prize fund
   const { data: summary } = useQuery({
@@ -205,7 +203,7 @@ export default function Finalize() {
     queryFn: async () => {
       const { data: tournament } = await supabase
         .from('tournaments')
-        .select('cash_prize_total')
+        .select('cash_prize_total, is_published, public_slug')
         .eq('id', id)
         .maybeSingle();
       
@@ -255,7 +253,9 @@ export default function Finalize() {
         trophiesAwarded,
         medalsAwarded,
         mainPrizesCount,
-        categoryPrizesCount
+        categoryPrizesCount,
+        isPublished: tournament?.is_published === true,
+        publicSlug: tournament?.public_slug ?? null
       };
     },
     enabled: !!id && winners.length > 0
@@ -396,14 +396,35 @@ export default function Finalize() {
   });
 
   const handlePublish = useCallback(() => {
+    // B20 / AA2 — every user-reachable failure branch writes something durable.
     if (winners.length === 0) {
-      toast.error("No allocations to finalize");
+      const normalized = normalizeError(new Error('publish blocked: no allocations'));
+      toast.error(`No allocations to finalize (Ref: ${normalized.referenceId})`);
+      logAuditEvent({
+        eventType: 'publish_blocked_no_winners',
+        severity: 'warn',
+        message: 'Publish blocked: winners.length === 0',
+        friendlyMessage: 'No allocations to publish',
+        suggestedAction: 'Go back to Review and run allocation before publishing.',
+        referenceId: normalized.referenceId,
+        context: { tournamentId: id ?? null, winnersCount: winners.length },
+      });
       return;
     }
 
     const proceed = async () => {
       if (!id) {
-        toast.error('Tournament ID missing');
+        const normalized = normalizeError(new Error('publish blocked: missing tournament id'));
+        toast.error(`Tournament ID missing (Ref: ${normalized.referenceId})`);
+        logAuditEvent({
+          eventType: 'publish_blocked_missing_id',
+          severity: 'error',
+          message: 'Publish blocked: tournament id missing from route params',
+          friendlyMessage: 'Tournament ID missing',
+          suggestedAction: 'Return to the dashboard and reopen the tournament.',
+          referenceId: normalized.referenceId,
+          context: { winnersCount: winners.length },
+        });
         navigate('/dashboard');
         return;
       }
@@ -439,6 +460,21 @@ export default function Finalize() {
 
   const isTeamTab = activeView === 'v5';
 
+  // B13 #8 — single publish surface. The public link is gated on a positive
+  // is_published read (D32): if the summary query has not resolved or has
+  // failed, the link stays hidden rather than pointing at a page that may
+  // not exist. Live data has 9 tournaments with a public_slug and
+  // is_published = false, so slug alone is not sufficient.
+  const isPublished = summary?.isPublished === true;
+  const publicSlug = summary?.publicSlug ?? null;
+  const publicPath = isPublished && publicSlug ? `/p/${publicSlug}` : null;
+  const isPublishing = finalizeMutation.isPending || publishMutation.isPending;
+  const isPublishDisabled = isPublishing || winners.length === 0;
+  const publishDisabledReason =
+    winners.length === 0
+      ? 'No allocations to publish yet. Go back to Review and run allocation first.'
+      : null;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="print:hidden">
@@ -455,7 +491,7 @@ export default function Finalize() {
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold text-foreground">Finalize Allocations</h1>
                 <span className="text-xs rounded-full px-2 py-1 bg-muted">
-                v{publishVersion}
+                  Allocation v{allocationVersion}
                 </span>
               </div>
             <p className="text-muted-foreground">
@@ -562,41 +598,6 @@ export default function Finalize() {
           {/* Special / Manual Prizes */}
           <ManualPrizesCard tournamentId={id!} hasFullAccess={hasFullAccess} />
 
-          {/* Publish CTA — moved ABOVE Final Prize Views */}
-          <Card className="border-primary/50 bg-primary/5 print:hidden">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground mb-4">
-                By publishing, you create an immutable version (v{publishVersion}) of these allocations.
-                The tournament will be available at a public URL that can be shared with participants.
-              </p>
-              {hasPendingTeamTies && (
-                <Alert className="mb-4 border-destructive/30 bg-destructive/5">
-                  <AlertDescription className="text-destructive text-sm">
-                    ⚠ Unresolved team prize ties must be resolved before publishing. Switch to the "Team Prizes" tab.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <div className="space-y-3">
-                <Button 
-                  onClick={handlePublish}
-                  disabled={publishMutation.isPending || finalizeMutation.isPending || hasPendingTeamTies}
-                  variant="outline"
-                  className="w-full"
-                  title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
-                >
-                  {publishMutation.isPending || finalizeMutation.isPending ? 'Publishing...' : 'Make Public'}
-                </Button>
-                <Button
-                  onClick={() => navigate(`/t/${id}/public`)}
-                  disabled={!winners || winners.length === 0}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  View Public Page
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Final Prize Views — embedded as tabs */}
           <Card className="print:border-0 print:shadow-none">
@@ -684,8 +685,7 @@ export default function Finalize() {
                     <TabsContent value="v5" className="m-0">
                       <TeamPrizesTabView
                         tournamentId={id as string}
-                        allocationVersion={publishVersion}
-                        onPendingTiesChange={setHasPendingTeamTies}
+                        allocationVersion={allocationVersion}
                       />
                     </TabsContent>
                   </div>
@@ -694,27 +694,55 @@ export default function Finalize() {
             </CardContent>
           </Card>
 
-          {/* Bottom action bar */}
-          <div className="flex justify-between pt-4 print:hidden">
-            <Button variant="outline" onClick={() => {
-              if (!id) {
-                toast.error('Tournament ID missing');
-                navigate('/dashboard');
-                return;
-              }
-              navigate(`/t/${id}/review`);
-            }}>
-              Back to Review
-            </Button>
-            <Button 
-              onClick={handlePublish} 
-              className="gap-2"
-              disabled={finalizeMutation.isPending || publishMutation.isPending || winners.length === 0 || hasPendingTeamTies}
-              title={hasPendingTeamTies ? 'Resolve team prize ties before publishing' : undefined}
-            >
-              {finalizeMutation.isPending || publishMutation.isPending ? "Publishing..." : "Publish Tournament"}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+          {/* Bottom action bar — single publish surface (B13 #8) */}
+          <div className="pt-4 print:hidden space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {publicPath
+                ? `Already published. Publishing again updates the public results page at ${publicPath}.`
+                : 'Publishing creates a public results page for this tournament at a /p/ link you can share with participants.'}
+            </p>
+
+            {publishDisabledReason && (
+              <p className="text-sm text-destructive">{publishDisabledReason}</p>
+            )}
+
+            <div className="flex items-center justify-between gap-4">
+              <Button variant="outline" onClick={() => {
+                if (!id) {
+                  toast.error('Tournament ID missing');
+                  navigate('/dashboard');
+                  return;
+                }
+                navigate(`/t/${id}/review`);
+              }}>
+                Back to Review
+              </Button>
+
+              <div className="flex items-center gap-4">
+                {publicPath && (
+                  <a
+                    href={publicPath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  >
+                    View public page
+                  </a>
+                )}
+                <Button
+                  onClick={handlePublish}
+                  className="gap-2"
+                  disabled={isPublishDisabled}
+                >
+                  {isPublishing
+                    ? 'Publishing...'
+                    : isPublished
+                      ? 'Update Published Results'
+                      : 'Publish Tournament'}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
