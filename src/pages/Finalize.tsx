@@ -396,14 +396,35 @@ export default function Finalize() {
   });
 
   const handlePublish = useCallback(() => {
+    // B20 / AA2 — every user-reachable failure branch writes something durable.
     if (winners.length === 0) {
-      toast.error("No allocations to finalize");
+      const normalized = normalizeError(new Error('publish blocked: no allocations'));
+      toast.error(`No allocations to finalize (Ref: ${normalized.referenceId})`);
+      logAuditEvent({
+        eventType: 'publish_blocked_no_winners',
+        severity: 'warn',
+        message: 'Publish blocked: winners.length === 0',
+        friendlyMessage: 'No allocations to publish',
+        suggestedAction: 'Go back to Review and run allocation before publishing.',
+        referenceId: normalized.referenceId,
+        context: { tournamentId: id ?? null, winnersCount: winners.length },
+      });
       return;
     }
 
     const proceed = async () => {
       if (!id) {
-        toast.error('Tournament ID missing');
+        const normalized = normalizeError(new Error('publish blocked: missing tournament id'));
+        toast.error(`Tournament ID missing (Ref: ${normalized.referenceId})`);
+        logAuditEvent({
+          eventType: 'publish_blocked_missing_id',
+          severity: 'error',
+          message: 'Publish blocked: tournament id missing from route params',
+          friendlyMessage: 'Tournament ID missing',
+          suggestedAction: 'Return to the dashboard and reopen the tournament.',
+          referenceId: normalized.referenceId,
+          context: { winnersCount: winners.length },
+        });
         navigate('/dashboard');
         return;
       }
