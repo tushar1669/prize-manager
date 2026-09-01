@@ -153,11 +153,35 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
     enabled: !!user && !roleLoading && isMaster,
   });
 
-  // Mutation for updating tournament status
+  // Mutation for updating tournament status.
+  //
+  // G2 (2 Sep 2026): `is_published` is the ONLY flag RLS reads after G1, and it
+  // must never be cleared by a raw client update from here. Doing so left
+  // `publications.is_active = true` and `status = 'published'` behind, which is
+  // exactly what exposed 7 archived tournaments — 2,625 allocation rows and
+  // their titles — to unauthenticated callers (X-exposure, PROJECT_STATE §12.11).
+  //
+  // `unpublish_tournament` is the atomic path: it deactivates the publication
+  // row, clears `is_published` and sets `status = 'draft'` in one transaction.
+  // It is idempotent, so calling it on an already-unpublished tournament is a
+  // no-op. Archive/soft-delete flags are applied afterwards, because if that
+  // second write fails the tournament is left MORE restricted, not less.
   const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AdminTournament> }) => {
-      const { error } = await supabase.from("tournaments").update(updates).eq("id", id);
-      if (error) throw error;
+    mutationFn: async ({
+      id,
+      updates,
+      unpublish,
+    }: { id: string; updates: Partial<AdminTournament>; unpublish?: boolean }) => {
+      if (unpublish) {
+        const { error: rpcError } = await supabase.rpc("unpublish_tournament", {
+          tournament_id: id,
+        });
+        if (rpcError) throw rpcError;
+      }
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase.from("tournaments").update(updates).eq("id", id);
+        if (error) throw error;
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin-tournaments"] });
@@ -258,13 +282,13 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
     switch (action) {
       case "hide":
         updateMutation.mutate(
-          { id: tournament.id, updates: { is_published: false } },
+          { id: tournament.id, updates: {}, unpublish: true },
           { onSuccess: () => toast.success("Tournament hidden from public") }
         );
         break;
       case "archive":
         updateMutation.mutate(
-          { id: tournament.id, updates: { is_archived: true, is_published: false } },
+          { id: tournament.id, updates: { is_archived: true }, unpublish: true },
           { onSuccess: () => toast.success("Tournament archived") }
         );
         break;
@@ -276,7 +300,7 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
         break;
       case "softDelete":
         updateMutation.mutate(
-          { id: tournament.id, updates: { is_archived: true, is_published: false, deleted_at: new Date().toISOString() } },
+          { id: tournament.id, updates: { is_archived: true, deleted_at: new Date().toISOString() }, unpublish: true },
           { onSuccess: () => toast.success("Tournament moved to trash") }
         );
         break;
