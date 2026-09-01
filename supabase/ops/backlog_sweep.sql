@@ -37,6 +37,8 @@ declare
   anon_alloc   bigint := -1;
   anon_prizes  bigint := -1;
   anon_players bigint := -1;
+  anon_tourn   bigint := -1;
+  anon_pubs    bigint := -1;
   probe_id     uuid;
 
   labels       jsonb := jsonb_build_object(
@@ -58,7 +60,8 @@ declare
     'B10',  'B10 referral rows with a dangling user reference',
     'X1',   'NEW is_published disagrees with an active publication row',
     'X2',   'NEW allocation rows anon-reachable ONLY via the is_active path',
-    'X3',   'NEW anon SELECT grant on allocations',
+    'X3',   'NEW anon control read returns prize/allocation rows when unpublished',
+    'X4',   'NEW anon can read the tournament row or its publication when unpublished',
     'GTM1', 'GTM published tournaments with a test-like title',
     'GTM2', 'GTM published tournaments (denominator)'
   );
@@ -192,9 +195,10 @@ begin
   m := m || jsonb_build_object('X2', tmp_int::text);
   d := d || jsonb_build_object('X2', case when tmp_int > 0 then 'OPEN' else 'CLOSED' end);
 
-  select has_table_privilege('anon','public.allocations','SELECT') into tmp_bool;
-  m := m || jsonb_build_object('X3', tmp_bool::text);
-  d := d || jsonb_build_object('X3', case when tmp_bool then 'OPEN' else 'CLOSED' end);
+  -- X3/X4 are set from the anon control read below. A grant is not an exposure
+  -- until a real read returns rows (BB4); the old X3 measured the anon SELECT
+  -- grant on allocations, which is legitimate and permanent and so could never
+  -- read CLOSED. If no probe exists both stay UNMEASURED, never CLOSED.
 
   ----------------------------------------------------------------------------
   -- GTM — what an unauthenticated visitor can find
@@ -217,9 +221,11 @@ begin
   select t.id into probe_id
     from public.tournaments t
    where not t.is_published
-     and exists (select 1 from public.publications p where p.tournament_id = t.id and p.is_active)
+     and exists (select 1 from public.publications p where p.tournament_id = t.id)
    order by t.id
-   limit 1;
+   limit 1;   -- deliberately NOT 'and p.is_active': G1 clears that flag, and a
+              -- probe predicate the fix dissolves would take this control dark
+              -- exactly when it most needs to keep passing.
 
   if probe_id is not null then
     set local role anon;
@@ -227,7 +233,14 @@ begin
     select count(*) into anon_prizes from public.prizes pr
       join public.categories c on c.id = pr.category_id where c.tournament_id = probe_id;
     select count(*) into anon_players from public.players where tournament_id = probe_id;
+    select count(*) into anon_tourn   from public.tournaments  where id = probe_id;
+    select count(*) into anon_pubs    from public.publications where tournament_id = probe_id;
     reset role;
+
+    m := m || jsonb_build_object('X3', (anon_alloc + anon_prizes)::text);
+    d := d || jsonb_build_object('X3', case when (anon_alloc + anon_prizes) > 0 then 'OPEN' else 'CLOSED' end);
+    m := m || jsonb_build_object('X4', (anon_tourn + anon_pubs)::text);
+    d := d || jsonb_build_object('X4', case when (anon_tourn + anon_pubs) > 0 then 'OPEN' else 'CLOSED' end);
   end if;
 
   ----------------------------------------------------------------------------
@@ -243,7 +256,8 @@ begin
     end if;
   end loop;
 
-  raise exception E'BACKLOG SWEEP\n  key    verdict  value   item%\n\nANON CONTROL TEST on unpublished tournament %:\n  allocations=% prizes=% players=%\n\nSUMMARY: % OPEN, % CLOSED, % UNMEASURED (UNMEASURED is never CLOSED)',
+  raise exception E'BACKLOG SWEEP\n  key    verdict  value   item%\n\nANON CONTROL TEST on unpublished tournament %:\n  allocations=% prizes=% players=% tournaments=% publications=%\n\nSUMMARY: % OPEN, % CLOSED, % UNMEASURED (UNMEASURED is never CLOSED)',
     r, coalesce(probe_id::text,'none found'), anon_alloc, anon_prizes, anon_players,
+    anon_tourn, anon_pubs,
     n_open, n_closed, n_unmeasured;
 end $$;
