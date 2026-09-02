@@ -8,6 +8,7 @@ import { AppNav } from "@/components/AppNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ColumnFilter, EMPTY_LABEL } from "@/components/admin/ColumnFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -109,6 +110,10 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  // Excel-style per-column filters. Empty array = unfiltered for that column.
+  const [ownerFilter, setOwnerFilter] = useState<string[]>([]);
+  const [locationFilter, setLocationFilter] = useState<string[]>([]);
+  const [timeControlFilter, setTimeControlFilter] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     action: "archive" | "unarchive" | "softDelete" | "restore" | "hardDelete" | "hide" | null;
@@ -224,17 +229,26 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
     },
   });
 
-  // Filter tournaments
-  const filteredTournaments = (tournaments ?? []).filter((t) => {
-    // Text search
-    const matchesSearch =
-      t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.venue?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.city?.toLowerCase().includes(searchQuery.toLowerCase());
+  // Column value extractors. Shared by the filter dropdowns and the predicate
+  // below so the list of options can never drift from what actually matches.
+  const ownerOf = (t: AdminTournament) => t.owner_email ?? "";
+  const locationOf = (t: AdminTournament) =>
+    [t.city, t.venue].filter(Boolean).join(" • ");
+  const timeControlOf = (t: AdminTournament) =>
+    t.time_control_category && t.time_control_category !== "UNKNOWN"
+      ? String(t.time_control_category)
+      : "";
 
-    if (!matchesSearch) return false;
+  // An empty selection means "no filter"; otherwise the row's value must be
+  // one of the selected ones. Blanks are bucketed under EMPTY_LABEL so they
+  // remain selectable rather than silently unfilterable.
+  const passesColumn = (value: string, selected: string[]) =>
+    selected.length === 0 ||
+    selected.includes(value && value.trim() !== "" ? value : EMPTY_LABEL);
 
-    // Status filter
+  // Status predicate, shared so the chips and the column-filter option lists
+  // agree by construction.
+  const matchesStatus = (t: AdminTournament): boolean => {
     switch (filterStatus) {
       case "active":
         return t.is_published && !t.is_archived && !t.deleted_at;
@@ -247,6 +261,34 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
       default:
         return true;
     }
+  };
+
+  // Rows in scope for the current status chip. Column filter options are built
+  // from these, so their counts match the tab on screen — and deselecting a
+  // value never makes it vanish from its own list.
+  const statusScoped = (tournaments ?? []).filter(matchesStatus);
+
+  // Filter tournaments
+  const filteredTournaments = (tournaments ?? []).filter((t) => {
+    // Text search — now includes owner email, which is how you find every
+    // tournament belonging to one organizer.
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      t.title?.toLowerCase().includes(q) ||
+      t.venue?.toLowerCase().includes(q) ||
+      t.city?.toLowerCase().includes(q) ||
+      t.owner_email?.toLowerCase().includes(q);
+
+    if (!matchesSearch) return false;
+
+    // Column filters
+    if (!passesColumn(ownerOf(t), ownerFilter)) return false;
+    if (!passesColumn(locationOf(t), locationFilter)) return false;
+    if (!passesColumn(timeControlOf(t), timeControlFilter)) return false;
+
+    // Status filter
+    return matchesStatus(t);
   });
 
   // Action handlers
@@ -429,11 +471,15 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
           </div>
         </div>
 
+        {/* Rows visible under the status chip alone — the option lists for the
+            column filters are built from these, so their counts match the tab
+            the user is looking at rather than the whole table. */}
         {/* Tournament table */}
         {filteredTournaments.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              {searchQuery || filterStatus !== "all"
+              {searchQuery || filterStatus !== "all" ||
+               ownerFilter.length > 0 || locationFilter.length > 0 || timeControlFilter.length > 0
                 ? "No tournaments match your filters."
                 : "No tournaments found."}
             </CardContent>
@@ -444,10 +490,40 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
               <TableHeader>
                 <TableRow>
                   <TableHead>Tournament</TableHead>
-                  <TableHead>Owner</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center">
+                      Owner
+                      <ColumnFilter
+                        label="Owner"
+                        values={statusScoped.map(ownerOf)}
+                        selected={ownerFilter}
+                        onChange={setOwnerFilter}
+                      />
+                    </span>
+                  </TableHead>
                   <TableHead>Dates</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Time Control</TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center">
+                      Location
+                      <ColumnFilter
+                        label="Location"
+                        values={statusScoped.map(locationOf)}
+                        selected={locationFilter}
+                        onChange={setLocationFilter}
+                      />
+                    </span>
+                  </TableHead>
+                  <TableHead>
+                    <span className="inline-flex items-center">
+                      Time Control
+                      <ColumnFilter
+                        label="Time Control"
+                        values={statusScoped.map(timeControlOf)}
+                        selected={timeControlFilter}
+                        onChange={setTimeControlFilter}
+                      />
+                    </span>
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
