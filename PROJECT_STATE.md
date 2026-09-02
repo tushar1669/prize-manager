@@ -23,7 +23,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`0ccfdcd`** (G2 merge) · G1 merge `44c289b` · prior: `2c72a0b` docs · `6020d65` sweeps · `22aa425` batch F1 · `42d920f` F3-C2 batch A · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`e207f41`** (G3b merge) · `dcb8274` G3 merge · `9f59c51` PROJECT_STATE · `0ccfdcd` G2 merge · `44c289b` G1 merge · prior: `2c72a0b` docs · `6020d65` sweeps · `22aa425` batch F1 · `42d920f` F3-C2 batch A · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
 | **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9**, `verify_jwt=false` · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · `publicTeamPrizes` v240 · `pmPing` v238 · `backfillTeamAllocations` v38. **Untouched 29 Aug – 2 Sep** |
 | **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy; the `ezbr_sha256` is |
 | **Free-plan log retention** | **1 day.** Edge-function logs older than ~24h are gone |
@@ -36,7 +36,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | **F3 oversight objects** | `payment_auto_approval_audit` · `record_auto_approval_audit` · `revoke_auto_entitlement` · `list_auto_approvals()`. RLS on, zero policies, zero client table grants, `anon` no EXECUTE |
 | **`public.referrals` triggers** | **ZERO, by design, since `20260822120000`.** Do not re-add one — see W1 |
 | Test baseline | **479 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **482**. Was 476/479 before G2 added 3 guard assertions |
-| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file baseline:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. **`AutoApprovedPanel.tsx`, `Finalize.tsx` and `AdminTournaments.tsx` have zero and must keep zero.** Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
+| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file baseline:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. **`AutoApprovedPanel.tsx`, `Finalize.tsx`, `AdminTournaments.tsx` and `admin/ColumnFilter.tsx` have zero and must keep zero.** Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
 | Claim RPC | **5-arg only**, `RETURNS uuid`, 1 overload, **15 `RAISE EXCEPTION` across 11 codes** |
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
@@ -105,6 +105,8 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 **CC4. A measurement that cannot ever read CLOSED is not a measurement.** The sweep's X3 checked whether `anon` holds a SELECT grant on `allocations`. That grant is legitimate and permanent, so X3 would have reported the exposure OPEN forever. Worse, the control-test probe required an *active* publication — a condition the fix destroys — so the anon control would have gone dark exactly when it most needed to keep passing. **When filing a check, ask what its CLOSED state looks like and whether the fix dissolves its own probe.**
 
 **CC5. Placeholder rows travel.** The Dashboard "New Tournament" button inserts a complete, valid, publishable row before the organizer types anything. Nothing between that insert and a live public page requires a single real value. **A default that is valid enough to save is a default that will reach production.**
+
+**CC6. A green check on an unchanged file looks identical to a green check on a correct one.** G3 was committed as `1 file changed` — the new `ColumnFilter.tsx` only. `AdminTournaments.tsx` never changed, because the browser had saved the second download as `AdminTournaments (1).tsx` and the `cp` copied the *old* file over itself. tsc passed, vitest passed, the merge succeeded and the push succeeded. Nothing failed, because nothing had changed. It surfaced only when Lovable reported nothing to publish. **After any `cp` into the repo, run `git --no-pager diff --stat` and confirm every file you expected is listed, before running tsc.** A passing baseline is evidence about whatever is on disk, not about what you meant to put there.
 
 **Phase 2B:** 13. Bank statements are `privacy_class='sensitive'`. NEVER through Gemini. pdfplumber only.
 
@@ -179,11 +181,26 @@ The archive dialog says "You can unarchive it later" — true of the flag, false
 
 DB sweep **18 OPEN / 2 CLOSED → 15 OPEN / 6 CLOSED**. X1, X2, X3 and the new X4 all read CLOSED. Repo sweep 7 OPEN / 3 CLOSED, unchanged. X3 was re-specified from a permanent grant check to a real anon read, and X4 added for the tournament and publication rows (CC4).
 
+### Batch G3 / G3b — admin column filters. Merged `dcb8274`, wired `e207f41`.
+
+`/admin/tournaments` had no way to see one organizer's tournaments: the text search covered title, venue and city but **not `owner_email`**, which is why searching for an organizer by name returned nothing.
+
+- Text search now also matches `owner_email`.
+- New `src/components/admin/ColumnFilter.tsx` — an Excel-style funnel on **Owner**, **Location** and **Time Control**. Searchable checkbox list of distinct values with counts, sorted most-frequent first, Select all / Clear. Built from `popover` + `checkbox` + `scroll-area`; **no new dependency** (guardrail 5).
+- **Empty selection means unfiltered**, so the page behaves exactly as before until a value is ticked — adding a filter to a column cannot hide rows by default.
+- Option lists are built from `statusScoped` (rows matching the current status chip), so counts match the tab on screen and deselecting a value never removes it from its own list.
+- Blanks bucket under `(blank)` and stay selectable — that is how you list every tournament with no location, which the stub problem makes worth having.
+- The status switch was extracted to a shared `matchesStatus()` used by both the chips and the option lists, so the two cannot drift.
+
+**G3 shipped the component unused.** See CC6. G3b wired it. tsc stayed 12/6 with neither new file listed; vitest stayed 479/3 of 482, which also re-confirmed the G2 source guard survived the edits.
+
+**No test covers the filter behaviour** — logged as Tier 3 debt.
+
 ---
 
 ## 13. Immediate next step
 
-**B18 phases (a)+(b) — published results are not immutable.** Fresh chat, new branch off `main` at `0ccfdcd`. Backend, with its own harness.
+**B18 phases (a)+(b) — published results are not immutable.** Fresh chat, new branch off `main` at `e207f41`. Backend, with its own harness.
 
 Scope:
 1. Add `allocation_version integer` to `publications`.
@@ -200,7 +217,7 @@ Scope:
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.12, §13 and §14. G1 and G2 shipped 2 Sep; `main` is `0ccfdcd`; X1–X4-exposure are CLOSED and verified as `anon`. Baselines: tsc **12 errors in 6 files** (per-file breakdown in §2), vitest **479 passed / 3 known failures of 482**. Next: **B18 (a)+(b) — version-pin published results**, backend only, matched-pair harness required, and it is the last Tier 1 engineering gate before the GTM pages. **Do not open `/t/8d1fbd83-…/finalize`** — operational hold in §12.11. Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, then show me the plan before writing any migration.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.12, §13 and §14. G1, G2 and G3 shipped 2 Sep; `main` is `e207f41`; X1–X4-exposure are CLOSED and verified as `anon`. Baselines: tsc **12 errors in 6 files** (per-file breakdown in §2), vitest **479 passed / 3 known failures of 482**. Next: **B18 (a)+(b) — version-pin published results**, backend only, matched-pair harness required, and it is the last Tier 1 engineering gate before the GTM pages. **Do not open `/t/8d1fbd83-…/finalize`** — operational hold in §12.11. Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, then show me the plan before writing any migration.*
 
 ---
 
@@ -235,7 +252,7 @@ Scope:
 
 ### Tier 3 — rides as debt, stated openly
 
-B1 (`authenticated` holds full DML on `coupons`/`coupon_redemptions`; control-tested non-exploitable) · Y2 (`anon` write grants on `extraction_review_queue`, control-tested inert) · B10 (2 dangling referral rows) · B12 · B14 (Resend reports accepted, not delivered — 0 unsent) · B15 (old API key still live) · B2 · B3 · B6 · layout regression test (Playwright is a new dependency, guardrail 5) · `CLAUDE.md` schema drift · `MAX_ATTEMPTS=5` with no backoff · `brew unlink node` fragility · `tsconfig.app.json` scope gap · `.claude/settings.local.json` wildcard rule · accepted residuals.
+**no test covers `ColumnFilter` / the admin filter predicate (G3)** · B1 (`authenticated` holds full DML on `coupons`/`coupon_redemptions`; control-tested non-exploitable) · Y2 (`anon` write grants on `extraction_review_queue`, control-tested inert) · B10 (2 dangling referral rows) · B12 · B14 (Resend reports accepted, not delivered — 0 unsent) · B15 (old API key still live) · B2 · B3 · B6 · layout regression test (Playwright is a new dependency, guardrail 5) · `CLAUDE.md` schema drift · `MAX_ATTEMPTS=5` with no backoff · `brew unlink node` fragility · `tsconfig.app.json` scope gap · `.claude/settings.local.json` wildcard rule · accepted residuals.
 
 ### Closed by measurement
 
@@ -288,6 +305,7 @@ Superseded by §14's three-tier gate. The sweeps are the canonical *measurement*
 - Use `git --no-pager diff`, never plain `git diff`. Merge with `--no-ff`. After merging, re-run tsc **and vitest** on `main`.
 - Paste terminal output as **text**, never screenshots.
 - **A build report is a claim, not evidence. Require the full `git --no-pager diff`.**
+- **After any `cp` into the repo, run `git --no-pager diff --stat` and confirm every expected file is listed — before tsc** (CC6). Chrome renames a repeat download to `name (1).ext`, so `cp ~/Downloads/name.ext` silently re-copies the previous version. Prefer `cp "$(ls -t ~/Downloads/<name>*.ext | head -1)" <dest>` and then `grep -c` for a token you know is in the new file.
 - Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`. `supabase db execute` does not exist.
 - **`RAISE NOTICE` is swallowed.** Put failures in `RAISE EXCEPTION`. **`RAISE` uses `%`, not `%s`** — `%s` substitutes and leaves a stray `s`.
 - **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state.
