@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 2 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 4 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -23,7 +23,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`e207f41`** (G3b merge) · `dcb8274` G3 merge · `9f59c51` PROJECT_STATE · `0ccfdcd` G2 merge · `44c289b` G1 merge · prior: `2c72a0b` docs · `6020d65` sweeps · `22aa425` batch F1 · `42d920f` F3-C2 batch A · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`7b6c152`** (B22 merge) · `aa57485` PROJECT_STATE · `e207f41` G3b merge · `dcb8274` G3 merge · `9f59c51` PROJECT_STATE · `0ccfdcd` G2 merge · `44c289b` G1 merge · prior: `2c72a0b` docs · `6020d65` sweeps · `22aa425` batch F1 · `42d920f` F3-C2 batch A · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
 | **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9**, `verify_jwt=false` · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · `publicTeamPrizes` v240 · `pmPing` v238 · `backfillTeamAllocations` v38. **Untouched 29 Aug – 2 Sep** |
 | **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy; the `ezbr_sha256` is |
 | **Free-plan log retention** | **1 day.** Edge-function logs older than ~24h are gone |
@@ -41,11 +41,11 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Claim RPC | **5-arg only**, `RETURNS uuid`, 1 overload, **15 `RAISE EXCEPTION` across 11 codes** |
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
 | **Brochure upload cap** | `storage.buckets.file_size_limit = 10485760` (10 MB) on `extraction-uploads`. See B17 |
-| Verification harnesses | `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · **`g1_publish_state_checks.sql` 16/16 (new 2 Sep)**. **No harness covers `publish_tournament` — see B18** |
+| Verification harnesses | `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · **`b22_publish_gate_checks.sql` 14/14 (new 4 Sep — the FIRST harness on `publish_tournament`; B18 must keep all 14 green)** |
 | **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**22 checks** after the G1 X3 respec + X4 addition) · `scripts/backlog_sweep_repo.sh` (10 checks + tsc baseline). **Run both before planning anything** |
 | Operational scripts | `f2_auto_approve_on.sql` · `f2_auto_approve_off.sql` · `f2_auto_approval_report.sql` · the two sweeps. **Not migrations** |
 | Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
-| **Live census (verified 2 Sep, post-G2)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications** · **0 drifted** · 32 archived · 23 soft-deleted · 12 payments · 6 referrals · 5 referral_rewards · 1 audit row |
+| **Live census (verified 4 Sep, post-B22)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications** · **0 drifted** · **0 stub slugs** · **33 drafts now gated by the title check** · 23 soft-deleted · 12 payments · 6 referrals · 5 referral_rewards · 1 audit row |
 | Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as the `PLATFORM_PAYEE_VPA` secret |
 
 ### Publish path — REVISED 2 September
@@ -54,8 +54,8 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 |---|---|
 | **Frontend entry** | `src/pages/Finalize.tsx` → `handlePublish` → **step 1** `functions.invoke('finalize')` → **step 2** `rpc('publish_tournament', { tournament_id, requested_slug: null })` |
 | **Unpublish callers** | `PublishSuccess.tsx` (organizer) **and `AdminTournaments.tsx` (master, since G2)**. Both call `unpublish_tournament(uuid)` |
-| `publish_tournament(uuid, text)` | One overload, SECURITY DEFINER, owner `postgres`. Auth: `v_owner_id = v_uid OR has_role(v_uid,'master')`. **Validates NOTHING else — no title, no dates, no allocations.** Deactivates prior publications, computes `max(version)+1`, inserts, sets `is_published/public_slug/status='published'` |
-| **Slug precedence (B22)** | `COALESCE(NULLIF(requested_slug,''), NULLIF(existing public_slug,''), slugify(title))`. **The existing slug wins over the title**, and `Finalize.tsx:367` always passes `requested_slug: null`. **Renaming a tournament never changes its public URL.** No UI exposes a slug change |
+| `publish_tournament(uuid, text)` | One overload, SECURITY DEFINER, owner `postgres`. Auth: `v_owner_id = v_uid OR has_role(v_uid,'master')`. **Since B22 also enforces a TITLE GATE** — blank or placeholder title raises `TITLE_REQUIRED`. Still validates no dates and no allocations. Deactivates prior publications, computes `max(version)+1`, inserts, sets `is_published/public_slug/status='published'` |
+| **Slug precedence (B22 — FIXED 4 Sep)** | `COALESCE(NULLIF(requested_slug,''), <existing slug UNLESS it matches `^untitled-tournament(-N)?$`>, regexp title)`. A placeholder slug is treated as absent so a renamed stub regenerates once. **Any other existing slug still wins, deliberately** — regenerating on every republish would break every shared link (harness T7 is the negative control). No UI exposes a slug change; that stays Tier 2 |
 | `unpublish_tournament(uuid)` | **Correct and always was.** Clears `publications.is_active`, sets `is_published=false` AND `status='draft'` in one transaction. Idempotent |
 | **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` [INSERT, UPDATE] and `trg_guard_publication_requires_team_snapshots` [UPDATE]. Both block activating a publication when the tournament has active `institution_prize_groups` but no `team_allocations` at that version. **See B21 — this is a one-way door** |
 | **`get_public_tournament_results(uuid)`** | SECURITY DEFINER. Gates on `tournaments.is_published = true`, selects **`MAX(allocations.version)`**, **never joins `publications`**. This is B18 |
@@ -71,7 +71,7 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 
 ### Migrations (all applied, repaired, version-matched)
 
-`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · **`20260902120000` G1 publish-state reconcile**.
+`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · `20260902120000` G1 publish-state reconcile · **`20260904120000` B22 publish title gate**.
 
 **G2 was frontend only. No migration on 30, 31 August or 1 September.**
 
@@ -107,6 +107,12 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 **CC5. Placeholder rows travel.** The Dashboard "New Tournament" button inserts a complete, valid, publishable row before the organizer types anything. Nothing between that insert and a live public page requires a single real value. **A default that is valid enough to save is a default that will reach production.**
 
 **CC6. A green check on an unchanged file looks identical to a green check on a correct one.** G3 was committed as `1 file changed` — the new `ColumnFilter.tsx` only. `AdminTournaments.tsx` never changed, because the browser had saved the second download as `AdminTournaments (1).tsx` and the `cp` copied the *old* file over itself. tsc passed, vitest passed, the merge succeeded and the push succeeded. Nothing failed, because nothing had changed. It surfaced only when Lovable reported nothing to publish. **After any `cp` into the repo, run `git --no-pager diff --stat` and confirm every file you expected is listed, before running tsc.** A passing baseline is evidence about whatever is on disk, not about what you meant to put there.
+
+**CC6 amendment (4 Sep).** `git --no-pager diff --stat` shows only MODIFIED TRACKED files. For a batch of NEW files it prints nothing whether the copy worked or not — the guard's all-clear is indistinguishable from not looking, which is the very failure CC6 exists to catch. **Use `git status --short`, or `git add -A` then `git --no-pager diff --cached --stat`.** Verified on the B22 batch: plain `diff --stat` printed nothing; `--cached` listed both files.
+
+**CC7. A harness's execution order can be load-bearing, and the dependency is invisible.** B22's uniqueness check (T9) failed on the first dry run because an earlier check (T8) republished the fixture under an explicit slug, deactivating the very publication T9 needed to collide with — the loop only inspects ACTIVE publications. Nothing in either check named the coupling. **When one check mutates state another check reads, say so in a comment at the point of order-dependence,** or the next person reorders them and gets a false pass.
+
+**CC8. Dry-run the fix, not just the migration.** B22's first dry run found a hole in the gate itself: `'  UNTITLED   tournament '` published cleanly, because `btrim` strips only OUTER whitespace and the internal run of spaces never matched the literal. The migration was syntactically perfect and would have applied without complaint. **A migration that applies successfully is not a fix that works** — only a matched-pair harness run against the new behaviour shows that.
 
 **Phase 2B:** 13. Bank statements are `privacy_class='sensitive'`. NEVER through Gemini. pdfplumber only.
 
@@ -198,9 +204,58 @@ DB sweep **18 OPEN / 2 CLOSED → 15 OPEN / 6 CLOSED**. X1, X2, X3 and the new X
 
 ---
 
+## 12.14 · 3–4 September 2026 — B22 closed, GTM1 closed, sportup corrected
+
+### B18-b CONFIRMED LIVE, on a real customer tournament
+
+While retitling `16b9cf29`, allocation **version 7** was created at 16:37 on 3 Sep — the same minute `tournaments.updated_at` moved. Opening the editor created a new allocation version, and `get_public_tournament_results` reads `MAX(allocations.version)`, so the public page changed.
+
+**Measured before drawing any conclusion:** v6 and v7 are byte-identical — 40 rows each, zero differences in the prize→player mapping. The allocation engine is deterministic and nothing upstream had been edited, so nothing a participant sees changed. **The mechanism is proven; the outcome was harmless this time.** For a tournament whose prizes or players HAVE been edited since publishing, it would not be.
+
+### GTM1 — closed
+
+`16b9cf29` retitled by owner to "2nd Checkers Under-13 Rapid Chess Championship". Its blank `city`/`venue`/`chief_arbiter`/`tournament_director` were filled by copying the two sibling events of the same championship (`04acc325` Under-10, `b3609ec5` Below 1700), all owned by `sankalparora5555@gmail.com`: Ghaziabad · MIPS College · FA Sankalp Arora · Mr. Vipin Shami.
+
+**Open discrepancy, owner's call:** the brochure names Ms. Gargi Kaushik as Director and lists Vipin Sami only under "For Queries". The organizer entered Mr. Vipin Shami as `tournament_director` on all three. Sibling values were copied rather than the brochure transcribed. If the brochure is right, all three need changing.
+
+### B22 — closed in both halves
+
+**Data.** Two published customer tournaments carried stub-derived URLs. Both repaired via `publish_tournament` RPC with `public_slug` nulled first, so the function's own rule generated the slug. No Finalize page was opened and no allocation version was created.
+
+| Tournament | Owner | Was | Now |
+|---|---|---|---|
+| `16b9cf29` | sankalparora5555 | `/p/untitled-tournament` | `/p/2nd-checkers-under-13-rapid-chess-championship` |
+| `51f0b22e` | shahgfaruqui | `/p/untitled-tournament-2` | `/p/2nd-varanasi-classical-chess-tournament-2026` |
+
+The `-2` suffix on the second is the uniqueness loop: a **second customer inherited a stub URL because the first had already taken the base slug.**
+
+**Code.** Migration `20260904120000`. Two changes to `publish_tournament`, no backfill required (0 published rows violated the gate; 33 drafts do and are now blocked until named):
+1. **Title gate** — blank or placeholder title raises `TITLE_REQUIRED`. Drafting, importing, allocating and finalizing are untouched; the gate bites only where the tournament would become public.
+2. **Stub-slug bypass** — `^untitled-tournament(-N)?$` is treated as absent so a renamed stub regenerates once. Without this the gate could not self-heal a tournament published before it existed.
+
+**Deliberately NOT done:** regenerating slugs from the title on every republish. That would break every shared public link the first time an organizer fixed a typo. Harness T7 is the negative control proving a normal slug survives.
+
+`supabase/tests/b22_publish_gate_checks.sql`, **14/14** — the first harness ever written for `publish_tournament`, built here specifically so B18 inherits it instead of editing an unguarded function.
+
+**Coupling to watch:** the gate matches the literal `'Untitled Tournament'` written by `Dashboard.tsx:172`. If that string changes the gate silently stops firing. **Sweep check owed — see §13.**
+
+### sportup.online
+
+FIDE affiliation claim, the unverified "50,000+ Players Registered" figure, and the Terms' Stripe/PayPal payment section all removed or corrected; Terms date moved to 3 Sep 2026; a sentence added stating entry fees are paid directly to the organizer and refunds are the organizer's responsibility (owner confirmed this matches the real money flow). Design-mockup copies of the FIDE claim scrubbed too. Published.
+
+Meta-tag and sitemap pass planned and approved but **not yet published**. Two things to verify after it ships: Lovable claimed removing `og:image` is safe because hosting injects one at serve time — unverified, check the live HTML; and `/tournaments/:id` pages were excluded from the sitemap, which is where the SEO value actually is.
+
+**Still owner-side on sportup:** Section 05's refund ladder and the "5-10 business days to original payment method" line remain factually wrong for manual UPI, and there is no governing-law clause or named legal entity anywhere in the Terms. Needs a professional, not a prompt.
+
+---
+
 ## 13. Immediate next step
 
-**B18 phases (a)+(b) — published results are not immutable.** Fresh chat, new branch off `main` at `e207f41`. Backend, with its own harness.
+**B18 phases (a)+(b) — published results are not immutable.** Fresh chat, new branch off `main` at `7b6c152`.
+
+**Two sweep checks are owed first (BB5), both small:**
+- DB sweep: no published tournament may carry a `public_slug` matching `^untitled-tournament(-[0-9]+)?$`. CLOSED state = 0.
+- Repo sweep: assert `Dashboard.tsx` still contains the literal `'Untitled Tournament'`, because `publish_tournament`'s gate matches that exact string and silently stops firing if it changes. Backend, with its own harness.
 
 Scope:
 1. Add `allocation_version integer` to `publications`.
@@ -217,7 +272,17 @@ Scope:
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.12, §13 and §14. G1, G2 and G3 shipped 2 Sep; `main` is `e207f41`; X1–X4-exposure are CLOSED and verified as `anon`. Baselines: tsc **12 errors in 6 files** (per-file breakdown in §2), vitest **479 passed / 3 known failures of 482**. Next: **B18 (a)+(b) — version-pin published results**, backend only, matched-pair harness required, and it is the last Tier 1 engineering gate before the GTM pages. **Do not open `/t/8d1fbd83-…/finalize`** — operational hold in §12.11. Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, then show me the plan before writing any migration.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.12, §12.14, §13 and §14. G1/G2/G3 shipped 2 Sep and B22 shipped 4 Sep; `main` is `7b6c152`. X1–X4-exposure CLOSED and verified as `anon`; GTM1 and B22 CLOSED. Baselines: tsc **12 errors in 6 files** (per-file breakdown in §2), vitest **479 passed / 3 known failures of 482**.*
+>
+> *Next: **B18 (a)+(b) — version-pin published results**. Backend only, matched-pair harness required. It is the last Tier 1 engineering gate before the GTM pages.*
+>
+> ***B18-b is confirmed live, not theorised:** retitling `16b9cf29` on 3 Sep created allocation version 7 from a page load. v6 and v7 are byte-identical so no participant saw a change, but the mechanism is proven — see §12.14.*
+>
+> ***B22 shipped migration `20260904120000`**, which added a title gate and a stub-slug bypass to `publish_tournament`, plus `b22_publish_gate_checks.sql` at **14/14** — the first harness on that function. **B18 edits the same function and must keep all 14 green.** Its T7 negative control (a normal slug survives a republish) is the one that must not regress.*
+>
+> ***Do not open `/t/8d1fbd83-…/finalize`** — operational hold in §12.11.*
+>
+> *Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, add the two sweep checks owed in §13, then show me the plan before writing any migration.*
 
 ---
 
@@ -231,13 +296,13 @@ Scope:
 |---|---|---|
 | **X1–X4-exposure** — unpublish/archive did not unpublish | ✅ **CLOSED 2 Sep, G1+G2** | Verified 0 rows readable as `anon` across all 7 |
 | **B18-a / B18-b** — published results are not immutable | **OPEN, HIGH — next** | Marketing drives traffic to `/p/` pages that follow `MAX(allocations.version)` and change when an editor page is opened |
-| **GTM1** — 1 published tournament titled "Untitled Tournament" | **OPEN — owner** | Sankalp contacted. **Also needs the `public_slug` cleared (B22) or the URL stays `/p/untitled-tournament`** |
-| **sportup.online claims** — "Official FIDE Partner" without written authorisation; player-count figure; ToS dated Oct 2023 naming wrong processors; sitemap 404 | **OPEN — owner** | **Decision 2 Sep: remove the FIDE line** until something materialises. Cannot be measured from this repo |
+| **GTM1** — published tournament titled "Untitled Tournament" | ✅ **CLOSED 3–4 Sep** | Retitled by owner, details copied from sibling events, slug regenerated |
+| **sportup.online claims** — FIDE line, player count, ToS processors | ✅ **CLOSED 3 Sep** — published | Meta tags + sitemap approved, **not yet published**. Refund ladder and missing governing-law clause remain owner-side, need a professional |
 
 ### Tier 2 — before the National Championship, not before the pages
 
 - **G4 — required details before publish.** Server-side field gate in `publish_tournament` (title not blank and not the placeholder; venue, city, chief arbiter, tournament director present) plus a CHECK of the shape `is_published = false OR (all required non-blank)`, which enforces "may change, may not blank" in one object. Needs `NOT VALID` + backfill; 9 published rows violate it today. **Do this before marketing brings new organizers into the stub flow.**
-- **B22 — sticky public_slug.** Renaming never changes the URL, and no UI exposes a slug change.
+- **B22 slug-change UI.** The defect is closed; what remains is that no UI lets an organizer deliberately change a public URL. Needs a redirect story before it is built.
 - **B21 — publish one-way door.** Team prize groups with no snapshots make a tournament permanently unpublishable. 2 tournaments, both Tushar's, no customer exposure. Needs a sweep check (BB5) and a warning in the archive dialog.
 - **Stub dates** — 23 of 35 published carry `start_date = creation date`. Likely fix is not creating the stub with today's date.
 - **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, **`bootstrap_master`**; `is_master(uuid)` missing.
@@ -260,6 +325,8 @@ Scope:
 |---|---|
 | X1/X2/X3/X4-exposure | **CLOSED 2 Sep** — G1 policies + G2 write path, verified as `anon` |
 | Archive re-dirtying publish state | **CLOSED 2 Sep** — G2, proven live |
+| B22 stub titles and sticky stub slugs | **CLOSED 4 Sep** — 2 URLs repaired, gate + bypass live, 14/14 |
+| GTM1 Untitled Tournament | **CLOSED 4 Sep** — title, details and slug all corrected |
 | B16 organizer publish failure | CLOSED 31 Aug — transport |
 | B13 #8 two publish buttons · B20 silent failures | CLOSED — batch F1 |
 | B5 unaudited auto-approvals · B14 unsent outbox rows | **0**, CLOSED by sweep |
