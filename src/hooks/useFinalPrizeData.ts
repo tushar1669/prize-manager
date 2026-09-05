@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { safeSelectPlayersByIds } from '@/utils/safeSelectPlayers';
 import { byMainOrderPlace } from '@/utils/sortWinners';
-import { getLatestAllocations } from '@/utils/getLatestAllocations';
+import { getLatestAllocations, type AllocationVersionSelector } from '@/utils/getLatestAllocations';
 import { getPlayerDisplayName } from '@/utils/playerName';
 import { coerceGiftItems } from '@/lib/utils';
 
@@ -60,7 +60,10 @@ export interface FinalPrizeData {
   version: number | null;
 }
 
-async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData> {
+async function fetchFinalPrizeData(
+  tournamentId: string,
+  selector: AllocationVersionSelector
+): Promise<FinalPrizeData> {
   const { data: tournament, error: tournamentError } = await supabase
     .from('tournaments')
     .select('id, title, city, start_date, end_date')
@@ -71,7 +74,7 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
     throw tournamentError;
   }
 
-  const { allocations, version } = await getLatestAllocations(tournamentId);
+  const { allocations, version } = await getLatestAllocations(tournamentId, selector);
 
   if (!allocations || allocations.length === 0) {
     return {
@@ -215,11 +218,20 @@ async function fetchFinalPrizeData(tournamentId: string): Promise<FinalPrizeData
   };
 }
 
-export function useFinalPrizeData(tournamentId?: string) {
+export function useFinalPrizeData(
+  tournamentId?: string,
+  selector: AllocationVersionSelector = { mode: 'latest' }
+) {
+  // The selector is part of the key: without it react-query would serve a cached
+  // organizer (latest) result to a public page, or keep serving one version's rows
+  // after a repin.
+  const selectorKey =
+    selector.mode === 'pinned' ? [selector.mode, selector.version] : [selector.mode];
+
   const query = useQuery({
-    queryKey: ['final-prize-data', tournamentId],
-    enabled: !!tournamentId,
-    queryFn: () => fetchFinalPrizeData(tournamentId as string),
+    queryKey: ['final-prize-data', tournamentId, ...selectorKey],
+    enabled: !!tournamentId && selector.mode !== 'unresolved',
+    queryFn: () => fetchFinalPrizeData(tournamentId as string, selector),
     staleTime: 60_000,
   });
 

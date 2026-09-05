@@ -1116,6 +1116,7 @@ export type Database = {
       }
       publications: {
         Row: {
+          allocation_version: number | null
           id: string
           is_active: boolean | null
           published_at: string | null
@@ -1126,6 +1127,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          allocation_version?: number | null
           id?: string
           is_active?: boolean | null
           published_at?: string | null
@@ -1136,6 +1138,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          allocation_version?: number | null
           id?: string
           is_active?: boolean | null
           published_at?: string | null
