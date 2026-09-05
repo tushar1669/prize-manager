@@ -291,6 +291,22 @@ begin
     v := v || jsonb_build_object('P16','skipped');
     det := det || jsonb_build_object('P16','no publication exists whose team-snapshot guard can fire');
   else
+    -- TC0 (5 Sep 2026): the team-snapshot guard now joins
+    -- publications.allocation_version instead of publications.version, and a NULL
+    -- pin legitimately SKIPS the check (B18 Option C). The control row's pin is
+    -- NULL, so as originally written this control could no longer make the guard
+    -- fire, and P16 reported FAIL against a correct database. The fix dissolved
+    -- its own probe -- exactly the CC4 trap.
+    --
+    -- Pin the row first so the guard CAN fire. Any non-null pin works: the
+    -- selector above already guarantees this tournament has NO team_allocations
+    -- at ANY version. This does NOT weaken the check -- P16 still FAILS if the
+    -- guard stops firing on an is_active update.
+    --
+    -- Control-tested 5 Sep 2026 against production, rolled back:
+    --   pin = NULL -> guard_fired = false (FAIL, reproduces the observed failure)
+    --   pin = 1    -> guard_fired = true  (pass)
+    update public.publications set allocation_version = 1 where id = ctl_pub;
     begin
       update public.publications set is_active = true where id = ctl_pub;
       ctl_guard_fired := false;
