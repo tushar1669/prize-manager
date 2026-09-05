@@ -5,13 +5,15 @@
  * This eliminates the need for publicTeamPrizes to fall back to live recomputation.
  *
  * When to run:
- *   - After Phase 1 deployment (publicTeamPrizes pins to publications.version)
- *   - For any published tournament where team_allocations rows are missing for the active version
+ *   - For any published tournament where team_allocations rows are missing at the
+ *     publication's pinned allocation version
  *
  * Safety:
  *   - Master or tournament owner only
  *   - Idempotent: if rows already exist for (tournament_id, version), returns early
- *   - Pins to publications.version by default (does not backfill unpublished tournaments)
+ *   - Pins to publications.allocation_version by default (TC0, 5 Sep 2026); does
+ *     not backfill unpublished tournaments. An explicit `version` in the body
+ *     still overrides, which is the manual escape hatch.
  *   - Uses the same shared team scoring logic as allocateInstitutionPrizes
  *
  * Example curl:
@@ -30,7 +32,7 @@ import {
   type TeamGroupByKey,
 } from "../_shared/teamPrizes.ts";
 
-const BUILD_VERSION = "2026-03-05T15:30:00Z";
+const BUILD_VERSION = "2026-09-05T20:00:00Z-TC0e";
 const FUNCTION_NAME = "backfillTeamAllocations";
 const corsHeaders = CORS_HEADERS;
 
@@ -117,7 +119,7 @@ Deno.serve(async (req: Request) => {
     } else {
       const { data: pub, error: pubErr } = await supabase
         .from("publications")
-        .select("version")
+        .select("version, allocation_version")
         .eq("tournament_id", tournament_id)
         .eq("is_active", true)
         .maybeSingle();
@@ -129,7 +131,22 @@ Deno.serve(async (req: Request) => {
           400
         );
       }
-      pinnedVersion = pub.version;
+
+      // TC0 (5 Sep 2026): resolve from publications.allocation_version, NOT
+      // publications.version. team_allocations rows are written by `finalize` at
+      // the ALLOCATIONS version; publications.version counts publishes. Writing
+      // at the publish counter produced snapshots in a version namespace nothing
+      // reads — the same defect that made publicTeamPrizes miss its lookup.
+      if (pub.allocation_version == null) {
+        return jsonResp(
+          {
+            error:
+              "The active publication has no pinned allocation version, so this tournament was published before it had any results. Finalize and publish it again, or pass an explicit `version` to override.",
+          },
+          400
+        );
+      }
+      pinnedVersion = pub.allocation_version;
     }
 
     console.log(`[${FUNCTION_NAME}] tournament=${tournament_id} version=${pinnedVersion}`);
