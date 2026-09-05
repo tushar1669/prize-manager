@@ -52,6 +52,7 @@ A=src/pages/Account.tsx
 P=src/pages/PublishSuccess.tsx
 F=src/pages/Finalize.tsx
 C=src/pages/admin/AdminCoupons.tsx
+D=src/pages/Dashboard.tsx
 
 check "B13#1" "$U" "Awaiting admin approval"        OPEN   "B13 #1 post-submit toast hardcodes 'Awaiting admin approval'"
 check "B13#2" "$U" 'to="/account"'                  OPEN   "B13 #2 bare Link to /account, no returnToForClaim"
@@ -63,6 +64,7 @@ check "B138"  "$F" "single publish surface (B13 #8)" CLOSED "B13 #8 Finalize sin
 check "B20"   "$F" "publish_blocked_no_winners"     CLOSED "B20 durable audit on publish early returns (batch F1)"
 check "F1TIE" "$F" "hasPendingTeamTies"             OPEN   "Dead hasPendingTeamTies state removed from Finalize (batch F1)"
 check "B13#7" "$C" "min-w-0"                        CLOSED "B13 #7 /admin/coupons filter row has an overflow guard"
+check "B22g"  "$D" "Untitled Tournament"            CLOSED "B22 Dashboard stub literal still matches publish_tournament's title gate"
 
 echo
 echo "  NOT MECHANICALLY CHECKABLE -- tracked in PROJECT_STATE only:"

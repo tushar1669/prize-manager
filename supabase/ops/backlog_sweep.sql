@@ -63,7 +63,9 @@ declare
     'X3',   'NEW anon control read returns prize/allocation rows when unpublished',
     'X4',   'NEW anon can read the tournament row or its publication when unpublished',
     'GTM1', 'GTM published tournaments with a test-like title',
-    'GTM2', 'GTM published tournaments (denominator)'
+    'GTM2', 'GTM published tournaments (denominator)',
+    'B22a', 'B22 published tournaments carrying a stub-derived public_slug',
+    'B22b', 'B22 active publications carrying a stub-derived slug'
   );
 begin
   ----------------------------------------------------------------------------
@@ -211,6 +213,21 @@ begin
   select count(*) into tmp_int from public.tournaments where is_published;
   m := m || jsonb_build_object('GTM2', tmp_int::text);
   d := d || jsonb_build_object('GTM2', 'INFO');
+
+  ----------------------------------------------------------------------------
+  -- B22 — the publish title gate blocks the stub title, but the slug derived
+  -- from it lives in two tables; a check on only one reads CLOSED while the
+  -- other is dirty.
+  ----------------------------------------------------------------------------
+  select count(*) into tmp_int from public.tournaments
+   where is_published and public_slug ~ '^untitled-tournament(-[0-9]+)?$';
+  m := m || jsonb_build_object('B22a', tmp_int::text);
+  d := d || jsonb_build_object('B22a', case when tmp_int > 0 then 'OPEN' else 'CLOSED' end);
+
+  select count(*) into tmp_int from public.publications
+   where is_active and slug ~ '^untitled-tournament(-[0-9]+)?$';
+  m := m || jsonb_build_object('B22b', tmp_int::text);
+  d := d || jsonb_build_object('B22b', case when tmp_int > 0 then 'OPEN' else 'CLOSED' end);
 
   ----------------------------------------------------------------------------
   -- Control test: read as anon against an unpublished tournament that still
