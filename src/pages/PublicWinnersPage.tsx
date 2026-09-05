@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
+import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
+import type { AllocationVersionSelector } from "@/utils/getLatestAllocations";
 import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
@@ -41,9 +43,21 @@ export default function PublicWinnersPage() {
     staleTime: 60_000,
   });
 
-  const { data: prizeData, isLoading: prizeLoading, grouped } = useFinalPrizeData(tournament?.id);
+  // Public page: render the version pinned at publish time, never the newest one.
+  const { allocationVersion, isVersionPending, isVersionError } = usePublishedAllocationVersion(tournament?.id);
+  // A failed pin lookup stays unresolved: pinning to null would render the
+  // "no winners" empty state on a tournament that actually has winners.
+  const versionSelector: AllocationVersionSelector =
+    tournamentLoading || !tournament?.id || isVersionPending || isVersionError
+      ? { mode: 'unresolved' }
+      : { mode: 'pinned', version: allocationVersion };
 
-  const isLoading = tournamentLoading || prizeLoading;
+  const { data: prizeData, isLoading: prizeLoading, grouped } = useFinalPrizeData(
+    tournament?.id,
+    versionSelector
+  );
+
+  const isLoading = tournamentLoading || isVersionPending || prizeLoading;
 
   if (isLoading) {
     return (
@@ -92,16 +106,18 @@ export default function PublicWinnersPage() {
             <div className="mb-4 print:hidden">
               <BrochureLink url={tournament.brochure_url} />
             </div>
-            <div className="flex gap-4 mb-4 print:mb-2">
-              <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
-                {totalPrizes} Winners
-              </Badge>
-              {totalCash > 0 && (
+            {!isVersionError && (
+              <div className="flex gap-4 mb-4 print:mb-2">
                 <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
-                  ₹{totalCash.toLocaleString('en-IN')} Total Prize
+                  {totalPrizes} Winners
                 </Badge>
-              )}
-            </div>
+                {totalCash > 0 && (
+                  <Badge variant="outline" className="text-base px-4 py-1.5 border-border print:border-black print:text-sm print:text-black">
+                    ₹{totalCash.toLocaleString('en-IN')} Total Prize
+                  </Badge>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -112,7 +128,14 @@ export default function PublicWinnersPage() {
             </div>
           </CardHeader>
           <CardContent className="print:px-2">
-            {!prizeData?.winners || prizeData.winners.length === 0 ? (
+            {isVersionError ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Published results could not be loaded. Please refresh to try again.
+                </AlertDescription>
+              </Alert>
+            ) : !prizeData?.winners || prizeData.winners.length === 0 ? (
               <div className="text-center text-muted-foreground py-8 print:text-black/70">
                 No winners allocated yet
               </div>

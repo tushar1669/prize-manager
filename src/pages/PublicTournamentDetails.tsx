@@ -8,6 +8,8 @@ import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
+import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
+import type { AllocationVersionSelector } from "@/utils/getLatestAllocations";
 import { formatCurrencyINR } from "@/utils/currency";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
@@ -30,7 +32,17 @@ export default function PublicTournamentDetails() {
   });
   const errorMessage = getPublicTournamentDetailsErrorMessage(error, import.meta.env.DEV);
 
-  const { grouped, isLoading: resultsLoading } = useFinalPrizeData(t?.id);
+  // Public pages render the version pinned at publish time, never the newest one.
+  const { allocationVersion, isVersionPending, isVersionError } = usePublishedAllocationVersion(t?.id);
+  // A failed pin lookup stays unresolved: pinning to null would render the
+  // "no results" empty state on a tournament that actually has winners.
+  const versionSelector: AllocationVersionSelector =
+    isLoading || !t?.id || isVersionPending || isVersionError
+      ? { mode: 'unresolved' }
+      : { mode: 'pinned', version: allocationVersion };
+
+  const { grouped, isLoading: prizeLoading } = useFinalPrizeData(t?.id, versionSelector);
+  const resultsLoading = isVersionPending || prizeLoading;
 
   const formatDate = (value: string | null | undefined) => {
     if (!value) return null;
@@ -289,7 +301,15 @@ export default function PublicTournamentDetails() {
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
-                {!grouped?.groups?.length ? (
+                {resultsLoading ? (
+                  <div className="text-center text-muted-foreground">
+                    Loading published results…
+                  </div>
+                ) : isVersionError ? (
+                  <div className="text-center text-destructive">
+                    Published results could not be loaded. Please refresh to try again.
+                  </div>
+                ) : !grouped?.groups?.length ? (
                   <div className="text-center text-muted-foreground">
                     No published results yet.
                   </div>
