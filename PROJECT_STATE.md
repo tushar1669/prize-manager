@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 4 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 5 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -12,9 +12,9 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 **Phase 2** extends the same engine into a Universal Extraction Engine serving three platforms and eventually external developers. The engine is doc-type-driven; adding a document type requires a new schema row and new trust invariants, not a new pipeline.
 
 **Three-platform context:**
-- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the auto-approval oversight loop (F3-A/B/C, 28 August), B13 #0 plus the `extraction_review_queue` security fix and the Resend SMTP migration (29 August), F3-C2 batch A (30–31 August), the B16 investigation which closed B16 and opened B18 (31 August), batch F1 plus the backlog sweeps which uncovered X1/X2/X3 (1 September), and now **batch G1 and G2, which closed the X-exposure entirely (2 September)**.
-- **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C). **Parked by owner decision 2 Sep** pending a seamless prize-manager → certificate-hub handoff.
-- **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C).
+- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the F3 oversight loop (28 Aug), the `extraction_review_queue` security fix and Resend SMTP migration (29 Aug), F3-C2 batch A (30–31 Aug), the B16 investigation (31 Aug), batch F1 and the backlog sweeps (1 Sep), G1/G2/G3 closing the X-exposure (2 Sep), B22 and GTM1 (3–4 Sep), and now **B18-a + B18-b — published results are version-pinned (5 September)**.
+- **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C). **Parked by owner decision 2 Sep** pending a seamless prize-manager → certificate-hub handoff. Public-page inventory taken 5 Sep — see §15.
+- **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C). Public-page inventory taken 5 Sep — see §15. **Carries one live exposure, `/debug/auth`.**
 
 ---
 
@@ -23,9 +23,9 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`7b6c152`** (B22 merge) · `aa57485` PROJECT_STATE · `e207f41` G3b merge · `dcb8274` G3 merge · `9f59c51` PROJECT_STATE · `0ccfdcd` G2 merge · `44c289b` G1 merge · prior: `2c72a0b` docs · `6020d65` sweeps · `22aa425` batch F1 · `42d920f` F3-C2 batch A · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
-| **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9**, `verify_jwt=false` · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · `publicTeamPrizes` v240 · `pmPing` v238 · `backfillTeamAllocations` v38. **Untouched 29 Aug – 2 Sep** |
-| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy; the `ezbr_sha256` is |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`1e0dada`** (sweep checks) · `7a187aa` B18 merge · `988403d` B18-b · `2f3528b` B18-a · `2cb9f83` PROJECT_STATE · `7b6c152` B22 merge · prior: `e207f41` G3b · `dcb8274` G3 · `0ccfdcd` G2 · `44c289b` G1 · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
+| **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9**, `verify_jwt=false` · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · `publicTeamPrizes` v240 · `pmPing` v238 · `backfillTeamAllocations` v38. **Untouched 29 Aug – 5 Sep** |
+| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy; the bundle hash is. **Better still: check the bundle's `__vite__mapDeps` list for a module that did not exist before** — that is how the B18-b publish was confirmed (`assets/usePublishedAllocationVersion-BOqEGwdO.js` in `index-J-hNkfzB.js`) |
 | **Free-plan log retention** | **1 day.** Edge-function logs older than ~24h are gone |
 | Active extraction schema | v5 (chess_brochure), v3 (payment_screenshot, id `4e8beb4d-4a07-4ef8-a774-18b22f722522`) |
 | Gemini model | `GEMINI_MODEL` = `gemini-3.1-flash-lite` |
@@ -35,34 +35,39 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | **F2 kill switch** | `platform_feature_flags` — row `key='payment_auto_approve'`, `enabled = true` since 2026-08-20 17:26:33 UTC. RLS on, zero policies. Off switch: `supabase/ops/f2_auto_approve_off.sql` |
 | **F3 oversight objects** | `payment_auto_approval_audit` · `record_auto_approval_audit` · `revoke_auto_entitlement` · `list_auto_approvals()`. RLS on, zero policies, zero client table grants, `anon` no EXECUTE |
 | **`public.referrals` triggers** | **ZERO, by design, since `20260822120000`.** Do not re-add one — see W1 |
-| Test baseline | **479 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **482**. Was 476/479 before G2 added 3 guard assertions |
-| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file baseline:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. **`AutoApprovedPanel.tsx`, `Finalize.tsx`, `AdminTournaments.tsx` and `admin/ColumnFilter.tsx` have zero and must keep zero.** Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
+| Test baseline | **479 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **482** |
+| **The 3 known failures are probably ONE bug** | `normDob('Jan 5, 2024')` → `2024-01-04`; the name+dob duplicate test depends on that same `normDob`; the martech inclusive-boundary test returns false. Off-by-one-day plus inclusive-boundary on an IST (+05:30) machine is the signature of local-time parsing against UTC dates. Untested hypothesis — but treat it as one timezone bug, not three. Tier 3 |
+| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file baseline:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. **`AutoApprovedPanel.tsx`, `Finalize.tsx`, `AdminTournaments.tsx`, `admin/ColumnFilter.tsx`, `usePublishedAllocationVersion.ts`, `getLatestAllocations.ts`, `useFinalPrizeData.ts`, `PublicTournamentDetails.tsx`, `PublicWinnersPage.tsx` have zero and must keep zero.** Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
+| **tsc exits non-zero, so never chain it** | `npx tsc … && npx vitest run` silently SKIPS vitest, because 12 errors is the normal state. Use `;` or separate commands. This bit us on the B18 merge |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
 | Claim RPC | **5-arg only**, `RETURNS uuid`, 1 overload, **15 `RAISE EXCEPTION` across 11 codes** |
 | Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
 | **Brochure upload cap** | `storage.buckets.file_size_limit = 10485760` (10 MB) on `extraction-uploads`. See B17 |
-| Verification harnesses | `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · **`b22_publish_gate_checks.sql` 14/14 (new 4 Sep — the FIRST harness on `publish_tournament`; B18 must keep all 14 green)** |
-| **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**22 checks** after the G1 X3 respec + X4 addition) · `scripts/backlog_sweep_repo.sh` (10 checks + tsc baseline). **Run both before planning anything** |
+| Verification harnesses | **8 total.** `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · `b22_publish_gate_checks.sql` 14/14 · **`b18_version_pin_checks.sql` 16/16 (new 5 Sep)** |
+| **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**24 checks** after B22a/B22b) · `scripts/backlog_sweep_repo.sh` (**11 checks** after B22g, plus the tsc baseline). **Run both before planning anything.** Last reading: **DB 12 OPEN / 11 CLOSED / 1 INFO**, **repo 7 OPEN / 4 CLOSED** |
 | Operational scripts | `f2_auto_approve_on.sql` · `f2_auto_approve_off.sql` · `f2_auto_approval_report.sql` · the two sweeps. **Not migrations** |
 | Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
-| **Live census (verified 4 Sep, post-B22)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications** · **0 drifted** · **0 stub slugs** · **33 drafts now gated by the title check** · 23 soft-deleted · 12 payments · 6 referrals · 5 referral_rewards · 1 audit row |
+| **Live census (verified 5 Sep, post-B18)** | 43 auth users · **133 tournaments, 35 published** · **95 publications, 35 active, 35 pinned, 0 unpinned** · **0 drifted** · **0 stub slugs** · 33 drafts still titled `Untitled Tournament` and gated by the title check · 23 soft-deleted · 12 payments · 6 referrals · 5 referral_rewards · 1 audit row |
 | Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as the `PLATFORM_PAYEE_VPA` secret |
 
-### Publish path — REVISED 2 September
+### Publish path — REVISED 5 September (B18)
 
 | Item | Value |
 |---|---|
 | **Frontend entry** | `src/pages/Finalize.tsx` → `handlePublish` → **step 1** `functions.invoke('finalize')` → **step 2** `rpc('publish_tournament', { tournament_id, requested_slug: null })` |
-| **Unpublish callers** | `PublishSuccess.tsx` (organizer) **and `AdminTournaments.tsx` (master, since G2)**. Both call `unpublish_tournament(uuid)` |
-| `publish_tournament(uuid, text)` | One overload, SECURITY DEFINER, owner `postgres`. Auth: `v_owner_id = v_uid OR has_role(v_uid,'master')`. **Since B22 also enforces a TITLE GATE** — blank or placeholder title raises `TITLE_REQUIRED`. Still validates no dates and no allocations. Deactivates prior publications, computes `max(version)+1`, inserts, sets `is_published/public_slug/status='published'` |
-| **Slug precedence (B22 — FIXED 4 Sep)** | `COALESCE(NULLIF(requested_slug,''), <existing slug UNLESS it matches `^untitled-tournament(-N)?$`>, regexp title)`. A placeholder slug is treated as absent so a renamed stub regenerates once. **Any other existing slug still wins, deliberately** — regenerating on every republish would break every shared link (harness T7 is the negative control). No UI exposes a slug change; that stays Tier 2 |
-| `unpublish_tournament(uuid)` | **Correct and always was.** Clears `publications.is_active`, sets `is_published=false` AND `status='draft'` in one transaction. Idempotent |
-| **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` [INSERT, UPDATE] and `trg_guard_publication_requires_team_snapshots` [UPDATE]. Both block activating a publication when the tournament has active `institution_prize_groups` but no `team_allocations` at that version. **See B21 — this is a one-way door** |
-| **`get_public_tournament_results(uuid)`** | SECURITY DEFINER. Gates on `tournaments.is_published = true`, selects **`MAX(allocations.version)`**, **never joins `publications`**. This is B18 |
-| **`allocations` FKs** | `prize_id → prizes ON DELETE CASCADE` · `player_id → players ON DELETE CASCADE` · `tournament_id → tournaments ON DELETE CASCADE`. **3 cascades; the first two rewrite published history** |
-| **Public RLS — re-keyed by G1** | `allocations.public_read_published_allocations`, `prizes.public_read_published_prizes`, `publications.public_read_active_publications`, `tournaments.anyone_read_published_tournaments` — all four are role **PUBLIC** and now key off **`tournaments.is_published`**. `players.anon_read_published_players` was already correct and is the reference shape |
-| `anon` table grants | SELECT true on `allocations`, `publications`, `prizes`; SELECT false on `players`. **Grants are not the exposure (BB4)** |
-| **Public route split** | `/p/:slug` is the real public page. `/t/:id/public` → `LegacyPublicRouteCompat` shim |
+| **Unpublish callers** | `PublishSuccess.tsx` (organizer) and `AdminTournaments.tsx` (master, since G2). Both call `unpublish_tournament(uuid)` |
+| `publish_tournament(uuid, text)` | One overload. **Exact signature `tournament_id uuid, requested_slug text DEFAULT NULL::text`** — the DEFAULT is load-bearing; `CREATE OR REPLACE` without it fails `42P13`. SECURITY DEFINER, `SET search_path = public`, owner `postgres`, RETURNS TABLE(slug text, version integer, request_id uuid). Auth: `v_owner_id = v_uid OR has_role(v_uid,'master')`. Enforces the B22 **title gate**. **Since B18 also records `allocation_version`.** Validates neither dates nor allocations |
+| **Slug precedence (B22)** | `COALESCE(NULLIF(requested_slug,''), <existing slug UNLESS it matches `^untitled-tournament(-N)?$`>, regexp title)`. **Any other existing slug still wins, deliberately** — regenerating on every republish would break every shared link (harness T7 is the negative control) |
+| **`publications.allocation_version` (B18-a)** | The allocation version this publication displays. Set from `MAX(allocations.version)` at publish time. **NULL means the tournament was published before it had any allocations** — the page then shows details and no winners until a later publish pins one |
+| **`get_public_tournament_results(uuid)`** | SECURITY DEFINER, **language `sql`**, 15-column TABLE. Gates on `tournaments.is_published`, then reads the ACTIVE publication's `allocation_version`. **NO `MAX()` FALLBACK — deliberately.** A `COALESCE(pin, MAX(...))` reopens B18-a |
+| **Client-side read path (B18-b)** | `/p/:slug` (`PublicTournamentDetails`) and `/t/:id/public` (`PublicWinnersPage`) do NOT use the RPC. They go through `useFinalPrizeData` → `getLatestAllocations`, which takes an `AllocationVersionSelector`: `{mode:'latest'}` (organizer default) · `{mode:'pinned', version}` · `{mode:'unresolved'}`. Public pages read the pin via `usePublishedAllocationVersion` and pass `pinned`. **Three modes exist so `undefined` ("use latest") can never be confused with `null` ("pinned to nothing")** |
+| **Organizer surfaces keep `latest`** | `Finalize`, `FinalPrizeView`, `ArbiterSheetView`, `useFinalizeData` were not edited; they inherit `{mode:'latest'}` from the default parameter |
+| `unpublish_tournament(uuid)` | Correct and always was. Clears `publications.is_active`, sets `is_published=false` AND `status='draft'` in one transaction. Idempotent |
+| **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` **[BEFORE INSERT OR UPDATE OF is_active, version]** and `trg_guard_publication_requires_team_snapshots` **[BEFORE UPDATE OF is_active]**. Both are **column-scoped**: an `allocation_version`-only write fires neither. Proven, not assumed — see CC9. Both block activating a publication when the tournament has active `institution_prize_groups` but no `team_allocations`. **See B21 — this is a one-way door** |
+| **`allocations` FKs** | `prize_id → prizes ON DELETE CASCADE` · `player_id → players ON DELETE CASCADE` · `tournament_id → tournaments ON DELETE CASCADE`. **3 cascades; the first two rewrite published history. This is B18-c, still open** |
+| **Public RLS — re-keyed by G1** | `allocations.public_read_published_allocations`, `prizes.public_read_published_prizes`, `publications.public_read_active_publications`, `tournaments.anyone_read_published_tournaments` — all four role **PUBLIC**, all key off **`tournaments.is_published`**. `players.anon_read_published_players` was already correct and is the reference shape |
+| **`publications` write surface** | `anon` AND `authenticated` hold **full INSERT/UPDATE/DELETE**, and `org_publications_access` is `FOR ALL` scoped owner-or-master. **An organizer can rewrite their own pin directly.** Not privilege escalation — they can already republish — but B18 delivers stability against accidental drift, **not tamper-proofing**. Do not describe published results as "immutable" |
+| **Public route split** | `/p/:slug` is the real public page. `/t/:id/public` → `LegacyPublicRouteCompat`, which redirects when a slug exists and otherwise renders `PublicWinnersPage` |
 | **`is_master` has only a zero-arg overload** | `is_master(uuid)` does not exist. `detect_missing_team_snapshots()` calls `public.is_master(auth.uid())` and raises `42883` every call. This is the `/admin/team-snapshots` failure |
 
 ### Email infrastructure (migrated 29 August 2026)
@@ -71,16 +76,16 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 
 ### Migrations (all applied, repaired, version-matched)
 
-`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · `20260902120000` G1 publish-state reconcile · **`20260904120000` B22 publish title gate**.
+`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · `20260902120000` G1 publish-state reconcile · `20260904120000` B22 publish title gate · **`20260905120000` B18-a version pin**.
 
-**G2 was frontend only. No migration on 30, 31 August or 1 September.**
+**G2, G3, G3b and B18-b were frontend only.**
 
 ---
 
 ## 3. Non-negotiable guardrails
 
 **Phase 1:**
-1. NEVER touch the allocation engine — allocations, `rule_config`, conflicts, player-to-prize matching — unless Tushar explicitly names it. Lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`. The frontend invokes it **by string name**; never alter an invoke name or payload. **Tushar explicitly authorised altering RLS policies ON the allocations table for G1 on 2 Sep; that authorisation does not extend further. Open scope question, must be settled before B18 phase 3: does `supabase/functions/finalize` fall inside this guardrail? It writes `allocations` rows but computes nothing.**
+1. NEVER touch the allocation engine — allocations, `rule_config`, conflicts, player-to-prize matching — unless Tushar explicitly names it. Lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`. The frontend invokes it **by string name**; never alter an invoke name or payload. **Tushar authorised altering RLS policies ON the allocations table for G1 on 2 Sep; that authorisation does not extend further. TWO OPEN SCOPE QUESTIONS, both owed before the Team Championship work: (a) does `supabase/functions/finalize` fall inside this guardrail — it writes `allocations` rows but computes nothing; (b) may Team Championship Mode A write `team_allocations`, and is `backfillTeamAllocations` in scope?**
 2. `criteria_json` committed as always `'{}'`.
 3. Never weaken grounding or arithmetic. Never weaken checks to force a pass.
 4. Client never writes production tables; only `commit-extraction` does, on explicit Approve.
@@ -92,197 +97,131 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 
 **Master / admin / auth:** M1–M5. **Phase 2A-2:** N1–N5. **Phase 2A-3:** P1–P6. **F0d:** Q1–Q7. **UI:** U1–U5. **F1:** R1–R7. **Client write-grant audit:** S1–S8. **PF1:** T1–T6. **F2:** V1–V8. **Referrals:** W1–W4. **F3:** X1–X9. **F3-C:** X7–X9. **Security and ops:** Y1–Y5. **Testing and state ownership:** Z1–Z4. **Investigation and version semantics:** AA1–AA5. **Documentation and verification:** BB1–BB5. (See prior PROJECT_STATE for full text; unchanged.)
 
-> **Naming note:** the F3 guardrails X1–X9 predate the exposure items labelled X1–X4. The exposure items are written as **X1-exposure … X4-exposure**. All four are now CLOSED.
+> **Naming note:** the F3 guardrails X1–X9 predate the exposure items labelled X1–X4. The exposure items are written as **X1-exposure … X4-exposure**. All four are CLOSED.
 
-**Publish-state and audit — CC1–CC5 (2 September 2026):**
+**Publish-state and audit — CC1–CC8 (2–4 September):** unchanged, see prior PROJECT_STATE. Summary: CC1 read the triggers on the table a function writes · CC2 a defect's name can encode a wrong cause · CC3 enumerate every policy on every related table · CC4 a check that can never read CLOSED is not a measurement · CC5 placeholder rows travel · CC6 a green check on an unchanged file looks identical to a green check on a correct one (+ amendment: `diff --stat` is blind to NEW files, use `git status --short` or `git add -A` then `diff --cached --stat`) · CC7 a harness's execution order can be load-bearing · CC8 dry-run the fix, not just the migration.
 
-**CC1. Read the triggers on the table a function writes, not just the function.** `publish_tournament` was audited end to end and pronounced safe to call for an operational restore. It is — but `publications` carries two triggers that block activation when team snapshots are missing, and neither is visible from the function body. The restore failed in production. Same family as D40: *the dangerous object is often not the one you are reading.*
+**B18 — CC9–CC12 (5 September 2026):**
 
-**CC2. A defect's name can encode a wrong cause.** The batch was called "unpublish must actually unpublish". `unpublish_tournament` was correct the whole time and had been since it was written. The real writer was `AdminTournaments.tsx`'s raw client update. **The give-away was in the data:** all 7 drifted rows had `status='published'`, a value the unpublish RPC cannot leave behind. Read the drifted rows before naming the cause.
+**CC9. A column-scoped trigger is a claim until you watch the guard fire.** The B18 backfill writes `publications.allocation_version` on 35 active rows. Both triggers on that table are `UPDATE OF is_active[, version]`, so neither should fire — but "should" is CC1's exact trap. The proof was a **matched pair on the same row**: an `is_active` update on `74e1bd2b`'s publication was **observed rejecting** with *"Cannot publish: missing team snapshots"*, and then the `allocation_version`-only write on that same row succeeded. Harness case P16 keeps that pair honest, and it deliberately picks a publication whose guard **can** fire — using the local fixture would have made the control unfalsifiable (CC4).
 
-**CC3. Three flags described one state, not two.** BB3 said two. It was `is_published`, `status` **and** `publications.is_active`, and four PUBLIC policies across four tables read the wrong ones. The §12.11 control test queried allocations, prizes and players only, so it under-reported the exposure by two tables — the tournament row and its title were readable too. **Enumerate every policy on every related table, then control-test each one.**
+**CC10. `prosrc` includes comments, so a literal-match guard can read its own documentation.** The B18 migration failed its own post-check on the first live run. The check looked for `MAX(a.version)` in `get_public_tournament_results` to confirm the defect was gone. The new function contains no such code — but its explanatory comment says *"there is deliberately no fallback to MAX(a.version)"*, and `prosrc` returns comments. **The correct fix is to strengthen the guard, not delete the explanation:** `regexp_replace(prosrc, '--[^\n]*', '', 'g')` before matching. Control-tested both ways — a comment-only mention no longer matches, a real `COALESCE` fallback still does. Note `publish_tournament` legitimately contains `MAX(a.version)`, so this guard stays scoped to the reader.
 
-**CC4. A measurement that cannot ever read CLOSED is not a measurement.** The sweep's X3 checked whether `anon` holds a SELECT grant on `allocations`. That grant is legitimate and permanent, so X3 would have reported the exposure OPEN forever. Worse, the control-test probe required an *active* publication — a condition the fix destroys — so the anon control would have gone dark exactly when it most needed to keep passing. **When filing a check, ask what its CLOSED state looks like and whether the fix dissolves its own probe.**
+**CC11. Dry-run the artifact you are shipping, not a compacted copy of it.** CC10 was avoidable. The pre-flight dry runs used a stripped-down function body with the comments removed, so the guard passed in the dry run and failed on the real file. **The dry run must execute the exact text of the file being applied.** Same family as D41: verify the artifact, not your model of it.
 
-**CC5. Placeholder rows travel.** The Dashboard "New Tournament" button inserts a complete, valid, publishable row before the organizer types anything. Nothing between that insert and a live public page requires a single real value. **A default that is valid enough to save is a default that will reach production.**
-
-**CC6. A green check on an unchanged file looks identical to a green check on a correct one.** G3 was committed as `1 file changed` — the new `ColumnFilter.tsx` only. `AdminTournaments.tsx` never changed, because the browser had saved the second download as `AdminTournaments (1).tsx` and the `cp` copied the *old* file over itself. tsc passed, vitest passed, the merge succeeded and the push succeeded. Nothing failed, because nothing had changed. It surfaced only when Lovable reported nothing to publish. **After any `cp` into the repo, run `git --no-pager diff --stat` and confirm every file you expected is listed, before running tsc.** A passing baseline is evidence about whatever is on disk, not about what you meant to put there.
-
-**CC6 amendment (4 Sep).** `git --no-pager diff --stat` shows only MODIFIED TRACKED files. For a batch of NEW files it prints nothing whether the copy worked or not — the guard's all-clear is indistinguishable from not looking, which is the very failure CC6 exists to catch. **Use `git status --short`, or `git add -A` then `git --no-pager diff --cached --stat`.** Verified on the B22 batch: plain `diff --stat` printed nothing; `--cached` listed both files.
-
-**CC7. A harness's execution order can be load-bearing, and the dependency is invisible.** B22's uniqueness check (T9) failed on the first dry run because an earlier check (T8) republished the fixture under an explicit slug, deactivating the very publication T9 needed to collide with — the loop only inspects ACTIVE publications. Nothing in either check named the coupling. **When one check mutates state another check reads, say so in a comment at the point of order-dependence,** or the next person reorders them and gets a false pass.
-
-**CC8. Dry-run the fix, not just the migration.** B22's first dry run found a hole in the gate itself: `'  UNTITLED   tournament '` published cleanly, because `btrim` strips only OUTER whitespace and the internal run of spaces never matched the literal. The migration was syntactically perfect and would have applied without complaint. **A migration that applies successfully is not a fix that works** — only a matched-pair harness run against the new behaviour shows that.
+**CC12. Structure survives a bad measurement; absolute values do not.** During B18 verification, a checksum of a live page's output disagreed with a value captured minutes earlier, at an identical row count — the exact signature of silent content change. It was not: the ad-hoc checksum instrument behaved differently across transaction contexts. **The relationships were stable throughout** (v8 = v9, v7 differs, before and after). The resolution was to stop comparing to a remembered number and instead **reconstruct the old logic and diff it against the new, live, across all 35 published tournaments** — result 0 rows lost, 0 gained, 35/35 identical. **When a measurement disagrees with a stored value, re-derive the comparison rather than trusting either number.**
 
 **Phase 2B:** 13. Bank statements are `privacy_class='sensitive'`. NEVER through Gemini. pdfplumber only.
 
 ---
 
-## 4–12.11. Phases 1 through 1 September — COMPLETE
+## 4–12.14. Phases 1 through 4 September — COMPLETE
 
-See prior PROJECT_STATE for full detail on Phase 1, Phase 2A, Workstream C, Phase 2A-2, F0a–F0e, F1, the E1–E3 audit, PF1, **F2 (live 20 Aug)**, the **referrals repair (22 Aug)**, **production validation (25–26 Aug)**, **F3-A/B/C0/C0b/C1 (28 Aug)**, **B13 #0 + `extraction_review_queue` + Resend SMTP (29 Aug)**, **F3-C2 batch A (30–31 Aug)**, **the B16 investigation (31 Aug)**, and **batch F1 + the backlog sweeps (1 Sep, §12.11)**.
+See prior PROJECT_STATE for full detail on Phase 1, Phase 2A, Workstream C, Phase 2A-2, F0a–F0e, F1, the E1–E3 audit, PF1, **F2 (live 20 Aug)**, the **referrals repair (22 Aug)**, **production validation (25–26 Aug)**, **F3-A/B/C0/C0b/C1 (28 Aug)**, **B13 #0 + `extraction_review_queue` + Resend SMTP (29 Aug)**, **F3-C2 batch A (30–31 Aug)**, **the B16 investigation (31 Aug)**, **batch F1 + the backlog sweeps (1 Sep, §12.11)**, **G1/G2/G3/G3b (2 Sep, §12.12)**, and **B22 + GTM1 + sportup corrections (3–4 Sep, §12.14)**.
 
-Governing decisions unchanged: **D38, D39, D40, D41, X1–X9, Y1, Z1–Z4, AA1–AA5, BB1–BB5**.
-
----
-
-## 12.12 · 2 September 2026 — G1 and G2 shipped, X-exposure closed
-
-### Batch G1 — publish-state reconciliation. Migration `20260902120000`, merged `44c289b`.
-
-**The premise in §13 was wrong and was corrected before any code was written.** §13 step 1 said to "clear `publications.is_active` in whatever RPC `PublishSuccess.tsx` calls". That RPC already did exactly that, and also set `status='draft'`. Building step 1 would have edited a correct function.
-
-**Real cause, identified by measurement:** all 7 drifted rows carried `status='published'` and `is_archived=true`. `unpublish_tournament` cannot produce that combination. `AdminTournaments.tsx:159` could — a raw `supabase.from("tournaments").update(...)` whose hide/archive/softDelete actions set `is_published:false` and touched nothing else. Five of the seven were archived in one session on 2026-06-13.
-
-**Scope was wider than documented.** Four PUBLIC-role policies read the wrong flags, not one:
-
-| Policy | Table | Was keyed on | Now keyed on |
-|---|---|---|---|
-| `public_read_published_allocations` | allocations | `publications.is_active` | `tournaments.is_published` |
-| `public_read_published_prizes` | prizes | `publications.is_active` | `tournaments.is_published` |
-| `public_read_active_publications` | publications | `is_active` alone | `is_active` AND `is_published` |
-| `anyone_read_published_tournaments` | tournaments | **`status='published'`** | `is_published` |
-
-**Re-keyed, not dropped.** §13 offered dropping in favour of the `is_published`-gated siblings. Those siblings are restricted to role `anon`; the policies above are role PUBLIC. A signed-in visitor who is neither owner nor master reads public results **only** through the PUBLIC policies. Dropping them would have broken every signed-in visitor. Roles were left untouched; only `USING` changed.
-
-**Safe because measured:** 36 tournaments had `is_published=true`, 43 had `status='published'`, difference exactly 7, and **zero** rows had `is_published=true` with `status<>'published'`. The sets nested, so re-keying strictly narrowed. Zero published rows were archived or soft-deleted, so `is_published` alone equalled the three-condition gate used by the `published_tournaments` view.
-
-**Dry-run discipline.** The MCP's transaction semantics were control-tested first (`create table … ; select 1/0;` → table did not survive), then the entire migration body was executed against production and force-aborted. All checks passed and rolled back; the 7 rows and old policies were verified still in place before the real run.
-
-**Result, verified independently of the harness.** As `anon`, across all 7 formerly exposed tournaments: `tournaments=0 publications=0 allocations=0 prizes=0`, total **0 rows** (was 2,625 allocations plus 7 titles). Positive control `0fa8d2f9`: `tournaments=1 allocations=875 prizes=180 players=1220`. All 35 published tournaments still readable.
-
-### Batch G2 — the write path. Merged `0ccfdcd`.
-
-`AdminTournaments.tsx`: hide / archive / softDelete now call `unpublish_tournament` first, then apply archive flags in a narrowed update. Order is deliberate — if the second write fails the tournament is left MORE restricted, not less. `unarchive` and `restore` were untouched; they never cleared `is_published`.
-
-`tests/admin-tournaments-unpublish.spec.ts` — a mechanical source guard, **verified to fail all three assertions against the pre-G2 file** before being trusted (D35). vitest 476→479 passed of 482; tsc unchanged at 12/6.
-
-**Proven live, not from the harness.** One archive click on `74e1bd2b` produced all three writes in one action: `is_published` true→false, `status` published→draft, `active_pubs` 1→0. Before G2 the last two would not have moved.
-
-### Column-level UPDATE on `tournaments` — deliberately deferred
-
-`authenticated` holds UPDATE on **all 29 columns** including `is_published`, `status`, `public_slug`. RLS restricts rows, never columns (D36). This is the enabling condition for the whole defect. **Not revoked**, because `TournamentSetup.tsx:723` performs a bare `.update(values)` and what `values` carries has not been established — revoking first would break tournament editing. After G1 the exposure is closed regardless, so this is Tier 2 hygiene, not a live hole.
-
-### GTM1 RCA — the stub, and a second defect underneath it
-
-`16b9cf29` "Untitled Tournament" is a **real customer event** (owner `sankalparora5555@gmail.com`, 61 players, 3 categories, 40 prizes, 240 allocations, published five times on 2026-04-04). `deleted_at` is null — it was never deleted.
-
-**Cause:** `Dashboard.tsx:172`, the New Tournament button, inserts a stub — `title:'Untitled Tournament'`, `start_date=end_date=today`, status draft — then navigates to setup. Every other text field is `''`, not null. Nothing between that insert and a live public page requires a real value, and `publish_tournament` validates only ownership.
-
-**Systemic measurement:** 34 of 133 still carry the stub title but only **1 published**. **23 of 35 published tournaments have `start_date = end_date = creation date`** — the stub default and a genuine same-day event are indistinguishable in the data, so an unknown share of public pages advertise the data-entry day as the event day.
-
-**B22, found while reading `publish_tournament`:** slug precedence is `requested_slug` → **existing `public_slug`** → slugified title, and `Finalize.tsx:367` always passes null. Sankalp's slug is already `untitled-tournament`. **Renaming the tournament will not change the public URL.** Fixing GTM1 needs the title *and* a `public_slug` clear so the next publish regenerates it.
-
-Sankalp has been contacted and will update the title.
-
-### B21 — a one-way door in the publish path
-
-`74e1bd2b` "Road To GCL — Shining Stars: Varanasi Edition" was archived as the G2 live test and **cannot be republished**. It has 2 active `institution_prize_groups` and **zero `team_allocations` at any version**; both `publications` triggers block activation, on UPDATE as well as INSERT. It was published at v3 in December 2025, before that guard existed.
-
-**Blast radius measured: 2 tournaments have active team prize groups, both owned by Tushar.** The other (`0d54de9f`) has 3 snapshots and 300 allocations and is fine. **No customer can hit this today.**
-
-The archive dialog says "You can unarchive it later" — true of the flag, false of the publication. **Decision: leave `74e1bd2b` archived.** Its public page had 0 players and 0 allocations, so nothing was displayed; the 6 categories and 16 prizes are intact and it will publish normally once a field is imported and finalized.
-
-### Sweep results
-
-DB sweep **18 OPEN / 2 CLOSED → 15 OPEN / 6 CLOSED**. X1, X2, X3 and the new X4 all read CLOSED. Repo sweep 7 OPEN / 3 CLOSED, unchanged. X3 was re-specified from a permanent grant check to a real anon read, and X4 added for the tournament and publication rows (CC4).
-
-### Batch G3 / G3b — admin column filters. Merged `dcb8274`, wired `e207f41`.
-
-`/admin/tournaments` had no way to see one organizer's tournaments: the text search covered title, venue and city but **not `owner_email`**, which is why searching for an organizer by name returned nothing.
-
-- Text search now also matches `owner_email`.
-- New `src/components/admin/ColumnFilter.tsx` — an Excel-style funnel on **Owner**, **Location** and **Time Control**. Searchable checkbox list of distinct values with counts, sorted most-frequent first, Select all / Clear. Built from `popover` + `checkbox` + `scroll-area`; **no new dependency** (guardrail 5).
-- **Empty selection means unfiltered**, so the page behaves exactly as before until a value is ticked — adding a filter to a column cannot hide rows by default.
-- Option lists are built from `statusScoped` (rows matching the current status chip), so counts match the tab on screen and deselecting a value never removes it from its own list.
-- Blanks bucket under `(blank)` and stay selectable — that is how you list every tournament with no location, which the stub problem makes worth having.
-- The status switch was extracted to a shared `matchesStatus()` used by both the chips and the option lists, so the two cannot drift.
-
-**G3 shipped the component unused.** See CC6. G3b wired it. tsc stayed 12/6 with neither new file listed; vitest stayed 479/3 of 482, which also re-confirmed the G2 source guard survived the edits.
-
-**No test covers the filter behaviour** — logged as Tier 3 debt.
+Governing decisions unchanged: **D38, D39, D40, D41, X1–X9, Y1, Z1–Z4, AA1–AA5, BB1–BB5, CC1–CC8**.
 
 ---
 
-## 12.14 · 3–4 September 2026 — B22 closed, GTM1 closed, sportup corrected
+## 12.15 · 5 September 2026 — B18 shipped, published results are version-pinned
 
-### B18-b CONFIRMED LIVE, on a real customer tournament
+### The defect
 
-While retitling `16b9cf29`, allocation **version 7** was created at 16:37 on 3 Sep — the same minute `tournaments.updated_at` moved. Opening the editor created a new allocation version, and `get_public_tournament_results` reads `MAX(allocations.version)`, so the public page changed.
+`get_public_tournament_results` selected `MAX(allocations.version)` with no join to `publications`. Any new allocation version silently became the public page. **Confirmed live on 3 Sep**, not theorised: retitling `16b9cf29` created allocation v7 from a page load, and the public page followed it.
 
-**Measured before drawing any conclusion:** v6 and v7 are byte-identical — 40 rows each, zero differences in the prize→player mapping. The allocation engine is deterministic and nothing upstream had been edited, so nothing a participant sees changed. **The mechanism is proven; the outcome was harmless this time.** For a tournament whose prizes or players HAVE been edited since publishing, it would not be.
+**The scope was wider than §13 recorded.** The RPC is not the only public read path. `/p/:slug` (`PublicTournamentDetails`) and `/t/:id/public` (`PublicWinnersPage`) resolve the version **client-side** through `getLatestAllocations`, using `.order('version', desc).limit(1)` over PostgREST. A backend-only fix would have left the primary public page following MAX. B18 therefore had two halves.
 
-### GTM1 — closed
+### B18-a — backend. Migration `20260905120000`, commit `2f3528b`
 
-`16b9cf29` retitled by owner to "2nd Checkers Under-13 Rapid Chess Championship". Its blank `city`/`venue`/`chief_arbiter`/`tournament_director` were filled by copying the two sibling events of the same championship (`04acc325` Under-10, `b3609ec5` Below 1700), all owned by `sankalparora5555@gmail.com`: Ghaziabad · MIPS College · FA Sankalp Arora · Mr. Vipin Shami.
+1. `publications.allocation_version integer` (nullable).
+2. Backfilled all 35 active publications with their current `MAX(allocations.version)`.
+3. `publish_tournament` records the pin at insert. Signature and B22 title gate unchanged.
+4. `get_public_tournament_results` reads the pin. **No `MAX()` fallback.**
 
-**Open discrepancy, owner's call:** the brochure names Ms. Gargi Kaushik as Director and lists Vipin Sami only under "For Queries". The organizer entered Mr. Vipin Shami as `tournament_director` on all three. Sibling values were copied rather than the brochure transcribed. If the brochure is right, all three need changing.
+**The backfill was safe because measured, not assumed.** 9 of 35 active publications had already drifted past the version they were published at. For all 8 with a comparable baseline, the `(prize_id, player_id)` set of the published version and the current version is **identical** — zero symmetric difference, identical row counts. The allocation engine is deterministic, so re-runs reproduce byte-identically when nothing upstream changed. Pinning to current MAX froze exactly what was already on screen.
 
-### B22 — closed in both halves
+### B18-b — frontend. Commit `988403d`
 
-**Data.** Two published customer tournaments carried stub-derived URLs. Both repaired via `publish_tournament` RPC with `public_slug` nulled first, so the function's own rule generated the slug. No Finalize page was opened and no allocation version was created.
+`getLatestAllocations` gained an `AllocationVersionSelector` with three modes. `useFinalPrizeData` forwards it **and includes it in the react-query key** — without that, a cached organizer result gets served to a public page, or one version's rows survive a repin. New hook `usePublishedAllocationVersion` reads `publications.allocation_version` (already anon-readable via `public_read_active_publications`; no policy change). The two public pages pass `pinned`; the four organizer consumers were not edited and inherit `latest`.
 
-| Tournament | Owner | Was | Now |
-|---|---|---|---|
-| `16b9cf29` | sankalparora5555 | `/p/untitled-tournament` | `/p/2nd-checkers-under-13-rapid-chess-championship` |
-| `51f0b22e` | shahgfaruqui | `/p/untitled-tournament-2` | `/p/2nd-varanasi-classical-chess-tournament-2026` |
+`src/integrations/supabase/types.ts` got three hand-added lines for the new column. **`supabase gen types` was deliberately NOT run** — a full regeneration drags in unrelated drift from the 8 untracked functions.
 
-The `-2` suffix on the second is the uniqueness loop: a **second customer inherited a stub URL because the first had already taken the base slug.**
+**A D32 defect was caught in review before publish.** If the pin lookup **errors**, `isPending` goes false and `data` is undefined, so `allocationVersion` collapses to `null` and the page renders "No published results yet." — a tournament with 180 winners would tell visitors there are none. Fixed by returning `isVersionError`, holding the selector at `unresolved` on error, and rendering an explicit error state. **Absence of a value is not evidence the value is null** — same family as D21, D32, D40.
 
-**Code.** Migration `20260904120000`. Two changes to `publish_tournament`, no backfill required (0 published rows violated the gate; 33 drafts do and are now blocked until named):
-1. **Title gate** — blank or placeholder title raises `TITLE_REQUIRED`. Drafting, importing, allocating and finalizing are untouched; the gate bites only where the tournament would become public.
-2. **Stub-slug bypass** — `^untitled-tournament(-N)?$` is treated as absent so a renamed stub regenerates once. Without this the gate could not self-heal a tournament published before it existed.
+### Verification
 
-**Deliberately NOT done:** regenerating slugs from the title on every republish. That would break every shared public link the first time an organizer fixed a typo. Harness T7 is the negative control proving a normal slug survives.
+- **`b18_version_pin_checks.sql` 16/16.** The load-bearing pair is P6/P7: P6 creates a NEW content-different allocation version behind a published page and asserts the page does not move; P7 repins to that version and asserts it does. P5 asserts the positive side is non-zero so neither can pass on an empty reader. **Comparison is by content checksum, not row count** — the fixture versions have identical counts and different winners, exactly like live tournament `3ac176a1` whose v7 and v8 both return 41 rows with different names.
+- **`b22_publish_gate_checks.sql` 14/14**, including T7, the negative control that a normal slug survives a republish. **`g1_publish_state_checks.sql` 16/16.**
+- **Zero regression, measured directly:** the pre-migration `MAX`-based logic was reconstructed and diffed against the live function across all 35 published tournaments — 35/35 row counts match, 35/35 content identical, 0 rows lost, 0 gained.
+- **Three-way live confirmation** on `51f0b22e` (shahgfaruqui, a real customer): pin = 2, `MAX` = 2, rows at pin = 28, RPC = 28, **rendered page = 28** (10 + 3 + 3 + 3 + 3 + 3 + 3).
+- Publish confirmed by the bundle's `__vite__mapDeps` listing `assets/usePublishedAllocationVersion-BOqEGwdO.js`.
 
-`supabase/tests/b22_publish_gate_checks.sql`, **14/14** — the first harness ever written for `publish_tournament`, built here specifically so B18 inherits it instead of editing an unguarded function.
+### Decisions recorded
 
-**Coupling to watch:** the gate matches the literal `'Untitled Tournament'` written by `Dashboard.tsx:172`. If that string changes the gate silently stops firing. **Sweep check owed — see §13.**
+**Option C — a NULL pin shows nothing; publishing with zero allocations is NOT blocked.** The alternative was refusing to publish until allocations exist. **Rejected on measurement:** 20 of 95 publications ever, and **4 of 39 since June**, were made with zero allocations at publish time — all by customers, with allocations arriving 12 minutes to 5 hours later. Blocking would reject a real customer action at roughly 1 in 10, and `/p/:slug` is a tournament *details* page that legitimately works before results exist. It would also have broken every positive case in `b22_publish_gate_checks.sql`, whose fixtures carry no allocations — forcing fixture surgery on a passing harness. The flow self-heals: `Finalize.handlePublish` already runs finalize then publish, so the organizer's next publish pins it.
 
-### sportup.online
+**"Immutable" is the wrong word.** See the `publications` write-surface row in §2. B18 delivers stability against accidental drift, not tamper-proofing.
 
-FIDE affiliation claim, the unverified "50,000+ Players Registered" figure, and the Terms' Stripe/PayPal payment section all removed or corrected; Terms date moved to 3 Sep 2026; a sentence added stating entry fees are paid directly to the organizer and refunds are the organizer's responsibility (owner confirmed this matches the real money flow). Design-mockup copies of the FIDE claim scrubbed too. Published.
+**`detect_missing_team_snapshots` deferred to B7.** Its `a.version = p.version` join is wrong — measured: wrong for **24 of 35** active publications, accidentally right for 11. B18-a's new column is the correct right-hand side, so a real fix now exists. But the function also raises `42883` on every call for want of `is_master(uuid)`, so fixing only the join leaves it broken. Fold both into B7.
 
-Meta-tag and sitemap pass planned and approved but **not yet published**. Two things to verify after it ships: Lovable claimed removing `og:image` is safe because hosting injects one at serve time — unverified, check the live HTML; and `/tournaments/:id` pages were excluded from the sitemap, which is where the SEO value actually is.
+### Sweeps, commit `1e0dada`
 
-**Still owner-side on sportup:** Section 05's refund ladder and the "5-10 business days to original payment method" line remain factually wrong for manual UPI, and there is no governing-law clause or named legal entity anywhere in the Terms. Needs a professional, not a prompt.
+Three checks added, all reading CLOSED: **B22a** (no published tournament carries a stub-derived `public_slug`), **B22b** (no active publication carries one — the slug lives in two tables and a check on one alone reads CLOSED while the other is dirty), and **B22g** (repo: `Dashboard.tsx` still contains the literal `'Untitled Tournament'`, which `publish_tournament`'s gate matches exactly and which silently stops firing if the string changes). **Reference the literal, not a line number** — it moved from 176 to 175 the same day.
+
+**DB sweep 12 OPEN / 11 CLOSED / 1 INFO of 24. Repo sweep 7 OPEN / 4 CLOSED of 11.**
+
+### Stub dates — investigated and CLOSED as not actionable
+
+An attempt to promote stub dates to Tier 1 was made and **withdrawn on measurement**. 24 of 35 published tournaments have `start_date` equal to their creation date — but **20 of those were published the same day**, which is an arbiter creating the event at the venue and publishing that evening. The date is correct. A narrower "3 are wrong" claim was then also over-stated: publishing 5–9 days late means slow finalisation, not a wrong event date.
+
+**The honest finding is that the data cannot answer it.** There is no field-level history anywhere: the only trigger on `tournaments` is `update_tournaments_updated_at`, and `audit_events` holds just runtime errors and rollout flags (61 rows). All 35 published rows show `updated_at > created_at`, which proves something was edited, never that `start_date` was. **Stays Tier 2. The only worthwhile action is the forward fix — stop defaulting new tournaments to today's date — which is G4.**
 
 ---
 
 ## 13. Immediate next step
 
-**B18 phases (a)+(b) — published results are not immutable.** Fresh chat, new branch off `main` at `7b6c152`.
+**Team Championship product.** Fresh chat. **Owner decision 5 Sep: this comes BEFORE the GTM pages**, because the feature contains a permanent-failure mode and GTM is what would put customers into it.
 
-**Two sweep checks are owed first (BB5), both small:**
-- DB sweep: no published tournament may carry a `public_slug` matching `^untitled-tournament(-[0-9]+)?$`. CLOSED state = 0.
-- Repo sweep: assert `Dashboard.tsx` still contains the literal `'Untitled Tournament'`, because `publish_tournament`'s gate matches that exact string and silently stops firing if it changes. Backend, with its own harness.
+**Open with the sweeps, then a live audit. Do not plan from this document alone (BB1).**
 
-Scope:
-1. Add `allocation_version integer` to `publications`.
-2. `publish_tournament` records `max(allocations.version)` at insert.
-3. `get_public_tournament_results` reads the active publication's `allocation_version`, falling back to `MAX()` when NULL.
-4. Fix `detect_missing_team_snapshots`'s `a.version = p.version` join and the missing `is_master(uuid)` overload (`42883`), or explicitly defer to B7.
-5. Matched-pair harness. **No harness has ever touched `publish_tournament`.**
+### Why it goes first
 
-**Two decisions owed before writing anything:**
-- Backfill the 35 active publications with their current `MAX(allocations.version)`, freezing them immediately? **Recommended yes.**
-- Does `supabase/functions/finalize` fall inside guardrail 1?
+- **B21 is a one-way door.** A tournament with active `institution_prize_groups` and zero `team_allocations` can never be published — both `publications` triggers block activation on UPDATE as well as INSERT. Today 2 tournaments, both Tushar's, so no customer exposure. GTM changes that.
+- **The diagnostic for it is dead.** `/admin/team-snapshots` raises `42883` on every call.
+- **Its join is wrong** — `a.version = p.version`, wrong for 24 of 35.
+- **The team-tie guard was never built** — inert code removed in F1, nothing replaced it.
 
-**Operational hold:** do not open `/t/8d1fbd83-…/finalize` until B18 ships. Auto-finalize fires on page load and creates new allocation versions (§12.11).
+### The product spec, in the owner's words (5 Sep)
+
+Two ways, both required:
+
+**Mode A — automatic.** The organizer uploads the Swiss Manager Excel file (or whatever rule they use to differentiate school/institution). They define the team composition: number of players and gender make-up — 4 boys, or 4 girls, or 2+2, or any combination. The system **automatically chooses each school's team members by highest points/rank** among eligible players, then ranks the teams.
+
+**Mode B — manual.** The organizer finalises the number of players and the gender composition if applicable. Then, **for each school, all eligible players are listed and the organizer selects the team from a dropdown**, school by school. The system then sums the selected players' scores.
+
+### Owed before any design
+
+1. **Guardrail 1 ruling (a):** may Mode A write `team_allocations`? Auto-selecting players by points to produce a ranked result is selection logic sitting immediately beside the allocation engine.
+2. **Guardrail 1 ruling (b):** is `supabase/functions/backfillTeamAllocations` in scope?
+3. **Guardrail 1 ruling (c), carried over:** does `supabase/functions/finalize` fall inside guardrail 1?
+
+### Surfaces to audit
+
+`src/components/team-prizes/` (`useTeamPrizeResults.ts`, `useInstitutionPrizes.ts`) · `src/pages/admin/AdminTeamSnapshots.tsx` · `src/pages/TournamentSetup.tsx` · `src/utils/prizeApplyDraft.ts` · edge functions `publicTeamPrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations` · tables `institution_prize_groups`, `team_allocations` · tests `tests/institution/`.
+
+**Operational hold:** do not open `/t/8d1fbd83-…/finalize`. Auto-finalize fires on page load and creates new allocation versions. **B18 makes this harmless to public pages** — the pin no longer moves — but it still creates junk versions, so the hold stands until B18-3.
 
 **Opening line for the next chat:**
 
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.12, §12.14, §13 and §14. G1/G2/G3 shipped 2 Sep and B22 shipped 4 Sep; `main` is `7b6c152`. X1–X4-exposure CLOSED and verified as `anon`; GTM1 and B22 CLOSED. Baselines: tsc **12 errors in 6 files** (per-file breakdown in §2), vitest **479 passed / 3 known failures of 482**.*
+> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.15, §13, §14 and §15. `main` is `1e0dada`. **B18-a and B18-b both shipped 5 Sep and are verified three ways on a live customer page** — published results are now version-pinned and Tier 1 is clear. Baselines: tsc **12 errors in 6 files** (per-file in §2), vitest **479 passed / 3 known failures of 482**, **8 harnesses**, DB sweep **12 OPEN / 11 CLOSED / 1 INFO of 24**, repo sweep **7 OPEN / 4 CLOSED of 11**.*
 >
-> *Next: **B18 (a)+(b) — version-pin published results**. Backend only, matched-pair harness required. It is the last Tier 1 engineering gate before the GTM pages.*
+> *Next: **Team Championship**, ahead of GTM by owner decision. Two modes are specified in §13 — automatic selection by points, and manual per-school selection from a dropdown.*
 >
-> ***B18-b is confirmed live, not theorised:** retitling `16b9cf29` on 3 Sep created allocation version 7 from a page load. v6 and v7 are byte-identical so no participant saw a change, but the mechanism is proven — see §12.14.*
+> ***Three guardrail-1 rulings are owed before any design*** *— see §13. Do not write code until they are settled.*
 >
-> ***B22 shipped migration `20260904120000`**, which added a title gate and a stub-slug bypass to `publish_tournament`, plus `b22_publish_gate_checks.sql` at **14/14** — the first harness on that function. **B18 edits the same function and must keep all 14 green.** Its T7 negative control (a normal slug survives a republish) is the one that must not regress.*
+> ***B21 is a one-way door in exactly this feature*** *and `/admin/team-snapshots` cannot diagnose it (`42883`, missing `is_master(uuid)`).*
 >
-> ***Do not open `/t/8d1fbd83-…/finalize`** — operational hold in §12.11.*
->
-> *Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, add the two sweep checks owed in §13, then show me the plan before writing any migration.*
+> *Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, then **audit the team surfaces live** before showing me a plan. Never chain tsc with `&&`.*
 
 ---
 
@@ -290,64 +229,104 @@ Scope:
 
 **The bar is not "clear everything."** The bar is: does it make a public statement false, produce wrong participant-facing output, or embarrass us at the National Championship.
 
-### Tier 1 — must close before any marketing page is written
+### Tier 1 — CLEAR as of 5 September
 
-| Item | Status | Why it gates GTM |
-|---|---|---|
-| **X1–X4-exposure** — unpublish/archive did not unpublish | ✅ **CLOSED 2 Sep, G1+G2** | Verified 0 rows readable as `anon` across all 7 |
-| **B18-a / B18-b** — published results are not immutable | **OPEN, HIGH — next** | Marketing drives traffic to `/p/` pages that follow `MAX(allocations.version)` and change when an editor page is opened |
-| **GTM1** — published tournament titled "Untitled Tournament" | ✅ **CLOSED 3–4 Sep** | Retitled by owner, details copied from sibling events, slug regenerated |
-| **sportup.online claims** — FIDE line, player count, ToS processors | ✅ **CLOSED 3 Sep** — published | Meta tags + sitemap approved, **not yet published**. Refund ladder and missing governing-law clause remain owner-side, need a professional |
+| Item | Status |
+|---|---|
+| **X1–X4-exposure** — unpublish/archive did not unpublish | ✅ CLOSED 2 Sep, G1+G2 |
+| **GTM1** — published tournament titled "Untitled Tournament" | ✅ CLOSED 3–4 Sep |
+| **B22** — stub titles and sticky stub slugs | ✅ CLOSED 4 Sep |
+| **sportup.online claims** — FIDE line, player count, ToS processors | ✅ CLOSED 3 Sep |
+| **B18-a / B18-b** — published results are not immutable | ✅ **CLOSED 5 Sep** — pinned, 16/16, zero regression across 35 |
+
+**New Tier 1, opened 5 September from the site inventories — see §15:**
+
+| Item | Why it gates GTM |
+|---|---|
+| **SP-1 `/debug/auth` is an ungated public route on sportup.online** | Live exposure. **Do not wait for GTM** |
+| **SP-2 Contradictory refund policies** — Help says 100% / 20% late fee, Terms says 100% / 50% | Two different refund promises on one site that takes money |
+| **SP-3 False payment claims** — Landing and Help advertise Credit Card and Net Banking and "automatically confirmed"; Terms correctly says no cards are processed and proof upload is required | Same class as the FIDE claim already removed |
+| **SP-4/5/6/7** — refunds "to original payment method in 5–10 business days" (impossible for manual UPI) · Help says 5–7 days vs Terms 5–10 · "excluding platform service fees" for a fee never charged · Privacy reads *"We use manual payment for payment processing"* (garbled find/replace leftover) | Public statements that are false |
+| **PM-1 prize-manager.com has NO legal pages at all** — no Terms, Privacy, Refund, Contact, About or FAQ, while taking UPI money | The most exposed of the three |
 
 ### Tier 2 — before the National Championship, not before the pages
 
-- **G4 — required details before publish.** Server-side field gate in `publish_tournament` (title not blank and not the placeholder; venue, city, chief arbiter, tournament director present) plus a CHECK of the shape `is_published = false OR (all required non-blank)`, which enforces "may change, may not blank" in one object. Needs `NOT VALID` + backfill; 9 published rows violate it today. **Do this before marketing brings new organizers into the stub flow.**
-- **B22 slug-change UI.** The defect is closed; what remains is that no UI lets an organizer deliberately change a public URL. Needs a redirect story before it is built.
-- **B21 — publish one-way door.** Team prize groups with no snapshots make a tournament permanently unpublishable. 2 tournaments, both Tushar's, no customer exposure. Needs a sweep check (BB5) and a warning in the archive dialog.
-- **Stub dates** — 23 of 35 published carry `start_date = creation date`. Likely fix is not creating the stub with today's date.
-- **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, **`bootstrap_master`**; `is_master(uuid)` missing.
+- **G4 — required details before publish**, including not defaulting `start_date` to today. **Do this before marketing brings new organizers into the stub flow.**
+- **B21 — publish one-way door.** Needs a sweep check (BB5) and a warning in the archive dialog. Folded into the Team Championship work.
+- **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, `bootstrap_master`; **`is_master(uuid)` missing**; and `detect_missing_team_snapshots`'s `a.version = p.version` join, now fixable via `publications.allocation_version`.
+- **Stub dates** — forward fix only; the existing set is not diagnosable (§12.15).
+- **B22 slug-change UI** — needs a redirect story before it is built.
 - **Column-level UPDATE on `tournaments`** — revoke `is_published`/`status`/`public_slug` from `authenticated`. Blocked on auditing `TournamentSetup.tsx:723`.
+- **Column-level write surface on `publications`** — both client roles hold full DML. Same shape as the above.
 - **B13 batch B** (#1 toast, #2 `/account` dead end, #5 screenshot copy); **batch C** (#3 spent coupons); **#9** `PublishSuccess.tsx`; **#7** clipping.
 - **B17 + B8b** — 10 MB cap forces lossy compression; compressed vs uncompressed disagree on category naming. Fixture suite first; judge against expected output, never flag count (D41).
 - **B5** — audit cadence. Count is 0 today, the easiest moment to forget it.
-- **Publish-path harness** — six harnesses exist and none touches `publish_tournament`.
-- **Team-tie guard design** — inert code removed in F1; the guard is not built.
-- **B19** — one unexplained `finalize` 500. Likely dissolved by B18, possibly authorization-caused.
-- **B18-c** — the `ON DELETE CASCADE` into published history. Own decision; deferred.
+- **B19** — one unexplained `finalize` 500. Possibly dissolved by B18.
+- **B18-c** — the `ON DELETE CASCADE` into published history. Own decision; deferred. Sweep reads OPEN with value 3, correctly.
+- **B18-3** — the auto-finalize `useEffect`. Needs guardrail-1 ruling (c).
 
 ### Tier 3 — rides as debt, stated openly
 
-**no test covers `ColumnFilter` / the admin filter predicate (G3)** · B1 (`authenticated` holds full DML on `coupons`/`coupon_redemptions`; control-tested non-exploitable) · Y2 (`anon` write grants on `extraction_review_queue`, control-tested inert) · B10 (2 dangling referral rows) · B12 · B14 (Resend reports accepted, not delivered — 0 unsent) · B15 (old API key still live) · B2 · B3 · B6 · layout regression test (Playwright is a new dependency, guardrail 5) · `CLAUDE.md` schema drift · `MAX_ATTEMPTS=5` with no backoff · `brew unlink node` fragility · `tsconfig.app.json` scope gap · `.claude/settings.local.json` wildcard rule · accepted residuals.
-
-### Closed by measurement
-
-| Item | Verdict |
-|---|---|
-| X1/X2/X3/X4-exposure | **CLOSED 2 Sep** — G1 policies + G2 write path, verified as `anon` |
-| Archive re-dirtying publish state | **CLOSED 2 Sep** — G2, proven live |
-| B22 stub titles and sticky stub slugs | **CLOSED 4 Sep** — 2 URLs repaired, gate + bypass live, 14/14 |
-| GTM1 Untitled Tournament | **CLOSED 4 Sep** — title, details and slug all corrected |
-| B16 organizer publish failure | CLOSED 31 Aug — transport |
-| B13 #8 two publish buttons · B20 silent failures | CLOSED — batch F1 |
-| B5 unaudited auto-approvals · B14 unsent outbox rows | **0**, CLOSED by sweep |
+**PublicWinnersPage shows "0 Winners" badges above the error alert when the pin lookup fails** (cosmetic, error path only) · **the 3 known test failures are probably one timezone bug** (§2) · **a `401` on `/rest/v1/players` appears in the public page console** — `safeSelectPlayers` capability probe, recovers immediately, pre-existing · no test covers `ColumnFilter` (G3) · no test covers the B18 selector modes · B1 · Y2 · B10 · B12 · B14 · B15 · B2 · B3 · B6 · layout regression test (Playwright is a new dependency) · `CLAUDE.md` schema drift · `MAX_ATTEMPTS=5` with no backoff · `brew unlink node` fragility · `tsconfig.app.json` scope gap · `.claude/settings.local.json` wildcard rule.
 
 ---
 
-## 15–18. Phase 2B / 2C-D / 3 / 4 — unchanged
+## 15. Cross-property GTM inventory (5 September 2026)
 
-**Ordering (revised 2 Sep):** B18 (a)+(b) → G4 required-fields → GTM pages → Tier 2 → Phase 2B.
+Taken via Lovable plan-mode, read-only, on both sites.
+
+### certificate-hub.com
+
+Terms and Privacy exist with real content dated 4 Sep 2026. **No money statements appear anywhere on public pages**, so the paywall is not live yet. No dead links.
+
+| Item | Action |
+|---|---|
+| No legal entity, registered address, or governing-law clause | Lawyer |
+| No Refund/Cancellation policy | **Required the day the paywall goes live**, not before |
+| Referrals promise "points" and "unlock rewards", type and value undefined | Define or soften |
+| No `sitemap.xml`; `robots.txt` has no `Sitemap:` line | SEO before GTM |
+| No About, FAQ, or Pricing page; `/contact` redirects to a support form | Owner-written |
+
+### sportup.online
+
+See Tier 1 SP-1 … SP-7 above. Additionally: Privacy "Last Updated: October 24, 2023" while Terms says 3 Sep 2026; Terms footer "© 2023"; WhatsApp support link with no business number bound; no `sitemap.xml`; no `Sitemap:` line in `robots.txt`. Meta-tag and sitemap pass was approved 4 Sep but **not yet published** — when it ships, verify Lovable's claim that removing `og:image` is safe (hosting allegedly injects one), and note `/tournaments/:id` pages were excluded from the sitemap, which is where the SEO value is.
+
+### The common item — one engagement, not three
+
+All three properties lack a named legal entity, registered address and governing-law clause, and all three need refund terms that match a manual UPI flow. **Brief one professional covering prize-manager, sportup and certificate-hub together.** Do NOT have Lovable or any model draft the legal copy — sportup's Terms already had to be corrected for naming Stripe/PayPal on a product that takes UPI, and the garbled "manual payment for payment processing" line is the visible scar of that fix. FAQ and About are owner-written and carry no legal exposure.
+
+### Analytics — decided 5 September
+
+**PostHog, not GA4.** The questions that matter are product questions — where organizers drop out of brochure → allocate → finalize → publish — and GA4 answers acquisition questions poorly suited to that. Session replay will also show the B13 UI defects instead of us guessing.
+
+Three conditions:
+1. **Install AFTER the privacy work, not before.** Adding third-party tracking while sportup's Privacy Policy is dated 2023 and garbled turns a documentation gap into a compliance one. India's DPDP Act 2023 applies.
+2. **Load by snippet, not npm** — keeps `package.json` untouched and guardrail 5 clean.
+3. **Do not replace what exists.** `audit_events` and the martech dashboards stay the source of truth for money and entitlements; PostHog is for behavioural funnels only.
+
+Separate projects per property, one account.
+
+---
+
+## 16. Ordering
+
+**Team Championship** → SP-1 (`/debug/auth`, immediately, out of band) → legal engagement + FAQ/About drafting (parallel, no repo access) → sportup copy fixes SP-2…SP-7 → sitemaps → G4 required-fields → PostHog → **GTM pages** → Tier 2 → Phase 2B.
 
 certificate-hub.com integration parked by owner decision 2 Sep.
 
 ---
 
-## 19. Tracked debt
+## 17. Phase 2B / 2C-D / 3 / 4 — unchanged
+
+---
+
+## 18. Tracked debt
 
 Superseded by §14's three-tier gate. The sweeps are the canonical *measurement*. Where this document and a sweep disagree, **the sweep wins and the document gets corrected** (BB1).
 
 ---
 
-## 20. How to start each new chat
+## 19. How to start each new chat
 
 **One chat per workstream.** At every phase boundary: Claude gives an updated `PROJECT_STATE.md` → delete the old one in the Project knowledge panel → upload the new one → open a fresh chat → paste the opening line.
 
@@ -361,33 +340,36 @@ Superseded by §14's three-tier gate. The sweeps are the canonical *measurement*
 5. **Every new backlog item gets a check the day it is filed** (BB5), and that check must have a reachable CLOSED state (CC4).
 
 **Working rules that do not change:**
-- `git config --global core.editor "true"` is set, so `git merge` no longer opens vim. Still prefer `git merge --no-ff -m "…"`.
+- `git config --global core.editor "true"` is set. Still prefer `git merge --no-ff -m "…"`.
 - Always `/clear` in Claude Code before a new prompt — **and verify it took.**
 - **First command in any new Terminal window is `cd ~/Desktop/prize-manager`.**
 - **`npm run dev` reads and writes the live database. Check which account you are signed in as.**
-- Edge-function changes need `supabase functions deploy <name>`. **Confirm the bundle hash changed, not the version number** (Y3).
+- **Never chain `npx tsc … && npx vitest run`.** tsc exits non-zero on the 12 known errors and silently skips vitest. Use `;` or run separately.
+- Edge-function changes need `supabase functions deploy <name>`. **Confirm the bundle changed, not the version number** (Y3).
 - **`supabase functions logs` does not exist.** Dashboard only, 1-day retention.
-- **A new database function also needs `notify pgrst, 'reload schema'`** (T6).
+- **A new database function also needs `notify pgrst, 'reload schema'`** (T6) — and so does a new COLUMN the frontend will select.
 - **Publishing is separate from merging.** A database-only migration is live the moment `supabase db query` runs; a `src/` change is not live until Lovable publishes.
-- Use `git --no-pager diff`, never plain `git diff`. Merge with `--no-ff`. After merging, re-run tsc **and vitest** on `main`.
+- Use `git --no-pager diff`, never plain `git diff`. After merging, re-run tsc **and** vitest on `main`.
 - Paste terminal output as **text**, never screenshots.
-- **A build report is a claim, not evidence. Require the full `git --no-pager diff`.**
-- **After any `cp` into the repo, run `git --no-pager diff --stat` and confirm every expected file is listed — before tsc** (CC6). Chrome renames a repeat download to `name (1).ext`, so `cp ~/Downloads/name.ext` silently re-copies the previous version. Prefer `cp "$(ls -t ~/Downloads/<name>*.ext | head -1)" <dest>` and then `grep -c` for a token you know is in the new file.
+- **A build report is a claim, not evidence. Require the full `git --no-pager diff`** — and remember it is **blind to NEW files**. Use `git add -A` then `git --no-pager diff --cached` (CC6 amendment).
+- Use `cp "$(ls -t ~/Downloads/<name>*.ext | head -1)" <dest>` then `grep -c` for a token you know is in the new file.
 - Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`. `supabase db execute` does not exist.
-- **`RAISE NOTICE` is swallowed.** Put failures in `RAISE EXCEPTION`. **`RAISE` uses `%`, not `%s`** — `%s` substitutes and leaves a stray `s`.
-- **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state.
-- **Dry-run a migration by executing its body and force-aborting**, then verify production is untouched. The MCP batches a multi-statement script into one transaction — control-tested 2 Sep.
-- **Prove the fix with a test that can only pass if the fix works.** Prefer *matched pairs*, and **assert the positive side is non-zero** — a matched pair whose positive cannot produce a positive proves nothing.
+- **`RAISE NOTICE` is swallowed.** Put failures in `RAISE EXCEPTION`. **`RAISE` uses `%`, not `%s`.** `format()` uses `%s`. Mixing them prints "16s passed".
+- **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state. **It works** — B18's post-check refused a bad guard and rolled back cleanly with nothing applied.
+- **Dry-run a migration by executing its body and force-aborting**, then verify production is untouched. **Dry-run the exact file text, not a compacted copy** (CC11).
+- **Reproducing a signature before `CREATE OR REPLACE`:** check `pg_get_function_arguments`, not just the name. A missing `DEFAULT` fails `42P13`.
+- **Prove the fix with a test that can only pass if the fix works.** Prefer *matched pairs*, **assert the positive side is non-zero**, and **compare content checksums, not row counts** — two allocation versions can differ entirely at an identical count.
 - **Verify a guard fails on the broken input before trusting it** (D35).
-- **Read the triggers on any table a function writes to** (CC1).
+- **Read the triggers on any table a function writes to** (CC1) — **and watch the guard actually fire** (CC9).
 - **Read the drifted rows before naming the cause** (CC2).
 - **Enumerate every policy on every related table, then control-test each** (CC3).
 - **Ask what a new check's CLOSED state looks like, and whether the fix dissolves its own probe** (CC4).
 - **A grant is not an exposure until a real read returns rows — and it is one once it does** (BB4).
-- **Two flags for one state will disagree; ask which one RLS reads** (BB3) — and count them, there may be three.
 - **An effect that writes on mount makes visiting a page a mutation** (AA5).
 - **Never let an error handler discard the input that caused the error** (W4).
+- **Absence of a value is not evidence the value is null.** A failed query must render an explicit state (D32).
 - **Never redirect a generator onto a tracked file** (R7). Temp file → verify → `cp`.
 - Additive migration → verify → frontend → verify → restrictive migration. Never the reverse.
 - **Do not fix what measurement says is not broken.** Record it as drift and move on (W3).
-- **When a new finding arrives mid-workstream, log it and finish the batch.** B21, B22 and the stub RCA all surfaced during G1/G2 and none was chased. That is why both closed cleanly.
+- **When a new finding arrives mid-workstream, log it and finish the batch.**
+- **Reference literals, not line numbers, in any check or document** — `Dashboard.tsx`'s stub literal moved from line 176 to 175 within a single day.
