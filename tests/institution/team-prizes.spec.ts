@@ -507,3 +507,340 @@ describe('computeTeamScoresWithReasons — visible exclusions (TC1.3)', () => {
     expect(full.droppedPlayersWithoutKey).toBe(1);
   });
 });
+
+describe('computeTeamScoresWithReasons — gender slots (TC1.4)', () => {
+  // RULING 1 (PRD §3): a female slot is satisfied ONLY by an explicit 'F'; a male
+  // slot is satisfied by "not F", which INCLUDES null and blank. Slots are MINIMUMS —
+  // boards left over after both minimums are filled by best rank, any gender.
+
+  const shape = (rows: TeamPrizeInstitutionScore[]) =>
+    rows.map((row) => ({
+      key: row.key,
+      total_points: row.total_points,
+      rank_sum: row.rank_sum,
+      best_individual_rank: row.best_individual_rank,
+      team: teamIds(row),
+    }));
+
+  describe('the zero-slot guard — this is what protects the three live groups', () => {
+    // Every live institution_prize_group sits at female_slots = 0, male_slots = 0.
+    // Genders here are deliberately mixed across all four cases ('F', 'M', null, 'f')
+    // so a scorer that read gender at zero slots would produce something else.
+    const genderRichRoster = () => [
+      player({ id: 'a1', rank: 1, points: 12, gender: 'M', club: 'Alpha' }),
+      player({ id: 'a2', rank: 4, points: 9, gender: 'F', club: 'Alpha' }),
+      player({ id: 'a3', rank: 6, points: 30, gender: null, club: 'Alpha' }),
+      player({ id: 'b1', rank: 2, points: 8, gender: 'f', club: 'Beta' }),
+      player({ id: 'b2', rank: 3, points: 5, gender: null, club: 'Beta' }),
+      player({ id: 'g1', rank: 7, points: 40, gender: 'F', club: 'Gamma' }),
+      player({ id: 'k1', rank: 9, points: 50, gender: 'M', club: '   ' }),
+    ];
+
+    it('produces today’s exact result when slots is omitted', () => {
+      const result = computeTeamScoresWithReasons(genderRichRoster(), 2, 'club');
+
+      expect(shape(result.scored)).toEqual([
+        { key: 'Alpha', total_points: 21, rank_sum: 5, best_individual_rank: 1, team: ['a1', 'a2'] },
+        { key: 'Beta', total_points: 13, rank_sum: 5, best_individual_rank: 2, team: ['b1', 'b2'] },
+      ]);
+      expect(result.excluded).toEqual([{ key: 'Gamma', reason: 'team_short_roster', playerCount: 1 }]);
+      expect(result.droppedPlayersWithoutKey).toBe(1);
+    });
+
+    it('is deep-equal at femaleSlots 0 / maleSlots 0 to the same call with slots omitted', () => {
+      const omitted = computeTeamScoresWithReasons(genderRichRoster(), 2, 'club');
+      const zeroed = computeTeamScoresWithReasons(genderRichRoster(), 2, 'club', {
+        femaleSlots: 0,
+        maleSlots: 0,
+      });
+
+      expect(zeroed).toEqual(omitted);
+      // Sanity: the fixture is not degenerate — the equality is not "both empty".
+      expect(zeroed.scored.map((row) => row.key)).toEqual(['Alpha', 'Beta']);
+      expect(zeroed.scored.map((row) => row.total_points)).toEqual([21, 13]);
+    });
+
+    it('attaches no warnings key at all when no slots are configured', () => {
+      // The roster contains null genders, so a scorer that warned unconditionally
+      // would add the key here. Byte-identical output means the key is absent.
+      const zeroed = computeTeamScoresWithReasons(genderRichRoster(), 2, 'club', {
+        femaleSlots: 0,
+        maleSlots: 0,
+      });
+
+      expect(zeroed.scored.some((row) => 'warnings' in row)).toBe(false);
+      expect(JSON.stringify(zeroed)).not.toContain('warnings');
+    });
+
+    it('adds slots as a fourth parameter and leaves the wrapper at three', () => {
+      // The fourth parameter is optional — the three-argument calls throughout this
+      // suite are the proof. `computeTeamScores` is untouched, so no caller of it
+      // can see the change; that is what TC1.4 means by "no caller is wired in".
+      expect(computeTeamScoresWithReasons).toHaveLength(4);
+      expect(computeTeamScores).toHaveLength(3);
+    });
+  });
+
+  describe('slot-aware selection differs from rank-only selection', () => {
+    // THE DISCRIMINATING FIXTURE. 'Slot School' enters six players; its four best by
+    // rank (m1, m2, m3, m4) are all not-F. With femaleSlots 2 the engine must reach
+    // down to ranks 5 and 6 for the girls and drop two better-ranked players.
+    const slotSchool = () => [
+      player({ id: 'm1', rank: 1, points: 10, gender: 'M', club: 'Slot School' }),
+      player({ id: 'm2', rank: 2, points: 9, gender: 'M', club: 'Slot School' }),
+      player({ id: 'm3', rank: 3, points: 8, gender: null, club: 'Slot School' }),
+      player({ id: 'm4', rank: 4, points: 7, gender: 'M', club: 'Slot School' }),
+      player({ id: 'f1', rank: 5, points: 6, gender: 'F', club: 'Slot School' }),
+      player({ id: 'f2', rank: 6, points: 5, gender: 'F', club: 'Slot School' }),
+    ];
+
+    it('picks a different team than the rank-only selection, and the exact ids', () => {
+      const rankOnly = computeTeamScoresWithReasons(slotSchool(), 4, 'club');
+      const withSlots = computeTeamScoresWithReasons(slotSchool(), 4, 'club', {
+        femaleSlots: 2,
+        maleSlots: 0,
+      });
+
+      expect(teamIds(rankOnly.scored[0])).toEqual(['m1', 'm2', 'm3', 'm4']);
+      expect(teamIds(withSlots.scored[0])).toEqual(['m1', 'm2', 'f1', 'f2']);
+
+      // Every derived number moves too, so the two runs are distinguishable on
+      // more than member ids alone.
+      expect(rankOnly.scored[0].total_points).toBe(34); // 10 + 9 + 8 + 7
+      expect(withSlots.scored[0].total_points).toBe(30); // 10 + 9 + 6 + 5
+      expect(rankOnly.scored[0].rank_sum).toBe(10); // 1 + 2 + 3 + 4
+      expect(withSlots.scored[0].rank_sum).toBe(14); // 1 + 2 + 5 + 6
+      expect(withSlots.scored[0].best_individual_rank).toBe(1);
+      expect(withSlots.excluded).toEqual([]);
+    });
+
+    it('raises no warning when maleSlots is zero, even with an unrecorded gender present', () => {
+      // m3 has a null gender but is not counted toward a male slot — there are none.
+      const withSlots = computeTeamScoresWithReasons(slotSchool(), 4, 'club', {
+        femaleSlots: 2,
+        maleSlots: 0,
+      });
+
+      expect('warnings' in withSlots.scored[0]).toBe(false);
+    });
+
+    it('fills the remaining boards by best rank regardless of gender', () => {
+      // femaleSlots 1 takes f1 (rank 1); maleSlots 1 takes m1 (rank 5, the best not-F).
+      // The one free board must go to f2 at rank 2, NOT to m2 at rank 6.
+      const players = [
+        player({ id: 'f1', rank: 1, points: 20, gender: 'F', club: 'Free Board' }),
+        player({ id: 'f2', rank: 2, points: 15, gender: 'F', club: 'Free Board' }),
+        player({ id: 'm1', rank: 5, points: 9, gender: 'M', club: 'Free Board' }),
+        player({ id: 'm2', rank: 6, points: 8, gender: 'M', club: 'Free Board' }),
+      ];
+
+      const { scored } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 1,
+        maleSlots: 1,
+      });
+
+      expect(teamIds(scored[0])).toEqual(['f1', 'f2', 'm1']);
+      expect(scored[0].total_points).toBe(44); // 20 + 15 + 9, not 20 + 9 + 8
+      expect(scored[0].rank_sum).toBe(8); // 1 + 2 + 5
+    });
+  });
+
+  describe('slot minimums that cannot be met exclude the institution', () => {
+    it('excludes a school with too few explicit F as female_slots_unfilled', () => {
+      // Four players against a teamSize of 4, so team_short_roster cannot fire first.
+      // Only one carries an explicit 'F'; the null and the blank do NOT count.
+      const players = [
+        player({ id: 'q1', rank: 1, points: 11, gender: 'M', club: 'One Girl School' }),
+        player({ id: 'q2', rank: 3, points: 9, gender: null, club: 'One Girl School' }),
+        player({ id: 'q3', rank: 5, points: 7, gender: '   ', club: 'One Girl School' }),
+        player({ id: 'q4', rank: 8, points: 4, gender: 'F', club: 'One Girl School' }),
+      ];
+
+      const { scored, excluded } = computeTeamScoresWithReasons(players, 4, 'club', {
+        femaleSlots: 2,
+        maleSlots: 0,
+      });
+
+      expect(scored).toEqual([]);
+      expect(excluded).toEqual([
+        { key: 'One Girl School', reason: 'female_slots_unfilled', playerCount: 4 },
+      ]);
+      // playerCount is the entered roster (4), which differs from the girls it has (1)
+      // and from the girls the rule asked for (2).
+      expect(excluded[0].playerCount).not.toBe(2);
+    });
+
+    it('excludes a school with too few not-F as male_slots_unfilled', () => {
+      // Three explicit F and one 'M' against maleSlots 2 — the not-F pool is 1.
+      const players = [
+        player({ id: 'g1', rank: 2, points: 12, gender: 'F', club: 'Girls Academy' }),
+        player({ id: 'g2', rank: 4, points: 10, gender: 'F', club: 'Girls Academy' }),
+        player({ id: 'g3', rank: 6, points: 8, gender: 'F', club: 'Girls Academy' }),
+        player({ id: 'g4', rank: 9, points: 3, gender: 'M', club: 'Girls Academy' }),
+      ];
+
+      const { scored, excluded } = computeTeamScoresWithReasons(players, 4, 'club', {
+        femaleSlots: 1,
+        maleSlots: 2,
+      });
+
+      expect(scored).toEqual([]);
+      expect(excluded).toEqual([
+        { key: 'Girls Academy', reason: 'male_slots_unfilled', playerCount: 4 },
+      ]);
+    });
+
+    it('reports the short roster before either slot check', () => {
+      // Two players, teamSize 3, and neither slot minimum is satisfiable either.
+      // ARCHITECTURE §4 order says the roster size is the reason given.
+      const players = [
+        player({ id: 't1', rank: 1, points: 9, gender: 'M', club: 'Tiny School' }),
+        player({ id: 't2', rank: 3, points: 6, gender: 'M', club: 'Tiny School' }),
+      ];
+
+      const { excluded } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 2,
+        maleSlots: 1,
+      });
+
+      expect(excluded).toEqual([{ key: 'Tiny School', reason: 'team_short_roster', playerCount: 2 }]);
+    });
+
+    it('moves an institution from excluded to scored when one gender changes null → F', () => {
+      // Matched pair: the SAME fixture, one field different. 'Rising School' has one
+      // explicit F against femaleSlots 2; marking its second player 'F' qualifies it.
+      const base = () => [
+        player({ id: 'r1', rank: 1, points: 14, gender: 'F', club: 'Rising School' }),
+        player({ id: 'r2', rank: 3, points: 9, gender: null, club: 'Rising School' }),
+        player({ id: 'r3', rank: 7, points: 5, gender: 'M', club: 'Rising School' }),
+      ];
+      const corrected = base().map((p) => (p.id === 'r2' ? { ...p, gender: 'F' } : p));
+
+      const slots = { femaleSlots: 2, maleSlots: 0 };
+      const before = computeTeamScoresWithReasons(base(), 3, 'club', slots);
+      const after = computeTeamScoresWithReasons(corrected, 3, 'club', slots);
+
+      expect(before.scored).toEqual([]);
+      expect(before.excluded).toEqual([
+        { key: 'Rising School', reason: 'female_slots_unfilled', playerCount: 3 },
+      ]);
+
+      expect(after.excluded).toEqual([]);
+      expect(after.scored.map((row) => row.key)).toEqual(['Rising School']);
+      expect(teamIds(after.scored[0])).toEqual(['r1', 'r2', 'r3']);
+      expect(after.scored[0].total_points).toBe(28); // 14 + 9 + 5
+      expect(after.scored[0].rank_sum).toBe(11); // 1 + 3 + 7
+    });
+  });
+
+  describe('RULING 1 — what satisfies which slot', () => {
+    it('counts null and blank genders toward a male slot and warns with the count', () => {
+      // maleSlots 2 is filled by n1 (rank 1, null) and n2 (rank 3, blank); m1 at rank 6
+      // is a better-documented but worse-ranked candidate and is not needed.
+      const players = [
+        player({ id: 'n1', rank: 1, points: 12, gender: null, club: 'Unmarked School' }),
+        player({ id: 'w1', rank: 2, points: 10, gender: 'F', club: 'Unmarked School' }),
+        player({ id: 'n2', rank: 3, points: 8, gender: '  ', club: 'Unmarked School' }),
+        player({ id: 'm1', rank: 6, points: 4, gender: 'M', club: 'Unmarked School' }),
+      ];
+
+      const { scored } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 1,
+        maleSlots: 2,
+      });
+
+      expect(teamIds(scored[0])).toEqual(['n1', 'w1', 'n2']);
+      expect(scored[0].warnings).toEqual([
+        { reason: 'unknown_gender_filled_other_slot', playerCount: 2 },
+      ]);
+      // playerCount is the unmarked players counted (2) — not the roster (4), not the
+      // team size (3), not the male slots asked for... which is also 2, so pin the
+      // discriminating case separately below.
+      expect(scored[0].warnings?.[0].playerCount).not.toBe(scored[0].team.length);
+    });
+
+    it('counts only the unmarked players, not every player filling a male slot', () => {
+      // maleSlots 2 is filled by n1 (null) and m1 (explicit 'M'): the count is 1, which
+      // differs from the male slots asked for (2) and from the roster (4).
+      const players = [
+        player({ id: 'n1', rank: 1, points: 12, gender: null, club: 'Half Marked' }),
+        player({ id: 'm1', rank: 2, points: 10, gender: 'M', club: 'Half Marked' }),
+        player({ id: 'w1', rank: 4, points: 7, gender: 'F', club: 'Half Marked' }),
+        player({ id: 'n2', rank: 8, points: 2, gender: null, club: 'Half Marked' }),
+      ];
+
+      const { scored } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 1,
+        maleSlots: 2,
+      });
+
+      expect(teamIds(scored[0])).toEqual(['n1', 'm1', 'w1']);
+      expect(scored[0].warnings).toEqual([
+        { reason: 'unknown_gender_filled_other_slot', playerCount: 1 },
+      ]);
+    });
+
+    it('raises no warning when every male slot is filled by an explicit M', () => {
+      // Same shape as the fixture above with n1 marked 'M'. n2's null gender sits
+      // outside the team, so nothing unmarked is counted.
+      const players = [
+        player({ id: 'm1', rank: 1, points: 12, gender: 'M', club: 'Marked School' }),
+        player({ id: 'm2', rank: 2, points: 10, gender: 'M', club: 'Marked School' }),
+        player({ id: 'w1', rank: 4, points: 7, gender: 'F', club: 'Marked School' }),
+        player({ id: 'n2', rank: 8, points: 2, gender: null, club: 'Marked School' }),
+      ];
+
+      const { scored } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 1,
+        maleSlots: 2,
+      });
+
+      expect(teamIds(scored[0])).toEqual(['m1', 'm2', 'w1']);
+      expect('warnings' in scored[0]).toBe(false);
+      expect(scored[0].warnings).toBeUndefined();
+    });
+
+    it('matches gender case- and whitespace-insensitively', () => {
+      // Lower-case 'f' and a padded ' F ' must both satisfy female slots; a padded
+      // ' m ' must not. Without trimming or case folding this school is excluded.
+      const players = [
+        player({ id: 'c1', rank: 1, points: 13, gender: 'f', club: 'Casing School' }),
+        player({ id: 'c2', rank: 2, points: 11, gender: ' F ', club: 'Casing School' }),
+        player({ id: 'c3', rank: 5, points: 6, gender: ' m ', club: 'Casing School' }),
+      ];
+
+      const { scored, excluded } = computeTeamScoresWithReasons(players, 3, 'club', {
+        femaleSlots: 2,
+        maleSlots: 1,
+      });
+
+      expect(excluded).toEqual([]);
+      expect(teamIds(scored[0])).toEqual(['c1', 'c2', 'c3']);
+      // ' m ' is not blank, so it raises no unknown-gender warning either.
+      expect('warnings' in scored[0]).toBe(false);
+    });
+  });
+
+  it('clamps slots that over-subscribe the team rather than crashing', () => {
+    // femaleSlots 3 + maleSlots 3 against a teamSize of 4. Documented behaviour:
+    // female is clamped to 3, male to the single remaining board. A DB check blocks
+    // this configuration upstream; the scorer must not throw and must not exclude
+    // an institution that satisfies the requirement that actually fits.
+    const players = [
+      player({ id: 'w1', rank: 1, points: 15, gender: 'F', club: 'Oversubscribed' }),
+      player({ id: 'w2', rank: 2, points: 12, gender: 'F', club: 'Oversubscribed' }),
+      player({ id: 'w3', rank: 4, points: 10, gender: 'F', club: 'Oversubscribed' }),
+      player({ id: 'm1', rank: 6, points: 7, gender: 'M', club: 'Oversubscribed' }),
+      player({ id: 'm2', rank: 9, points: 3, gender: 'M', club: 'Oversubscribed' }),
+    ];
+
+    const { scored, excluded } = computeTeamScoresWithReasons(players, 4, 'club', {
+      femaleSlots: 3,
+      maleSlots: 3,
+    });
+
+    expect(excluded).toEqual([]);
+    expect(teamIds(scored[0])).toEqual(['w1', 'w2', 'w3', 'm1']);
+    expect(scored[0].total_points).toBe(44); // 15 + 12 + 10 + 7
+  });
+});

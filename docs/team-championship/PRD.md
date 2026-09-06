@@ -75,15 +75,21 @@ Output states **the rule that was applied**. It never asserts a count of players
 The engine knows what it required. It does not know, and must not claim, what any individual on a
 roster is. Every site listed in §2 that prints `2F + 2M` is in scope for TC1.5.
 
-### RULING 3 — Roster minimum · **PROPOSED, AWAITING OWNER SIGN-OFF**
+### RULING 3 — Roster minimum · **DECIDED 7 September 2026**
 
-> ⚠️ **This section is not decided. Do not build against it until the owner signs off.**
-
-**Proposal:** `minimum_roster_size` is a **per-prize-group** field on `institution_prize_groups`,
-separate from `team_size`, defaulting to `team_size`.
+**Decision:** `minimum_roster_size` is a **per-prize-group** field on `institution_prize_groups`,
+separate from `team_size`, defaulting to `team_size`. The tournament-level
+**allow-incomplete-teams flag is WITHDRAWN**. One setting, not two.
 
 - `minimum_roster_size` — how many entrants an institution must have **entered** to compete for the prize.
 - `team_size` — how many of them are **counted** toward the score.
+
+**Reason for the withdrawal:** a per-group minimum expresses everything the flag did, and also
+expresses real regulations the flag cannot. Setting `minimum_roster_size` equal to `team_size`
+is the flag switched off; setting it below `team_size` is the flag switched on — but only where
+the organizer wants it, and at whatever threshold the regulation actually names. Two controls
+that overlap on part of their range and disagree on the rest is a configuration the organizer
+would have to reason about; one control is not.
 
 **Evidence:**
 
@@ -93,10 +99,6 @@ separate from `team_size`, defaulting to `team_size`.
    8 entries / best 4** — two different minimums, same counted size, **in the same tournament**.
    A tournament-level field cannot express this. A per-group field can.
 
-This is why the field is proposed per group and not per tournament. Contrast with the
-allow-incomplete-teams toggle, which the owner has already ruled is **tournament-level** event policy
-(PROJECT_STATE §13, 6 September) — the two settings sit at different levels deliberately.
-
 ## 4. Organizer-facing behaviour after TC1
 
 | Setting | Level | Meaning |
@@ -105,8 +107,8 @@ allow-incomplete-teams toggle, which the owner has already ruled is **tournament
 | Team size | per group | how many players are counted |
 | Girls (minimum) | per group | satisfied only by an explicit `F` |
 | Other players (minimum) | per group | satisfied by anyone not marked `F`, including unmarked |
-| Minimum roster size | per group | **PROPOSED — RULING 3, pending sign-off** |
-| Allow incomplete teams | **per tournament** | owner ruling, PROJECT_STATE §13. Needs an "i" hover explaining purpose |
+| Minimum roster size | per group | how many entrants an institution must have entered to compete — defaults to team size (RULING 3) |
+| Allow incomplete teams | — | **WITHDRAWN by RULING 3.** Subsumed by minimum roster size; no tournament-level flag ships |
 
 Every setting must show the organizer, before allocation runs, what it will do — and after allocation
 runs, why any institution was left out. Silent exclusion is the defect TC1 exists to end

@@ -20,6 +20,11 @@ export type TeamPrizeInstitutionScore = {
   rank_sum: number;
   best_individual_rank: number;
   team: TeamPrizePlayer[];
+  /**
+   * Present ONLY when non-empty. A group with no gender slots configured therefore
+   * produces an object with no `warnings` key at all, byte-identical to pre-TC1.4.
+   */
+  warnings?: TeamWarning[];
 };
 
 export function compareInstitutions(a: TeamPrizeInstitutionScore, b: TeamPrizeInstitutionScore): number {
@@ -31,17 +36,57 @@ export function compareInstitutions(a: TeamPrizeInstitutionScore, b: TeamPrizeIn
 
 /**
  * Why an institution was excluded from `scored`. ARCHITECTURE §4 (fail codes).
- * Only `team_short_roster` is produced today; the remaining fail codes
- * (`below_minimum_roster`, `female_slots_unfilled`) arrive with TC1.4 onward.
+ * `team_short_roster` shipped with TC1.3; the two slot codes ship with TC1.4.
+ * `below_minimum_roster` arrives with TC1.6 (RULING 3, signed off 7 September 2026).
  */
-export type TeamExclusionReason = 'team_short_roster';
+export type TeamExclusionReason =
+  | 'team_short_roster'
+  | 'female_slots_unfilled'
+  | 'male_slots_unfilled';
 
 export type TeamExclusion = {
   key: string;
   reason: TeamExclusionReason;
-  /** How many players the institution actually entered — fewer than `teamSize`. */
+  /** How many players the institution actually entered, whatever the reason. */
   playerCount: number;
 };
+
+/**
+ * Gender minimums for one prize group, from `institution_prize_groups.female_slots`
+ * and `.male_slots`. These are MINIMUMS, not exact quotas: any board left over after
+ * both minimums are met is filled from whoever is left, of any gender.
+ */
+export type TeamSlotRequirements = {
+  femaleSlots: number;
+  maleSlots: number;
+};
+
+/**
+ * Attached to a SCORED institution — it qualified, but the organizer should know
+ * something about how. ARCHITECTURE §4 (warn codes).
+ */
+export type TeamWarning = {
+  reason: 'unknown_gender_filled_other_slot';
+  /** How many players with a null/blank gender were counted toward a male slot. */
+  playerCount: number;
+};
+
+/**
+ * RULING 1 (PRD §3), implemented in parallel to `allocatePrizes`' M_OR_UNKNOWN rule
+ * and NOT imported from it — DD1 forbids reaching into the allocation engine.
+ *
+ * A female slot is satisfied ONLY by an explicit `'F'`; a male slot is satisfied by
+ * "not F", which includes null and blank, because a blank Sex column in a
+ * Swiss-Manager export is the default for a male entrant, not missing data.
+ */
+function isFemale(player: TeamPrizePlayer): boolean {
+  return (player.gender ?? '').trim().toLowerCase() === 'f';
+}
+
+/** A gender that was never recorded. Such a player still satisfies a male slot. */
+function isUnknownGender(player: TeamPrizePlayer): boolean {
+  return (player.gender ?? '').trim() === '';
+}
 
 export type TeamScoresWithReasons = {
   scored: TeamPrizeInstitutionScore[];
@@ -56,14 +101,18 @@ export type TeamScoresWithReasons = {
 };
 
 /**
- * The real implementation. Identical selection and scoring to the behaviour pinned
- * by tests/institution/team-prizes.spec.ts — an institution dropped before is still
- * dropped, it is merely now reported. See ARCHITECTURE §1.3 and §1.4.
+ * The real implementation.
+ *
+ * `slots` is optional and additive. Omitted — or with both minimums at zero, which
+ * is where all three live prize groups sit — selection and output are byte-identical
+ * to the rank-only behaviour pinned by tests/institution/team-prizes.spec.ts.
+ * See ARCHITECTURE §1.3, §1.4 and §5 (TC1.4).
  */
 export function computeTeamScoresWithReasons(
   players: TeamPrizePlayer[],
   teamSize: number,
-  groupBy: TeamGroupByKey
+  groupBy: TeamGroupByKey,
+  slots?: TeamSlotRequirements
 ): TeamScoresWithReasons {
   const grouped = new Map<string, TeamPrizePlayer[]>();
   let droppedPlayersWithoutKey = 0;
@@ -84,17 +133,67 @@ export function computeTeamScoresWithReasons(
   const scored: TeamPrizeInstitutionScore[] = [];
   const excluded: TeamExclusion[] = [];
 
-  for (const [key, groupPlayers] of grouped.entries()) {
-    const ordered = [...groupPlayers].sort((a, b) => {
-      if (a.rank !== b.rank) return a.rank - b.rank;
-      return a.id.localeCompare(b.id);
-    });
+  // Over-subscribed slots (femaleSlots + maleSlots > teamSize) cannot all be honoured;
+  // a DB check blocks the configuration upstream. Rather than crash or invent an
+  // exclusion nobody can satisfy, the minimums are clamped to the boards available —
+  // female first, then whatever is left for male — and the slot checks below run
+  // against the clamped numbers. An impossible configuration therefore degrades to the
+  // strictest requirement that fits, it never silently excludes every institution.
+  const femaleSlots = Math.max(0, Math.min(slots?.femaleSlots ?? 0, teamSize));
+  const maleSlots = Math.max(0, Math.min(slots?.maleSlots ?? 0, teamSize - femaleSlots));
 
-    const topPlayers = ordered.slice(0, teamSize);
-    if (topPlayers.length < teamSize) {
+  const byRankThenId = (a: TeamPrizePlayer, b: TeamPrizePlayer) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return a.id.localeCompare(b.id);
+  };
+
+  for (const [key, groupPlayers] of grouped.entries()) {
+    const ordered = [...groupPlayers].sort(byRankThenId);
+
+    // Fail codes are evaluated in ARCHITECTURE §4 order: roster size first, then the
+    // slot minimums (female, then male). The first one that fires is the reason given.
+    if (ordered.length < teamSize) {
       excluded.push({ key, reason: 'team_short_roster', playerCount: groupPlayers.length });
       continue;
     }
+
+    // The two constrained pools are disjoint (a player is F or not-F, never both), so
+    // taking the best-ranked players from each independently is optimal for the slots.
+    const femalePool = ordered.filter(isFemale);
+    const notFemalePool = ordered.filter((p) => !isFemale(p));
+
+    if (femalePool.length < femaleSlots) {
+      excluded.push({ key, reason: 'female_slots_unfilled', playerCount: groupPlayers.length });
+      continue;
+    }
+    if (notFemalePool.length < maleSlots) {
+      excluded.push({ key, reason: 'male_slots_unfilled', playerCount: groupPlayers.length });
+      continue;
+    }
+
+    const maleSlotFill = notFemalePool.slice(0, maleSlots);
+    const selected = [...femalePool.slice(0, femaleSlots), ...maleSlotFill];
+
+    // Remaining boards go to the best-ranked players still unselected, any gender.
+    const takenIds = new Set(selected.map((p) => p.id));
+    for (const candidate of ordered) {
+      if (selected.length >= teamSize) break;
+      if (takenIds.has(candidate.id)) continue;
+      takenIds.add(candidate.id);
+      selected.push(candidate);
+    }
+
+    // Re-sorted so `team` and `best_individual_rank` keep their shipped meaning:
+    // with no slots configured this is exactly `ordered.slice(0, teamSize)`.
+    const topPlayers = selected.sort(byRankThenId);
+
+    // RULING 1's visible consequence: a blank gender counted toward a male slot.
+    // Only the male-slot fill can raise it — the free boards require nothing.
+    const unknownGenderInMaleSlots = maleSlotFill.filter(isUnknownGender).length;
+    const warnings: TeamWarning[] =
+      unknownGenderInMaleSlots > 0
+        ? [{ reason: 'unknown_gender_filled_other_slot', playerCount: unknownGenderInMaleSlots }]
+        : [];
 
     scored.push({
       key,
@@ -102,6 +201,7 @@ export function computeTeamScoresWithReasons(
       rank_sum: topPlayers.reduce((sum, p) => sum + p.rank, 0),
       best_individual_rank: topPlayers[0]?.rank ?? 0,
       team: topPlayers,
+      ...(warnings.length > 0 ? { warnings } : {}),
     });
   }
 

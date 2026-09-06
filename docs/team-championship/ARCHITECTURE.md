@@ -155,11 +155,10 @@ green, it will stay green while shipped code diverges arbitrarily, and it reads 
 All four tables grant full DML to `anon` and `authenticated`; RLS scopes owner-or-master; public SELECT
 policies key off `tournaments.is_published`.
 
-**Proposed by RULING 3, pending owner sign-off:** `institution_prize_groups.minimum_roster_size int
-not null default team_size`, per group. **No migration is written until sign-off.**
-
-**Ruled by the owner (PROJECT_STATE §13):** an allow-incomplete-teams flag is **tournament-level**, not
-per group. Column placement is settled; wording and the "i" hover copy are not.
+**Decided by RULING 3 (7 September 2026):** `institution_prize_groups.minimum_roster_size int
+not null default team_size`, **per group**. The tournament-level allow-incomplete-teams flag is
+**withdrawn** — the per-group minimum subsumes it. One setting, not two. The migration is written
+in TC1.6, not before.
 
 ## 3. Version pinning — inherited from TC0, unchanged by TC1
 
@@ -189,8 +188,9 @@ engine declares its own sets in `_shared/teamPrizes.ts`.
 | Code | Fires when |
 |---|---|
 | `team_short_roster` | the institution has fewer players than `team_size` — today's silent `continue` at `teamPrizes.ts:58` |
-| `below_minimum_roster` | the institution has at least `team_size` players but fewer than `minimum_roster_size` — **RULING 3, only if signed off** |
+| `below_minimum_roster` | the institution has at least `team_size` players but fewer than `minimum_roster_size` — **RULING 3, signed off 7 September 2026**; lands in TC1.6 as the per-group `minimum_roster_size` |
 | `female_slots_unfilled` | fewer than `female_slots` players carry an explicit `'F'` |
+| `male_slots_unfilled` | fewer than `male_slots` players are not `'F'`. Under RULING 1 a null or blank gender counts as not-F, so this fires far more rarely than `female_slots_unfilled` — only when the institution genuinely has too few non-`'F'` entrants |
 | `missing_group_field` | the player's `group_by` column is null, empty, or whitespace — today's silent `continue` at `teamPrizes.ts:42` |
 
 ### pass
@@ -203,7 +203,7 @@ engine declares its own sets in `_shared/teamPrizes.ts`.
 
 | Code | Fires when |
 |---|---|
-| `unknown_gender_filled_other_slot` | a player with `gender` null/blank was counted toward `male_slots` — the visible consequence of RULING 1 |
+| `unknown_gender_filled_other_slot` | one or more players with `gender` null/blank were counted toward `male_slots` — the visible consequence of RULING 1. Carries `playerCount`, how many. Only the male-slot fill raises it; the free boards after the minimums require nothing, so they never do |
 | `tie_at_prize_boundary` | `detectTieAtPrizeBoundary` (`teamPrizes.ts:72-84`) returns a non-empty set for this group; `resolve_team_tie` is the operator path |
 
 ### Rendering rule — binding
@@ -217,6 +217,7 @@ Illustrative, subject to RULING 2 (state the rule, never assert a player's attri
 | `team_short_roster` | "Fewer players than the team size." |
 | `below_minimum_roster` | "Fewer entries than this prize requires." |
 | `female_slots_unfilled` | "The rule asks for at least 2 girls and the entry list does not meet it." |
+| `male_slots_unfilled` | "The rule asks for other players and the entry list does not meet it." |
 | `missing_group_field` | "No school recorded for these players." |
 | `unknown_gender_filled_other_slot` | "Some players have no gender recorded and were counted as other players." |
 | `tie_at_prize_boundary` | "Two teams are level at the prize boundary." |
@@ -242,7 +243,7 @@ that can fail. Production code unchanged.
 a deliberate one-line mutation of the scorer that is then reverted (DD2 — a check that cannot fire is
 not a check).
 
-**TC1.3 — Reason codes only in `_shared/teamPrizes.ts`. No gender, no schema, no migration.**
+**TC1.3 — Reason codes only in `_shared/teamPrizes.ts`. No gender, no schema, no migration. — DONE.**
 `computeTeamScoresWithReasons` becomes the real implementation and returns `{ scored, excluded,
 droppedPlayersWithoutKey }`; `computeTeamScores` becomes a thin wrapper over its `.scored` with its
 exported signature and return type unchanged, so no caller is edited and nothing is duplicated. The two
@@ -266,6 +267,12 @@ caller edited.
 which is what protects the three live groups — and slot fixtures whose selection differs from the
 rank-only selection, so the new path is proved to be doing something.
 
+**TC1.4b — Wire the caller.**
+`allocateInstitutionPrizes` passes the group's `female_slots` / `male_slots` into
+`computeTeamScoresWithReasons` as `slots`, and emits the resulting exclusion reasons and warnings in
+its response. Deploy; re-run the `glanz-open-haryana-cup` curl of §3. This is the step where TC1.4's
+scorer first changes anything a user can see.
+
 **TC1.5 — Display and printed output.**
 One formatter replaces the four independent builders in §1.7 — `TeamPrizeRulesSheet.tsx`,
 `TeamPrizesEditor.tsx`, `TeamPrizeResultsPanel.tsx` and the team block of `generatePdf`. `Male Slots`
@@ -275,8 +282,8 @@ Codes render through the §4 mapping table as plain sentences, never as raw code
 assertion anywhere on it.
 
 **TC1.6 — Roster policy and schema.**
-Tournament-level allow-incomplete-teams column with its "i" hover; `minimum_roster_size` and its
-`below_minimum_roster` code **only if RULING 3 is signed off**. `allocateInstitutionPrizes` populates
+Per-group `minimum_roster_size` column and its `below_minimum_roster` code (RULING 3, signed off
+7 September); no tournament-level allow-incomplete-teams column is added. `allocateInstitutionPrizes` populates
 the real counts and reasons, retiring the literals at `:340-341`; persistence so `publicTeamPrizes` and
 `useTeamPrizeResults` read codes from the snapshot rather than hardcoding `0`, which makes the
 collapsible at `TeamPrizeResultsPanel.tsx:248` reachable for the first time. **`finalize` is not
