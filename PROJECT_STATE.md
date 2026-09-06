@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 5 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 6 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -9,12 +9,12 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 
 **Prize Manager** (prize-manager.com) is a chess tournament management platform. Phase 1 built a brochure extraction engine: organizer uploads a PDF brochure → two-pass Gemini OCR + structured extraction + deterministic trust/grounding layer → review screen → on Approve, a tournament is created with categories and prizes.
 
-**Phase 2** extends the same engine into a Universal Extraction Engine serving three platforms and eventually external developers. The engine is doc-type-driven; adding a document type requires a new schema row and new trust invariants, not a new pipeline.
+**Why it exists, from the Phase 1 documents.** The task was brochure extraction; the idea it was planning for was bigger. `docs/extraction-engine/PRD.md` calls Prize Manager the *"first face of the Universal Extraction Engine"*, and `ARCHITECTURE.md` opens with **"One engine, many faces."** The destination was named under "design for, don't build": a standalone product surface — REST API keys plus an MCP server exposing `extract_document`, `get_extraction`, `query_documents`, with multi-tenant metering. The engine has two faces in production today (`chess_brochure`, `payment_screenshot`) and the generality bet has held: Phase 2A added payment screenshots with a new schema row and new invariants, not a new pipeline.
 
 **Three-platform context:**
-- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the F3 oversight loop (28 Aug), the `extraction_review_queue` security fix and Resend SMTP migration (29 Aug), F3-C2 batch A (30–31 Aug), the B16 investigation (31 Aug), batch F1 and the backlog sweeps (1 Sep), G1/G2/G3 closing the X-exposure (2 Sep), B22 and GTM1 (3–4 Sep), and now **B18-a + B18-b — published results are version-pinned (5 September)**.
-- **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C). **Parked by owner decision 2 Sep** pending a seamless prize-manager → certificate-hub handoff. Public-page inventory taken 5 Sep — see §15.
-- **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C). Public-page inventory taken 5 Sep — see §15. **Carries one live exposure, `/debug/auth`.**
+- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the F3 oversight loop (28 Aug), the `extraction_review_queue` security fix and Resend SMTP migration (29 Aug), F3-C2 batch A (30–31 Aug), the B16 investigation (31 Aug), batch F1 and the backlog sweeps (1 Sep), G1/G2/G3 closing the X-exposure (2 Sep), B22 and GTM1 (3–4 Sep), B18-a/B18-b version-pinning published results (5 Sep), and now **TC0 — the team engine reads and writes on one version namespace (5–6 September)**.
+- **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C). **Parked by owner decision 2 Sep.** Public-page inventory 5 Sep — see §15.
+- **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C). **Carries one live exposure, `/debug/auth`.** See §15.
 
 ---
 
@@ -23,9 +23,10 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`1e0dada`** (sweep checks) · `7a187aa` B18 merge · `988403d` B18-b · `2f3528b` B18-a · `2cb9f83` PROJECT_STATE · `7b6c152` B22 merge · prior: `e207f41` G3b · `dcb8274` G3 · `0ccfdcd` G2 · `44c289b` G1 · `a5bebf8` F2. **`PROJECT_STATE.md` lives at the repo root only** |
-| **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9**, `verify_jwt=false` · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · `publicTeamPrizes` v240 · `pmPing` v238 · `backfillTeamAllocations` v38. **Untouched 29 Aug – 5 Sep** |
-| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy; the bundle hash is. **Better still: check the bundle's `__vite__mapDeps` list for a module that did not exist before** — that is how the B18-b publish was confirmed (`assets/usePublishedAllocationVersion-BOqEGwdO.js` in `index-J-hNkfzB.js`) |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`f2a6c8e`** (TC0-f merge) · `2ef0c93` TC0-d/e · `06e41d1` TC0-a/b/c · `d9d1da9` PROJECT_STATE · `1e0dada` sweeps · `7a187aa` B18 merge · `7b6c152` B22 merge. **`PROJECT_STATE.md` lives at the repo root only** |
+| **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9** (`verify_jwt=false`) · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · **`publicTeamPrizes` v241 (`verify_jwt=false`, build `2026-09-05T20:00:00Z-TC0d`)** · `pmPing` v238 (`verify_jwt=false`) · **`backfillTeamAllocations` v39 (build `2026-09-05T20:00:00Z-TC0e`)** |
+| **`verify_jwt=false` is THREE functions** | `send-payment-notifications`, `pmPing`, **`publicTeamPrizes`**. Prior PROJECT_STATE listed only the first — corrected 6 Sep from `list_edge_functions` |
+| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy. Better than a hash: **make the function report its own build string** and curl its `?ping=1`. That is how TC0-d/e were confirmed, and a version bump cannot fake it |
 | **Free-plan log retention** | **1 day.** Edge-function logs older than ~24h are gone |
 | Active extraction schema | v5 (chess_brochure), v3 (payment_screenshot, id `4e8beb4d-4a07-4ef8-a774-18b22f722522`) |
 | Gemini model | `GEMINI_MODEL` = `gemini-3.1-flash-lite` |
@@ -33,59 +34,74 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Payment trust invariants | 8 in `extract/paymentTrustCheck.ts` · returns `{flags, verdicts}` |
 | Checker version | `PAYMENT_CHECKER_VERSION = 1`; the RPC gate pins the literal `1` |
 | **F2 kill switch** | `platform_feature_flags` — row `key='payment_auto_approve'`, `enabled = true` since 2026-08-20 17:26:33 UTC. RLS on, zero policies. Off switch: `supabase/ops/f2_auto_approve_off.sql` |
-| **F3 oversight objects** | `payment_auto_approval_audit` · `record_auto_approval_audit` · `revoke_auto_entitlement` · `list_auto_approvals()`. RLS on, zero policies, zero client table grants, `anon` no EXECUTE |
+| **F3 oversight objects** | `payment_auto_approval_audit` · `record_auto_approval_audit` · `revoke_auto_entitlement` · `list_auto_approvals()` |
 | **`public.referrals` triggers** | **ZERO, by design, since `20260822120000`.** Do not re-add one — see W1 |
 | Test baseline | **479 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **482** |
-| **The 3 known failures are probably ONE bug** | `normDob('Jan 5, 2024')` → `2024-01-04`; the name+dob duplicate test depends on that same `normDob`; the martech inclusive-boundary test returns false. Off-by-one-day plus inclusive-boundary on an IST (+05:30) machine is the signature of local-time parsing against UTC dates. Untested hypothesis — but treat it as one timezone bug, not three. Tier 3 |
-| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file baseline:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. **`AutoApprovedPanel.tsx`, `Finalize.tsx`, `AdminTournaments.tsx`, `admin/ColumnFilter.tsx`, `usePublishedAllocationVersion.ts`, `getLatestAllocations.ts`, `useFinalPrizeData.ts`, `PublicTournamentDetails.tsx`, `PublicWinnersPage.tsx` have zero and must keep zero.** Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
-| **tsc exits non-zero, so never chain it** | `npx tsc … && npx vitest run` silently SKIPS vitest, because 12 errors is the normal state. Use `;` or separate commands. This bit us on the B18 merge |
+| **The 3 known failures are probably ONE bug** | Off-by-one-day plus inclusive-boundary on an IST (+05:30) machine is the signature of local-time parsing against UTC dates. Untested hypothesis. Tier 3 |
+| TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
+| **tsc exits non-zero, so never chain it** | `npx tsc … && npx vitest run` silently SKIPS vitest. Use `;` or separate commands |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
 | Claim RPC | **5-arg only**, `RETURNS uuid`, 1 overload, **15 `RAISE EXCEPTION` across 11 codes** |
-| Backstop index | `uq_tournament_payments_utr_active` — UNIQUE on `normalize_utr(utr)` WHERE `status <> 'rejected'` |
-| **Brochure upload cap** | `storage.buckets.file_size_limit = 10485760` (10 MB) on `extraction-uploads`. See B17 |
-| Verification harnesses | **8 total.** `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · `b22_publish_gate_checks.sql` 14/14 · **`b18_version_pin_checks.sql` 16/16 (new 5 Sep)** |
-| **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**24 checks** after B22a/B22b) · `scripts/backlog_sweep_repo.sh` (**11 checks** after B22g, plus the tsc baseline). **Run both before planning anything.** Last reading: **DB 12 OPEN / 11 CLOSED / 1 INFO**, **repo 7 OPEN / 4 CLOSED** |
-| Operational scripts | `f2_auto_approve_on.sql` · `f2_auto_approve_off.sql` · `f2_auto_approval_report.sql` · the two sweeps. **Not migrations** |
+| **Verification harnesses** | **9 total.** `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · `b22_publish_gate_checks.sql` 14/14 · `b18_version_pin_checks.sql` 16/16 · **`tc0_team_version_checks.sql` 12/12 (new 6 Sep)** |
+| **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**24 checks**) · `scripts/backlog_sweep_repo.sh` (**11 checks** + tsc baseline). **Run both before planning anything.** Last reading: **DB 12 OPEN / 11 CLOSED / 1 INFO**, **repo 7 OPEN / 4 CLOSED** |
 | Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
-| **Live census (verified 5 Sep, post-B18)** | 43 auth users · **133 tournaments, 35 published** · **95 publications, 35 active, 35 pinned, 0 unpinned** · **0 drifted** · **0 stub slugs** · 33 drafts still titled `Untitled Tournament` and gated by the title check · 23 soft-deleted · 12 payments · 6 referrals · 5 referral_rewards · 1 audit row |
-| Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as the `PLATFORM_PAYEE_VPA` secret |
+| **Live census (verified 6 Sep, post-TC0)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications, 0 NULL pins** · 3 institution_prize_groups (2 tournaments, both DRAFTS) · 3 team_allocations (1 tournament) · 12 payments · 6 referrals · 5 referral_rewards |
+| Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as `PLATFORM_PAYEE_VPA` |
 
-### Publish path — REVISED 5 September (B18)
+### Public routes — CORRECTED 6 September
+
+| Route | Component | Shows |
+|---|---|---|
+| `/p/:slug` | `PublicTournamentDetails` | Details + individual winners. **No team prizes** |
+| **`/p/:slug/results`** | **`PublicResults`** | **The ONLY page showing team prizes.** Undocumented until 6 Sep |
+| `/t/:id/public` | `LegacyPublicRouteCompat` → `PublicWinnersPage` | Redirects when a slug exists. **No team prizes** |
+
+`/p/:slug/results` gets individual winners from `get_public_tournament_results` (pinned by B18-a) and team prizes from the `publicTeamPrizes` edge function. Until TC0, one table on that page was pinned and the other was not.
+
+### Publish path
 
 | Item | Value |
 |---|---|
-| **Frontend entry** | `src/pages/Finalize.tsx` → `handlePublish` → **step 1** `functions.invoke('finalize')` → **step 2** `rpc('publish_tournament', { tournament_id, requested_slug: null })` |
-| **Unpublish callers** | `PublishSuccess.tsx` (organizer) and `AdminTournaments.tsx` (master, since G2). Both call `unpublish_tournament(uuid)` |
-| `publish_tournament(uuid, text)` | One overload. **Exact signature `tournament_id uuid, requested_slug text DEFAULT NULL::text`** — the DEFAULT is load-bearing; `CREATE OR REPLACE` without it fails `42P13`. SECURITY DEFINER, `SET search_path = public`, owner `postgres`, RETURNS TABLE(slug text, version integer, request_id uuid). Auth: `v_owner_id = v_uid OR has_role(v_uid,'master')`. Enforces the B22 **title gate**. **Since B18 also records `allocation_version`.** Validates neither dates nor allocations |
-| **Slug precedence (B22)** | `COALESCE(NULLIF(requested_slug,''), <existing slug UNLESS it matches `^untitled-tournament(-N)?$`>, regexp title)`. **Any other existing slug still wins, deliberately** — regenerating on every republish would break every shared link (harness T7 is the negative control) |
-| **`publications.allocation_version` (B18-a)** | The allocation version this publication displays. Set from `MAX(allocations.version)` at publish time. **NULL means the tournament was published before it had any allocations** — the page then shows details and no winners until a later publish pins one |
-| **`get_public_tournament_results(uuid)`** | SECURITY DEFINER, **language `sql`**, 15-column TABLE. Gates on `tournaments.is_published`, then reads the ACTIVE publication's `allocation_version`. **NO `MAX()` FALLBACK — deliberately.** A `COALESCE(pin, MAX(...))` reopens B18-a |
-| **Client-side read path (B18-b)** | `/p/:slug` (`PublicTournamentDetails`) and `/t/:id/public` (`PublicWinnersPage`) do NOT use the RPC. They go through `useFinalPrizeData` → `getLatestAllocations`, which takes an `AllocationVersionSelector`: `{mode:'latest'}` (organizer default) · `{mode:'pinned', version}` · `{mode:'unresolved'}`. Public pages read the pin via `usePublishedAllocationVersion` and pass `pinned`. **Three modes exist so `undefined` ("use latest") can never be confused with `null` ("pinned to nothing")** |
-| **Organizer surfaces keep `latest`** | `Finalize`, `FinalPrizeView`, `ArbiterSheetView`, `useFinalizeData` were not edited; they inherit `{mode:'latest'}` from the default parameter |
-| `unpublish_tournament(uuid)` | Correct and always was. Clears `publications.is_active`, sets `is_published=false` AND `status='draft'` in one transaction. Idempotent |
-| **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` **[BEFORE INSERT OR UPDATE OF is_active, version]** and `trg_guard_publication_requires_team_snapshots` **[BEFORE UPDATE OF is_active]**. Both are **column-scoped**: an `allocation_version`-only write fires neither. Proven, not assumed — see CC9. Both block activating a publication when the tournament has active `institution_prize_groups` but no `team_allocations`. **See B21 — this is a one-way door** |
-| **`allocations` FKs** | `prize_id → prizes ON DELETE CASCADE` · `player_id → players ON DELETE CASCADE` · `tournament_id → tournaments ON DELETE CASCADE`. **3 cascades; the first two rewrite published history. This is B18-c, still open** |
-| **Public RLS — re-keyed by G1** | `allocations.public_read_published_allocations`, `prizes.public_read_published_prizes`, `publications.public_read_active_publications`, `tournaments.anyone_read_published_tournaments` — all four role **PUBLIC**, all key off **`tournaments.is_published`**. `players.anon_read_published_players` was already correct and is the reference shape |
-| **`publications` write surface** | `anon` AND `authenticated` hold **full INSERT/UPDATE/DELETE**, and `org_publications_access` is `FOR ALL` scoped owner-or-master. **An organizer can rewrite their own pin directly.** Not privilege escalation — they can already republish — but B18 delivers stability against accidental drift, **not tamper-proofing**. Do not describe published results as "immutable" |
-| **Public route split** | `/p/:slug` is the real public page. `/t/:id/public` → `LegacyPublicRouteCompat`, which redirects when a slug exists and otherwise renders `PublicWinnersPage` |
-| **`is_master` has only a zero-arg overload** | `is_master(uuid)` does not exist. `detect_missing_team_snapshots()` calls `public.is_master(auth.uid())` and raises `42883` every call. This is the `/admin/team-snapshots` failure |
+| **Frontend entry** | `Finalize.tsx` → `handlePublish` → `functions.invoke('finalize')` → `rpc('publish_tournament', { tournament_id, requested_slug: null })` |
+| `publish_tournament(uuid, text)` | One overload. **`tournament_id uuid, requested_slug text DEFAULT NULL::text`** — the DEFAULT is load-bearing (`42P13`). SECURITY DEFINER. Enforces the B22 title gate. Records `allocation_version` |
+| **`publications.allocation_version`** | The allocation version this publication displays. `MAX(allocations.version)` at publish time. **NULL = published before any allocations existed** (Option C) |
+| **`publications.version`** | **A PUBLISH COUNTER. Not a results version.** Runs 1–6 live while `allocation_version` runs 1–13; they **disagree on 24 of 35** active publications. Never join anything to it |
+| `get_public_tournament_results(uuid)` | SECURITY DEFINER, language `sql`. Reads the pin. **NO `MAX()` FALLBACK** |
+| **Client-side read path (B18-b)** | `/p/:slug` and `/t/:id/public` use `useFinalPrizeData` → `getLatestAllocations` with an `AllocationVersionSelector`: `latest` / `pinned` / `unresolved`. Three modes so `undefined` ("use latest") can never be confused with `null` ("pinned to nothing") |
+| **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` [BEFORE INSERT OR UPDATE OF is_active, version] and `trg_guard_publication_requires_team_snapshots` [BEFORE UPDATE OF is_active]. Both **column-scoped**: an `allocation_version`-only write fires neither (CC9). **Since TC0 both join `publications.allocation_version`** |
+| **`publications` write surface** | `anon` AND `authenticated` hold full INSERT/UPDATE/DELETE; `org_publications_access` is `FOR ALL` owner-or-master. An organizer can rewrite their own pin. **Do not describe published results as "immutable"** — TC0/B18 deliver stability against accidental drift, not tamper-proofing |
+
+### Team engine — mapped 5–6 September
+
+**DD1 boundary. The team engine is separate from the main allocation engine and always must be.**
+
+| Object | Role |
+|---|---|
+| `_shared/teamPrizes.ts` | `computeTeamScores(players, teamSize, groupBy)` + `detectTieAtPrizeBoundary`. **Takes NO gender parameters** — see DD5 |
+| `allocateInstitutionPrizes` | **Read-only compute/preview. Writes nothing.** Calls `detectTieAtPrizeBoundary` |
+| `finalize` | **The primary writer of `team_allocations`** in the normal flow. Invokes `allocateInstitutionPrizes`, deletes and re-inserts at the ALLOCATIONS version. §13's old description ("writes allocations but computes nothing") was wrong |
+| `backfillTeamAllocations` | Master-only repair. Outside the normal flow. Since TC0 resolves from `allocation_version`; `body.version` still overrides |
+| `publicTeamPrizes` | Public reader. Since TC0 pins to `allocation_version` and **has no compute path at all** |
+| `resolve_team_tie` | Live SECURITY DEFINER RPC writing `team_allocation_notes`. **Exists** — §13 previously said the tie guard was never built |
+| Tables | `institution_prize_groups`, `institution_prizes`, `team_allocations`, `team_allocation_notes`. All four grant full DML to `anon` and `authenticated`; RLS scopes owner-or-master; public SELECT policies correctly key off `tournaments.is_published` |
+| **`allocatePrizes` is clean** | 2011 lines, imports only `supabase-js` and `_shared/health.ts`. **Zero** references to team scoring or team tables. Measured 5 Sep |
 
 ### Email infrastructure (migrated 29 August 2026)
 
-Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, password = `RESEND_API_KEY`, sender `noreply@prize-manager.com`. Edge-function sender `WELCOME_EMAIL_FROM` = `hello@prize-manager.com`. Domain verified. Auth limits: emails 100/h, 60 s per user, sign-ups/sign-ins 30/5min. `RESEND_API_KEY` rotated 29 Aug; old key still live pending B15. **Edge-function secrets are runtime env vars — rotating one needs no redeploy.**
+Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, sender `noreply@prize-manager.com`. Edge-function sender `WELCOME_EMAIL_FROM` = `hello@prize-manager.com`. `RESEND_API_KEY` rotated 29 Aug; old key still live pending B15. **Edge-function secrets are runtime env vars — rotating one needs no redeploy.**
 
 ### Migrations (all applied, repaired, version-matched)
 
-`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · `20260902120000` G1 publish-state reconcile · `20260904120000` B22 publish title gate · **`20260905120000` B18-a version pin**.
+`20260817120000` F2-A · `20260817130000` F2-B · `20260817140000` F2-D · `20260817150000` F2-E · `20260817160000` F2-G · `20260822120000` drop dead referrals trigger · `20260827120000` F3-A · `20260827130000` F3-B · `20260828120000` F3-C0 · `20260828130000` F3-C0b · `20260829120000` SEC `extraction_review_queue` · `20260902120000` G1 · `20260904120000` B22 · `20260905120000` B18-a · **`20260905130000` TC0 team version join**.
 
-**G2, G3, G3b and B18-b were frontend only.**
+**G2, G3, G3b, B18-b, TC0-d and TC0-e were not migrations** (frontend or edge functions).
 
 ---
 
 ## 3. Non-negotiable guardrails
 
 **Phase 1:**
-1. NEVER touch the allocation engine — allocations, `rule_config`, conflicts, player-to-prize matching — unless Tushar explicitly names it. Lives in `supabase/functions/allocatePrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations`. The frontend invokes it **by string name**; never alter an invoke name or payload. **Tushar authorised altering RLS policies ON the allocations table for G1 on 2 Sep; that authorisation does not extend further. TWO OPEN SCOPE QUESTIONS, both owed before the Team Championship work: (a) does `supabase/functions/finalize` fall inside this guardrail — it writes `allocations` rows but computes nothing; (b) may Team Championship Mode A write `team_allocations`, and is `backfillTeamAllocations` in scope?**
+1. **NEVER touch the main allocation engine** — see **DD1** below, which supersedes the old wording.
 2. `criteria_json` committed as always `'{}'`.
 3. Never weaken grounding or arithmetic. Never weaken checks to force a pass.
 4. Client never writes production tables; only `commit-extraction` does, on explicit Approve.
@@ -95,228 +111,202 @@ Custom SMTP via Resend. Host `smtp.resend.com`, port `465`, user `resend`, passw
 
 **Phase 2A:** 8. Auto-approval is CONDITIONAL, server-side, gated on **named invariant verdicts** (D28); **`skipped` is not `pass`** (D39). 9. NEVER use `commit-extraction` for payment data. 10. NEVER modify `review_tournament_payment`'s entitlement-insert logic. 11. Screenshot upload is OPTIONAL; **no screenshot can never auto-approve**. 12. NEVER expose the kill switch in frontend code or logs.
 
-**Master / admin / auth:** M1–M5. **Phase 2A-2:** N1–N5. **Phase 2A-3:** P1–P6. **F0d:** Q1–Q7. **UI:** U1–U5. **F1:** R1–R7. **Client write-grant audit:** S1–S8. **PF1:** T1–T6. **F2:** V1–V8. **Referrals:** W1–W4. **F3:** X1–X9. **F3-C:** X7–X9. **Security and ops:** Y1–Y5. **Testing and state ownership:** Z1–Z4. **Investigation and version semantics:** AA1–AA5. **Documentation and verification:** BB1–BB5. (See prior PROJECT_STATE for full text; unchanged.)
+**Other blocks unchanged, see prior PROJECT_STATE for full text:** M1–M5 · N1–N5 · P1–P6 · Q1–Q7 · U1–U5 · R1–R7 · S1–S8 · T1–T6 · V1–V8 · W1–W4 · X1–X9 · Y1–Y5 · Z1–Z4 · AA1–AA5 · BB1–BB5 · CC1–CC12.
 
-> **Naming note:** the F3 guardrails X1–X9 predate the exposure items labelled X1–X4. The exposure items are written as **X1-exposure … X4-exposure**. All four are CLOSED.
+### DD1 — Team prizes are a separate engine (OWNER RULING, 6 September 2026)
 
-**Publish-state and audit — CC1–CC8 (2–4 September):** unchanged, see prior PROJECT_STATE. Summary: CC1 read the triggers on the table a function writes · CC2 a defect's name can encode a wrong cause · CC3 enumerate every policy on every related table · CC4 a check that can never read CLOSED is not a measurement · CC5 placeholder rows travel · CC6 a green check on an unchanged file looks identical to a green check on a correct one (+ amendment: `diff --stat` is blind to NEW files, use `git status --short` or `git add -A` then `diff --cached --stat`) · CC7 a harness's execution order can be load-bearing · CC8 dry-run the fix, not just the migration.
+**Supersedes the old guardrail 1 wording, which named `allocateInstitutionPrizes` and `backfillTeamAllocations` inside the protected engine. Read literally, that made Team Championship unbuildable.**
 
-**B18 — CC9–CC12 (5 September 2026):**
+- **Main engine — never edited for team work:** `supabase/functions/allocatePrizes`, `rule_config`, conflicts, player-to-prize matching, the `allocations` table, and the allocation engine's own docs.
+- **Team engine — where all Team Championship work lands:** `_shared/teamPrizes.ts`, `allocateInstitutionPrizes`, `backfillTeamAllocations`, `publicTeamPrizes`, RPC `resolve_team_tie`, tables `institution_prize_groups` / `institution_prizes` / `team_allocations` / `team_allocation_notes`.
+- **Team Championship gets its own `docs/team-championship/PRD.md` and `ARCHITECTURE.md`.** It never edits the allocation engine's documents.
+- **`finalize` is the only seam** — it writes both `allocations` and `team_allocations`. **Owner ruling: leave `finalize` untouched.** Improvements to the team scorer reach it without editing its file. TC0 needed no change to it, because it already writes at the correct version number.
 
-**CC9. A column-scoped trigger is a claim until you watch the guard fire.** The B18 backfill writes `publications.allocation_version` on 35 active rows. Both triggers on that table are `UPDATE OF is_active[, version]`, so neither should fire — but "should" is CC1's exact trap. The proof was a **matched pair on the same row**: an `is_active` update on `74e1bd2b`'s publication was **observed rejecting** with *"Cannot publish: missing team snapshots"*, and then the `allocation_version`-only write on that same row succeeded. Harness case P16 keeps that pair honest, and it deliberately picks a publication whose guard **can** fire — using the local fixture would have made the control unfalsifiable (CC4).
+### DD2 — A fix can dissolve its own probe (6 September)
 
-**CC10. `prosrc` includes comments, so a literal-match guard can read its own documentation.** The B18 migration failed its own post-check on the first live run. The check looked for `MAX(a.version)` in `get_public_tournament_results` to confirm the defect was gone. The new function contains no such code — but its explanatory comment says *"there is deliberately no fallback to MAX(a.version)"*, and `prosrc` returns comments. **The correct fix is to strengthen the guard, not delete the explanation:** `regexp_replace(prosrc, '--[^\n]*', '', 'g')` before matching. Control-tested both ways — a comment-only mention no longer matches, a real `COALESCE` fallback still does. Note `publish_tournament` legitimately contains `MAX(a.version)`, so this guard stays scoped to the reader.
+TC0 made `b18_version_pin_checks.sql` P16 fail **against a correct database**. P16 asserts an `is_active` update on a real publication is *rejected*, to prove its control can fire. TC0's NULL-pin rule means that row now activates legitimately, so the control went quiet and the check reported FAIL.
 
-**CC11. Dry-run the artifact you are shipping, not a compacted copy of it.** CC10 was avoidable. The pre-flight dry runs used a stripped-down function body with the comments removed, so the guard passed in the dry run and failed on the real file. **The dry run must execute the exact text of the file being applied.** Same family as D41: verify the artifact, not your model of it.
+The repair pins the control row before running the pair, restoring falsifiability without relaxing anything. **When a green check goes red immediately after a change you believe is correct, ask whether the check still measures what it claims** before assuming a regression — and repair the probe rather than the expectation (guardrail 3, CC4).
 
-**CC12. Structure survives a bad measurement; absolute values do not.** During B18 verification, a checksum of a live page's output disagreed with a value captured minutes earlier, at an identical row count — the exact signature of silent content change. It was not: the ad-hoc checksum instrument behaved differently across transaction contexts. **The relationships were stable throughout** (v8 = v9, v7 differs, before and after). The resolution was to stop comparing to a remembered number and instead **reconstruct the old logic and diff it against the new, live, across all 35 published tournaments** — result 0 rows lost, 0 gained, 35/35 identical. **When a measurement disagrees with a stored value, re-derive the comparison rather than trusting either number.**
+### DD3 — A test file that imports nothing tests nothing (6 September)
+
+`tests/institution/institution-allocation.spec.ts` has 18 green tests, a header advertising *"team building with gender slot requirements"*, and calls like `buildTeam(schoolA, 4, 2, 2)`. It imports **no source module**. `buildTeam` is defined at line 71 of the spec and exists nowhere in `supabase/functions` or `src`.
+
+The suite reproduces the intended logic and confirms the reproduction agrees with itself. It can never fail when shipped code diverges. **Check the import list before counting a suite as coverage.** Same family as D41 and CC11.
+
+### DD4 — A fixture that starts at version 1 hides a counter mismatch (6 September)
+
+TC0-f's first draft seeded allocations at version 1. The first publish always makes `publications.version = 1`, so the two counters agreed **by accident** — the same coincidence that hides this bug on 11 of 35 live publications. Half the harness passed under pre-TC0 code.
+
+Fixed by seeding at version 5, forcing the counters apart. T5 now cannot pass against the old trigger. **When testing a comparison between two values, make the fixture's two values different.**
+
+### DD5 — A comment can claim a capability the code does not have (6 September)
+
+`allocateInstitutionPrizes` line 27: *"Supports gender slot requirements (e.g., team of 4 must include 2 girls + 2 boys)."* Line 339 calls `computeTeamScores(teamPlayers, group.team_size, columnName)` — the function has **no gender parameters at all**. `female_slots` and `male_slots` are stored, echoed in API responses, badged in the UI as `F2/M2`, printed over results as `2F + 2M`, and never used in selection.
+
+`TeamPrizeRulesSheet.tsx` states the rule to the organizer in writing. **Only the "no gender requirements" case is true.** Exposure today is nil — all 3 live groups have `female_slots = 0, male_slots = 0` — and goes live the moment Mode A ships. Tracked as TC1.
 
 **Phase 2B:** 13. Bank statements are `privacy_class='sensitive'`. NEVER through Gemini. pdfplumber only.
 
 ---
 
-## 4–12.14. Phases 1 through 4 September — COMPLETE
+## 4–12.15. Phases 1 through 5 September — COMPLETE
 
-See prior PROJECT_STATE for full detail on Phase 1, Phase 2A, Workstream C, Phase 2A-2, F0a–F0e, F1, the E1–E3 audit, PF1, **F2 (live 20 Aug)**, the **referrals repair (22 Aug)**, **production validation (25–26 Aug)**, **F3-A/B/C0/C0b/C1 (28 Aug)**, **B13 #0 + `extraction_review_queue` + Resend SMTP (29 Aug)**, **F3-C2 batch A (30–31 Aug)**, **the B16 investigation (31 Aug)**, **batch F1 + the backlog sweeps (1 Sep, §12.11)**, **G1/G2/G3/G3b (2 Sep, §12.12)**, and **B22 + GTM1 + sportup corrections (3–4 Sep, §12.14)**.
+See prior PROJECT_STATE for Phase 1, Phase 2A, Workstream C, Phase 2A-2, F0a–F0e, F1, E1–E3, PF1, **F2 (live 20 Aug)**, the **referrals repair (22 Aug)**, **production validation (25–26 Aug)**, **F3 (28 Aug)**, **Resend SMTP (29 Aug)**, **F3-C2 batch A**, **the B16 investigation**, **batch F1 + sweeps**, **G1/G2/G3/G3b**, **B22 + GTM1 + sportup corrections**, and **§12.15 B18-a/B18-b**.
 
-Governing decisions unchanged: **D38, D39, D40, D41, X1–X9, Y1, Z1–Z4, AA1–AA5, BB1–BB5, CC1–CC8**.
+Governing decisions unchanged: **D38, D39, D40, D41, X1–X9, Y1, Z1–Z4, AA1–AA5, BB1–BB5, CC1–CC12**.
 
 ---
 
-## 12.15 · 5 September 2026 — B18 shipped, published results are version-pinned
+## 12.16 · 5–6 September 2026 — TC0 shipped, the team engine runs on one version namespace
 
 ### The defect
 
-`get_public_tournament_results` selected `MAX(allocations.version)` with no join to `publications`. Any new allocation version silently became the public page. **Confirmed live on 3 Sep**, not theorised: retitling `16b9cf29` created allocation v7 from a page load, and the public page followed it.
+Two independent counters were both called "version":
 
-**The scope was wider than §13 recorded.** The RPC is not the only public read path. `/p/:slug` (`PublicTournamentDetails`) and `/t/:id/public` (`PublicWinnersPage`) resolve the version **client-side** through `getLatestAllocations`, using `.order('version', desc).limit(1)` over PostgREST. A backend-only fix would have left the primary public page following MAX. B18 therefore had two halves.
+- `team_allocations.version` — written by `finalize`, counts **results**
+- `publications.version` — written by publish, counts **publishes**
 
-### B18-a — backend. Migration `20260905120000`, commit `2f3528b`
+Both publication triggers, and `detect_missing_team_snapshots`, compared the first against the second. Measured: they disagree on **24 of 35** active publications (`publications.version` 1–6, `allocation_version` 1–13). The 11 that agree do so by accident — exactly one finalize per publish.
 
-1. `publications.allocation_version integer` (nullable).
-2. Backfilled all 35 active publications with their current `MAX(allocations.version)`.
-3. `publish_tournament` records the pin at insert. Signature and B22 title gate unchanged.
-4. `get_public_tournament_results` reads the pin. **No `MAX()` fallback.**
+**That is B21.** Not "team snapshots are missing" but "a results number was compared to a publish number." Tournament `74e1bd2b` holds 3 publication rows, 2 active team groups and zero allocations; none of its publications could ever be activated.
 
-**The backfill was safe because measured, not assumed.** 9 of 35 active publications had already drifted past the version they were published at. For all 8 with a comparable baseline, the `(prize_id, player_id)` set of the published version and the current version is **identical** — zero symmetric difference, identical row counts. The allocation engine is deterministic, so re-runs reproduce byte-identically when nothing upstream changed. Pinning to current MAX froze exactly what was already on screen.
+**A second, independent defect in the same function:** `detect_missing_team_snapshots` called `is_master(auth.uid())`, and only a zero-arg `is_master()` exists. Every call raised `42883`, so `/admin/team-snapshots` had never returned a row in its life.
 
-### B18-b — frontend. Commit `988403d`
+### TC0-a/b/c — migration `20260905130000`, commit `06e41d1`
 
-`getLatestAllocations` gained an `AllocationVersionSelector` with three modes. `useFinalPrizeData` forwards it **and includes it in the react-query key** — without that, a cached organizer result gets served to a public page, or one version's rows survive a repin. New hook `usePublishedAllocationVersion` reads `publications.allocation_version` (already anon-readable via `public_read_active_publications`; no policy change). The two public pages pass `pinned`; the four organizer consumers were not edited and inherit `latest`.
+Both triggers and `detect_missing_team_snapshots` now join `publications.allocation_version`. `detect` calls `is_master()` and returns `allocation_version` as `published_version` — column name unchanged, so `AdminTeamSnapshots.tsx` needed no edit.
 
-`src/integrations/supabase/types.ts` got three hand-added lines for the new column. **`supabase gen types` was deliberately NOT run** — a full regeneration drags in unrelated drift from the 8 untracked functions.
+**NULL pin rule (inherits B18 Option C):** a NULL pin means published before results existed. The team check is skipped and publishing is allowed. Blocking would recreate B21 on a different flow — 4 of 39 publications since June were made with zero allocations, all by customers.
 
-**A D32 defect was caught in review before publish.** If the pin lookup **errors**, `isPending` goes false and `data` is undefined, so `allocationVersion` collapses to `null` and the page renders "No published results yet." — a tournament with 180 winners would tell visitors there are none. Fixed by returning `isVersionError`, holding the selector at `unresolved` on error, and rendering an explicit error state. **Absence of a value is not evidence the value is null** — same family as D21, D32, D40.
+**Grants deliberately untouched.** `anon` holds EXECUTE on all three functions. Real, pre-existing, tracked as B7. Revoking it inside a join fix would have put the publish path of 35 live tournaments in scope for no measured benefit. `CREATE OR REPLACE` preserves ACLs; the post-check asserts `authenticated` retained EXECUTE.
 
-### Verification
+**Verified before apply:** dry-run of the exact file text with only `commit;` → `rollback;` changed, proved by `diff` showing one line. Production confirmed byte-identical afterwards.
 
-- **`b18_version_pin_checks.sql` 16/16.** The load-bearing pair is P6/P7: P6 creates a NEW content-different allocation version behind a published page and asserts the page does not move; P7 repins to that version and asserts it does. P5 asserts the positive side is non-zero so neither can pass on an empty reader. **Comparison is by content checksum, not row count** — the fixture versions have identical counts and different winners, exactly like live tournament `3ac176a1` whose v7 and v8 both return 41 rows with different names.
-- **`b22_publish_gate_checks.sql` 14/14**, including T7, the negative control that a normal slug survives a republish. **`g1_publish_state_checks.sql` 16/16.**
-- **Zero regression, measured directly:** the pre-migration `MAX`-based logic was reconstructed and diffed against the live function across all 35 published tournaments — 35/35 row counts match, 35/35 content identical, 0 rows lost, 0 gained.
-- **Three-way live confirmation** on `51f0b22e` (shahgfaruqui, a real customer): pin = 2, `MAX` = 2, rows at pin = 28, RPC = 28, **rendered page = 28** (10 + 3 + 3 + 3 + 3 + 3 + 3).
-- Publish confirmed by the bundle's `__vite__mapDeps` listing `assets/usePublishedAllocationVersion-BOqEGwdO.js`.
+**Verified after apply, matched pair on ONE live row** (`74e1bd2b`'s publication):
 
-### Decisions recorded
+| | Before TC0 | After |
+|---|---|---|
+| `detect_missing_team_snapshots` | `42883` (function absent) | **`42501` forbidden** — body runs |
+| NULL pin, 2 active team groups | blocked forever | **ACTIVATED** |
+| **Same row**, pin = 1, no snapshot | blocked | **BLOCKED `23514`** |
 
-**Option C — a NULL pin shows nothing; publishing with zero allocations is NOT blocked.** The alternative was refusing to publish until allocations exist. **Rejected on measurement:** 20 of 95 publications ever, and **4 of 39 since June**, were made with zero allocations at publish time — all by customers, with allocations arriving 12 minutes to 5 hours later. Blocking would reject a real customer action at roughly 1 in 10, and `/p/:slug` is a tournament *details* page that legitimately works before results exist. It would also have broken every positive case in `b22_publish_gate_checks.sql`, whose fixtures carry no allocations — forcing fixture surgery on a passing harness. The flow self-heals: `Finalize.handlePublish` already runs finalize then publish, so the organizer's next publish pins it.
+The error code moving 42883 → 42501 is the proof: the old code died before reaching the permission check.
 
-**"Immutable" is the wrong word.** See the `publications` write-surface row in §2. B18 delivers stability against accidental drift, not tamper-proofing.
+### TC0-d/e — edge functions, commit `2ef0c93`
 
-**`detect_missing_team_snapshots` deferred to B7.** Its `a.version = p.version` join is wrong — measured: wrong for **24 of 35** active publications, accidentally right for 11. B18-a's new column is the correct right-hand side, so a real fix now exists. But the function also raises `42883` on every call for want of `is_master(uuid)`, so fixing only the join leaves it broken. Fold both into B7.
+**`publicTeamPrizes`** pins to `allocation_version`, and its **live-compute fallback is deleted**. Previously, when the snapshot lookup missed — the normal case, given the wrong join — it recomputed team standings from the **current `players` table at request time**. Correcting a player's club spelling could change an announced result. Now a missing snapshot renders the prize structure with `winner_institution: null`, an explicit empty state the UI already handled (D32).
 
-### Sweeps, commit `1e0dada`
+The deploy uploaded only `index.ts` and `health.ts`, **not `_shared/teamPrizes.ts`** — bundle-level proof the scorer dependency is gone. Response gained `pinned_version` and `snapshot_rows`.
 
-Three checks added, all reading CLOSED: **B22a** (no published tournament carries a stub-derived `public_slug`), **B22b** (no active publication carries one — the slug lives in two tables and a check on one alone reads CLOSED while the other is dirty), and **B22g** (repo: `Dashboard.tsx` still contains the literal `'Untitled Tournament'`, which `publish_tournament`'s gate matches exactly and which silently stops firing if the string changes). **Reference the literal, not a line number** — it moved from 176 to 175 the same day.
+**`backfillTeamAllocations`** resolves from `allocation_version`; a NULL pin returns a 400 explaining why rather than writing into a namespace nothing reads. `body.version` still overrides.
 
-**DB sweep 12 OPEN / 11 CLOSED / 1 INFO of 24. Repo sweep 7 OPEN / 4 CLOSED of 11.**
+**Verified live, discriminating:** `glanz-open-haryana-cup` has `publications.version = 2` and `allocation_version = 13`. The deployed function returned **`pinned_version: 13`**. The old bundle could not produce that number.
 
-### Stub dates — investigated and CLOSED as not actionable
+### TC0-f — harness `tc0_team_version_checks.sql`, commit `f2a6c8e`
 
-An attempt to promote stub dates to Tier 1 was made and **withdrawn on measurement**. 24 of 35 published tournaments have `start_date` equal to their creation date — but **20 of those were published the same day**, which is an arbiter creating the event at the venue and publishing that evening. The date is correct. A narrower "3 are wrong" claim was then also over-stated: publishing 5–9 days late means slow finalisation, not a wrong event date.
+**12/12.** Three matched pairs. T5 encodes the B21 door — the fixture allocates at version 5 while the first publish makes `publications.version = 1`, so **T5 cannot pass against pre-TC0 code**, which would refuse that publish outright.
 
-**The honest finding is that the data cannot answer it.** There is no field-level history anywhere: the only trigger on `tournaments` is `update_tournaments_updated_at`, and `audit_events` holds just runtime errors and rollout flags (61 rows). All 35 published rows show `updated_at > created_at`, which proves something was edited, never that `start_date` was. **Stays Tier 2. The only worthwhile action is the forward fix — stop defaulting new tournaments to today's date — which is G4.**
+Discriminating against the old code: T1, T2, T3 (structural), T5, T8. The rest are guards and controls.
+
+**What it cannot reach, written into the file header:** `publicTeamPrizes` is TypeScript on an Edge Function; SQL cannot call it. **Re-run the `glanz-open-haryana-cup` curl after any `publicTeamPrizes` deploy — this harness will not catch a regression there.**
+
+### Also repaired
+
+`b18_version_pin_checks.sql` P16 — see **DD2**. Back to 16/16, with the guard observed firing.
+
+### Findings recorded, not acted on
+
+- `/p/:slug/results` is a third public route, undocumented until now (§2).
+- `resolve_team_tie` and `team_allocation_notes` exist live; the tie guard **was** built (§2).
+- `tests/institution/` provides zero coverage — **DD3**.
+- Gender slots are a written promise the engine does not keep — **DD5**, now TC1.
+- `verify_jwt=false` is three functions, not one (§2).
 
 ---
 
 ## 13. Immediate next step
 
-**Team Championship product.** Fresh chat. **Owner decision 5 Sep: this comes BEFORE the GTM pages**, because the feature contains a permanent-failure mode and GTM is what would put customers into it.
+**TC1 — gender slots, and the incomplete-teams toggle.**
 
-**Open with the sweeps, then a live audit. Do not plan from this document alone (BB1).**
+**Open with the sweeps, then load `/admin/team-snapshots`.** TC0 revived it; nobody has opened it since it started raising `42883`. It is the diagnostic for everything in this workstream and it has never been seen working.
 
-### Why it goes first
+### The owner's ruling, 6 September
 
-- **B21 is a one-way door.** A tournament with active `institution_prize_groups` and zero `team_allocations` can never be published — both `publications` triggers block activation on UPDATE as well as INSERT. Today 2 tournaments, both Tushar's, so no customer exposure. GTM changes that.
-- **The diagnostic for it is dead.** `/admin/team-snapshots` raises `42883` on every call.
-- **Its join is wrong** — `a.version = p.version`, wrong for 24 of 35.
-- **The team-tie guard was never built** — inert code removed in F1, nothing replaced it.
+Whether a school with too few eligible players of the required gender is **excluded** or **fields an incomplete team** is an organizer decision, exposed in the UI as a **tournament-level toggle**, with clear wording and an "i" hover explaining the purpose.
 
-### The product spec, in the owner's words (5 Sep)
+**Design note owed:** every other composition setting (`team_size`, `female_slots`, `male_slots`) lives **per prize group**, and one live tournament already has two groups with different team sizes. A tournament-level toggle applies to all groups at once. That matches the owner's framing — *"do we allow incomplete teams at this event"* is event policy, not a per-prize mechanic — but confirm before schema work.
 
-Two ways, both required:
+### TC1 scope
 
-**Mode A — automatic.** The organizer uploads the Swiss Manager Excel file (or whatever rule they use to differentiate school/institution). They define the team composition: number of players and gender make-up — 4 boys, or 4 girls, or 2+2, or any combination. The system **automatically chooses each school's team members by highest points/rank** among eligible players, then ranks the teams.
+1. Add gender-slot selection to `computeTeamScores` in `_shared/teamPrizes.ts` (DD1 team side; `finalize` untouched).
+2. Add the tournament-level allow-incomplete-teams column + UI toggle.
+3. **Rewrite `tests/institution/` to import the real module** (DD3). Until then it is worse than no tests, because it looks like coverage.
+4. Verify against the promise already printed in `TeamPrizeRulesSheet.tsx`.
 
-**Mode B — manual.** The organizer finalises the number of players and the gender composition if applicable. Then, **for each school, all eligible players are listed and the organizer selects the team from a dropdown**, school by school. The system then sums the selected players' scores.
+### Then TC2 / TC3
 
-### Owed before any design
+**TC2 — Mode A (automatic).** Organizer uploads the Swiss Manager file, defines composition, system picks each school's team by highest points/rank and ranks the teams. Largely exists once TC1 lands: `parseWorkbook` handles upload, the schema holds composition, `allocateInstitutionPrizes` selects and ranks.
 
-1. **Guardrail 1 ruling (a):** may Mode A write `team_allocations`? Auto-selecting players by points to produce a ranked result is selection logic sitting immediately beside the allocation engine.
-2. **Guardrail 1 ruling (b):** is `supabase/functions/backfillTeamAllocations` in scope?
-3. **Guardrail 1 ruling (c), carried over:** does `supabase/functions/finalize` fall inside guardrail 1?
+**TC3 — Mode B (manual).** Organizer fixes the size and composition, then for each school picks the team from a dropdown of eligible players; the system sums their scores. Genuinely new — needs a schema change to record a hand-picked team, a per-school UI, and a writer.
 
-### Surfaces to audit
-
-`src/components/team-prizes/` (`useTeamPrizeResults.ts`, `useInstitutionPrizes.ts`) · `src/pages/admin/AdminTeamSnapshots.tsx` · `src/pages/TournamentSetup.tsx` · `src/utils/prizeApplyDraft.ts` · edge functions `publicTeamPrizes`, `allocateInstitutionPrizes`, `backfillTeamAllocations` · tables `institution_prize_groups`, `team_allocations` · tests `tests/institution/`.
-
-**Operational hold:** do not open `/t/8d1fbd83-…/finalize`. Auto-finalize fires on page load and creates new allocation versions. **B18 makes this harmless to public pages** — the pin no longer moves — but it still creates junk versions, so the hold stands until B18-3.
-
-**Opening line for the next chat:**
-
-> *Continue the Prize Manager project. Read PROJECT_STATE.md §12.15, §13, §14 and §15. `main` is `1e0dada`. **B18-a and B18-b both shipped 5 Sep and are verified three ways on a live customer page** — published results are now version-pinned and Tier 1 is clear. Baselines: tsc **12 errors in 6 files** (per-file in §2), vitest **479 passed / 3 known failures of 482**, **8 harnesses**, DB sweep **12 OPEN / 11 CLOSED / 1 INFO of 24**, repo sweep **7 OPEN / 4 CLOSED of 11**.*
->
-> *Next: **Team Championship**, ahead of GTM by owner decision. Two modes are specified in §13 — automatic selection by points, and manual per-school selection from a dropdown.*
->
-> ***Three guardrail-1 rulings are owed before any design*** *— see §13. Do not write code until they are settled.*
->
-> ***B21 is a one-way door in exactly this feature*** *and `/admin/team-snapshots` cannot diagnose it (`42883`, missing `is_master(uuid)`).*
->
-> *Run `supabase db query --linked -f supabase/ops/backlog_sweep.sql` and `bash scripts/backlog_sweep_repo.sh` first, paste both outputs, then **audit the team surfaces live** before showing me a plan. Never chain tsc with `&&`.*
+**Operational hold:** do not open `/t/8d1fbd83-…/finalize`. Auto-finalize fires on page load and creates allocation versions. **B18 + TC0 make this harmless to public pages** — neither individual nor team results move — but it still creates junk versions. Hold stands until B18-3.
 
 ---
 
 ## 14. Backlog — the GTM gate
 
-**The bar is not "clear everything."** The bar is: does it make a public statement false, produce wrong participant-facing output, or embarrass us at the National Championship.
+**The bar:** does it make a public statement false, produce wrong participant-facing output, or embarrass us at the National Championship.
 
-### Tier 1 — CLEAR as of 5 September
+### Tier 1 — CLEAR as of 6 September
 
 | Item | Status |
 |---|---|
-| **X1–X4-exposure** — unpublish/archive did not unpublish | ✅ CLOSED 2 Sep, G1+G2 |
-| **GTM1** — published tournament titled "Untitled Tournament" | ✅ CLOSED 3–4 Sep |
-| **B22** — stub titles and sticky stub slugs | ✅ CLOSED 4 Sep |
-| **sportup.online claims** — FIDE line, player count, ToS processors | ✅ CLOSED 3 Sep |
-| **B18-a / B18-b** — published results are not immutable | ✅ **CLOSED 5 Sep** — pinned, 16/16, zero regression across 35 |
+| X1–X4-exposure | ✅ 2 Sep, G1+G2 |
+| GTM1 · B22 · sportup claims | ✅ 3–4 Sep |
+| B18-a / B18-b | ✅ 5 Sep |
+| **B21 / TC0 — team results unpinned and the one-way door** | ✅ **6 Sep — 12/12, verified live** |
 
-**New Tier 1, opened 5 September from the site inventories — see §15:**
+**Still Tier 1, from the site inventories (§15):** **SP-1** `/debug/auth` ungated on sportup.online — **do not wait for GTM** · **SP-2** contradictory refund policies · **SP-3** false payment claims (cards/net banking advertised, none processed) · **SP-4/5/6/7** impossible refund mechanics, mismatched windows, phantom fees, garbled Privacy line · **PM-1** prize-manager.com has **no legal pages at all** while taking UPI money.
 
-| Item | Why it gates GTM |
-|---|---|
-| **SP-1 `/debug/auth` is an ungated public route on sportup.online** | Live exposure. **Do not wait for GTM** |
-| **SP-2 Contradictory refund policies** — Help says 100% / 20% late fee, Terms says 100% / 50% | Two different refund promises on one site that takes money |
-| **SP-3 False payment claims** — Landing and Help advertise Credit Card and Net Banking and "automatically confirmed"; Terms correctly says no cards are processed and proof upload is required | Same class as the FIDE claim already removed |
-| **SP-4/5/6/7** — refunds "to original payment method in 5–10 business days" (impossible for manual UPI) · Help says 5–7 days vs Terms 5–10 · "excluding platform service fees" for a fee never charged · Privacy reads *"We use manual payment for payment processing"* (garbled find/replace leftover) | Public statements that are false |
-| **PM-1 prize-manager.com has NO legal pages at all** — no Terms, Privacy, Refund, Contact, About or FAQ, while taking UPI money | The most exposed of the three |
+### Tier 2
 
-### Tier 2 — before the National Championship, not before the pages
+- **TC1 gender slots (DD5)** — a written promise the engine does not keep. Nil exposure today, live the moment Mode A ships.
+- **`tests/institution/` rewrite (DD3)** — looks like coverage, is not.
+- **G4** — required details before publish, including not defaulting `start_date` to today.
+- **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, `bootstrap_master`, **and now the three TC0 functions**; `is_master(uuid)` still absent by design. **Sweep check B7a must be rewritten** — it measures "does the overload exist", and TC0 removed the dependency instead of adding the overload (CC4).
+- **B18-c** — `ON DELETE CASCADE` into published history. Same shape exists on `team_allocations` (`prize_id`, `group_id`). Own decision.
+- **B22 slug-change UI** · **column-level UPDATE on `tournaments` and `publications`** · **B13 batch B/C, #9, #7** · **B17 + B8b** · **B5 audit cadence** · **B19** · **B18-3**.
 
-- **G4 — required details before publish**, including not defaulting `start_date` to today. **Do this before marketing brings new organizers into the stub flow.**
-- **B21 — publish one-way door.** Needs a sweep check (BB5) and a warning in the archive dialog. Folded into the Team Championship work.
-- **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, `bootstrap_master`; **`is_master(uuid)` missing**; and `detect_missing_team_snapshots`'s `a.version = p.version` join, now fixable via `publications.allocation_version`.
-- **Stub dates** — forward fix only; the existing set is not diagnosable (§12.15).
-- **B22 slug-change UI** — needs a redirect story before it is built.
-- **Column-level UPDATE on `tournaments`** — revoke `is_published`/`status`/`public_slug` from `authenticated`. Blocked on auditing `TournamentSetup.tsx:723`.
-- **Column-level write surface on `publications`** — both client roles hold full DML. Same shape as the above.
-- **B13 batch B** (#1 toast, #2 `/account` dead end, #5 screenshot copy); **batch C** (#3 spent coupons); **#9** `PublishSuccess.tsx`; **#7** clipping.
-- **B17 + B8b** — 10 MB cap forces lossy compression; compressed vs uncompressed disagree on category naming. Fixture suite first; judge against expected output, never flag count (D41).
-- **B5** — audit cadence. Count is 0 today, the easiest moment to forget it.
-- **B19** — one unexplained `finalize` 500. Possibly dissolved by B18.
-- **B18-c** — the `ON DELETE CASCADE` into published history. Own decision; deferred. Sweep reads OPEN with value 3, correctly.
-- **B18-3** — the auto-finalize `useEffect`. Needs guardrail-1 ruling (c).
+### Tier 3
 
-### Tier 3 — rides as debt, stated openly
-
-**PublicWinnersPage shows "0 Winners" badges above the error alert when the pin lookup fails** (cosmetic, error path only) · **the 3 known test failures are probably one timezone bug** (§2) · **a `401` on `/rest/v1/players` appears in the public page console** — `safeSelectPlayers` capability probe, recovers immediately, pre-existing · no test covers `ColumnFilter` (G3) · no test covers the B18 selector modes · B1 · Y2 · B10 · B12 · B14 · B15 · B2 · B3 · B6 · layout regression test (Playwright is a new dependency) · `CLAUDE.md` schema drift · `MAX_ATTEMPTS=5` with no backoff · `brew unlink node` fragility · `tsconfig.app.json` scope gap · `.claude/settings.local.json` wildcard rule.
+The 3 known test failures are probably one timezone bug · no test covers `ColumnFilter` or the B18 selector modes · `PublicWinnersPage` "0 Winners" badge on the pin error path · `401` on `/rest/v1/players` capability probe · B1 · Y2 · B10 · B12 · B14 · B15 · B2 · B3 · B6 · Playwright layout test · `CLAUDE.md` drift · `MAX_ATTEMPTS=5` no backoff · `tsconfig.app.json` scope gap.
 
 ---
 
 ## 15. Cross-property GTM inventory (5 September 2026)
 
-Taken via Lovable plan-mode, read-only, on both sites.
+**certificate-hub.com** — Terms and Privacy exist, dated 4 Sep 2026. No money statements on public pages, so the paywall is not live. Missing: legal entity, registered address, governing law; Refund policy (**required the day the paywall goes live**); referral "points" undefined; no `sitemap.xml`; no About/FAQ/Pricing.
 
-### certificate-hub.com
+**sportup.online** — SP-1…SP-7 above. Also: Privacy dated October 2023 while Terms says 3 Sep 2026; Terms footer "© 2023"; WhatsApp link with no number bound; no sitemap. Meta-tag pass approved 4 Sep but **not yet published** — when it ships, verify the `og:image` claim and note `/tournaments/:id` pages were excluded from the sitemap, which is where the SEO value is.
 
-Terms and Privacy exist with real content dated 4 Sep 2026. **No money statements appear anywhere on public pages**, so the paywall is not live yet. No dead links.
+**The common item — one engagement, not three.** All three lack a named legal entity, registered address and governing-law clause, and all three need refund terms matching a manual UPI flow. **Brief one professional across all three.** Do NOT have any model draft the legal copy — sportup's Terms already had to be corrected for naming Stripe/PayPal on a UPI product, and the garbled *"We use manual payment for payment processing"* line is the visible scar.
 
-| Item | Action |
-|---|---|
-| No legal entity, registered address, or governing-law clause | Lawyer |
-| No Refund/Cancellation policy | **Required the day the paywall goes live**, not before |
-| Referrals promise "points" and "unlock rewards", type and value undefined | Define or soften |
-| No `sitemap.xml`; `robots.txt` has no `Sitemap:` line | SEO before GTM |
-| No About, FAQ, or Pricing page; `/contact` redirects to a support form | Owner-written |
-
-### sportup.online
-
-See Tier 1 SP-1 … SP-7 above. Additionally: Privacy "Last Updated: October 24, 2023" while Terms says 3 Sep 2026; Terms footer "© 2023"; WhatsApp support link with no business number bound; no `sitemap.xml`; no `Sitemap:` line in `robots.txt`. Meta-tag and sitemap pass was approved 4 Sep but **not yet published** — when it ships, verify Lovable's claim that removing `og:image` is safe (hosting allegedly injects one), and note `/tournaments/:id` pages were excluded from the sitemap, which is where the SEO value is.
-
-### The common item — one engagement, not three
-
-All three properties lack a named legal entity, registered address and governing-law clause, and all three need refund terms that match a manual UPI flow. **Brief one professional covering prize-manager, sportup and certificate-hub together.** Do NOT have Lovable or any model draft the legal copy — sportup's Terms already had to be corrected for naming Stripe/PayPal on a product that takes UPI, and the garbled "manual payment for payment processing" line is the visible scar of that fix. FAQ and About are owner-written and carry no legal exposure.
-
-### Analytics — decided 5 September
-
-**PostHog, not GA4.** The questions that matter are product questions — where organizers drop out of brochure → allocate → finalize → publish — and GA4 answers acquisition questions poorly suited to that. Session replay will also show the B13 UI defects instead of us guessing.
-
-Three conditions:
-1. **Install AFTER the privacy work, not before.** Adding third-party tracking while sportup's Privacy Policy is dated 2023 and garbled turns a documentation gap into a compliance one. India's DPDP Act 2023 applies.
-2. **Load by snippet, not npm** — keeps `package.json` untouched and guardrail 5 clean.
-3. **Do not replace what exists.** `audit_events` and the martech dashboards stay the source of truth for money and entitlements; PostHog is for behavioural funnels only.
-
-Separate projects per property, one account.
+**Analytics — PostHog, not GA4.** Three conditions: install **after** the privacy work (DPDP Act 2023 applies); load by snippet, not npm (guardrail 5); do not replace `audit_events` or the martech dashboards.
 
 ---
 
 ## 16. Ordering
 
-**Team Championship** → SP-1 (`/debug/auth`, immediately, out of band) → legal engagement + FAQ/About drafting (parallel, no repo access) → sportup copy fixes SP-2…SP-7 → sitemaps → G4 required-fields → PostHog → **GTM pages** → Tier 2 → Phase 2B.
+**TC1** → TC2 → TC3 → SP-1 (`/debug/auth`, immediately, out of band) → legal engagement + FAQ/About drafting (parallel, no repo access) → sportup copy fixes → sitemaps → G4 → PostHog → **GTM pages** → Tier 2 → Phase 2B.
 
 certificate-hub.com integration parked by owner decision 2 Sep.
 
 ---
 
 ## 17. Phase 2B / 2C-D / 3 / 4 — unchanged
+
+Phase 2B bank reconciliation (pdfplumber only, never Gemini). Phase 2C–D REST API + MCP server — the standalone product surface the engine was designed for from the start (§1). Currently four workstreams out.
 
 ---
 
@@ -332,44 +322,33 @@ Superseded by §14's three-tier gate. The sweeps are the canonical *measurement*
 
 **Division of labour:** design, schema audit and independent verification belong in **chat**; write-run-fix loops on SQL and TypeScript belong in **Claude Code**.
 
-**The backlog loop:**
-1. **Run both sweeps at the start of every session**, before planning anything.
-2. **Where a verdict contradicts this document, correct the document first** (BB1).
-3. **After shipping, re-run.** The item must flip to CLOSED.
-4. **UNMEASURED is never CLOSED.**
-5. **Every new backlog item gets a check the day it is filed** (BB5), and that check must have a reachable CLOSED state (CC4).
+**The backlog loop:** run both sweeps first · correct the document where a verdict contradicts it (BB1) · re-run after shipping · **UNMEASURED is never CLOSED** · every new item gets a check the day it is filed (BB5), with a reachable CLOSED state (CC4).
 
-**Working rules that do not change:**
+**Working rules:**
 - `git config --global core.editor "true"` is set. Still prefer `git merge --no-ff -m "…"`.
 - Always `/clear` in Claude Code before a new prompt — **and verify it took.**
 - **First command in any new Terminal window is `cd ~/Desktop/prize-manager`.**
-- **`npm run dev` reads and writes the live database. Check which account you are signed in as.**
-- **Never chain `npx tsc … && npx vitest run`.** tsc exits non-zero on the 12 known errors and silently skips vitest. Use `;` or run separately.
-- Edge-function changes need `supabase functions deploy <name>`. **Confirm the bundle changed, not the version number** (Y3).
-- **`supabase functions logs` does not exist.** Dashboard only, 1-day retention.
-- **A new database function also needs `notify pgrst, 'reload schema'`** (T6) — and so does a new COLUMN the frontend will select.
-- **Publishing is separate from merging.** A database-only migration is live the moment `supabase db query` runs; a `src/` change is not live until Lovable publishes.
-- Use `git --no-pager diff`, never plain `git diff`. After merging, re-run tsc **and** vitest on `main`.
-- Paste terminal output as **text**, never screenshots.
-- **A build report is a claim, not evidence. Require the full `git --no-pager diff`** — and remember it is **blind to NEW files**. Use `git add -A` then `git --no-pager diff --cached` (CC6 amendment).
-- Use `cp "$(ls -t ~/Downloads/<name>*.ext | head -1)" <dest>` then `grep -c` for a token you know is in the new file.
-- Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`. `supabase db execute` does not exist.
-- **`RAISE NOTICE` is swallowed.** Put failures in `RAISE EXCEPTION`. **`RAISE` uses `%`, not `%s`.** `format()` uses `%s`. Mixing them prints "16s passed".
-- **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state. **It works** — B18's post-check refused a bad guard and rolled back cleanly with nothing applied.
-- **Dry-run a migration by executing its body and force-aborting**, then verify production is untouched. **Dry-run the exact file text, not a compacted copy** (CC11).
-- **Reproducing a signature before `CREATE OR REPLACE`:** check `pg_get_function_arguments`, not just the name. A missing `DEFAULT` fails `42P13`.
-- **Prove the fix with a test that can only pass if the fix works.** Prefer *matched pairs*, **assert the positive side is non-zero**, and **compare content checksums, not row counts** — two allocation versions can differ entirely at an identical count.
-- **Verify a guard fails on the broken input before trusting it** (D35).
+- **`npm run dev` reads and writes the live database.** Check which account you are signed in as.
+- **Never chain `npx tsc … && npx vitest run`.** Use `;` or run separately.
+- **`supabase db execute` does not exist.** **`supabase functions logs` does not exist.** **`supabase db query --linked -f -` does not read stdin** — it looks for a file named `-`. Write a temp file and pass the path (new 6 Sep).
+- Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`.
+- **A new database function needs `notify pgrst, 'reload schema'`** (T6) — and so does a new COLUMN the frontend will select.
+- **Publishing is separate from merging.** A migration is live the moment `db query` runs; a `src/` change is not live until Lovable publishes. **Edge functions need `supabase functions deploy <name>` and are live immediately.**
+- **Make a function report its own build string and curl `?ping=1`** — a version bump cannot fake that (Y3, improved 6 Sep).
+- **A build report is a claim. Require the full `git --no-pager diff`** — blind to NEW files, so `git add -A` then `diff --cached` (CC6).
+- **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state.
+- **Dry-run the exact file text** (CC11). The only permitted deviation is `commit;` → `rollback;`, proved by a `diff` showing exactly one changed line.
+- **`prosrc` includes comments** — `regexp_replace(prosrc,'--[^\n]*','','g')` before matching (CC10).
+- **Prove the fix with a test that can only pass if the fix works.** Prefer *matched pairs on one row, one column apart*, assert the positive side is non-zero, and **compare content checksums, not row counts**.
+- **Make a fixture's two compared values different** (DD4).
+- **Check a test file's imports before counting it as coverage** (DD3).
+- **When a green check goes red after a correct change, ask whether the check still measures what it claims** (DD2).
 - **Read the triggers on any table a function writes to** (CC1) — **and watch the guard actually fire** (CC9).
-- **Read the drifted rows before naming the cause** (CC2).
-- **Enumerate every policy on every related table, then control-test each** (CC3).
-- **Ask what a new check's CLOSED state looks like, and whether the fix dissolves its own probe** (CC4).
 - **A grant is not an exposure until a real read returns rows — and it is one once it does** (BB4).
-- **An effect that writes on mount makes visiting a page a mutation** (AA5).
-- **Never let an error handler discard the input that caused the error** (W4).
 - **Absence of a value is not evidence the value is null.** A failed query must render an explicit state (D32).
+- **Never let an error handler discard the input that caused the error** (W4).
 - **Never redirect a generator onto a tracked file** (R7). Temp file → verify → `cp`.
 - Additive migration → verify → frontend → verify → restrictive migration. Never the reverse.
-- **Do not fix what measurement says is not broken.** Record it as drift and move on (W3).
-- **When a new finding arrives mid-workstream, log it and finish the batch.**
-- **Reference literals, not line numbers, in any check or document** — `Dashboard.tsx`'s stub literal moved from line 176 to 175 within a single day.
+- **Do not fix what measurement says is not broken.** Record it as drift (W3).
+- **Reference literals, not line numbers**, in any check or document.
+- Paste terminal output as **text**, never screenshots.
