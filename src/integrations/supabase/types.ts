@@ -10,32 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -832,6 +807,77 @@ export type Database = {
           email?: string
         }
         Relationships: []
+      }
+      payment_auto_approval_audit: {
+        Row: {
+          action_taken: string
+          audited_at: string
+          audited_by: string
+          outcome: string
+          payment_id: string
+          reason: string
+        }
+        Insert: {
+          action_taken?: string
+          audited_at?: string
+          audited_by: string
+          outcome: string
+          payment_id: string
+          reason: string
+        }
+        Update: {
+          action_taken?: string
+          audited_at?: string
+          audited_by?: string
+          outcome?: string
+          payment_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_auto_approval_audit_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "tournament_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_invariant_verdicts: {
+        Row: {
+          checker_version: number
+          computed_at: string
+          extraction_id: string
+          verdicts: Json
+        }
+        Insert: {
+          checker_version: number
+          computed_at?: string
+          extraction_id: string
+          verdicts: Json
+        }
+        Update: {
+          checker_version?: number
+          computed_at?: string
+          extraction_id?: string
+          verdicts?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_invariant_verdicts_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: true
+            referencedRelation: "extraction_review_queue"
+            referencedColumns: ["extraction_id"]
+          },
+          {
+            foreignKeyName: "payment_invariant_verdicts_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: true
+            referencedRelation: "extractions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payment_notification_outbox: {
         Row: {
@@ -1696,6 +1742,46 @@ export type Database = {
           },
         ]
       }
+      tournament_player_watermark: {
+        Row: {
+          players_count_max: number
+          tournament_id: string
+          updated_at: string
+        }
+        Insert: {
+          players_count_max?: number
+          tournament_id: string
+          updated_at?: string
+        }
+        Update: {
+          players_count_max?: number
+          tournament_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_player_watermark_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "published_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_player_watermark_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "tournament_publish_state_drift"
+            referencedColumns: ["tournament_id"]
+          },
+          {
+            foreignKeyName: "tournament_player_watermark_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: true
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           brochure_url: string | null
@@ -2029,6 +2115,14 @@ export type Database = {
           tournament_title: string
         }[]
       }
+      expected_payment_amount_inr: {
+        Args: { p_tournament_id: string; p_user_id: string }
+        Returns: {
+          billing_basis: number
+          canonical_amount_inr: number
+          expected_amount_inr: number
+        }[]
+      }
       expire_stuck_extraction_documents: { Args: never; Returns: undefined }
       get_brochure_import_rollout_state: {
         Args: never
@@ -2101,6 +2195,7 @@ export type Database = {
         Returns: Json
       }
       issue_welcome_onboarding_reward: { Args: never; Returns: Json }
+      list_auto_approvals: { Args: never; Returns: Json }
       list_my_tournaments: {
         Args: { include_all?: boolean }
         Returns: {
@@ -2141,6 +2236,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      master_reset_player_watermark: {
+        Args: { p_tournament_id: string }
+        Returns: number
+      }
       my_payment_gate_status: { Args: never; Returns: Json }
       normalize_dob_input: { Args: { in_raw: string }; Returns: string }
       normalize_phone_in: { Args: { p_raw: string }; Returns: string }
@@ -2154,6 +2253,15 @@ export type Database = {
         }[]
       }
       reap_stuck_payment_notifications: { Args: never; Returns: number }
+      record_auto_approval_audit: {
+        Args: {
+          p_action_taken?: string
+          p_outcome: string
+          p_payment_id: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       redeem_coupon_for_tournament: {
         Args: { amount_before: number; code: string; tournament_id: string }
         Returns: {
@@ -2177,6 +2285,10 @@ export type Database = {
         Args: { p_decision: string; p_note?: string; p_payment_id: string }
         Returns: Json
       }
+      revoke_auto_entitlement: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: Json
+      }
       set_brochure_import_rollout_state: {
         Args: { p_enabled: boolean }
         Returns: {
@@ -2192,6 +2304,19 @@ export type Database = {
           p_utr: string
         }
         Returns: string
+      }
+      tournament_billing_basis: {
+        Args: { p_tournament_id: string }
+        Returns: number
+      }
+      tournament_pro_tier: {
+        Args: { p_billing_basis: number }
+        Returns: {
+          amount_inr: number
+          free_player_threshold: number
+          is_free_small_tournament: boolean
+          tier_label: string
+        }[]
       }
       unpublish_tournament: {
         Args: { tournament_id: string }
@@ -2243,12 +2368,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2272,11 +2397,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2297,11 +2422,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2322,11 +2447,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2339,11 +2464,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2353,9 +2478,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["master", "organizer", "user"],
