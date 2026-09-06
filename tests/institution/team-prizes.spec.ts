@@ -9,18 +9,22 @@
  * what the shipped functions do:
  *
  *   - team members are selected by `rank` ASCENDING, tie-broken by `id`
- *     (teamPrizes.ts:52-55) — NOT by points descending
+ *     (teamPrizes.ts:88-91) — NOT by points descending
  *   - total_points is the raw sum of the selected players' `points` column
- *     (teamPrizes.ts:62) — no transform
+ *     (teamPrizes.ts:101) — no transform
  *   - rank_sum sums the selected players' ranks; best_individual_rank is the
  *     first selected player's rank
  *   - compareInstitutions orders: total_points DESC, rank_sum ASC,
  *     best_individual_rank ASC, key localeCompare (teamPrizes.ts:25-30)
- *   - an institution with fewer than teamSize players is dropped silently
- *     (teamPrizes.ts:58)
+ *   - an institution with fewer than teamSize players is dropped from `scored`
+ *     (teamPrizes.ts:94)
  *   - a player whose groupBy value is null/empty/whitespace is dropped before
- *     grouping (teamPrizes.ts:40-42)
+ *     grouping (teamPrizes.ts:72-77)
  *   - gender is never read; it is not even a parameter
+ *
+ * TC1.3 adds computeTeamScoresWithReasons, which makes those two drops visible
+ * (`excluded` / `droppedPlayersWithoutKey`) WITHOUT changing what is selected;
+ * computeTeamScores is now a thin wrapper returning its `.scored`.
  *
  * Fixture rule (DD4): no two compared values are equal unless the equality is
  * the thing under test.
@@ -30,6 +34,7 @@ import { describe, it, expect } from 'vitest';
 import {
   compareInstitutions,
   computeTeamScores,
+  computeTeamScoresWithReasons,
   detectTieAtPrizeBoundary,
   type TeamPrizeInstitutionScore,
   type TeamPrizePlayer,
@@ -288,7 +293,7 @@ describe('detectTieAtPrizeBoundary', () => {
   });
 
   it('includes institutions ABOVE the boundary that share the boundary total (shipped behaviour)', () => {
-    // teamPrizes.ts:80-83 filters the whole list on the boundary's total_points,
+    // teamPrizes.ts:133-136 filters the whole list on the boundary's total_points,
     // so a winner already inside the cut is reported too.
     const rows = [
       institution({ key: 'Alpha', total_points: 20 }),
@@ -346,5 +351,159 @@ describe('gender is not part of the shipped team algorithm', () => {
 
   it('takes no slot arguments at all — female_slots/male_slots cannot reach it', () => {
     expect(computeTeamScores).toHaveLength(3); // players, teamSize, groupBy
+  });
+});
+
+describe('computeTeamScoresWithReasons — visible exclusions (TC1.3)', () => {
+  // Reporting only: selection is unchanged. Every institution dropped by the
+  // pre-TC1.3 scorer is still dropped here — it now carries a reason.
+  // ARCHITECTURE §4: fail codes `team_short_roster` and `missing_group_field`.
+
+  // Two institutions, deliberately unequal in every compared field: 'Short Roster'
+  // enters 2 players (below a teamSize of 3), 'Full Roster' enters 4.
+  const mixedRoster = () => [
+    player({ id: 's1', rank: 2, points: 9, club: 'Short Roster' }),
+    player({ id: 's2', rank: 5, points: 8, club: 'Short Roster' }),
+    player({ id: 'f1', rank: 1, points: 7, club: 'Full Roster' }),
+    player({ id: 'f2', rank: 3, points: 6, club: 'Full Roster' }),
+    player({ id: 'f3', rank: 4, points: 4, club: 'Full Roster' }),
+    player({ id: 'f4', rank: 8, points: 50, club: 'Full Roster' }),
+  ];
+
+  it('reports a short-roster institution with its real playerCount and reason', () => {
+    const { excluded } = computeTeamScoresWithReasons(mixedRoster(), 3, 'club');
+
+    expect(excluded).toEqual([{ key: 'Short Roster', reason: 'team_short_roster', playerCount: 2 }]);
+    // playerCount is the roster it entered (2), which differs from both the
+    // teamSize it needed (3) and the other institution's roster (4).
+    expect(excluded[0].playerCount).not.toBe(3);
+  });
+
+  it('does not report an institution that qualifies', () => {
+    const { scored, excluded } = computeTeamScoresWithReasons(mixedRoster(), 3, 'club');
+
+    expect(scored.map((row) => row.key)).toEqual(['Full Roster']);
+    expect(excluded.map((row) => row.key)).not.toContain('Full Roster');
+    // The qualifying institution has a 4th player at rank 8 with 50 points that is
+    // not selected, so "qualifies" is not "has exactly teamSize players".
+    expect(teamIds(scored[0])).toEqual(['f1', 'f2', 'f3']);
+    expect(scored[0].total_points).toBe(17);
+  });
+
+  it('reports every short-roster institution, sorted by key', () => {
+    // Input order is Zulu, Alpha, Mike; output order must be alphabetical.
+    // Each carries a different playerCount so no two compared values are equal.
+    const players = [
+      player({ id: 'z1', rank: 1, points: 30, club: 'Zulu' }),
+      player({ id: 'z2', rank: 2, points: 25, club: 'Zulu' }),
+      player({ id: 'z3', rank: 3, points: 20, club: 'Zulu' }),
+      player({ id: 'a1', rank: 4, points: 15, club: 'Alpha' }),
+      player({ id: 'm1', rank: 6, points: 10, club: 'Mike' }),
+      player({ id: 'm2', rank: 7, points: 5, club: 'Mike' }),
+    ];
+
+    const { scored, excluded } = computeTeamScoresWithReasons(players, 4, 'club');
+
+    expect(scored).toEqual([]);
+    expect(excluded).toEqual([
+      { key: 'Alpha', reason: 'team_short_roster', playerCount: 1 },
+      { key: 'Mike', reason: 'team_short_roster', playerCount: 2 },
+      { key: 'Zulu', reason: 'team_short_roster', playerCount: 3 },
+    ]);
+  });
+
+  it('counts players dropped for a null, empty or whitespace-only group key', () => {
+    // Four keyless players against one keyed player, so the count (4) differs
+    // from both the total roster (5) and the surviving institution's size (1).
+    const players = [
+      player({ id: 'n1', rank: 1, points: 40, club: null }),
+      player({ id: 'n2', rank: 2, points: 30, club: '' }),
+      player({ id: 'n3', rank: 3, points: 20, club: '   ' }),
+      player({ id: 'n4', rank: 4, points: 10, club: '\t\n ' }),
+      player({ id: 'r1', rank: 5, points: 6, club: 'Padded School' }),
+    ];
+
+    const { scored, excluded, droppedPlayersWithoutKey } = computeTeamScoresWithReasons(players, 1, 'club');
+
+    expect(droppedPlayersWithoutKey).toBe(4);
+    expect(scored.map((row) => row.key)).toEqual(['Padded School']);
+    // Keyless players have no key by definition, so no placeholder appears.
+    expect(excluded).toEqual([]);
+  });
+
+  it('counts zero dropped players when every player has a group key', () => {
+    const players = [
+      player({ id: 'p1', rank: 1, points: 12, club: 'Alpha' }),
+      player({ id: 'p2', rank: 3, points: 7, club: 'Beta' }),
+    ];
+
+    const { droppedPlayersWithoutKey } = computeTeamScoresWithReasons(players, 1, 'club');
+
+    expect(droppedPlayersWithoutKey).toBe(0);
+  });
+
+  it('counts a missing key on the requested column only, not on the other columns', () => {
+    // Every player has a blank `club`; grouping is by `state`, where two of the
+    // three are populated. A scorer reading the wrong column would count 3.
+    const players = [
+      player({ id: 'x1', rank: 1, points: 9, club: '  ', state: 'Rajasthan' }),
+      player({ id: 'x2', rank: 2, points: 8, club: '  ', state: 'Kerala' }),
+      player({ id: 'x3', rank: 4, points: 6, club: '  ', state: null }),
+    ];
+
+    const { scored, droppedPlayersWithoutKey } = computeTeamScoresWithReasons(players, 1, 'state');
+
+    expect(droppedPlayersWithoutKey).toBe(1);
+    expect(scored.map((row) => row.key)).toEqual(['Rajasthan', 'Kerala']);
+  });
+
+  it('moves an institution from excluded to scored when one more player is added', () => {
+    // Matched pair on one fixture. 'Rising School' enters 2 players against a
+    // teamSize of 3; the added player is the only difference between the runs.
+    const base = [
+      player({ id: 'r1', rank: 2, points: 11, club: 'Rising School' }),
+      player({ id: 'r2', rank: 5, points: 7, club: 'Rising School' }),
+    ];
+    const withThird = [...base, player({ id: 'r3', rank: 9, points: 3, club: 'Rising School' })];
+
+    const before = computeTeamScoresWithReasons(base, 3, 'club');
+    const after = computeTeamScoresWithReasons(withThird, 3, 'club');
+
+    expect(before.scored).toEqual([]);
+    expect(before.excluded).toEqual([
+      { key: 'Rising School', reason: 'team_short_roster', playerCount: 2 },
+    ]);
+
+    expect(after.excluded).toEqual([]);
+    expect(after.scored.map((row) => row.key)).toEqual(['Rising School']);
+    expect(teamIds(after.scored[0])).toEqual(['r1', 'r2', 'r3']);
+    expect(after.scored[0].total_points).toBe(21); // 11 + 7 + 3
+    expect(after.scored[0].rank_sum).toBe(16); // 2 + 5 + 9
+    expect(after.scored[0].best_individual_rank).toBe(2);
+  });
+
+  it('computeTeamScores returns exactly computeTeamScoresWithReasons(...).scored', () => {
+    // A fixture that exercises all three outputs at once: two qualifying
+    // institutions with different totals, one short roster, one keyless player.
+    const players = [
+      player({ id: 'a1', rank: 1, points: 12, club: 'Alpha' }),
+      player({ id: 'a2', rank: 4, points: 9, club: 'Alpha' }),
+      player({ id: 'b1', rank: 2, points: 8, club: 'Beta' }),
+      player({ id: 'b2', rank: 3, points: 5, club: 'Beta' }),
+      player({ id: 'g1', rank: 6, points: 30, club: 'Gamma' }),
+      player({ id: 'k1', rank: 7, points: 40, club: '   ' }),
+    ];
+
+    const full = computeTeamScoresWithReasons(players, 2, 'club');
+    const wrapped = computeTeamScores(players, 2, 'club');
+
+    expect(wrapped).toEqual(full.scored);
+
+    // Sanity: the fixture is not degenerate — the equality above is not "both empty",
+    // and the wrapper is genuinely dropping the other two fields.
+    expect(wrapped.map((row) => row.key)).toEqual(['Alpha', 'Beta']);
+    expect(wrapped.map((row) => row.total_points)).toEqual([21, 13]);
+    expect(full.excluded).toEqual([{ key: 'Gamma', reason: 'team_short_roster', playerCount: 1 }]);
+    expect(full.droppedPlayersWithoutKey).toBe(1);
   });
 });

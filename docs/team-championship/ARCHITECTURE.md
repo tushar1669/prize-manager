@@ -228,8 +228,13 @@ Illustrative, subject to RULING 2 (state the rule, never assert a player's attri
 **Each step is verified before the next begins.** No step starts while the previous one is unverified.
 This mirrors the TC0 cadence (a/b/c → d/e → f, each with its own commit and its own evidence).
 
-**TC1.2 — Replace `tests/institution/` with a suite that imports the real module.**
-Delete the self-reproducing specs. Write tests that `import { computeTeamScores, compareInstitutions,
+Reason codes and gender slots are **separate steps**. TC1.3 changes no selection outcome at all; TC1.4
+is the first step that can change which team is picked. Keeping them apart is what makes TC1.3's
+"byte-identical selection" claim checkable — a step that both reports exclusions and rewrites selection
+cannot prove either half.
+
+**TC1.2 — Replace `tests/institution/` with a suite that imports the real module. — DONE.**
+Deleted the self-reproducing specs. Wrote tests that `import { computeTeamScores, compareInstitutions,
 detectTieAtPrizeBoundary } from '_shared/teamPrizes.ts'` and pin **today's** behaviour: rank-ascending
 sort, raw-points sum, the short-roster drop, the blank-key drop, no gender. This establishes a suite
 that can fail. Production code unchanged.
@@ -237,34 +242,50 @@ that can fail. Production code unchanged.
 a deliberate one-line mutation of the scorer that is then reverted (DD2 — a check that cannot fire is
 not a check).
 
-**TC1.3 — Gender slots and reason codes in `_shared/teamPrizes.ts`.**
-Add slot-aware selection under RULING 1 and the §4 code sets. `team_short_roster` and
-`missing_group_field` replace the two silent `continue`s. Pure function; no caller edited yet.
-*Verified by:* the TC1.2 suite extended, with the pre-TC1.3 expectations still passing wherever no slot
-is configured — a group at `female_slots = 0, male_slots = 0` must produce byte-identical results, which
-is what protects the three live groups.
+**TC1.3 — Reason codes only in `_shared/teamPrizes.ts`. No gender, no schema, no migration.**
+`computeTeamScoresWithReasons` becomes the real implementation and returns `{ scored, excluded,
+droppedPlayersWithoutKey }`; `computeTeamScores` becomes a thin wrapper over its `.scored` with its
+exported signature and return type unchanged, so no caller is edited and nothing is duplicated. The two
+silent `continue`s of §1.3 and §1.4 become visible: `team_short_roster` per institution, with its real
+player count, and `missing_group_field` as an integer count of players dropped before grouping.
+`missing_group_field` is a **player-level** condition — those players have no key, so they never appear
+in `excluded` and no placeholder key is invented for them. Only these two §4 codes ship here;
+`female_slots_unfilled`, `below_minimum_roster`, `unknown_gender_filled_other_slot` and `team_ok` do not.
+**Selection behaviour does not change** — an institution dropped before is still dropped, merely now
+reported.
+*Verified by:* the TC1.2 suite's existing tests passing unmodified, plus new tests for the exclusion
+reason and count, the qualifying institution that must not appear in `excluded`, the dropped-player
+count across null/empty/whitespace keys, a matched pair where one added player moves an institution from
+`excluded` to `scored`, and deep equality between the wrapper's output and `.scored` on one fixture.
 
-**TC1.4 — Carry the codes through the writers and readers; schema.**
-`allocateInstitutionPrizes` populates the real counts and reasons (retiring the literals at `:340-341`);
-persistence so `publicTeamPrizes` and `useTeamPrizeResults` read codes from the snapshot rather than
-hardcoding `0`. Tournament-level allow-incomplete-teams column. `minimum_roster_size` **only if RULING 3
-is signed off**. **`finalize` is not edited** (DD1).
+**TC1.4 — Gender slots in `_shared/teamPrizes.ts`.**
+Slot-aware selection under RULING 1, adding `female_slots_unfilled` (fail) and
+`unknown_gender_filled_other_slot` (warn) to the vocabulary TC1.3 established. Pure function; still no
+caller edited.
+*Verified by:* a group at `female_slots = 0, male_slots = 0` producing byte-identical results to TC1.3 —
+which is what protects the three live groups — and slot fixtures whose selection differs from the
+rank-only selection, so the new path is proved to be doing something.
+
+**TC1.5 — Display and printed output.**
+One formatter replaces the four independent builders in §1.7 — `TeamPrizeRulesSheet.tsx`,
+`TeamPrizesEditor.tsx`, `TeamPrizeResultsPanel.tsx` and the team block of `generatePdf`. `Male Slots`
+becomes **"other players (minimum)"** (RULING 1). Every `2F + 2M` becomes a rule sentence (RULING 2).
+Codes render through the §4 mapping table as plain sentences, never as raw codes.
+*Verified by:* a screenshot of each of the four surfaces, and a generated PDF with no `F`/`M` count
+assertion anywhere on it.
+
+**TC1.6 — Roster policy and schema.**
+Tournament-level allow-incomplete-teams column with its "i" hover; `minimum_roster_size` and its
+`below_minimum_roster` code **only if RULING 3 is signed off**. `allocateInstitutionPrizes` populates
+the real counts and reasons, retiring the literals at `:340-341`; persistence so `publicTeamPrizes` and
+`useTeamPrizeResults` read codes from the snapshot rather than hardcoding `0`, which makes the
+collapsible at `TeamPrizeResultsPanel.tsx:248` reachable for the first time. **`finalize` is not
+edited** (DD1). Then `supabase/ops/tc1_team_gender_checks.sql` joins the existing nine harnesses, built
+to DD4's rule: fixtures whose two compared values differ.
 *Verified by:* a compute-preview response on a live draft carrying a non-zero `ineligible_institutions`,
-and the `glanz-open-haryana-cup` curl still returning `pinned_version: 13`.
-
-**TC1.5 — UI and printed output.**
-One formatter replaces the four independent builders in §1.7. `Male Slots` becomes
-**"other players (minimum)"** (RULING 1). Every `2F + 2M` becomes a rule sentence (RULING 2). The
-ineligible collapsible at `TeamPrizeResultsPanel.tsx:248` becomes reachable for the first time. The
-allow-incomplete-teams toggle ships with its "i" hover.
-*Verified by:* a screenshot of the collapsible rendering real reasons, and a generated PDF with no
-`F`/`M` count assertion anywhere on it.
-
-**TC1.6 — Harness and live verification.**
-`supabase/ops/tc1_team_gender_checks.sql` joining the existing nine harnesses, built to DD4's rule:
-fixtures whose two compared values differ. Then the deploy obligation of §3, then a fresh census.
-*Verified by:* the harness green, at least one check demonstrated to fail against pre-TC1 behaviour,
-and `/admin/team-snapshots` loaded — TC0 revived it and it has still never been seen working.
+the harness green with at least one check demonstrated to fail against pre-TC1 behaviour, the
+`glanz-open-haryana-cup` curl of §3 still returning `pinned_version: 13` after the `publicTeamPrizes`
+deploy, and `/admin/team-snapshots` loaded — TC0 revived it and it has still never been seen working.
 
 ## 6. Out of scope for TC1
 
