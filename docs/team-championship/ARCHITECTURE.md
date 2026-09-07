@@ -57,9 +57,12 @@ passed. This is **DD5**: a comment claiming a capability the code does not have.
 (`allocateInstitutionPrizes/index.ts:329`), summed as-is at `teamPrizes.ts:62`. Two false claims in
 one header block. Both are corrected in TC1.
 
-`docs/team-prizes.md` repeats both errors (its "Scoring" and "Gender slots" bullets). It is a team-engine
-document and therefore in TC1's scope to correct — but **not in TC1.1**, which creates two files and
-edits none.
+`docs/team-prizes.md` **repeated both errors** in its "Scoring" and "Gender slots" bullets — the same
+false rank-points formula and the same false claim of gender enforcement. **Corrected in TC1.1b:**
+`docs/team-prizes.md:24` now states the scorer sums the raw `players.points` column and says "There are
+no rank points" explicitly, citing `:286` and `:405` for what `max_rank` is actually for. The historical
+error is recorded here; the file itself is no longer wrong, and this paragraph must not be read as
+outstanding work.
 
 ### 1.3 The silent exclusion
 
@@ -191,7 +194,7 @@ engine declares its own sets in `_shared/teamPrizes.ts`.
 | `below_minimum_roster` | the institution has at least `team_size` players but fewer than `minimum_roster_size` — **RULING 3, signed off 7 September 2026**; lands in TC1.6 as the per-group `minimum_roster_size` |
 | `female_slots_unfilled` | fewer than `female_slots` players carry an explicit `'F'` |
 | `male_slots_unfilled` | fewer than `male_slots` players are not `'F'`. Under RULING 1 a null or blank gender counts as not-F, so this fires far more rarely than `female_slots_unfilled` — only when the institution genuinely has too few non-`'F'` entrants |
-| `missing_group_field` | the player's `group_by` column is null, empty, or whitespace — today's silent `continue` at `teamPrizes.ts:42` |
+| `missing_group_field` | the player's `group_by` column is null, empty, or whitespace. **Player-level, not an institution exclusion.** Such a player has no key, so it can never appear in `excluded` and no `TeamExclusionReason` member exists for it — the shipped union has exactly three members (`team_short_roster`, `female_slots_unfilled`, `male_slots_unfilled`). It ships instead as the integer `droppedPlayersWithoutKey`, surfaced by `allocateInstitutionPrizes` as `players_without_group_field` (TC1.4b) |
 
 ### pass
 
@@ -218,7 +221,7 @@ Illustrative, subject to RULING 2 (state the rule, never assert a player's attri
 | `below_minimum_roster` | "Fewer entries than this prize requires." |
 | `female_slots_unfilled` | "The rule asks for at least 2 girls and the entry list does not meet it." |
 | `male_slots_unfilled` | "The rule asks for other players and the entry list does not meet it." |
-| `missing_group_field` | "No school recorded for these players." |
+| `missing_group_field` | "No school recorded for these players." (a player counter, rendered from `players_without_group_field`, not from an entry in `ineligible_reasons`) |
 | `unknown_gender_filled_other_slot` | "Some players have no gender recorded and were counted as other players." |
 | `tie_at_prize_boundary` | "Two teams are level at the prize boundary." |
 
@@ -259,8 +262,8 @@ reason and count, the qualifying institution that must not appear in `excluded`,
 count across null/empty/whitespace keys, a matched pair where one added player moves an institution from
 `excluded` to `scored`, and deep equality between the wrapper's output and `.scored` on one fixture.
 
-**TC1.4 — Gender slots in `_shared/teamPrizes.ts`.**
-Slot-aware selection under RULING 1, adding `female_slots_unfilled` (fail) and
+**TC1.4 — Gender slots in `_shared/teamPrizes.ts`. — DONE.**
+Slot-aware selection under RULING 1, adding `female_slots_unfilled` (fail), `male_slots_unfilled` (fail) and
 `unknown_gender_filled_other_slot` (warn) to the vocabulary TC1.3 established. Pure function; still no
 caller edited.
 *Verified by:* a group at `female_slots = 0, male_slots = 0` producing byte-identical results to TC1.3 —
@@ -273,6 +276,49 @@ rank-only selection, so the new path is proved to be doing something.
 its response. Deploy; re-run the `glanz-open-haryana-cup` curl of §3. This is the step where TC1.4's
 scorer first changes anything a user can see.
 
+**Scope boundary — binding.** TC1.4b wires the **compute/preview path only**: the
+`allocateInstitutionPrizes` response, which feeds Conflict Review and Finalize. It persists nothing.
+`publicTeamPrizes:212-213` and `useTeamPrizeResults.ts:165-166` still hardcode
+`ineligible_institutions: 0` because there is still nothing persisted for them to read — §3 forbids
+giving `publicTeamPrizes` a compute path, so those two are **not** fixed here and must not be claimed
+as fixed. Persistence is TC1.6.
+
+**Corrected count — TC1.4b retires ONE of the four §1.5 hardcoded sites, not two.** The site it retires
+is the `:340-341` literal pair. `:319-320` **correctly keeps its `0`**: that branch returns on an
+invalid `group_by` before any scoring runs, so no institution has been evaluated and there is nothing
+to count — it is not a defect awaiting a fix, and no later step should "fix" it. The two read paths
+(`publicTeamPrizes`, `useTeamPrizeResults`) are untouched and remain for TC1.6. Three of the four
+sites therefore still hold a literal after TC1.4b, one of them permanently.
+
+What ships in the response:
+
+| Field | Shape | Note |
+|---|---|---|
+| `ineligible_institutions` | `number` | `excluded.length` — the literal `0` at `:340` is gone |
+| `ineligible_reasons` | `string[]`, **ordered by player count descending**, then capped at 10 | Stays `string[]`: `TeamPrizeResultsPanel.tsx:258` renders each entry as a string, and TC1.5 has not run. Plain sentences from one local mapping table obeying RULING 2, each prefixed `"<key>: "` so the organizer knows which school. The order is what makes the cap useful — see below |
+| `ineligible_details` | `{ key, reason, playerCount }[]`, uncapped | Additive. The same information machine-readable, so TC1.5 can render it properly instead of re-parsing sentences |
+| `players_without_group_field` | `number` | Additive. `droppedPlayersWithoutKey` — a real diagnostic that was invisible until now (§1.4, §4) |
+| `warnings` | `TeamWarning[]`, omitted when empty | Additive, per scored institution, on both `winner_institution` and `scored_institutions` |
+
+The invalid-`group_by` early-return branch (§1.5, `:319-320`) also gains the two additive fields as
+empty/zero so every `GroupResponse` has one shape. Its `ineligible_reasons` message is unchanged.
+
+**Why the sentence list is ordered by player count.** Measured on the one live tournament with an
+active group: 28 institutions, **21 excluded**, and **12 of those are near-misses at 2-9 players against
+a `team_size` of 10**. Unordered, the 10-sentence cap would be filled by whichever keys sort first
+alphabetically — mostly single-entrant schools the organizer can do nothing about — and would hide the
+near-misses, which are the entries worth acting on. Sorting `playerCount` descending before the
+`.slice(0, 10)` puts the actionable cases first. `Array.prototype.sort` is stable, so institutions on
+equal counts keep the scorer's key order and the output stays deterministic.
+
+**This is presentation only, and deliberately not a filter.** `ineligible_institutions` remains the
+full `excluded.length` — every excluded institution is still counted, including single entrants — and
+`ineligible_details` remains uncapped in the scorer's key order, so no consumer that wants the whole
+set is reading a truncated or reordered view. Only the ten sentences are prioritised.
+
+*Verified by:* `?ping=1` returning `buildVersion: "2026-09-07T00:00:00Z-TC1.4b"` — the version bump in
+the dashboard is not evidence of a deploy, the build string is (Y3).
+
 **TC1.5 — Display and printed output.**
 One formatter replaces the four independent builders in §1.7 — `TeamPrizeRulesSheet.tsx`,
 `TeamPrizesEditor.tsx`, `TeamPrizeResultsPanel.tsx` and the team block of `generatePdf`. `Male Slots`
@@ -283,10 +329,10 @@ assertion anywhere on it.
 
 **TC1.6 — Roster policy and schema.**
 Per-group `minimum_roster_size` column and its `below_minimum_roster` code (RULING 3, signed off
-7 September); no tournament-level allow-incomplete-teams column is added. `allocateInstitutionPrizes` populates
-the real counts and reasons, retiring the literals at `:340-341`; persistence so `publicTeamPrizes` and
-`useTeamPrizeResults` read codes from the snapshot rather than hardcoding `0`, which makes the
-collapsible at `TeamPrizeResultsPanel.tsx:248` reachable for the first time. **`finalize` is not
+7 September); no tournament-level allow-incomplete-teams column is added. The real counts and reasons already reach
+the compute path (TC1.4b retired the literals at `:340-341`); TC1.6 adds persistence so
+`publicTeamPrizes` and `useTeamPrizeResults` read codes from the snapshot rather than hardcoding `0`,
+which makes the collapsible at `TeamPrizeResultsPanel.tsx:248` reachable on the published page too. **`finalize` is not
 edited** (DD1). Then `supabase/ops/tc1_team_gender_checks.sql` joins the existing nine harnesses, built
 to DD4's rule: fixtures whose two compared values differ.
 *Verified by:* a compute-preview response on a live draft carrying a non-zero `ineligible_institutions`,

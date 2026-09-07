@@ -1,13 +1,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 import {
-  computeTeamScores,
+  computeTeamScoresWithReasons,
   detectTieAtPrizeBoundary,
+  type TeamExclusion,
   type TeamPrizePlayer,
   type TeamGroupByKey,
+  type TeamWarning,
 } from "../_shared/teamPrizes.ts";
 
-const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const BUILD_VERSION = "2026-09-07T00:00:00Z-TC1.4b";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -24,13 +26,17 @@ const corsHeaders = CORS_HEADERS;
  * - Players can win BOTH individual and institution prizes (ignores multi_prize_policy)
  * - Groups players by institution field (school, club, city, state, etc.)
  * - Calculates team scores based on top-K players per institution
- * - Supports gender slot requirements (e.g., team of 4 must include 2 girls + 2 boys)
+ * - Supports gender slot requirements as MINIMUMS (e.g. a team of 4 must include at
+ *   least 2 girls; any board left over after the minimums is filled by rank)
  * 
  * SCORING RULES:
- * - Uses "rank points" as score: (max_rank + 1 - player_rank)
- * - Lower rank = higher score (rank 1 gets highest score)
- * - Team total_points = sum of team members' rank points
+ * - Score per player is the raw `players.points` column, passed through unchanged
+ * - Players are ordered by rank ascending, tie-broken by id
+ * - Team total_points = sum of the selected players' points
  * - Tie-break: rank_sum (lower better), then best_individual_rank (lower better), then institution name
+ *
+ * `max_rank` is reported in the response but is NOT used in scoring. Two claims in an
+ * earlier version of this header said otherwise; see ARCHITECTURE §1.2 (DD5).
  */
 
 // Type definitions for institution prizes
@@ -99,6 +105,23 @@ interface WinnerInstitution {
   best_individual_rank: number;
   players: TeamPlayerInfo[];
   tied_at_boundary?: boolean;
+  /**
+   * ARCHITECTURE §4 warn codes raised by the scorer for this institution. Present
+   * only when the scorer produced any, so a group with no gender slots configured
+   * serialises exactly as it did before TC1.4b.
+   */
+  warnings?: TeamWarning[];
+}
+
+/**
+ * One excluded institution, structured. `ineligible_reasons` is the string rendering
+ * TeamPrizeResultsPanel consumes today; this is the same information uncapped and
+ * machine-readable, for TC1.5 to render properly.
+ */
+interface IneligibleDetail {
+  key: string;
+  reason: TeamExclusion['reason'];
+  playerCount: number;
 }
 
 interface PrizeWithWinner {
@@ -119,6 +142,13 @@ interface GroupResponse {
   eligible_institutions: number;
   ineligible_institutions: number;
   ineligible_reasons: string[];
+  ineligible_details: IneligibleDetail[];
+  /**
+   * Players discarded before grouping because this group's `group_by` column was
+   * null, empty or whitespace-only. A player-level diagnostic, not an institution
+   * exclusion — see ARCHITECTURE §4.
+   */
+  players_without_group_field: number;
   scored_institutions?: WinnerInstitution[];
 }
 
@@ -130,6 +160,27 @@ interface AllocateInstitutionPrizesResponse {
 
 interface AllocateInstitutionPrizesRequest {
   tournament_id: string;
+}
+
+/**
+ * ARCHITECTURE §4 "Rendering rule". Codes are an internal vocabulary; the organizer
+ * only ever sees a plain sentence. Obeys RULING 2 — each sentence states the RULE
+ * that was not met and never asserts anything about a player's attributes.
+ *
+ * The institution key is prefixed so the organizer knows which school a line is about.
+ * `ineligible_reasons` stays `string[]` because TeamPrizeResultsPanel renders it as
+ * strings today; the structured form travels alongside it in `ineligible_details`.
+ */
+const EXCLUSION_SENTENCES: Record<TeamExclusion['reason'], string> = {
+  team_short_roster: 'Fewer players than the team size.',
+  female_slots_unfilled:
+    'The rule asks for a minimum number of girls and the entry list does not meet it.',
+  male_slots_unfilled:
+    'The rule asks for other players and the entry list does not meet it.',
+};
+
+function formatExclusion(exclusion: TeamExclusion): string {
+  return `${exclusion.key}: ${EXCLUSION_SENTENCES[exclusion.reason]}`;
 }
 
 // All supported group_by keys (must match _shared/teamPrizes.ts TeamGroupByKey)
@@ -318,6 +369,8 @@ Deno.serve(async (req: Request) => {
           eligible_institutions: 0,
           ineligible_institutions: 0,
           ineligible_reasons: [`Invalid group_by value: ${group.group_by}`],
+          ineligible_details: [],
+          players_without_group_field: 0,
         });
         continue;
       }
@@ -336,12 +389,34 @@ Deno.serve(async (req: Request) => {
         type_label: (player.type_label as string | null) ?? null,
       }));
 
-      const scoredInstitutions = computeTeamScores(teamPlayers, group.team_size, columnName);
-      const ineligibleCount = 0;
-      const ineligibleReasons: string[] = [];
+      // TC1.4b: the group's configured gender minimums now reach the scorer. Both are
+      // zero on every live group today, which is byte-identical to the rank-only path.
+      const { scored: scoredInstitutions, excluded, droppedPlayersWithoutKey } =
+        computeTeamScoresWithReasons(teamPlayers, group.team_size, columnName, {
+          femaleSlots: group.female_slots,
+          maleSlots: group.male_slots,
+        });
+
+      const ineligibleCount = excluded.length;
+
+      // The sentence list is capped at 10, so WHICH ten matters. Ordered by player
+      // count descending: a school that entered 9 of the 10 needed is a near-miss the
+      // organizer may want to act on, a school that entered 1 is noise. No filter and
+      // no threshold — `ineligible_institutions` remains the full `excluded.length`,
+      // and `ineligible_details` below stays uncapped in the scorer's key order.
+      // Array.prototype.sort is stable, so equal counts keep that key order.
+      const ineligibleReasons: string[] = [...excluded]
+        .sort((a, b) => b.playerCount - a.playerCount)
+        .map(formatExclusion);
+
+      const ineligibleDetails: IneligibleDetail[] = excluded.map((e) => ({
+        key: e.key,
+        reason: e.reason,
+        playerCount: e.playerCount,
+      }));
 
       const boundaryTies = detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
-      console.log(`[allocateInstitutionPrizes] Group "${group.name}": ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible`);
+      console.log(`[allocateInstitutionPrizes] Group "${group.name}": ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${droppedPlayersWithoutKey} players without a ${columnName} value`);
 
       // Assign prizes
       const prizesWithWinners: PrizeWithWinner[] = groupPrizes.map((prize, index) => {
@@ -364,6 +439,7 @@ Deno.serve(async (req: Request) => {
             best_individual_rank: winner.best_individual_rank,
             players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
             tied_at_boundary: boundaryTies.includes(winner.key),
+            ...(winner.warnings ? { warnings: winner.warnings } : {}),
           } : null,
         };
       });
@@ -379,6 +455,7 @@ Deno.serve(async (req: Request) => {
         rank_sum: inst.rank_sum,
         best_individual_rank: inst.best_individual_rank,
         players: inst.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+        ...(inst.warnings ? { warnings: inst.warnings } : {}),
       }));
 
       groupResponses.push({
@@ -395,6 +472,8 @@ Deno.serve(async (req: Request) => {
         eligible_institutions: scoredInstitutions.length,
         ineligible_institutions: ineligibleCount,
         ineligible_reasons: ineligibleReasons.slice(0, 10),
+        ineligible_details: ineligibleDetails,
+        players_without_group_field: droppedPlayersWithoutKey,
         scored_institutions: scoredForResponse,
       });
     }
