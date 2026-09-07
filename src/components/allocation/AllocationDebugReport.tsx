@@ -425,11 +425,23 @@ export function AllocationDebugReport({
       tournamentSlug,
     );
 
-    const success = exportRcaToXlsx(rcaRows, tournamentSlug || "tournament");
-    if (success) {
+    const result = exportRcaToXlsx(rcaRows, tournamentSlug || "tournament");
+    if (result.ok) {
       toast.success("RCA report downloaded (.xlsx)");
-    } else {
-      toast.error("Failed to download RCA report");
+      return;
+    }
+
+    switch (result.reason) {
+      case "nothing_unfilled":
+        // Every prize has a winner — the good outcome, not a failure.
+        toast.info("No unfilled prizes \u2014 there is nothing to analyse.");
+        break;
+      case "no_data":
+        toast.info("RCA data has not loaded yet. Run Preview first.");
+        break;
+      case "write_failed":
+        toast.error("Failed to download RCA report");
+        break;
     }
   };
 
@@ -539,6 +551,17 @@ export function AllocationDebugReport({
   const filledCount = coverage.filter((e) => !e.is_unfilled).length;
   const unfilledCount = coverage.filter((e) => e.is_unfilled).length;
 
+  // The RCA button stays enabled when there is nothing unfilled: a disabled
+  // trigger swallows the hover events the tooltip needs, which would leave a
+  // dead control with no visible reason. Say why on hover instead.
+  const rcaHintText = !canDownloadRca
+    ? canViewFullResults
+      ? "Run Preview Allocation to generate exports."
+      : "Upgrade to Pro to export full reports."
+    : unfilledCount === 0
+      ? "No unfilled prizes \u2014 there is nothing to analyse."
+      : undefined;
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mb-6">
       <Card>
@@ -591,20 +614,14 @@ export function AllocationDebugReport({
                         handleDownloadRca();
                       }}
                       disabled={!canDownloadRca}
-                      title={!canDownloadRca ? (canViewFullResults ? 'Run Preview Allocation to generate exports.' : 'Upgrade to Pro to export full reports.') : undefined}
+                      title={rcaHintText}
                     >
                       <FileSearch className="h-4 w-4 mr-1" />
                       RCA (.xlsx)
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>
-                      {canDownloadRca
-                        ? 'Engine vs final winners (for audit / RCA)'
-                        : canViewFullResults
-                          ? 'Run Preview Allocation to generate exports.'
-                          : 'Upgrade to Pro to export full reports.'}
-                    </p>
+                    <p>{rcaHintText ?? 'Engine vs final winners (for audit / RCA)'}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

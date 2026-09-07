@@ -9,26 +9,45 @@ import type { RcaRow } from '@/types/rca';
 import { getReasonLabel, type UnfilledReasonCode } from '@/types/allocation';
 
 /**
+ * Why no file was produced.
+ * - `no_data`: the RCA rows have not been built yet (Preview not run / still loading)
+ * - `nothing_unfilled`: every prize has a winner, so there is nothing to root-cause
+ * - `write_failed`: rows existed but the workbook could not be written
+ */
+export type RcaExportFailureReason =
+  | 'no_data'
+  | 'nothing_unfilled'
+  | 'write_failed';
+
+// `reason?: never` on the success arm keeps `result.reason` readable without
+// relying on discriminant narrowing, which this project's non-strict tsconfig
+// does not apply to boolean discriminants.
+export type RcaExportResult =
+  | { ok: true; reason?: never }
+  | { ok: false; reason: RcaExportFailureReason };
+
+/**
  * Export RCA data to XLSX file.
  * Single sheet with one row per prize comparing engine vs final allocation.
- * 
+ *
  * @param rcaRows - Array of RCA row objects
  * @param tournamentSlug - Tournament slug for filename
- * @returns true if export succeeded, false otherwise
+ * @returns `{ ok: true }` on success, otherwise `{ ok: false, reason }` so the
+ *          caller can tell an empty result apart from a genuine failure.
  */
 export function exportRcaToXlsx(
   rcaRows: RcaRow[],
   tournamentSlug: string
-): boolean {
+): RcaExportResult {
   if (!rcaRows || rcaRows.length === 0) {
     console.warn('[rca-export] No RCA data to export');
-    return false;
+    return { ok: false, reason: 'no_data' };
   }
 
   const unfilledRows = rcaRows.filter(row => row.is_unfilled);
   if (unfilledRows.length === 0) {
     console.warn('[rca-export] No unfilled prize rows to export');
-    return false;
+    return { ok: false, reason: 'nothing_unfilled' };
   }
 
   // Transform RCA rows into flat objects for Excel
@@ -56,7 +75,8 @@ export function exportRcaToXlsx(
 
   console.log('[rca-export] Exporting', rows.length, 'rows to', filename);
 
-  return downloadWorkbookXlsx(filename, { RCA: rows });
+  const written = downloadWorkbookXlsx(filename, { RCA: rows });
+  return written ? { ok: true } : { ok: false, reason: 'write_failed' };
 }
 
 function formatGiftItems(items?: Array<{ name?: string; qty?: number }>): string {
