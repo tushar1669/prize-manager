@@ -16,6 +16,7 @@ import {
   useDeleteInstitutionGroup,
   useSaveInstitutionPrizes 
 } from './useInstitutionPrizes';
+import { formatTeamRuleClause } from '@/components/allocation/TeamPrizeResultsPanel';
 import TeamPrizeRulesSheet from './TeamPrizeRulesSheet';
 import TeamGroupPrizesTable from './TeamGroupPrizesTable';
 
@@ -240,12 +241,10 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                     <div className="flex flex-wrap gap-2 mt-2 ml-12">
                       <Badge variant="secondary">{getGroupByLabel(group.group_by)}</Badge>
                       <Badge variant="outline">Top {group.team_size}</Badge>
-                      {(group.female_slots > 0 || group.male_slots > 0) && (
-                        <Badge variant="outline">
-                          {group.female_slots > 0 && `F${group.female_slots}`}
-                          {group.female_slots > 0 && group.male_slots > 0 && '/'}
-                          {group.male_slots > 0 && `M${group.male_slots}`}
-                        </Badge>
+                      {/* RULING 2: the badge states the rule, never a composition.
+                          Null at 0/0, so no badge is rendered at all. */}
+                      {formatTeamRuleClause(group, 'compact') && (
+                        <Badge variant="outline">{formatTeamRuleClause(group, 'compact')}</Badge>
                       )}
                       <Badge variant="outline" className="capitalize">
                         {group.scoring_mode.replace(/_/g, ' ')}

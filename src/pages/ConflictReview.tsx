@@ -800,6 +800,7 @@ export default function ConflictReview() {
               data={teamPrizeResults}
               isLoading={teamPrizeLoading}
               error={teamPrizeError}
+              showDiagnostics
             />
           </div>
         )}

@@ -33,6 +33,17 @@ interface TeamPrizeResultsPanelProps {
   allocationVersion?: number;
   tournamentId?: string;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  /**
+   * Organizer-only diagnostics: the list of institutions that did not qualify.
+   *
+   * Defaults to FALSE, and the default is what carries the guarantee. Exactly two
+   * surfaces turn it on: ConflictReview passes it directly, and Finalize passes it
+   * through TeamPrizesTabView (which has its own prop, also defaulting to false).
+   * FinalPrizeView and PublicTeamPrizesSection pass nothing and inherit false — the
+   * print artifact and the public page must never list the schools that did not
+   * qualify, which is a reputational risk to those schools.
+   */
+  showDiagnostics?: boolean;
 }
 
 const GROUP_BY_LABELS: Record<string, string> = {
@@ -42,6 +53,84 @@ const GROUP_BY_LABELS: Record<string, string> = {
   group_label: 'Swiss Group (Gr)',
   type_label: 'Swiss Type',
 };
+
+/**
+ * Diagnostics the compute path ships (TC1.4b) that the persisted and public read
+ * paths do not: `publicTeamPrizes` and `useTeamPrizeResults` still hardcode these
+ * empty until persistence lands in TC1.6. Declared optional here so absence renders
+ * nothing rather than an empty or broken section.
+ */
+type IneligibleDetail = {
+  key: string;
+  reason: string;
+  playerCount: number;
+};
+
+type GroupDiagnostics = {
+  ineligible_details?: IneligibleDetail[];
+  players_without_points?: number;
+};
+
+/**
+ * ARCHITECTURE §4 "Rendering rule", binding: every reason code renders as a plain
+ * sentence in organizer-facing UI, never as a raw code. Each sentence states the
+ * RULE that was not met (RULING 2); none reports what any player on a roster is.
+ */
+const EXCLUSION_SENTENCES: Record<string, string> = {
+  team_short_roster: 'Fewer players than the team size.',
+  female_slots_unfilled:
+    'The rule asks for a minimum number of girls and the entry list does not meet it.',
+  male_slots_unfilled:
+    'The rule asks for other players and the entry list does not meet it.',
+};
+
+/** A code added upstream without a sentence here still must not reach a human eye. */
+const UNMAPPED_EXCLUSION_SENTENCE = 'This team did not meet the rule for this prize.';
+
+export function formatExclusionSentence(reason: string): string {
+  return EXCLUSION_SENTENCES[reason] ?? UNMAPPED_EXCLUSION_SENTENCE;
+}
+
+export interface TeamRuleSlots {
+  female_slots: number;
+  male_slots: number;
+}
+
+/**
+ * The one formatter for the team composition rule (ARCHITECTURE §5, TC1.5).
+ *
+ * RULING 2, binding: output states the RULE THAT WAS APPLIED and never asserts a
+ * count of players' attributes. `2F + 2M required` claimed to know what four people
+ * on a roster are; `at least 2 girls` claims only what the organizer configured.
+ *
+ * RULING 1: `male_slots` means "not F" — it is satisfied by a player whose sex was
+ * never recorded — so it is worded "other players", never "boys" or "male".
+ *
+ * Slots are MINIMUMS, never exact quotas, so every rendering says so.
+ *
+ * Both slots at zero means no rule was applied, so there is nothing to state and this
+ * returns `null`. Callers then render nothing at all: not "0 girls", not an empty
+ * badge. All three live prize groups sit at 0/0.
+ */
+export function formatTeamRuleClause(
+  config: TeamRuleSlots,
+  style: 'sentence' | 'compact' = 'sentence'
+): string | null {
+  const female = Math.max(0, Math.trunc(Number(config?.female_slots) || 0));
+  const male = Math.max(0, Math.trunc(Number(config?.male_slots) || 0));
+  if (female === 0 && male === 0) return null;
+
+  const minimum = style === 'compact' ? 'min' : 'at least';
+  const parts: string[] = [];
+  if (female > 0) parts.push(`${minimum} ${female} girl${female === 1 ? '' : 's'}`);
+  if (male > 0) {
+    // In sentence style a leading "at least" already governs the whole list, so the
+    // second clause does not repeat it. Compact style has no such lead-in.
+    const lead = style === 'compact' || parts.length === 0 ? `${minimum} ` : '';
+    parts.push(`${lead}${male} other player${male === 1 ? '' : 's'}`);
+  }
+  return parts.join(', ');
+}
 
 function getPlaceOrdinal(place: number): string {
   if (place === 1) return '1st';
@@ -54,7 +143,15 @@ function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
-function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void }) {
+function GroupCard({
+  group,
+  onTieResolutionRequest,
+  showDiagnostics = false,
+}: {
+  group: GroupResponse;
+  onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  showDiagnostics?: boolean;
+}) {
   const [expanded, setExpanded] = React.useState(true);
   const [showIneligible, setShowIneligible] = React.useState(false);
 
@@ -62,6 +159,29 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
+
+  // Null when no composition rule was configured — nothing is rendered in that case.
+  const ruleClause = formatTeamRuleClause(group.config);
+
+  const diagnostics = group as GroupResponse & GroupDiagnostics;
+
+  // Uncapped and structured, unlike `ineligible_reasons` (kept in the response for
+  // backward compatibility, capped at 10). Ordered by roster size descending: the
+  // school that entered 9 of the 10 needed is the near-miss worth acting on.
+  const ineligibleDetails = React.useMemo(
+    () => [...(diagnostics.ineligible_details ?? [])].sort((a, b) => b.playerCount - a.playerCount),
+    [diagnostics.ineligible_details]
+  );
+
+  // Every scored institution contributes exactly `team_size` players — the scorer
+  // drops any institution with fewer — so this is the selected pool the edge function
+  // counted `players_without_points` over. When the two are equal, not one counted
+  // player had a points value and every total below is a 0 that means "absent".
+  const selectedPoolSize = group.eligible_institutions * group.config.team_size;
+  const pointsAbsent =
+    typeof diagnostics.players_without_points === 'number' &&
+    selectedPoolSize > 0 &&
+    diagnostics.players_without_points === selectedPoolSize;
 
   return (
     <Card>
@@ -83,14 +203,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
           <div className="flex flex-wrap gap-2 mt-2">
             <Badge variant="secondary">{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
             <Badge variant="outline">Top {group.config.team_size} players</Badge>
-            {(group.config.female_slots > 0 || group.config.male_slots > 0) && (
-              <Badge variant="outline">
-                {group.config.female_slots > 0 && `${group.config.female_slots}F`}
-                {group.config.female_slots > 0 && group.config.male_slots > 0 && ' + '}
-                {group.config.male_slots > 0 && `${group.config.male_slots}M`}
-                {' required'}
-              </Badge>
-            )}
+            {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
             <Badge variant="secondary">
               {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
@@ -145,7 +258,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-mono">
-                              {winner.total_points}
+                              {pointsAbsent ? '—' : winner.total_points}
                             </TableCell>
                             <TableCell className="text-right font-mono text-muted-foreground">
                               {winner.rank_sum}
@@ -168,6 +281,11 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                     })}
                   </TableBody>
                 </Table>
+                {pointsAbsent && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground border-t">
+                    Points were not imported for this tournament. Teams were ranked by rank sum.
+                  </p>
+                )}
               </div>
             ) : (
               <Alert variant="default" className="border-warning/30 bg-warning/10">
@@ -177,8 +295,12 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
                   <p className="mb-2">Common causes:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm">
                     <li><strong>Missing "{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}" data</strong> – players may not have this field populated in the import</li>
-                    {(group.config.female_slots > 0 || group.config.male_slots > 0) && (
-                      <li><strong>Gender requirements impossible</strong> – not enough female ({group.config.female_slots}) or male ({group.config.male_slots}) players per team</li>
+                    {ruleClause && (
+                      <li>
+                        <strong>No team met the composition rule</strong> – the rule applied here is
+                        {' '}{ruleClause}. Girls are counted only where the player list records a player
+                        as female, so a file with no sex column cannot meet a girls minimum.
+                      </li>
                     )}
                     <li><strong>Team size too large</strong> – teams need at least {group.config.team_size} players to qualify</li>
                   </ul>
@@ -244,23 +366,28 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
               </Alert>
             )}
 
-            {/* Ineligible institutions */}
-            {group.ineligible_institutions > 0 && group.ineligible_reasons.length > 0 && (
+            {/* Ineligible institutions — ORGANIZER SURFACES ONLY.
+                Rendered from the uncapped `ineligible_details`, so every excluded
+                institution is listed; `ineligible_reasons` stays in the response for
+                backward compatibility but is no longer read here. Absent on the
+                persisted and public paths until TC1.6, and the empty array renders
+                nothing rather than an empty collapsible. */}
+            {showDiagnostics && ineligibleDetails.length > 0 && (
               <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     {showIneligible ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    {group.ineligible_institutions} ineligible team{group.ineligible_institutions !== 1 ? 's' : ''}
+                    {ineligibleDetails.length} ineligible team{ineligibleDetails.length !== 1 ? 's' : ''}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="mt-2 text-sm text-muted-foreground space-y-1 pl-4 border-l-2 border-muted">
-                    {group.ineligible_reasons.slice(0, 5).map((reason, i) => (
-                      <p key={i}>• {reason}</p>
+                    {ineligibleDetails.map((detail) => (
+                      <p key={detail.key}>
+                        • {detail.key} — {detail.playerCount} player{detail.playerCount !== 1 ? 's' : ''}:{' '}
+                        {formatExclusionSentence(detail.reason)}
+                      </p>
                     ))}
-                    {group.ineligible_reasons.length > 5 && (
-                      <p className="italic">...and {group.ineligible_reasons.length - 5} more</p>
-                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -272,7 +399,7 @@ function GroupCard({ group, onTieResolutionRequest }: { group: GroupResponse; on
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -333,7 +460,12 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
 
       <div className="space-y-4">
         {data.groups.map((group) => (
-          <GroupCard key={group.group_id} group={group} onTieResolutionRequest={onTieResolutionRequest} />
+          <GroupCard
+            key={group.group_id}
+            group={group}
+            onTieResolutionRequest={onTieResolutionRequest}
+            showDiagnostics={showDiagnostics}
+          />
         ))}
       </div>
     </div>

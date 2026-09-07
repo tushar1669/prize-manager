@@ -159,7 +159,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="female-slots">Female Slots</Label>
+                <Label htmlFor="female-slots">Girls on the team (minimum)</Label>
                 <Input
                   id="female-slots"
                   type="number"
@@ -169,9 +169,15 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
                   onChange={(e) => setFemaleSlots(parseInt(e.target.value) || 0)}
                   className={cn(validationError && femaleSlots + maleSlots > teamSize ? 'border-destructive' : '')}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Counts only players recorded as female in the player list.
+                </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="male-slots">Male Slots</Label>
+                {/* RULING 1: this minimum is satisfied by "not F", which includes a
+                    player whose sex was never recorded. Labelling it "Male" would be
+                    a claim the data does not support. */}
+                <Label htmlFor="male-slots">Other players (minimum)</Label>
                 <Input
                   id="male-slots"
                   type="number"
@@ -181,6 +187,9 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
                   onChange={(e) => setMaleSlots(parseInt(e.target.value) || 0)}
                   className={cn(validationError && femaleSlots + maleSlots > teamSize ? 'border-destructive' : '')}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Counts every player not recorded as female — including players whose sex was not recorded.
+                </p>
               </div>
             </div>
 
@@ -189,12 +198,18 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             )}
 
             <div className="text-xs text-muted-foreground space-y-1">
+              {/* These are MINIMUMS, never exact quotas. The old examples said
+                  "exactly 2 girls + 2 boys", which the engine has never done. */}
               <p><strong>Examples:</strong></p>
-              <p>• team_size=4, female_slots=2, male_slots=2 → exactly 2 girls + 2 boys</p>
-              <p>• team_size=5, female_slots=2, male_slots=0 → at least 2 girls, rest can be any gender</p>
-              <p>• team_size=4, female_slots=0, male_slots=0 → no gender requirements</p>
+              <p>• Team of 4, minimum 2 girls, minimum 2 other players → the team must include at least 2 girls and at least 2 other players.</p>
+              <p>• Team of 5, minimum 2 girls, minimum 0 other players → the team must include at least 2 girls; the remaining 3 places go to the best-ranked players left, whoever they are.</p>
+              <p>• Team of 4, minimum 0 girls, minimum 0 other players → no composition rule; the team is simply the 4 best-ranked players.</p>
               <p className="pt-2 italic">
-                If slots sum to less than team_size, remaining boards are filled by best remaining players of any gender.
+                If the minimums add up to less than the team size, remaining boards are filled by the best remaining players, of any gender.
+              </p>
+              <p className="pt-2">
+                We can only count girls when the player list records them as female. If your file has no
+                sex column, a girls minimum cannot be met.
               </p>
             </div>
           </div>

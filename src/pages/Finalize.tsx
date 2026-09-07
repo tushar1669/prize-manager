@@ -686,6 +686,7 @@ export default function Finalize() {
                       <TeamPrizesTabView
                         tournamentId={id as string}
                         allocationVersion={allocationVersion}
+                        showDiagnostics
                       />
                     </TabsContent>
                   </div>

@@ -9,7 +9,11 @@ import {
   type TeamWarning,
 } from "../_shared/teamPrizes.ts";
 
-const BUILD_VERSION = "2026-09-07T00:00:00Z-TC1.4b";
+// Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
+// version number is not evidence of a deploy. It must therefore change whenever this
+// file's behaviour changes — a constant that survives an amendment proves nothing.
+// TC1.5 added `players_without_points` to the response, so it changes here.
+const BUILD_VERSION = "2026-09-07T09:00:00Z-TC1.5";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -149,6 +153,17 @@ interface GroupResponse {
    * exclusion — see ARCHITECTURE §4.
    */
   players_without_group_field: number;
+  /**
+   * Players in the SELECTED pool — those actually placed into a scored team — whose
+   * `points` column is null or not finite. The scorer coerces such a player to 0, so
+   * a team with no points at all totals 0, a number indistinguishable from a team
+   * that scored nothing. This count lets the display say "—" and name the cause
+   * instead of inferring an absence from a row of zeros.
+   *
+   * Every scored institution contributes exactly `team_size` players, so the pool
+   * size is `eligible_institutions * team_size` and a consumer can test equality.
+   */
+  players_without_points: number;
   scored_institutions?: WinnerInstitution[];
 }
 
@@ -371,6 +386,7 @@ Deno.serve(async (req: Request) => {
           ineligible_reasons: [`Invalid group_by value: ${group.group_by}`],
           ineligible_details: [],
           players_without_group_field: 0,
+          players_without_points: 0,
         });
         continue;
       }
@@ -414,6 +430,20 @@ Deno.serve(async (req: Request) => {
         reason: e.reason,
         playerCount: e.playerCount,
       }));
+
+      // Counted over the selected pool only — the players whose points are summed —
+      // because that is the pool the "—" display speaks for. Read from the raw rows,
+      // not from `teamPlayers`, where `points ?? 0` has already erased the null.
+      const rawPointsById = new Map(typedPlayers.map((p) => [String(p.id), p.points]));
+      let playersWithoutPoints = 0;
+      for (const institution of scoredInstitutions) {
+        for (const player of institution.team) {
+          const raw = rawPointsById.get(player.id);
+          if (raw === null || raw === undefined || !Number.isFinite(Number(raw))) {
+            playersWithoutPoints += 1;
+          }
+        }
+      }
 
       const boundaryTies = detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
       console.log(`[allocateInstitutionPrizes] Group "${group.name}": ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${droppedPlayersWithoutKey} players without a ${columnName} value`);
@@ -474,6 +504,7 @@ Deno.serve(async (req: Request) => {
         ineligible_reasons: ineligibleReasons.slice(0, 10),
         ineligible_details: ineligibleDetails,
         players_without_group_field: droppedPlayersWithoutKey,
+        players_without_points: playersWithoutPoints,
         scored_institutions: scoredForResponse,
       });
     }

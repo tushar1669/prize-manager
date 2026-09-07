@@ -179,6 +179,29 @@ removed.
 **Re-run the `glanz-open-haryana-cup` curl after any `publicTeamPrizes` deploy** — it has
 `publications.version = 2` and `allocation_version = 13`, so it discriminates.
 
+### 3.1 `generatePdf` still has the live-compute fallback — FILED, NOT FIXED
+
+`loadTeamPrizes` (`supabase/functions/generatePdf/index.ts:155-169`) prefers the persisted snapshot
+via `publicTeamPrizes`, but when that returns nothing it falls back to invoking
+`allocateInstitutionPrizes` and **computing the team standings live at PDF-generation time**.
+
+This is the same defect TC0-d removed from `publicTeamPrizes`: a recompute at request time can change
+an announced result. Correct a player's club spelling, or edit any player row, after the prizes were
+announced and a PDF generated afterwards can name a different winning institution than the one read
+out at the ceremony — with nothing in the document indicating that it was recomputed rather than read.
+`generatePdf` is a second document-producing surface with the property §3 forbids for the public page.
+
+**Status: FILED, not fixed. Out of scope for TC1.** It is recorded here so it is not rediscovered as
+new, and so no one reads §3's "no compute path" as covering every published surface — it covers
+`publicTeamPrizes` only. Removing the fallback is not a TC1 step and must not be attempted as one.
+
+**Consequence to record (TC1.5).** `players_without_points`, and therefore the "—" Points cell and the
+"Points were not imported for this tournament" footnote, ships only in the `allocateInstitutionPrizes`
+response. The persisted snapshot does not carry it. So on the PDF the footnote fires **only on this
+live-compute path** — precisely the path that should not be running — and a PDF built from the
+persisted snapshot prints the bare `0` totals until persistence lands in TC1.6. The two are fixed by
+the same work, in that order: persist the field, then the fallback has nothing left to justify it.
+
 ## 4. Team reason-code vocabulary
 
 Mirrors the individual engine's structure at `supabase/functions/allocatePrizes/index.ts:1519-1521`

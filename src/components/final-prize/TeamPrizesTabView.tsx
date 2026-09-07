@@ -14,9 +14,20 @@ interface TeamPrizesTabViewProps {
   allocationVersion?: number;
   /** Called whenever the pending-tie state changes */
   onPendingTiesChange?: (hasPending: boolean) => void;
+  /**
+   * Organizer-only diagnostics — the list of institutions that did not qualify.
+   *
+   * Defaults to FALSE, and the default is the point: this component is rendered by
+   * BOTH Finalize (a working review surface) and FinalPrizeView (the print/handout
+   * artifact, `FinalPrizeView.tsx:124`). Gating on the component rather than on the
+   * surface would put the list of schools that failed to qualify onto a printed
+   * page, which carries the same reputational risk as publishing it. Only
+   * `src/pages/Finalize.tsx` passes this true.
+   */
+  showDiagnostics?: boolean;
 }
 
-export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange }: TeamPrizesTabViewProps) {
+export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false }: TeamPrizesTabViewProps) {
   const {
     hasTeamPrizes,
     checkingTeamPrizes,
@@ -101,6 +112,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
         data={data}
         isLoading={false}
         error={null}
+        showDiagnostics={showDiagnostics}
         tournamentId={tournamentId}
         allocationVersion={allocationVersion}
         onTieResolutionRequest={handleTieResolutionRequest}

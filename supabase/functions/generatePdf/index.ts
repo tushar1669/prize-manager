@@ -57,6 +57,11 @@ interface GroupResponse {
   eligible_institutions: number;
   ineligible_institutions: number;
   ineligible_reasons: string[];
+  /**
+   * Optional: shipped by allocateInstitutionPrizes (TC1.5), absent from the persisted
+   * snapshot until TC1.6. When absent the Points column behaves exactly as before.
+   */
+  players_without_points?: number;
 }
 
 interface TeamPrizeResults {
@@ -81,6 +86,36 @@ const GROUP_BY_LABELS: Record<string, string> = {
   group_label: 'Swiss Group (Gr)',
   type_label: 'Swiss Type',
 };
+
+/**
+ * RULING 2 (PRD §3), binding: printed output states the RULE THAT WAS APPLIED and
+ * never asserts a count of players' attributes. The PDF previously printed
+ * "(2F + 2M required)", which claimed to know what four people on a roster are.
+ *
+ * RULING 1: `male_slots` means "not F" — satisfied by a player whose sex was never
+ * recorded — so it prints as "other players", never "boys" or "male".
+ *
+ * A deliberate PARALLEL of `formatTeamRuleClause` in
+ * `src/components/allocation/TeamPrizeResultsPanel.tsx`. The two run in different
+ * runtimes (Deno edge function vs. browser bundle) with no module they can share,
+ * so the duplication is the cost of the boundary — same pattern as the exclusion
+ * sentences in allocateInstitutionPrizes. Keep the wording in step.
+ *
+ * Returns null when both minimums are zero: no rule was applied, so nothing prints.
+ */
+function formatTeamRuleClause(config: { female_slots: number; male_slots: number }): string | null {
+  const female = Math.max(0, Math.trunc(Number(config?.female_slots) || 0));
+  const male = Math.max(0, Math.trunc(Number(config?.male_slots) || 0));
+  if (female === 0 && male === 0) return null;
+
+  const parts: string[] = [];
+  if (female > 0) parts.push(`at least ${female} girl${female === 1 ? '' : 's'}`);
+  if (male > 0) {
+    const lead = parts.length === 0 ? 'at least ' : '';
+    parts.push(`${lead}${male} other player${male === 1 ? '' : 's'}`);
+  }
+  return parts.join(', ');
+}
 
 function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -404,13 +439,18 @@ function generateHtmlReport(
         const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
         const groupByLabel = GROUP_BY_LABELS[group.config.group_by] || group.config.group_by;
 
-        let genderReq = '';
-        if (group.config.female_slots > 0 || group.config.male_slots > 0) {
-          const parts = [];
-          if (group.config.female_slots > 0) parts.push(`${group.config.female_slots}F`);
-          if (group.config.male_slots > 0) parts.push(`${group.config.male_slots}M`);
-          genderReq = ` (${parts.join(' + ')} required)`;
-        }
+        const ruleClause = formatTeamRuleClause(group.config);
+        const genderReq = ruleClause ? ` (rule applied: ${ruleClause})` : '';
+
+        // Every scored institution contributes exactly team_size players, so this is
+        // the pool allocateInstitutionPrizes counted `players_without_points` over.
+        // Equal means not one counted player had a points value, and every total in
+        // the table below is a 0 that means "absent" rather than "scored nothing".
+        const selectedPoolSize = group.eligible_institutions * group.config.team_size;
+        const pointsAbsent =
+          typeof group.players_without_points === 'number' &&
+          selectedPoolSize > 0 &&
+          group.players_without_points === selectedPoolSize;
 
         return `
           <h3>${escapeHtml(group.name)}</h3>
@@ -446,13 +486,16 @@ function generateHtmlReport(
                           ${winner.players.map(p => `${escapeHtml(p.name)} (#${p.rank})`).join(', ')}
                         </div>
                       </td>
-                      <td>${winner.total_points}</td>
+                      <td>${pointsAbsent ? '&mdash;' : winner.total_points}</td>
                       <td>${escapeHtml(prizeText)}</td>
                     </tr>
                   `;
                 }).join('')}
               </tbody>
             </table>
+            ${pointsAbsent ? `
+              <p class="meta">Points were not imported for this tournament. Teams were ranked by rank sum.</p>
+            ` : ''}
           ` : `
             <p class="meta">No eligible institutions for this group.</p>
           `}
