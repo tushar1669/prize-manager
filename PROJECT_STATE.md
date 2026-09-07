@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 6 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 7 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -12,7 +12,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 **Why it exists, from the Phase 1 documents.** The task was brochure extraction; the idea it was planning for was bigger. `docs/extraction-engine/PRD.md` calls Prize Manager the *"first face of the Universal Extraction Engine"*, and `ARCHITECTURE.md` opens with **"One engine, many faces."** The destination was named under "design for, don't build": a standalone product surface — REST API keys plus an MCP server exposing `extract_document`, `get_extraction`, `query_documents`, with multi-tenant metering. The engine has two faces in production today (`chess_brochure`, `payment_screenshot`) and the generality bet has held: Phase 2A added payment screenshots with a new schema row and new invariants, not a new pipeline.
 
 **Three-platform context:**
-- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the F3 oversight loop (28 Aug), the `extraction_review_queue` security fix and Resend SMTP migration (29 Aug), F3-C2 batch A (30–31 Aug), the B16 investigation (31 Aug), batch F1 and the backlog sweeps (1 Sep), G1/G2/G3 closing the X-exposure (2 Sep), B22 and GTM1 (3–4 Sep), B18-a/B18-b version-pinning published results (5 Sep), and now **TC0 — the team engine reads and writes on one version namespace (5–6 September)**.
+- **prize-manager.com** — Tournament prize management (live). Phase 2A/2A-2/2A-3 added payment screenshot verification, the full payment lifecycle, UTR trust hardening, the profile prerequisite, **conditional auto-approval (live 20 August 2026)**, the F3 oversight loop (28 Aug), the `extraction_review_queue` security fix and Resend SMTP migration (29 Aug), F3-C2 batch A (30–31 Aug), the B16 investigation (31 Aug), batch F1 and the backlog sweeps (1 Sep), G1/G2/G3 closing the X-exposure (2 Sep), B22 and GTM1 (3–4 Sep), B18-a/B18-b version-pinning published results (5 Sep), TC0 — the team engine reads and writes on one version namespace (5–6 Sep), and now **TC1 — gender slots, reason codes, tier limits and masking, closing DD5 end to end (6–7 September)**.
 - **certificate-hub.com** — Certificate creation, paywalled. Will consume the engine via REST API (Phase 2C). **Parked by owner decision 2 Sep.** Public-page inventory 5 Sep — see §15.
 - **sportup.online** — Discovery + tournament management. Will consume via REST API (Phase 2C). **Carries one live exposure, `/debug/auth`.** See §15.
 
@@ -23,10 +23,11 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`f2a6c8e`** (TC0-f merge) · `2ef0c93` TC0-d/e · `06e41d1` TC0-a/b/c · `d9d1da9` PROJECT_STATE · `1e0dada` sweeps · `7a187aa` B18 merge · `7b6c152` B22 merge. **`PROJECT_STATE.md` lives at the repo root only** |
-| **Edge functions** | `extract` **v48** · `send-payment-notifications` **v9** (`verify_jwt=false`) · `commit-extraction` **v14** · `sendWelcomeOnboardingEmail` **v21** · `allocatePrizes` v368 · `finalize` v355 · `generatePdf` v353 · `parseWorkbook` v341 · `allocateInstitutionPrizes` v251 · **`publicTeamPrizes` v241 (`verify_jwt=false`, build `2026-09-05T20:00:00Z-TC0d`)** · `pmPing` v238 (`verify_jwt=false`) · **`backfillTeamAllocations` v39 (build `2026-09-05T20:00:00Z-TC0e`)** |
-| **`verify_jwt=false` is THREE functions** | `send-payment-notifications`, `pmPing`, **`publicTeamPrizes`**. Prior PROJECT_STATE listed only the first — corrected 6 Sep from `list_edge_functions` |
-| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy. Better than a hash: **make the function report its own build string** and curl its `?ping=1`. That is how TC0-d/e were confirmed, and a version bump cannot fake it |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`fc62a60`** (TC1.6, HEAD) · `9ed454e` RCA export message fix · `712532a` TC1.5 · `3edf96e` TC1.4b · `4777bd1` TC1.4 · `f2a6c8e` TC0-f merge. **`PROJECT_STATE.md` lives at the repo root only** |
+| **Deploy model — CORRECTED 7 Sep (DD6)** | **`git push` to `main` deploys BOTH the edge functions and the frontend.** There is no CLI deploy step and no Lovable publish gate — a push **is** a deploy. Consequence: **there is no review gate between commit and production.** Anything that must be reviewed before going live has to be reviewed **before** the push, not after |
+| **Edge functions — versions are not evidence** | Every push redeploys every edge function and the frontend, so a recorded version number goes stale within a day. The only reliable check is a function's own build string via `?ping=1` (Y3, DD6). `allocateInstitutionPrizes` carries `BUILD_VERSION = "2026-09-07T09:00:00Z-TC1.5"` |
+| **`verify_jwt=false` is THREE functions** | `send-payment-notifications`, `pmPing`, **`publicTeamPrizes`** |
+| **Version-vs-hash rule (Y3)** | A version bump is not evidence of a deploy. Better than a hash: **make the function report its own build string** and curl its `?ping=1`. That is how TC0-d/e were confirmed, and a version bump cannot fake it. Since DD6, the same logic covers the frontend too |
 | **Free-plan log retention** | **1 day.** Edge-function logs older than ~24h are gone |
 | Active extraction schema | v5 (chess_brochure), v3 (payment_screenshot, id `4e8beb4d-4a07-4ef8-a774-18b22f722522`) |
 | Gemini model | `GEMINI_MODEL` = `gemini-3.1-flash-lite` |
@@ -36,8 +37,9 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | **F2 kill switch** | `platform_feature_flags` — row `key='payment_auto_approve'`, `enabled = true` since 2026-08-20 17:26:33 UTC. RLS on, zero policies. Off switch: `supabase/ops/f2_auto_approve_off.sql` |
 | **F3 oversight objects** | `payment_auto_approval_audit` · `record_auto_approval_audit` · `revoke_auto_entitlement` · `list_auto_approvals()` |
 | **`public.referrals` triggers** | **ZERO, by design, since `20260822120000`.** Do not re-add one — see W1 |
-| Test baseline | **479 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **482** |
+| Test baseline | **528 passing / 3 known failures** (conflict-utils ×2, martech-metrics ×1) of **531**, across 60 files |
 | **The 3 known failures are probably ONE bug** | Off-by-one-day plus inclusive-boundary on an IST (+05:30) machine is the signature of local-time parsing against UTC dates. Untested hypothesis. Tier 3 |
+| **Unconfirmed flake (7 Sep)** | A fourth failure was observed once on an unchanged tree and never reproduced across four later runs. It did not name itself in the summary. Record as an unconfirmed flake, not a known failure. Tier 3 |
 | TypeScript check | `npx tsc -p tsconfig.app.json --noEmit` — **12 errors in 6 files**. **Per-file:** `PendingPaymentsPanel.tsx` 5 · `TournamentUpgrade.tsx` 2 · `BrochureImportDialog.tsx` 2 · `BrochureReview.tsx` 1 · `AdminPayments.tsx` 1 · `useAuth.tsx` 1. Root `npx tsc --noEmit` and `npm run typecheck` check **nothing** |
 | **tsc exits non-zero, so never chain it** | `npx tsc … && npx vitest run` silently SKIPS vitest. Use `;` or separate commands |
 | pg_cron jobs | jobid 1 `expire-stuck-extraction-documents` (*/10); jobid 2 `drain-payment-notifications` (*/2) |
@@ -45,7 +47,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | **Verification harnesses** | **9 total.** `f2_gate_checks.sql` 24/24 · `f3_audit_checks.sql` 33/33 · `f3c_read_checks.sql` 13/13 · `f0d_rpc_checks.sql` 17/17 · `pf1b_expected_amount.sql` 9/9 · `g1_publish_state_checks.sql` 16/16 · `b22_publish_gate_checks.sql` 14/14 · `b18_version_pin_checks.sql` 16/16 · **`tc0_team_version_checks.sql` 12/12 (new 6 Sep)** |
 | **Backlog sweeps** | `supabase/ops/backlog_sweep.sql` (**24 checks**) · `scripts/backlog_sweep_repo.sh` (**11 checks** + tsc baseline). **Run both before planning anything.** Last reading: **DB 12 OPEN / 11 CLOSED / 1 INFO**, **repo 7 OPEN / 4 CLOSED** |
 | Design doc | `docs/design/UI_CONVENTIONS.md` — dark-only, enforced by `tests/ui-conventions.spec.ts` |
-| **Live census (verified 6 Sep, post-TC0)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications, 0 NULL pins** · 3 institution_prize_groups (2 tournaments, both DRAFTS) · 3 team_allocations (1 tournament) · 12 payments · 6 referrals · 5 referral_rewards |
+| **Live census (verified 6 Sep, post-TC0)** | 43 auth users · **133 tournaments, 35 published** · **35 active publications, 0 NULL pins** · 3 institution_prize_groups (2 tournaments, both DRAFTS) · 3 team_allocations (1 tournament) · 12 payments · 6 referrals · 5 referral_rewards. **Player/payment/gender census measured 7 Sep — see §12.18** |
 | Platform payee VPA | `9559161414-5@ybl` — hardcoded as `UPI_ID` in `TournamentUpgrade.tsx` **and** held as `PLATFORM_PAYEE_VPA` |
 
 ### Public routes — CORRECTED 6 September
@@ -71,14 +73,14 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | **`publications` triggers** | `trg_enforce_team_snapshots_on_publications` [BEFORE INSERT OR UPDATE OF is_active, version] and `trg_guard_publication_requires_team_snapshots` [BEFORE UPDATE OF is_active]. Both **column-scoped**: an `allocation_version`-only write fires neither (CC9). **Since TC0 both join `publications.allocation_version`** |
 | **`publications` write surface** | `anon` AND `authenticated` hold full INSERT/UPDATE/DELETE; `org_publications_access` is `FOR ALL` owner-or-master. An organizer can rewrite their own pin. **Do not describe published results as "immutable"** — TC0/B18 deliver stability against accidental drift, not tamper-proofing |
 
-### Team engine — mapped 5–6 September
+### Team engine — mapped 5–7 September
 
 **DD1 boundary. The team engine is separate from the main allocation engine and always must be.**
 
 | Object | Role |
 |---|---|
-| `_shared/teamPrizes.ts` | `computeTeamScores(players, teamSize, groupBy)` + `detectTieAtPrizeBoundary`. **Takes NO gender parameters** — see DD5 |
-| `allocateInstitutionPrizes` | **Read-only compute/preview. Writes nothing.** Calls `detectTieAtPrizeBoundary` |
+| `_shared/teamPrizes.ts` | `computeTeamScores(players, teamSize, groupBy)` + `detectTieAtPrizeBoundary`, now backed by `computeTeamScoresWithReasons` (TC1.3/TC1.4). **Gender-slot aware since TC1.4 — DD5 closed 7 Sep, see §12.17** |
+| `allocateInstitutionPrizes` | **Read-only compute/preview. Writes nothing.** Calls `detectTieAtPrizeBoundary` and, since TC1.4b, `computeTeamScoresWithReasons` |
 | `finalize` | **The primary writer of `team_allocations`** in the normal flow. Invokes `allocateInstitutionPrizes`, deletes and re-inserts at the ALLOCATIONS version. §13's old description ("writes allocations but computes nothing") was wrong |
 | `backfillTeamAllocations` | Master-only repair. Outside the normal flow. Since TC0 resolves from `allocation_version`; `body.version` still overrides |
 | `publicTeamPrizes` | Public reader. Since TC0 pins to `allocation_version` and **has no compute path at all** |
@@ -145,6 +147,16 @@ Fixed by seeding at version 5, forcing the counters apart. T5 now cannot pass ag
 `allocateInstitutionPrizes` line 27: *"Supports gender slot requirements (e.g., team of 4 must include 2 girls + 2 boys)."* Line 339 calls `computeTeamScores(teamPlayers, group.team_size, columnName)` — the function has **no gender parameters at all**. `female_slots` and `male_slots` are stored, echoed in API responses, badged in the UI as `F2/M2`, printed over results as `2F + 2M`, and never used in selection.
 
 `TeamPrizeRulesSheet.tsx` states the rule to the organizer in writing. **Only the "no gender requirements" case is true.** Exposure today is nil — all 3 live groups have `female_slots = 0, male_slots = 0` — and goes live the moment Mode A ships. Tracked as TC1.
+
+**Closed 7 September 2026 (TC1.6).** Gender slots are now read by the selector, reason codes render as plain sentences, print/display go through one formatter, and the promise in `TeamPrizeRulesSheet.tsx` matches the code. Closed end to end: engine, organizer display, print gating, PDF. See `docs/team-championship/ARCHITECTURE.md` §5 and §12.17.
+
+### DD6 — A git push deploys everything; there is no review gate (7 September 2026)
+
+Measured this session: `allocateInstitutionPrizes` answered `?ping=1` with the TC1.4b build string **before** any CLI deploy; all eleven other edge functions moved +3 versions from the §2 baseline with no CLI deploy for any of them; and `/admin/team-snapshots`'s build stamp read `fc62a60` — HEAD — with no Lovable publish performed.
+
+§2 and §19 previously stated that edge functions need `supabase functions deploy` and that a `src/` change is not live until Lovable publishes. **Both were false. Pushing to GitHub deploys both the edge functions and the frontend.**
+
+**Consequence to state plainly: there is no review gate between commit and production.** A `git push` **is** a deploy. Any step that must be reviewed before going live has to be reviewed **before** the push, not after.
 
 **Phase 2B:** 13. Bank statements are `privacy_class='sensitive'`. NEVER through Gemini. pdfplumber only.
 
@@ -225,28 +237,69 @@ Discriminating against the old code: T1, T2, T3 (structural), T5, T8. The rest a
 
 ---
 
+## 12.17 · 6–7 September 2026 — TC1 shipped, DD5 closed end to end
+
+TC1 shipped in order: TC1.1 docs, TC1.1b `docs/team-prizes.md` corrections, TC1.2 a real test suite (replacing the self-reproducing `tests/institution/` specs — DD3), TC1.3 reason codes, TC1.4 gender slots, TC1.4b wiring + deploy, TC1.5 display and print, TC1.6 tier limits + masking + honest labels. HEAD is `fc62a60`.
+
+**DD5 is closed end to end:** engine, organizer display, print gating, PDF. See `docs/team-championship/ARCHITECTURE.md` §5 for the per-step detail and verification.
+
+**RULING 3's per-group `minimum_roster_size` is decided but not built.** No `tc1_` harness was written — TC1.6's scope changed to tier limits, masking and honest group labels instead (`docs/team-championship/ARCHITECTURE.md` §2, §5; PRD §3). Anyone picking this up should treat `minimum_roster_size` as designed, not shipped.
+
+**New baselines:** vitest **528 passed / 3 known failures** of **531**, across 60 files — the 3 known failures are unchanged (conflict-utils ×2, martech-metrics ×1). tsc 12 errors in 6 files, unchanged. Harnesses still 9 — TC1 added none.
+
+**RCA export was never broken.** `exportRcaToXlsx` returned `false` when there were no unfilled prizes, and the caller reported that as a failure. Fixed in `9ed454e` as a message, not a download fix — same family as D21/D32.
+
+---
+
+## 12.18 · Census and business facts (measured 7 September 2026)
+
+- **Players.** 15,700 player records. 10,479 are minors by DOB; 8,726 carry an under-18 type label; 3,009 minors appear on PUBLISHED public pages with name, age category and school. Measured fact only — no legal conclusion drawn.
+- **Payments.** 3 approved totalling ₹1,500, from 2 accounts, **both Tushar's** (`tusharsaraswat68@gmail.com` and its `+r3` alias). **No third party has ever paid.** 9 rejected. The pay path is live and reachable.
+- **Coupon farming is closed.** `authenticated` holds zero column-level UPDATE grants on `profiles`, and `update_my_profile` only READS `profile_reward_claimed` to echo it — it cannot set or reset it.
+- Only 2 of 43 profiles have ever claimed the profile reward. Flagged as a possible dead write path (the D40 lesson), unverified.
+- **`players.points`:** 10,614 of 15,700 populated, across 53 of 77 tournaments, including 3,632 half-point scores. Tournament `0d54de9f` (Jaipur) has NULL points although its source file carries `Pts` — a stale import artifact, **not** a platform defect.
+- **Gender provenance:** 68 of 77 tournaments follow "F marked, everyone else blank"; only 2 have explicit M. Jaipur's F marks come from an unlabelled column after the name, handled by `genderInference`'s headerless case.
+- **Migration ledger drift.** `20251201090000_add_category_type_to_categories.sql` is recorded as APPLIED in `supabase_migrations.schema_migrations`, but the column does **not** exist in production — a false-applied ledger entry, the inverse of D40. The engine reads `criteria_json.category_type` and is unaffected.
+
+---
+
+## 12.19 · Individual engine gender investigation — closed negative (7 September 2026)
+
+An investigation asked whether treating blank gender as male was a carried-over blunder in individual prize allocation. **It is not.** `allocatePrizes:1523-1556` implements: girls categories require an explicit `F`; boys mode (`'M'` or `'M_OR_UNKNOWN'`) means "not F" and admits blanks; open admits everyone.
+
+Measured across every allocation ever made: **zero** players with unrecorded gender have won a girls-only prize, across 62 tournaments. 541 allocation rows went to unrecorded-gender players under boys-mode rules, as intended. Swiss-Manager's manual documents the Sex field as *"W..woman, C..Computer or blank..man"*, so the rule matches the source format.
+
+**One real defect found:** tournament `8265c82a` has a girls-only prize and zero gender data on any of its 150 players, so that prize can never be awarded. It is **unpublished**. Filed as a Tier 2 item (§14): warn at finalize when a category's rule can match no player in the field.
+
+---
+
+## 12.20 · Status, 7 September 2026
+
+- **Legal brief sent to counsel 7 September**, covering all three properties (prize-manager.com, certificate-hub.com, sportup.online). Reply expected in 1–2 days.
+- **Payments stay LIVE by owner decision.**
+- **PostHog remains gated** behind the privacy work, per the §15 condition — not forgotten, deliberately blocked.
+- **Demo to FIDE arbiters 13 September 2026.** Run sheet exists outside the repo.
+
+---
+
 ## 13. Immediate next step
 
-**TC1 — gender slots, and the incomplete-teams toggle.**
+**TC1 is complete** (shipped 6–7 September 2026, HEAD `fc62a60`). DD5 is closed end to end: engine, organizer display, print gating, PDF. RULING 3's per-group `minimum_roster_size` is decided (PRD §3) but not built — no `tc1_` harness was written; TC1.6's scope changed to tier limits, masking and honest group labels instead. See §12.17.
 
-**Open with the sweeps, then load `/admin/team-snapshots`.** TC0 revived it; nobody has opened it since it started raising `42883`. It is the diagnostic for everything in this workstream and it has never been seen working.
+The tournament-level allow-incomplete-teams toggle considered on 6 September was **withdrawn by RULING 3** (7 September) in favour of a per-group `minimum_roster_size` — see PRD §3, ARCHITECTURE §2.
 
-### The owner's ruling, 6 September
+### Next, in order
 
-Whether a school with too few eligible players of the required gender is **excluded** or **fields an incomplete team** is an organizer decision, exposed in the UI as a **tournament-level toggle**, with clear wording and an "i" hover explaining the purpose.
-
-**Design note owed:** every other composition setting (`team_size`, `female_slots`, `male_slots`) lives **per prize group**, and one live tournament already has two groups with different team sizes. A tournament-level toggle applies to all groups at once. That matches the owner's framing — *"do we allow incomplete teams at this event"* is event policy, not a per-prize mechanic — but confirm before schema work.
-
-### TC1 scope
-
-1. Add gender-slot selection to `computeTeamScores` in `_shared/teamPrizes.ts` (DD1 team side; `finalize` untouched).
-2. Add the tournament-level allow-incomplete-teams column + UI toggle.
-3. **Rewrite `tests/institution/` to import the real module** (DD3). Until then it is worse than no tests, because it looks like coverage.
-4. Verify against the promise already printed in `TeamPrizeRulesSheet.tsx`.
+1. **Full test run** — two test cases + ground truth against the Jaipur Final Prize List, plus a UI read-through.
+2. **Safe GTM pages** — About, FAQ, Pricing, Contact. Terms/Privacy/Refund get placeholder routes only (legal copy is not drafted by any model — see §15).
+3. **SP-1** — `/debug/auth` on sportup.online, in its own session (different repo).
+4. **sportup SP-2…SP-7** — the remaining sportup.online GTM defects (§14, §15).
 
 ### Then TC2 / TC3
 
-**TC2 — Mode A (automatic).** Organizer uploads the Swiss Manager file, defines composition, system picks each school's team by highest points/rank and ranks the teams. Largely exists once TC1 lands: `parseWorkbook` handles upload, the schema holds composition, `allocateInstitutionPrizes` selects and ranks.
+Not the immediate next step, but the next Team Championship work once the above lands.
+
+**TC2 — Mode A (automatic).** Organizer uploads the Swiss Manager file, defines composition, system picks each school's team by highest points/rank and ranks the teams. Largely exists now that TC1 has landed: `parseWorkbook` handles upload, the schema holds composition, `allocateInstitutionPrizes` selects and ranks.
 
 **TC3 — Mode B (manual).** Organizer fixes the size and composition, then for each school picks the team from a dropdown of eligible players; the system sums their scores. Genuinely new — needs a schema change to record a hand-picked team, a per-school UI, and a writer.
 
@@ -266,13 +319,16 @@ Whether a school with too few eligible players of the required gender is **exclu
 | GTM1 · B22 · sportup claims | ✅ 3–4 Sep |
 | B18-a / B18-b | ✅ 5 Sep |
 | **B21 / TC0 — team results unpinned and the one-way door** | ✅ **6 Sep — 12/12, verified live** |
+| **TC1 / DD5 — gender slots enforced, closed end to end** | ✅ **6–7 Sep — TC1.1 through TC1.6, HEAD `fc62a60`. See §12.17** |
 
 **Still Tier 1, from the site inventories (§15):** **SP-1** `/debug/auth` ungated on sportup.online — **do not wait for GTM** · **SP-2** contradictory refund policies · **SP-3** false payment claims (cards/net banking advertised, none processed) · **SP-4/5/6/7** impossible refund mechanics, mismatched windows, phantom fees, garbled Privacy line · **PM-1** prize-manager.com has **no legal pages at all** while taking UPI money.
 
 ### Tier 2
 
-- **TC1 gender slots (DD5)** — a written promise the engine does not keep. Nil exposure today, live the moment Mode A ships.
-- **`tests/institution/` rewrite (DD3)** — looks like coverage, is not.
+- **RULING 3 — per-group `minimum_roster_size`** — decided 7 Sep, not built. No `tc1_` harness exists yet (§12.17, PRD §3).
+- **`generatePdf` live-compute fallback** (`generatePdf/index.ts:155-169`) — falls back to invoking `allocateInstitutionPrizes` and computing team standings live when the persisted snapshot is missing, the same defect TC0-d removed from `publicTeamPrizes`. Filed, out of scope for TC1. See `docs/team-championship/ARCHITECTURE.md` §3.1.
+- **Migration `20251201090000` false-applied ledger entry** — recorded APPLIED, column absent in production; engine unaffected (§12.18).
+- **Girls-only prize that can never be awarded** — tournament `8265c82a`, zero gender data on 150 players, unpublished. Warn at finalize when a category's rule can match no player in the field (§12.19).
 - **G4** — required details before publish, including not defaulting `start_date` to today.
 - **B7** drift migration — 8 untracked functions; `anon` EXECUTE on `admin_create_coupon`, `admin_list_coupons`, `redeem_coupon_for_tournament`, `bootstrap_master`, **and now the three TC0 functions**; `is_master(uuid)` still absent by design. **Sweep check B7a must be rewritten** — it measures "does the overload exist", and TC0 removed the dependency instead of adding the overload (CC4).
 - **B18-c** — `ON DELETE CASCADE` into published history. Same shape exists on `team_allocations` (`prize_id`, `group_id`). Own decision.
@@ -280,7 +336,7 @@ Whether a school with too few eligible players of the required gender is **exclu
 
 ### Tier 3
 
-The 3 known test failures are probably one timezone bug · no test covers `ColumnFilter` or the B18 selector modes · `PublicWinnersPage` "0 Winners" badge on the pin error path · `401` on `/rest/v1/players` capability probe · B1 · Y2 · B10 · B12 · B14 · B15 · B2 · B3 · B6 · Playwright layout test · `CLAUDE.md` drift · `MAX_ATTEMPTS=5` no backoff · `tsconfig.app.json` scope gap.
+The 3 known test failures are probably one timezone bug · a fourth vitest failure seen once on an unchanged tree, never reproduced across four later runs, unnamed in the summary — unconfirmed flake, not a known failure (§12.17) · no test covers `ColumnFilter` or the B18 selector modes · `PublicWinnersPage` "0 Winners" badge on the pin error path · `401` on `/rest/v1/players` capability probe · B1 · Y2 · B10 · B12 · B14 · B15 · B2 · B3 · B6 · Playwright layout test · `CLAUDE.md` drift · `MAX_ATTEMPTS=5` no backoff · `tsconfig.app.json` scope gap.
 
 ---
 
@@ -292,13 +348,13 @@ The 3 known test failures are probably one timezone bug · no test covers `Colum
 
 **The common item — one engagement, not three.** All three lack a named legal entity, registered address and governing-law clause, and all three need refund terms matching a manual UPI flow. **Brief one professional across all three.** Do NOT have any model draft the legal copy — sportup's Terms already had to be corrected for naming Stripe/PayPal on a UPI product, and the garbled *"We use manual payment for payment processing"* line is the visible scar.
 
-**Analytics — PostHog, not GA4.** Three conditions: install **after** the privacy work (DPDP Act 2023 applies); load by snippet, not npm (guardrail 5); do not replace `audit_events` or the martech dashboards.
+**Analytics — PostHog, not GA4.** Three conditions: install **after** the privacy work (DPDP Act 2023 applies); load by snippet, not npm (guardrail 5); do not replace `audit_events` or the martech dashboards. Status as of 7 Sep — legal brief sent to counsel, reply expected in 1–2 days; PostHog stays gated on that. See §12.20.
 
 ---
 
 ## 16. Ordering
 
-**TC1** → TC2 → TC3 → SP-1 (`/debug/auth`, immediately, out of band) → legal engagement + FAQ/About drafting (parallel, no repo access) → sportup copy fixes → sitemaps → G4 → PostHog → **GTM pages** → Tier 2 → Phase 2B.
+**TC1 (shipped)** → full test run (two test cases + Jaipur Final Prize List ground truth + UI read-through) → **GTM pages** (About/FAQ/Pricing/Contact — Terms/Privacy/Refund placeholder routes only) → SP-1 (`/debug/auth`, own session, different repo) → sportup SP-2…SP-7 → legal engagement (brief sent 7 Sep, in progress, parallel, no repo access) → sitemaps → G4 → PostHog → Tier 2 → Phase 2B → TC2 → TC3.
 
 certificate-hub.com integration parked by owner decision 2 Sep.
 
@@ -333,7 +389,7 @@ Superseded by §14's three-tier gate. The sweeps are the canonical *measurement*
 - **`supabase db execute` does not exist.** **`supabase functions logs` does not exist.** **`supabase db query --linked -f -` does not read stdin** — it looks for a file named `-`. Write a temp file and pass the path (new 6 Sep).
 - Migration workflow: `supabase db query --linked -f <file>` then `supabase migration repair --status applied <version>`.
 - **A new database function needs `notify pgrst, 'reload schema'`** (T6) — and so does a new COLUMN the frontend will select.
-- **Publishing is separate from merging.** A migration is live the moment `db query` runs; a `src/` change is not live until Lovable publishes. **Edge functions need `supabase functions deploy <name>` and are live immediately.**
+- **A `git push` to `main` is a deploy (DD6).** It ships both the edge functions and the frontend, with no CLI deploy step and no Lovable publish gate. There is no review gate between commit and production — review before the push, not after. A migration is live the moment `db query` runs.
 - **Make a function report its own build string and curl `?ping=1`** — a version bump cannot fake that (Y3, improved 6 Sep).
 - **A build report is a claim. Require the full `git --no-pager diff`** — blind to NEW files, so `git add -A` then `diff --cached` (CC6).
 - **Every migration must self-verify and fail loudly**, in one transaction, opening with a pre-flight that asserts the audited state.

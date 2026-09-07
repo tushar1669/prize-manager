@@ -1,6 +1,6 @@
 # Team Championship — PRD
 
-**Status:** TC1.1 · documentation only · 6 September 2026
+**Status:** TC1 complete (TC1.1–TC1.6) · 7 September 2026
 **Owner:** Tushar Saraswat
 **Scope boundary:** DD1 (PROJECT_STATE §3). This is the **team engine's own** product document.
 It never edits, and never speaks for, `supabase/functions/allocatePrizes`, `rule_config`, conflicts,
@@ -36,6 +36,10 @@ takes `(players, teamSize, groupBy)` and has no gender parameter of any kind.
 This is **DD5**. Exposure today is nil — all three live groups sit at `female_slots = 0, male_slots = 0`
 (PROJECT_STATE §2 live census, 6 Sep) — and becomes a false public statement the moment an organizer
 sets a slot and publishes. That is the TC1 trigger.
+
+**DD5 is closed as of TC1.6 (7 September 2026).** The selector now reads `female_slots`/`male_slots`,
+every site above renders through one rule-sentence formatter (RULING 2), and the promise in
+`TeamPrizeRulesSheet.tsx` matches the code. See `ARCHITECTURE.md` §5 and PROJECT_STATE §12.17.
 
 ## 3. Decided rulings
 

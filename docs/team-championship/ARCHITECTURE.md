@@ -1,7 +1,8 @@
 # Team Championship — Architecture
 
-**Status:** TC1.1 · documentation only · 6 September 2026
+**Status:** TC1 complete (TC1.1–TC1.6) · 7 September 2026
 **Scope boundary:** DD1 (PROJECT_STATE §3). This document describes the **team engine only**.
+**DD5 is closed end to end** — engine, organizer display, print gating, PDF. See PROJECT_STATE §12.17.
 
 **In the team engine — where all Team Championship work lands:**
 `supabase/functions/_shared/teamPrizes.ts` · `allocateInstitutionPrizes` · `backfillTeamAllocations` ·
