@@ -160,8 +160,9 @@ policies key off `tournaments.is_published`.
 
 **Decided by RULING 3 (7 September 2026):** `institution_prize_groups.minimum_roster_size int
 not null default team_size`, **per group**. The tournament-level allow-incomplete-teams flag is
-**withdrawn** — the per-group minimum subsumes it. One setting, not two. The migration is written
-in TC1.6, not before.
+**withdrawn** — the per-group minimum subsumes it. One setting, not two. **Not implemented in TC1** —
+see §5's TC1.6 entry. The column, `below_minimum_roster` code, and migration remain to be written;
+this paragraph records the decision, not a shipped schema.
 
 ## 3. Version pinning — inherited from TC0, unchanged by TC1
 
@@ -350,18 +351,58 @@ Codes render through the §4 mapping table as plain sentences, never as raw code
 *Verified by:* a screenshot of each of the four surfaces, and a generated PDF with no `F`/`M` count
 assertion anywhere on it.
 
-**TC1.6 — Roster policy and schema.**
-Per-group `minimum_roster_size` column and its `below_minimum_roster` code (RULING 3, signed off
-7 September); no tournament-level allow-incomplete-teams column is added. The real counts and reasons already reach
-the compute path (TC1.4b retired the literals at `:340-341`); TC1.6 adds persistence so
-`publicTeamPrizes` and `useTeamPrizeResults` read codes from the snapshot rather than hardcoding `0`,
-which makes the collapsible at `TeamPrizeResultsPanel.tsx:248` reachable on the published page too. **`finalize` is not
-edited** (DD1). Then `supabase/ops/tc1_team_gender_checks.sql` joins the existing nine harnesses, built
-to DD4's rule: fixtures whose two compared values differ.
-*Verified by:* a compute-preview response on a live draft carrying a non-zero `ineligible_institutions`,
-the harness green with at least one check demonstrated to fail against pre-TC1 behaviour, the
-`glanz-open-haryana-cup` curl of §3 still returning `pinned_version: 13` after the `publicTeamPrizes`
-deploy, and `/admin/team-snapshots` loaded — TC0 revived it and it has still never been seen working.
+**TC1.6 — Tier limits, masking, and honest group labels. SHIPPED, as the last step of TC1 — SCOPE
+CHANGED FROM THE PARAGRAPH ORIGINALLY HERE.**
+
+This paragraph originally described "Roster policy and schema" — the `minimum_roster_size` column and
+`below_minimum_roster` code from RULING 3. **That did not ship in TC1.** RULING 3 stays *decided* (PRD
+§3); its schema and persistence are not implemented and are not scheduled by this document. Anyone
+picking this up should treat `minimum_roster_size` as designed-but-not-built, not as done.
+
+What TC1.6 actually shipped, closing TC1:
+
+1. **Honest group label.** `TeamPrizeResultsPanel.tsx`, `TeamPrizesEditor.tsx` (via
+   `types.ts#GROUP_BY_OPTIONS`) and `generatePdf`'s own `GROUP_BY_LABELS` all renamed the `club` label
+   from `School / Academy / Club` to `Club / institution field`, and the two organizer-facing badges
+   (results panel, editor) are now prefixed `Grouped by:`. Same motivation as RULING 2: a group named
+   "Best State" but grouped on the `club` column must never print a badge that reads as a claim about
+   who the prize is for. The badge now states provenance (which column was grouped on), never the
+   prize's identity — the group's own `name` already says that.
+2. **Free-tier group limit (client-side gate) — see TC1.6-debt below.** `TeamPrizesEditor` disables
+   "Add Team Prize Group" when the tournament is free-tier (`useTournamentAccess().isFreeSmall`, itself
+   sourced from `tournament_billing_basis` / `tournament_pro_tier` — not reimplemented) **and** already
+   has one active `institution_prize_groups` row. The button stays visible and disabled, with a `title`
+   naming the reason and the threshold, rather than being hidden — a disabled control teaches, a
+   missing one confuses.
+3. **Organizer-preview masking of team results.** `selectVisibleTeamPrizes`
+   (`src/utils/teamPrizeMasking.ts`) hides team-prize winners when the viewer lacks full access
+   (`useTournamentAccess().hasFullAccess` threaded through `TeamPrizeResultsPanel` /
+   `TeamPrizesTabView`). It is the **deliberate inverse** of the individual masking rule in
+   `src/utils/reviewAccess.ts` (unchanged this week, per the "do not touch" list): individual masking
+   previews the TOP placings and hides the bottom; team masking hides the TOP placing(s) — 1st is never
+   revealed — and shows 2nd downward. `GroupCard` renders a locked row in place of each hidden placing,
+   keeping the table's shape and place number visible, plus a line stating how many placings are hidden
+   and that paying reveals them. Wired into the three organizer surfaces
+   (`ConflictReview`, `Finalize`, `FinalPrizeView`, all via `TeamPrizesTabView` or directly).
+   **`PublicTeamPrizesSection` is untouched** — it never passes `hasFullAccess`, so the prop's `true`
+   default keeps it unmasked, and it can never render a locked row.
+
+**TC1.6-debt — filed, not fixed.** The free-tier one-group limit above is enforced **only** in
+`TeamPrizesEditor.tsx`. §2 above already records that `institution_prize_groups` (and its siblings)
+grant full DML to `authenticated`, with RLS as the only server-side gate — and that RLS policy
+(`org_institution_prize_groups_access`) checks tournament ownership, nothing else. There is no
+constraint, trigger, or RPC-level check tying group count to billing tier: an authenticated owner can
+`INSERT` a second active group directly against the API regardless of tier, and no roster-size or
+tier check exists on `institution_prizes` writes either. This is adequate **only while no customer uses
+team prizes** — the moment a paying customer's incentive to have more than one team prize group on a
+free-tier tournament becomes real money, this must move server-side (a `CHECK`/trigger on
+`institution_prize_groups`, or a check inside the RPC/edge function that writes it). Not filed against
+any TC2/TC3 step; whoever adds server-side billing enforcement to this table should close this note.
+
+*Verified by:* `npx vitest run` — `tests/utils/team-prize-masking.spec.ts` (`selectVisibleTeamPrizes`:
+full access unmasked, restricted access hides only place 1, ties on place 1 all hidden) and
+`tests/utils/team-prize-group-limit.spec.ts` (`isTeamPrizeGroupLimitReached`, the pure predicate
+`TeamPrizesEditor` wires the "Add Team Prize Group" button to).
 
 ## 6. Out of scope for TC1
 

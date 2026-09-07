@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Trophy, Medal, Award, AlertCircle, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Users, Trophy, Medal, Award, AlertCircle, Info, AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
+import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
 
 import type {
   TeamPrizeResultsResponse,
@@ -44,10 +45,20 @@ interface TeamPrizeResultsPanelProps {
    * qualify, which is a reputational risk to those schools.
    */
   showDiagnostics?: boolean;
+  /**
+   * Masks the top team-prize placing(s) on ORGANIZER preview surfaces when the
+   * viewer does not have full access (an unpaid, non-free-tier tournament).
+   * Defaults to true so every caller that doesn't pass it — including
+   * PublicTeamPrizesSection, which must never show a locked row — renders
+   * unmasked, exactly as before TC1.6. See `selectVisibleTeamPrizes` for the
+   * rule: the inverse of the individual masking rule (hides the top, not the
+   * bottom), and 1st place is never revealed.
+   */
+  hasFullAccess?: boolean;
 }
 
 const GROUP_BY_LABELS: Record<string, string> = {
-  club: 'School / Academy / Club',
+  club: 'Club / institution field',
   city: 'City',
   state: 'State',
   group_label: 'Swiss Group (Gr)',
@@ -147,18 +158,35 @@ function GroupCard({
   group,
   onTieResolutionRequest,
   showDiagnostics = false,
+  hasFullAccess = true,
 }: {
   group: GroupResponse;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
   showDiagnostics?: boolean;
+  hasFullAccess?: boolean;
 }) {
   const [expanded, setExpanded] = React.useState(true);
   const [showIneligible, setShowIneligible] = React.useState(false);
 
-  const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
+  const filledPrizes = React.useMemo(
+    () => group.prizes.filter(p => p.winner_institution !== null).sort((a, b) => a.place - b.place),
+    [group.prizes]
+  );
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
+
+  // TC1.6 masking — ORGANIZER preview surfaces only (callers wire hasFullAccess;
+  // the public path never does, so it always renders unmasked). Inverse of the
+  // individual rule: hides the top placing(s), 1st never revealed.
+  const { hidden: hiddenFilledPrizes } = React.useMemo(
+    () => selectVisibleTeamPrizes(filledPrizes, hasFullAccess),
+    [filledPrizes, hasFullAccess]
+  );
+  const hiddenPrizeIds = React.useMemo(
+    () => new Set(hiddenFilledPrizes.map(p => p.id)),
+    [hiddenFilledPrizes]
+  );
 
   // Null when no composition rule was configured — nothing is rendered in that case.
   const ruleClause = formatTeamRuleClause(group.config);
@@ -201,7 +229,7 @@ function GroupCard({
 
           {/* Config badges */}
           <div className="flex flex-wrap gap-2 mt-2">
-            <Badge variant="secondary">{GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
+            <Badge variant="secondary">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
             <Badge variant="outline">Top {group.config.team_size} players</Badge>
             {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
             <Badge variant="secondary">
@@ -233,6 +261,25 @@ function GroupCard({
                   </TableHeader>
                   <TableBody>
                     {filledPrizes.map((prize) => {
+                      // TC1.6: unpaid organizer preview — keeps the row (and the
+                      // place) so the organizer sees the engine produced a result,
+                      // but the winner itself stays locked. Never applies to the
+                      // public path (hasFullAccess defaults true there).
+                      if (hiddenPrizeIds.has(prize.id)) {
+                        return (
+                          <TableRow key={prize.id} className="bg-muted/30">
+                            <TableCell className="font-medium text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Lock className="h-3.5 w-3.5" />
+                                {getPlaceOrdinal(prize.place)}
+                              </div>
+                            </TableCell>
+                            <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                              Locked — upgrade to Pro to reveal this placing
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
                       const winner = prize.winner_institution!;
                       return (
                         <React.Fragment key={prize.id}>
@@ -284,6 +331,13 @@ function GroupCard({
                 {pointsAbsent && (
                   <p className="px-3 py-2 text-xs text-muted-foreground border-t">
                     Points were not imported for this tournament. Teams were ranked by rank sum.
+                  </p>
+                )}
+                {hiddenFilledPrizes.length > 0 && (
+                  <p className="px-3 py-2 text-xs text-muted-foreground border-t flex items-center gap-1.5">
+                    <Lock className="h-3 w-3 shrink-0" />
+                    {hiddenFilledPrizes.length} placing{hiddenFilledPrizes.length !== 1 ? 's' : ''} hidden on this
+                    preview — paying reveals {hiddenFilledPrizes.length !== 1 ? 'them' : 'it'}.
                   </p>
                 )}
               </div>
@@ -399,7 +453,7 @@ function GroupCard({
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -465,6 +519,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
             group={group}
             onTieResolutionRequest={onTieResolutionRequest}
             showDiagnostics={showDiagnostics}
+            hasFullAccess={hasFullAccess}
           />
         ))}
       </div>

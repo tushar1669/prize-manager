@@ -25,9 +25,16 @@ interface TeamPrizesTabViewProps {
    * `src/pages/Finalize.tsx` passes this true.
    */
   showDiagnostics?: boolean;
+  /**
+   * Forwarded to TeamPrizeResultsPanel. Defaults to true (unmasked), matching
+   * pre-TC1.6 behaviour for any caller that doesn't pass it. FinalPrizeView and
+   * Finalize both pass their own `useTournamentAccess().hasFullAccess` through —
+   * see `selectVisibleTeamPrizes` for the masking rule this gates.
+   */
+  hasFullAccess?: boolean;
 }
 
-export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false }: TeamPrizesTabViewProps) {
+export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false, hasFullAccess = true }: TeamPrizesTabViewProps) {
   const {
     hasTeamPrizes,
     checkingTeamPrizes,
@@ -113,6 +120,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
         isLoading={false}
         error={null}
         showDiagnostics={showDiagnostics}
+        hasFullAccess={hasFullAccess}
         tournamentId={tournamentId}
         allocationVersion={allocationVersion}
         onTieResolutionRequest={handleTieResolutionRequest}

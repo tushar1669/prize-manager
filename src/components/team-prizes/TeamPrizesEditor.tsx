@@ -19,6 +19,9 @@ import {
 import { formatTeamRuleClause } from '@/components/allocation/TeamPrizeResultsPanel';
 import TeamPrizeRulesSheet from './TeamPrizeRulesSheet';
 import TeamGroupPrizesTable from './TeamGroupPrizesTable';
+import { useTournamentAccess } from '@/hooks/useTournamentAccess';
+import { teamPrizeGroupLimitHint } from '@/constants/tournamentAccess';
+import { isTeamPrizeGroupLimitReached } from '@/utils/teamPrizeGroupLimit';
 
 interface Props {
   tournamentId: string;
@@ -46,6 +49,20 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   const { data: groups, isLoading: loadingGroups } = useInstitutionPrizeGroups(tournamentId);
   const groupIds = useMemo(() => (groups || []).map(g => g.id), [groups]);
   const { data: allPrizes, isLoading: loadingPrizes } = useInstitutionPrizes(tournamentId, groupIds);
+
+  // TC1.6-B: free tier (<=150 players) is capped at one ACTIVE team prize
+  // group. `isFreeSmall` and `freePlayerThreshold` come from
+  // `get_tournament_access_state`, which in turn reads the canonical
+  // `tournament_billing_basis` / `tournament_pro_tier` helpers — this does not
+  // reimplement the tier ladder. CLIENT-SIDE ONLY: see
+  // docs/team-championship/ARCHITECTURE.md "TC1.6-debt" for what is not
+  // enforced server-side.
+  const { isFreeSmall, freePlayerThreshold } = useTournamentAccess(tournamentId);
+  const activeGroupCount = useMemo(() => (groups || []).filter(g => g.is_active).length, [groups]);
+  const freeTierGroupLimitReached = isTeamPrizeGroupLimitReached(isFreeSmall, activeGroupCount);
+  const addGroupDisabledReason = freeTierGroupLimitReached
+    ? teamPrizeGroupLimitHint(freePlayerThreshold)
+    : undefined;
 
   // Mutations
   const createGroup = useCreateInstitutionGroup();
@@ -145,7 +162,11 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
           </p>
         </div>
         {isOrganizer && (
-          <Button onClick={() => setRulesSheet({ open: true, group: null })}>
+          <Button
+            onClick={() => setRulesSheet({ open: true, group: null })}
+            disabled={freeTierGroupLimitReached}
+            title={addGroupDisabledReason}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Team Prize Group
           </Button>
@@ -174,10 +195,12 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
             <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No team prize groups configured yet.</p>
             {isOrganizer && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4"
                 onClick={() => setRulesSheet({ open: true, group: null })}
+                disabled={freeTierGroupLimitReached}
+                title={addGroupDisabledReason}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Team Prize Group
@@ -239,7 +262,10 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                     
                     {/* Summary chips */}
                     <div className="flex flex-wrap gap-2 mt-2 ml-12">
-                      <Badge variant="secondary">{getGroupByLabel(group.group_by)}</Badge>
+                      {/* TC1.6: the badge states the FIELD grouped on, prefixed as provenance —
+                          it must never read as a claim about who the prize is for. The group's
+                          own name ("Best State", say) already says what the prize is. */}
+                      <Badge variant="secondary">Grouped by: {getGroupByLabel(group.group_by)}</Badge>
                       <Badge variant="outline">Top {group.team_size}</Badge>
                       {/* RULING 2: the badge states the rule, never a composition.
                           Null at 0/0, so no badge is rendered at all. */}

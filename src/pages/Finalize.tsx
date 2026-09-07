@@ -687,6 +687,7 @@ export default function Finalize() {
                         tournamentId={id as string}
                         allocationVersion={allocationVersion}
                         showDiagnostics
+                        hasFullAccess={hasFullAccess}
                       />
                     </TabsContent>
                   </div>

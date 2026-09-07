@@ -43,7 +43,7 @@ export const GROUP_BY_OPTIONS: Array<{
   description: string;
 }> = [
   { value: 'team', label: 'Team', column: 'team', description: 'Uses the team field from player data' },
-  { value: 'club', label: 'School / Academy / Club', column: 'club', description: 'Uses the club field from player data' },
+  { value: 'club', label: 'Club / institution field', column: 'club', description: 'Uses the club field from player data' },
   { value: 'city', label: 'City', column: 'city', description: 'Groups players by their city' },
   { value: 'state', label: 'State', column: 'state', description: 'Groups players by their state' },
   { value: 'group_label', label: 'Swiss Group (Gr column)', column: 'group_label', description: 'Uses the Gr column from Swiss-Manager export' },

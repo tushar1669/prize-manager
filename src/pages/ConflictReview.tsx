@@ -801,6 +801,7 @@ export default function ConflictReview() {
               isLoading={teamPrizeLoading}
               error={teamPrizeError}
               showDiagnostics
+              hasFullAccess={canViewFullResults}
             />
           </div>
         )}

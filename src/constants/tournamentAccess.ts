@@ -22,3 +22,8 @@ export function exportUpgradeHint(threshold: number): string {
 export function printViewUpgradeCopy(viewName: string, threshold: number): string {
   return `Upgrade to Pro to access the ${viewName} view for tournaments with more than ${threshold} players.`;
 }
+
+/** TC1.6: free tier is capped at one active team prize group. */
+export function teamPrizeGroupLimitHint(threshold: number): string {
+  return `Free tier tournaments (${threshold} or fewer players) are limited to one team prize group. Upgrade to Pro to add more.`;
+}
