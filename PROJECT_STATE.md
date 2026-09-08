@@ -1,5 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
-**Last updated:** 7 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
+**Last updated:** 8 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
 
@@ -282,22 +282,97 @@ Measured across every allocation ever made: **zero** players with unrecorded gen
 
 ---
 
+## 12.21 · Ground-truth validation against a human arbiter (8 September 2026)
+
+Every fact below was measured on 8 September 2026 against tournament `0d54de9f-242a-41bd-a2ad-a70f712c3fd7` (Second Jaipur Open Classical FIDE Rated 2025, 318 players, unpublished draft). Recorded, not re-derived.
+
+### The headline
+
+The individual allocation engine was compared, placement by placement, against the event's official Final Prize List as awarded by the Chief Arbiter. 14 categories, 100 prizes. **First time any output of this platform has been checked against a human-produced result.**
+
+| Step | Agreement |
+|---|---|
+| As configured | 76/100 |
+| After adding "Jpr - Raj" to Best RAJASTHAN's `allowed_clubs` | 94/100 |
+| After correcting one prize amount, ₹6,996 → ₹7,000 | 96/100 |
+
+Allocation is now at **version 5**.
+
+### Finding 1 — disjoint geographic club lists
+
+Best RAJASTHAN filtered `allowed_clubs: ["Rajasthan"]`; Best JAIPUR filtered `["Jpr - Raj"]`. Disjoint, so a Jaipur player could never win the Rajasthan prize — but Jaipur is *in* Rajasthan and the arbiter treated it as such. One value added; agreement moved 76 → 94.
+
+**Configuration lesson:** a geographic category's `allowed_clubs` must include every club value inside that geography.
+
+### Finding 2 — a four-rupee prize amount moved a player between categories (the most important entry)
+
+Main (Open) place 10 was entered as ₹6,996 instead of the brochure's ₹7,000. This tournament's `rule_config` reads `multi_prize_policy: 'single'`, `prefer_main_on_equal_value: true`, `main_vs_side_priority_mode: 'main_first'`. A multi-eligible player therefore takes the **highest-value** prize they qualify for, with Main winning only on an exact tie. At ₹6,996 the side prize was worth four rupees more, so it took the player; at ₹7,000 the values tie and Main wins, matching the arbiter.
+
+Correcting it moved **two** placements (Main #10 and Rating 1651-1900 #9) and took agreement 94 → 96.
+
+**Lesson, stated plainly:** a prize amount is not cosmetic — under `multi_prize_policy: 'single'` it is an input to *which* prize a player receives. **Nothing flagged it.** The brochure's own prize table is the authority and no check compares entered amounts against it. **Tier 2** (§14): validate entered prize amounts against the extracted brochure prize table.
+
+### Finding 3 — the 3 remaining differences are an unresolved tie-break, and the engine's answer is rank-optimal
+
+All three involve ₹6,000 prizes of equal value. The four players, all on 5.5 points:
+
+| Player | Rank | Club | Engine result |
+|---|---|---|---|
+| Ojas Maheshwari | 66 | Rajasthan | Best RAJASTHAN #5 |
+| Yash Dahiya | 72 | Haryana | Rating 1401-1650 #10 |
+| Kavyansh Jain | 74 | Jpr - Raj | Best JAIPUR #5 |
+| Anirudha Khandelwal | 86 | Jpr - Raj | no prize |
+
+The arbiter instead awarded ranks 66, 74 and 86, giving Anirudha a prize and Yash none. Yash is from Haryana with no age type, so the Rating band is the **only** ₹6,000 prize he can win. Assigning the three prizes to the three highest-ranked eligible players (66, 72, 74) admits exactly one arrangement, and it is the one the engine produced. **The engine's winning set is uniformly better by rank at identical cost.**
+
+The brochure states only *"Players qualified for more than one prizes will be considered only for the higher prize"* — silent on equal prizes. Nothing in the published rules decides it.
+
+**Caveat, stated honestly:** the arbiter may have applied discretion not in the brochure (home-city preference, a withdrawal, absence from the ceremony). We have his output, not his reasoning. **Do not record this as an arbiter error.**
+
+**Root cause in our config:** `rule_config.category_priority_order` is an empty array, so equal-value ties resolve by an implicit fallback rather than a stated rule. **Tier 2** (§14): populate it so ties resolve by documented policy.
+
+### Finding 4 — no prize inversion in either allocation
+
+Checked: every category list in the arbiter's PDF ascends by rank, and the engine assigns places in rank order by construction. No higher-value prize went to a lower-ranked player anywhere, in either allocation.
+
+### Finding 5 — truncated player name
+
+Unrated #10 is stored as the single letter "T". The player is Tavish Singh Rathore, rank 170. A real import defect, unrelated to allocation, and the only remaining difference that is unambiguously a bug. **Tier 2** (§14).
+
+### Finding 6 — team prizes cannot be ground-truthed, and why it matters
+
+Of 18 real tournament documents examined, only 2 mention team prizes. The NEW DELHI OPEN (`6b63300e-756a-47ba-acb8-96c97418cf33`, 1119 players) **did** award Best School and Best Academy — they appear in its Prize Winners List — but its brochure never mentions them, and its `players.club` column holds **states** (Delhi 367, Uttar Pradesh 217, Haryana 130), not school names. `players.team` is empty.
+
+**Conclusion:** team prizes at these events are awarded from data that never enters the Swiss Manager export. The team engine groups only on club, team, city, state, `group_label` or `type_label` — all of which come from that file — so it **cannot** produce Best School where school names were never imported.
+
+**This is the most important product finding of the session and it should lead TC2/TC3 planning:** an import path for institution data is required before Best School is possible. Filed to Tier 2 (§14) and §15.
+
+Corollary: brochure extraction of team prizes is **not** the blocker. Organizers decide team prizes after the brochure is printed.
+
+### GTM positioning, decided 8 September
+
+See §15 for the full statement — the validation result is GTM material, with hard limits on how it may be framed.
+
+---
+
 ## 13. Immediate next step
 
 **TC1 is complete** (shipped 6–7 September 2026, HEAD `fc62a60`). DD5 is closed end to end: engine, organizer display, print gating, PDF. RULING 3's per-group `minimum_roster_size` is decided (PRD §3) but not built — no `tc1_` harness was written; TC1.6's scope changed to tier limits, masking and honest group labels instead. See §12.17.
 
 The tournament-level allow-incomplete-teams toggle considered on 6 September was **withdrawn by RULING 3** (7 September) in favour of a per-group `minimum_roster_size` — see PRD §3, ARCHITECTURE §2.
 
+**Ground-truth validation against the Jaipur Final Prize List is complete** (8 September 2026 — 96/100 placements, individual engine only. See §12.21).
+
 ### Next, in order
 
-1. **Full test run** — two test cases + ground truth against the Jaipur Final Prize List, plus a UI read-through.
-2. **Safe GTM pages** — About, FAQ, Pricing, Contact. Terms/Privacy/Refund get placeholder routes only (legal copy is not drafted by any model — see §15).
-3. **SP-1** — `/debug/auth` on sportup.online, in its own session (different repo).
-4. **sportup SP-2…SP-7** — the remaining sportup.online GTM defects (§14, §15).
+1. **SP-1** — `/debug/auth` on sportup.online, own session, different repo.
+2. **Safe GTM pages** — About, FAQ, Pricing, Contact. Terms/Privacy/Refund get placeholder routes only until counsel replies (brief sent 7 Sep).
+3. **Friday 12 Sep** — build and publish the demo tournament, full UI read-through, keep its public URL as the demo fallback.
+4. **Sunday 13 Sep** — FIDE arbiter seminar demo.
 
 ### Then TC2 / TC3
 
-Not the immediate next step, but the next Team Championship work once the above lands.
+Led by the institution-import gap in Finding 6 (§12.21): an import path for institution/school data is required before Best School is possible.
 
 **TC2 — Mode A (automatic).** Organizer uploads the Swiss Manager file, defines composition, system picks each school's team by highest points/rank and ranks the teams. Largely exists now that TC1 has landed: `parseWorkbook` handles upload, the schema holds composition, `allocateInstitutionPrizes` selects and ranks.
 
@@ -320,11 +395,16 @@ Not the immediate next step, but the next Team Championship work once the above 
 | B18-a / B18-b | ✅ 5 Sep |
 | **B21 / TC0 — team results unpinned and the one-way door** | ✅ **6 Sep — 12/12, verified live** |
 | **TC1 / DD5 — gender slots enforced, closed end to end** | ✅ **6–7 Sep — TC1.1 through TC1.6, HEAD `fc62a60`. See §12.17** |
+| **Ground-truth validation, individual engine vs. Jaipur Final Prize List** | ✅ **8 Sep — 96/100, root causes identified for all 4 misses. See §12.21** |
 
 **Still Tier 1, from the site inventories (§15):** **SP-1** `/debug/auth` ungated on sportup.online — **do not wait for GTM** · **SP-2** contradictory refund policies · **SP-3** false payment claims (cards/net banking advertised, none processed) · **SP-4/5/6/7** impossible refund mechanics, mismatched windows, phantom fees, garbled Privacy line · **PM-1** prize-manager.com has **no legal pages at all** while taking UPI money.
 
 ### Tier 2
 
+- **Validate entered prize amounts against the extracted brochure prize table** — under `multi_prize_policy: 'single'`, a prize amount decides *which* prize a multi-eligible player receives; a ₹4 entry error (₹6,996 vs. brochure ₹7,000) moved two placements in the Jaipur ground-truth check and nothing flagged it. Highest-value finding of the session (§12.21, Finding 2).
+- **Populate `rule_config.category_priority_order`** — currently an empty array on every tournament, so equal-value ties resolve by an implicit fallback rather than a documented policy. Surfaced by 3 of 100 Jaipur placements where four players tied on prize value (§12.21, Finding 3).
+- **Institution-import gap** — the team engine groups only on club/team/city/state/`group_label`/`type_label`, all sourced from the Swiss Manager export, which never carries school names. The New Delhi Open awarded Best School/Best Academy from data outside that file. No institution-data import path exists, so Best School cannot be ground-truthed or, at these events, computed at all. **Should lead TC2/TC3 planning** (§12.21, Finding 6; §13).
+- **Truncated player name** — Jaipur tournament `0d54de9f`, Unrated #10 stored as the single letter "T"; actual player is Tavish Singh Rathore, rank 170. Import defect, unrelated to allocation (§12.21, Finding 5).
 - **RULING 3 — per-group `minimum_roster_size`** — decided 7 Sep, not built. No `tc1_` harness exists yet (§12.17, PRD §3).
 - **`generatePdf` live-compute fallback** (`generatePdf/index.ts:155-169`) — falls back to invoking `allocateInstitutionPrizes` and computing team standings live when the persisted snapshot is missing, the same defect TC0-d removed from `publicTeamPrizes`. Filed, out of scope for TC1. See `docs/team-championship/ARCHITECTURE.md` §3.1.
 - **Migration `20251201090000` false-applied ledger entry** — recorded APPLIED, column absent in production; engine unaffected (§12.18).
@@ -350,11 +430,20 @@ The 3 known test failures are probably one timezone bug · a fourth vitest failu
 
 **Analytics — PostHog, not GA4.** Three conditions: install **after** the privacy work (DPDP Act 2023 applies); load by snippet, not npm (guardrail 5); do not replace `audit_events` or the martech dashboards. Status as of 7 Sep — legal brief sent to counsel, reply expected in 1–2 days; PostHog stays gated on that. See §12.20.
 
+**GTM positioning — the Jaipur ground-truth validation, decided 8 September.** The result (§12.21) is GTM material, with hard limits:
+
+- **Permitted:** "matched the official list on 96 of 100 placements on a real 100-prize open."
+- **NEVER** "96% accurate" — it is one tournament, not a rate.
+- **NEVER** name the event, the arbiter or any player in public material. The Chief Arbiter is named on that prize list and the demo audience is his professional peers.
+- **NEVER** frame it as finding an arbiter's mistake.
+- The positioning is **defensibility, not accuracy**: "it doesn't replace the arbiter's judgement, it makes the judgement visible and writes it down."
+- **GTM offer to make at the seminar:** a free replay of an organizer's own past tournament from their Swiss Manager file and prize list.
+
 ---
 
 ## 16. Ordering
 
-**TC1 (shipped)** → full test run (two test cases + Jaipur Final Prize List ground truth + UI read-through) → **GTM pages** (About/FAQ/Pricing/Contact — Terms/Privacy/Refund placeholder routes only) → SP-1 (`/debug/auth`, own session, different repo) → sportup SP-2…SP-7 → legal engagement (brief sent 7 Sep, in progress, parallel, no repo access) → sitemaps → G4 → PostHog → Tier 2 → Phase 2B → TC2 → TC3.
+**TC1 (shipped)** → Jaipur Final Prize List ground truth (done, 8 Sep — §12.21) → SP-1 (`/debug/auth`, own session, different repo) → **GTM pages** (About/FAQ/Pricing/Contact — Terms/Privacy/Refund placeholder routes only) → Friday 12 Sep demo tournament build + publish + UI read-through → Sunday 13 Sep FIDE arbiter seminar demo → sportup SP-2…SP-7 → legal engagement (brief sent 7 Sep, in progress, parallel, no repo access) → sitemaps → G4 → PostHog → Tier 2 (led by the institution-import gap, §12.21 Finding 6) → Phase 2B → TC2 → TC3.
 
 certificate-hub.com integration parked by owner decision 2 Sep.
 
