@@ -9,6 +9,7 @@ import { Calendar, MapPin, Timer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { SiteFooter } from "@/components/public/SiteFooter";
 import { Seo } from "@/components/seo/Seo";
 
 type PublicManualPrize = Pick<
@@ -181,6 +182,13 @@ export default function PublicHome() {
               <p className="text-lg text-muted-foreground">
                 View published tournament results and prize allocations
               </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Running a tournament?{" "}
+                <Link to="/how-it-works" className="text-primary underline underline-offset-2 hover:no-underline">
+                  See how it works and what it costs
+                </Link>
+                .
+              </p>
             </div>
           </div>
         </div>
@@ -281,6 +289,7 @@ export default function PublicHome() {
           )}
         </div>
         </main>
+        <SiteFooter />
       </div>
     </>
   );

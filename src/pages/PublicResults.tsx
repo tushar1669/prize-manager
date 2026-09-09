@@ -10,6 +10,7 @@ import { BrochureLink } from "@/components/public/BrochureLink";
 import { PublicTeamPrizesSection } from "@/components/public/PublicTeamPrizesSection";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { SiteFooter } from "@/components/public/SiteFooter";
 import { Seo } from "@/components/seo/Seo";
 import { fetchPublishedTournamentBySlug, type PublicTournamentLookup } from "@/utils/publicTournamentLookup";
 import { coerceGiftItems } from "@/lib/utils";
@@ -213,6 +214,7 @@ export default function PublicResults() {
           </div>
         </div>
     </main>
+    <SiteFooter />
     </div>
     </>
   );

@@ -28,6 +28,16 @@ import NotFound from "./pages/NotFound";
 // Lazy load public home (not needed on "/")
 const PublicHome = lazy(() => import("./pages/PublicHome"));
 
+// Lazy load GTM public pages (marketing/legal — not needed on the app's critical path)
+const HowItWorks = lazy(() => import("./pages/public/HowItWorks"));
+const Pricing = lazy(() => import("./pages/public/Pricing"));
+const About = lazy(() => import("./pages/public/About"));
+const Faq = lazy(() => import("./pages/public/Faq"));
+const Contact = lazy(() => import("./pages/public/Contact"));
+const Terms = lazy(() => import("./pages/public/Terms"));
+const Privacy = lazy(() => import("./pages/public/Privacy"));
+const Refund = lazy(() => import("./pages/public/Refund"));
+
 // Lazy load protected/less-critical pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TournamentSetup = lazy(() => import("./pages/TournamentSetup"));
@@ -145,6 +155,14 @@ const AppInner = () => {
                 <Route path="/p/:slug/results" element={<PublicResults />} />
                 <Route path="/p/:slug/details" element={<PublicTournamentDetailsRedirect />} />
                 <Route path="/t/:id/public" element={<LegacyPublicRouteCompat />} />
+                <Route path="/how-it-works" element={<HowItWorks />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/faq" element={<Faq />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/refund" element={<Refund />} />
 
                 {/* Auth routes */}
                 <Route path="/auth" element={<Auth />} />

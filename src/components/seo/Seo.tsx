@@ -6,11 +6,12 @@ interface SeoProps {
   path: string;
   type?: "website" | "article" | "event";
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
+  noindex?: boolean;
 }
 
 const SITE_URL = "https://prize-manager.com";
 
-export function Seo({ title, description, path, type = "website", jsonLd }: SeoProps) {
+export function Seo({ title, description, path, type = "website", jsonLd, noindex = false }: SeoProps) {
   const url = `${SITE_URL}${path}`;
   const ogType = type === "event" ? "article" : type;
   const ldArray = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
@@ -20,6 +21,7 @@ export function Seo({ title, description, path, type = "website", jsonLd }: SeoP
       <title>{title}</title>
       <meta name="description" content={description} />
       <link rel="canonical" href={url} />
+      {noindex && <meta name="robots" content="noindex, nofollow" />}
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />

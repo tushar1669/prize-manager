@@ -13,6 +13,7 @@ import type { AllocationVersionSelector } from "@/utils/getLatestAllocations";
 import { formatCurrencyINR } from "@/utils/currency";
 import { classifyTimeControl } from "@/utils/timeControl";
 import { PublicHeader } from "@/components/public/PublicHeader";
+import { SiteFooter } from "@/components/public/SiteFooter";
 import { Seo } from "@/components/seo/Seo";
 import {
   fetchPublicTournamentDetails,
@@ -321,6 +322,7 @@ export default function PublicTournamentDetails() {
           </div>
         </div>
         </main>
+        <SiteFooter />
       </div>
     </>
   );
