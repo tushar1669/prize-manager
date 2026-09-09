@@ -27,6 +27,7 @@ import { formatDiscount } from "./types";
 function resolveOrigin(origin: string | null | undefined, code: string): string {
   if (origin) return origin;
   const upper = code.toUpperCase();
+  if (upper.startsWith("WELCOME-")) return "welcome";
   if (upper.startsWith("PROFILE-")) return "profile_reward";
   if (upper.startsWith("REF1-")) return "referral_l1";
   if (upper.startsWith("REF2-")) return "referral_l2";
@@ -36,6 +37,7 @@ function resolveOrigin(origin: string | null | undefined, code: string): string 
 
 function originLabel(origin: string): { label: string; variant: "default" | "secondary" | "outline" } {
   switch (origin) {
+    case "welcome": return { label: "Welcome", variant: "secondary" };
     case "profile_reward": return { label: "Profile Reward", variant: "secondary" };
     case "referral_l1": return { label: "Referral L1", variant: "default" };
     case "referral_l2": return { label: "Referral L2", variant: "default" };
