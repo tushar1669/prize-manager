@@ -27,14 +27,13 @@ export default function About() {
                 <li className="flex gap-3 text-sm text-foreground">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" aria-hidden="true" />
                   <span>
-                    FIDE profile (FIDE ID 25022288):{" "}
                     <a
                       href="https://ratings.fide.com/profile/25022288"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary underline underline-offset-2 hover:no-underline"
                     >
-                      https://ratings.fide.com/profile/25022288
+                      FIDE profile (FIDE ID 25022288)
                     </a>
                   </span>
                 </li>
