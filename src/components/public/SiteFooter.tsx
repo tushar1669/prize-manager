@@ -77,8 +77,7 @@ export function SiteFooter() {
 
         <div className="mt-10 border-t border-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <p>
-            {/* TODO: fill in the legal entity name once counsel confirms it */}
-            © 2026 [LEGAL ENTITY NAME] · Public beta
+            © 2026 DERA Tech · Public beta
           </p>
           <a href="mailto:chess.tushar@gmail.com" className="hover:text-foreground transition-colors">
             chess.tushar@gmail.com
