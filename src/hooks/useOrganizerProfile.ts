@@ -31,6 +31,46 @@ export function isInvalidPhoneError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * F2-B1: the save toast used to be chosen from the profile_completed_at null -> set
+ * TRANSITION, which stopped matching reality when migration 20260909130000 made
+ * update_my_profile issue the reward on ANY save of a complete, unclaimed profile.
+ * An organiser already past that transition was handed a coupon and told only
+ * "Profile saved.". The message is now driven by what the server reports it did.
+ *
+ * update_my_profile returns its `reward` key as the verbatim result of
+ * claim_profile_completion_reward(), or JSON null when the reward was not
+ * attempted (profile incomplete, or already claimed before this save):
+ *   { ok: true,  already_claimed: false, coupon_code, coupon_id }  -> just issued
+ *   { ok: true,  already_claimed: true,  coupon_code }             -> none issued
+ *   { ok: false, reason }                                          -> none issued
+ *   null / absent                                                  -> not attempted
+ * Only the first case may claim a coupon was earned, so this reads positively:
+ * anything that is not an explicit ok/already_claimed=false pair — an older cached
+ * response without the key, a malformed body, a non-object — falls through to the
+ * plain message rather than promising money the user did not get.
+ */
+export const PROFILE_SAVED_MESSAGE = "Profile saved.";
+export const PROFILE_REWARD_MESSAGE =
+  "Profile saved. You earned 1 free tournament upgrade.";
+
+/** True only when this save is the one that minted the coupon. Never throws. */
+export function couponWasJustIssued(rpcResult: unknown): boolean {
+  if (typeof rpcResult !== "object" || rpcResult === null) return false;
+  const { reward } = rpcResult as { reward?: unknown };
+  if (typeof reward !== "object" || reward === null) return false;
+  const { ok, already_claimed } = reward as {
+    ok?: unknown;
+    already_claimed?: unknown;
+  };
+  return ok === true && already_claimed === false;
+}
+
+/** The success toast for a save, decided by the server's reported outcome. */
+export function saveSuccessMessage(rpcResult: unknown): string {
+  return couponWasJustIssued(rpcResult) ? PROFILE_REWARD_MESSAGE : PROFILE_SAVED_MESSAGE;
+}
+
 export function useOrganizerProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -66,20 +106,11 @@ export function useOrganizerProfile() {
       });
       if (error) throw new Error(error.message);
 
-      // profile_completed_at is derived server-side; the client never sends it.
-      const justCompleted =
-        !profile?.profile_completed_at &&
-        !!(data as any)?.profile_completed_at;
-
-      return { justCompleted };
+      return data;
     },
-    onSuccess: (result) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["organizer-profile", user?.id] });
-      if (result.justCompleted) {
-        toast.success("Profile complete! You earned 1 free tournament.");
-      } else {
-        toast.success("Profile saved.");
-      }
+      toast.success(saveSuccessMessage(data));
     },
     onError: (err) => {
       const normalized = normalizeError(err);
