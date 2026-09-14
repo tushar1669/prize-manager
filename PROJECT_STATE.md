@@ -25,7 +25,7 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | Item | Value |
 |---|---|
 | Supabase project | `nvjjifnzwrueutbirpde` (ap-south-1, Postgres 17.6). Org is on the **FREE** plan |
-| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`766faad`** · `4b57f68` profile reward auto-issue · `705e1bb` coupon origin fix · `5779d14` GTM pages · `fc62a60` TC1.6. **`PROJECT_STATE.md` lives at the repo root only** |
+| Repo | github.com/tushar1669/prize-manager (**public**) · `main` at **`8483ad8`** · `766faad` profile toast · `4b57f68` profile reward auto-issue · `705e1bb` coupon origin fix · `5779d14` GTM pages. **`PROJECT_STATE.md` lives at the repo root only.** `.claude/` is gitignored — headroom tooling state, never commit it |
 | **Deploy model (DD6)** | **`git push` to `main` deploys BOTH edge functions and the frontend.** No CLI deploy step, no Lovable publish gate. **There is no review gate between commit and production — review before the push, not after** |
 | **Edge function versions are not evidence** | Every push redeploys everything, so recorded version numbers go stale within a day. The only reliable check is a function's own build string via `?ping=1` (Y3, DD6). `allocateInstitutionPrizes` carries `BUILD_VERSION = "2026-09-07T09:00:00Z-TC1.5"` |
 | **`verify_jwt=false` is THREE functions** | `send-payment-notifications`, `pmPing`, `publicTeamPrizes` |
@@ -57,7 +57,8 @@ Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at th
 | `/p/:slug/results` | `PublicResults` | **The ONLY page showing team prizes** |
 | `/t/:id/public` | `LegacyPublicRouteCompat` → `PublicWinnersPage` | Redirects when a slug exists |
 | `/how-it-works` `/pricing` `/about` `/faq` `/contact` | GTM pages, shipped 9 Sep | Real content |
-| `/terms` `/privacy` `/refund` | Placeholder notices, **noindex** | "Being finalised with counsel" |
+| `/terms` | **Counsel's Terms of Service, LIVE since 14 Sep, indexed** | 25 sections, contents list, three tables rendered with the shadcn `Table` component |
+| `/privacy` `/refund` | Placeholder notices, **noindex** | "Being finalised with counsel" |
 
 `SiteFooter` renders on every public page. `PublicHeader` carries nav plus a mobile sheet menu.
 
@@ -198,9 +199,28 @@ Counsel (a friend, not charging; incorporation to follow) delivered a Scope of W
 
 | Site | Terms | Privacy | Refund |
 |---|---|---|---|
-| prize-manager.com | ✅ **ready** — all placeholders filled, `Terms.tsx` generated but **NOT YET INSTALLED** | ❌ 5 gaps | ❌ not supplied |
-| certificate-hub.com | ❌ Clause 16.1 liability floor TBD | ✅ **ready** | ❌ not needed — no money taken |
+| prize-manager.com | ✅ **LIVE 14 Sep**, indexed, `src/pages/public/Terms.tsx` | ❌ 5 gaps | ❌ not supplied |
+| certificate-hub.com | ❌ Clause 16.1 liability floor TBD | ❌ **7 gaps — see below** | ❌ not needed — no money taken |
 | sportup.online | ❌ Clause 10 redraft + ₹500 into 18.1 | ❌ sub-processor list blocked on PostHog | ❌ not needed — no money taken |
+
+### CertificateHub Privacy Policy — seven defects found on transcription (14 Sep)
+
+Lovable transcribed it verbatim and flagged, as instructed. **Three are substantive gaps in counsel's own document**, not transcription errors:
+
+1. **Clause 15 "Cookies and similar technologies" — heading present, body empty.**
+2. **Clause 8.1 says provider categories "are set out below" — no table follows.** Same missing sub-processor table as Prize Manager.
+3. **Clause 9 ends "Our measures include:" — no list follows.**
+4. Clause 4.1 cites a "Clause 1.4" that does not exist in the document.
+5. Clause 16 refers to a "Last updated" date the document does not carry.
+6. Clause 2.1 ends without a full stop; Clause 11 reads "legal claims.Where consent" — missing space.
+
+**It must NOT be published in this state.** A privacy policy with an empty cookies clause and a missing sub-processor table is worse than the placeholder, because it presents itself as complete. `/privacy` on certificate-hub must be reverted to the placeholder notice until counsel returns corrections.
+
+### Lovable shells built 14 Sep
+
+Both sites now have `/terms`, `/privacy`, `/refund`, a site footer with the Legal column and "© 2026 DERA Tech", and header links. **SportUp's changes are built but NOT PUBLISHED** — publishing replaces the garbled 2023 Privacy line and the contradictory refund policies with an honest notice, closing most of SP-2…SP-7.
+
+**Known copy defect on both sites:** the placeholder notice reads "Our refund policy **are** being finalised" — a bracket in the source instruction was expanded literally. Verb agreement needs correcting per page.
 
 **Resolved by owner:** entity **DERA Tech** · Grievance address (above) · Prize Manager change-notice **15 days** · SportUp liability floor **₹500** · SportUp PP timelines 15 days / 24 hours / 15 days · SportUp Platform Fee — **state that none is charged, reserving the right to introduce one on notice** · refund on prize-manager only, where failure to receive Pro is reported within 24 hours, processed within 15 days by manual UPI.
 
@@ -238,9 +258,13 @@ Measured 14 Sep: `anon` **cannot** read `dob`, `dob_raw`, `disability` or `speci
 **The order is forced by a dependency chain:** PostHog sets non-essential cookies → Privacy Clause 16.2 promises a consent mechanism → the banner must exist before PostHog goes live → PostHog must appear in the sub-processor table → the table cannot go to counsel until the tools are decided → the Privacy Policy cannot publish until the table is filled.
 
 1. **AICF ID** — Opus. Migration + UI.
-2. **Cookie consent + PostHog** — Sonnet. Consent banner first, then PostHog by snippet (not npm, guardrail 5), analytics **and** error tracking, billing limit set on day one.
-3. **Anti-scraping hardening** — Opus. `robots.txt`, and review whether `gender` and `fide_id` need to be anon-readable. Touches published-results read paths.
-4. **Legal completion** — return to the chat titled *"Prize Manager TC1 gender slots implementation"*. Install prize-manager's Terms, fill the sub-processor table, send counsel the remaining items, publish everything together.
+2. **Per-site legal and copy fixes** — three separate chats, one per property:
+   - **prize-manager.com** — `/privacy` and `/refund` still placeholders, awaiting counsel.
+   - **certificate-hub.com** — revert `/privacy` to the placeholder notice; send counsel the seven defects; fix the "policy are" verb agreement.
+   - **sportup.online** — **publish the built changes**; fix the verb agreement; then SP-1 (`/debug/auth`, ungated public route) in its own chat, different repo.
+3. **Cookie consent + PostHog** — Sonnet. Consent banner first, then PostHog by snippet (not npm, guardrail 5), analytics **and** error tracking, billing limit set on day one.
+4. **Anti-scraping hardening** — Opus. `robots.txt`, and review whether `gender` and `fide_id` need to be anon-readable. Touches published-results read paths.
+5. **Legal completion** — return to the chat titled *"Prize Manager TC1 gender slots implementation"*. Fill the sub-processor table, send counsel the remaining items, publish everything together.
 
 **Tool decision, made 14 Sep: PostHog for both analytics and error tracking. Not Sentry.** PostHog free gives 100,000 exceptions a month against Sentry's 5,000, unlimited team members against Sentry's one user, per-product billing limits, and — decisively — **one sub-processor instead of two**, meaning one privacy entry, one consent mechanism, one snippet. PostHog free is **1 project**; use one project with a `site` property, or pay-as-you-go ($0 base, 6 projects) with a low billing limit.
 
