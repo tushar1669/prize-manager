@@ -56,4 +56,17 @@ describe("profileCompletion", () => {
     expect(filledFieldCount(ws)).toBe(4);
     expect(isProfileComplete(ws)).toBe(false);
   });
+
+  it("never counts aicf_id toward completion", () => {
+    // AICF ID is optional (migration 20260914120000). If it joined PROFILE_FIELDS the
+    // denominator would move to 6 and every completed organiser would drop below 100%.
+    const fullPlusAicf: Partial<ProfileData> = { ...FULL, aicf_id: "AICF-TEST" };
+    expect(filledFieldCount(fullPlusAicf)).toBe(5);
+    expect(completionPercent(fullPlusAicf)).toBe(100);
+    expect(isProfileComplete(fullPlusAicf)).toBe(true);
+
+    const aicfOnly: Partial<ProfileData> = { ...EMPTY, aicf_id: "AICF-TEST" };
+    expect(filledFieldCount(aicfOnly)).toBe(0);
+    expect(isProfileComplete(aicfOnly)).toBe(false);
+  });
 });

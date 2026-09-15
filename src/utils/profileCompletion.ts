@@ -19,6 +19,8 @@ export interface ProfileData {
   city: string | null;
   org_name: string | null;
   fide_arbiter_id: string | null;
+  /** Optional. Deliberately NOT in PROFILE_FIELDS — see migration 20260914120000. */
+  aicf_id: string | null;
   profile_completed_at: string | null;
   profile_reward_claimed: boolean;
 }

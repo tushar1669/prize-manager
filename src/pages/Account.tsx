@@ -33,7 +33,16 @@ const FIELD_LABELS: Record<string, { label: string; placeholder: string; helper?
   city: { label: "City", placeholder: "e.g. Mumbai" },
   org_name: { label: "Organization Name", placeholder: "e.g. Chess Academy India" },
   fide_arbiter_id: { label: "FIDE ID", placeholder: "e.g. 12345678" },
+  aicf_id: {
+    label: "AICF ID",
+    placeholder: "Your AICF ID",
+    helper: "Optional — not required to complete your profile.",
+  },
 };
+
+// Everything the form edits. PROFILE_FIELDS stays the completeness list: AICF ID is
+// optional and must never move the denominator (migration 20260914120000).
+const EDITABLE_FIELDS = [...PROFILE_FIELDS, "aicf_id"] as const;
 
 function copyToClipboard(text: string, label: string) {
   navigator.clipboard.writeText(text).then(
@@ -58,7 +67,7 @@ export default function Account() {
   useEffect(() => {
     if (profile && !initialized) {
       const initial: Record<string, string> = {};
-      for (const field of PROFILE_FIELDS) {
+      for (const field of EDITABLE_FIELDS) {
         initial[field] = (profile[field] as string) ?? "";
       }
       setForm(initial);
@@ -72,7 +81,7 @@ export default function Account() {
 
   const handleSave = () => {
     const updates: Partial<ProfileData> = {};
-    for (const field of PROFILE_FIELDS) {
+    for (const field of EDITABLE_FIELDS) {
       const val = form[field]?.trim() || null;
       (updates as Record<string, unknown>)[field] = val;
     }
@@ -384,7 +393,7 @@ export default function Account() {
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {PROFILE_FIELDS.map((field) => {
+                  {EDITABLE_FIELDS.map((field) => {
                     const meta = FIELD_LABELS[field];
                     const invalid = field === "phone" && phoneRejected;
                     return (

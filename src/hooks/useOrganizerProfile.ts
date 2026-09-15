@@ -8,7 +8,7 @@ import { logAuditEvent } from "@/lib/audit/logAuditEvent";
 import type { ProfileData } from "@/utils/profileCompletion";
 
 const PROFILE_FIELDS_SELECT =
-  "display_name, phone, city, org_name, fide_arbiter_id, profile_completed_at, profile_reward_claimed";
+  "display_name, phone, city, org_name, fide_arbiter_id, aicf_id, profile_completed_at, profile_reward_claimed";
 
 /**
  * F1-B1: update_my_profile rejects a phone it cannot normalise to +91 followed by
@@ -103,6 +103,7 @@ export function useOrganizerProfile() {
         p_city:            updates.city            ?? null,
         p_org_name:        updates.org_name        ?? null,
         p_fide_arbiter_id: updates.fide_arbiter_id ?? null,
+        p_aicf_id:         updates.aicf_id         ?? null,
       });
       if (error) throw new Error(error.message);
 
