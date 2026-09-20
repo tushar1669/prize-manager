@@ -655,6 +655,7 @@ The missing canonical spine is **normalization debt**. This document does not in
 | Public role has runtime evidence | **PASS at route/runtime-data level** |
 | Organizer role has runtime evidence | **PASS at route/runtime-data level** |
 | Master/admin role has runtime evidence | **PASS at historical route/runtime-data level; current rendered UI not captured** |
+| Rendered role UI evidence | **BLOCKED — connected tools exposed route analytics, project metadata, source, and production read-only data, but not an interactive authenticated browser/rendered-page inspector** |
 | Cross-role workflows mapped | **PASS at source level; some end-to-end handoffs not executed** |
 | Failure/recovery paths mapped | **PASS at source level; exact rendered states partly unverified** |
 | Legacy aliases registered | **PASS** |
@@ -700,7 +701,8 @@ Do not rerun a full product reconstruction for a localized change. Update the af
 ## 19. Current item exit
 
 **Item:** Role-based Product Flow Map evidence/reconciliation  
-**State:** **VERIFIED at source + route/runtime-data level; rendered-control runtime evidence remains partial**  
+**State:** **IMPLEMENTED / PARTIALLY VERIFIED — BLOCKED on minimum rendered runtime/UI evidence for public, organizer, and master perspectives**  
 **Product/security implementation changes:** none  
-**Next documentation dependency:** canonical normalization of the missing lean operating spine, preserving this map as the route/action authority and preserving legacy evidence without rewriting product behavior.
+**Current blocker:** connected tools can prove deployed route use, production role/data states, and deployed functions, but cannot expose a safe interactive authenticated browser or current rendered organizer/master screens.  
+**Next exact action:** obtain the minimum read-only rendered evidence for `/public`, organizer `/dashboard`, and master `/admin` (with PII redacted if present), reconcile any visual/control differences against this file, then move the item to VERIFIED. Do not start canonical normalization or a security fix before that.
 
