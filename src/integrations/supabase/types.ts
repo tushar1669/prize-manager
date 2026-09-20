@@ -1120,6 +1120,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          aicf_id: string | null
           city: string | null
           created_at: string | null
           display_name: string | null
@@ -1133,6 +1134,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          aicf_id?: string | null
           city?: string | null
           created_at?: string | null
           display_name?: string | null
@@ -1146,6 +1148,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          aicf_id?: string | null
           city?: string | null
           created_at?: string | null
           display_name?: string | null
@@ -2324,6 +2327,7 @@ export type Database = {
       }
       update_my_profile: {
         Args: {
+          p_aicf_id?: string
           p_city: string
           p_display_name: string
           p_fide_arbiter_id: string
