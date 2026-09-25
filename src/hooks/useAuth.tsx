@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { User, Session } from "@supabase/supabase-js";
+import { User, Session, type AuthError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<Awaited<ReturnType<typeof supabase.auth.signUp>>>;
+  signUp: (email: string, password: string) => Promise<{
+    data: { user: User | null; session: Session | null };
+    error: AuthError | null;
+  }>;
   signIn: (email: string, password: string) => Promise<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>>;
   signOut: () => Promise<Awaited<ReturnType<typeof supabase.auth.signOut>>>;
 }

@@ -52,9 +52,10 @@ export function PendingPaymentsPanel() {
 
       if (error) throw error;
       if (!paymentRows || paymentRows.length === 0) return [];
+      const rows = paymentRows as unknown as Array<Record<string, unknown>>;
 
       // Enrich with tournament titles
-      const tournamentIds = [...new Set(paymentRows.map((p) => p.tournament_id))];
+      const tournamentIds = [...new Set(rows.map((p) => p.tournament_id as string))];
       const { data: tournaments } = await supabase
         .from("tournaments")
         .select("id, title")
@@ -62,7 +63,7 @@ export function PendingPaymentsPanel() {
       const titleMap = new Map((tournaments ?? []).map((t) => [t.id, t.title]));
 
       // Enrich with user emails
-      const userIds = [...new Set(paymentRows.map((p) => p.user_id))];
+      const userIds = [...new Set(rows.map((p) => p.user_id as string))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, email")
@@ -70,7 +71,7 @@ export function PendingPaymentsPanel() {
       const emailMap = new Map((profiles ?? []).map((p) => [p.id, p.email]));
 
       // Phase 2A: batch-fetch extraction evidence for screenshot-backed payments
-      const screenshotIds = (paymentRows as Array<Record<string, unknown>>)
+      const screenshotIds = rows
         .map((p) => p.screenshot_extraction_id as string | null)
         .filter((id): id is string => typeof id === "string");
 
@@ -103,14 +104,14 @@ export function PendingPaymentsPanel() {
             payload: ((row.payload ?? {}) as unknown) as ExtractionPayload,
             field_flags: (Array.isArray(row.field_flags)
               ? row.field_flags
-              : []) as ExtractionFlag[],
+              : []) as unknown as ExtractionFlag[],
             confidence: typeof row.confidence === "number" ? row.confidence : 0,
             file_path: pathMap.get(row.document_id) ?? null,
           });
         }
       }
 
-      return (paymentRows as Array<Record<string, unknown>>).map((p) => ({
+      return rows.map((p) => ({
         ...p,
         tournament_title: titleMap.get(p.tournament_id as string) ?? undefined,
         user_email: emailMap.get(p.user_id as string) ?? undefined,

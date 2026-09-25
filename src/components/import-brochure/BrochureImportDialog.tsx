@@ -185,7 +185,8 @@ export default function BrochureImportDialog({ open, onOpenChange }: BrochureImp
           return;
         }
 
-        const extractionId = typeof data?.extraction_id === "string" ? data.extraction_id : null;
+        const responseData = data as { extraction_id?: unknown } | null;
+        const extractionId = typeof responseData?.extraction_id === "string" ? responseData.extraction_id : null;
         if (!extractionId) {
           setError(errorCopy("unknown"));
           setStage("error");
