@@ -83,6 +83,15 @@ function getSheetRows(workbook: XLSX.WorkBook, name: string): Record<string, unk
   return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
 }
 
+function hasV2PrizeHeaders(workbook: XLSX.WorkBook, name: string): boolean {
+  const ws = workbook.Sheets[name];
+  if (!ws) return false;
+  const [headerRow] = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "", range: 0 });
+  if (!headerRow) return false;
+  const headers = new Set(headerRow.map((value) => normalize(value).toLowerCase()));
+  return headers.has("category") && headers.has("place");
+}
+
 const CRITERIA_COLUMN_MAPPINGS: Array<[string, string]> = [
   ["Gender", "gender"],
   ["Min Age", "min_age"],
@@ -261,29 +270,56 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
   }
 
   const seenCategoryPlace = new Set<string>();
-  const prizeRows = getSheetRows(workbook, "Prizes");
+  let prizeSheetName = "Prizes";
+  if (!parseV1 && !workbook.Sheets.Prizes) {
+    const matchingSheets = workbook.SheetNames.filter((name) => hasV2PrizeHeaders(workbook, name));
+    if (matchingSheets.length === 1) {
+      prizeSheetName = matchingSheets[0];
+      issues.push({
+        severity: "warning",
+        sheet: prizeSheetName,
+        row: 1,
+        message: `Using worksheet "${prizeSheetName}" because no worksheet named "Prizes" was found.`,
+      });
+    } else if (matchingSheets.length === 0) {
+      issues.push({
+        severity: "error",
+        sheet: "Workbook",
+        row: 1,
+        message: 'No prize worksheet found. Name the worksheet "Prizes" or include Category and Place columns.',
+      });
+    } else {
+      issues.push({
+        severity: "error",
+        sheet: "Workbook",
+        row: 1,
+        message: `Multiple worksheets contain Category and Place columns (${matchingSheets.join(", ")}). Rename the intended worksheet to "Prizes".`,
+      });
+    }
+  }
+  const prizeRows = getSheetRows(workbook, prizeSheetName);
   prizeRows.forEach((row, idx) => {
     const rowNum = idx + 2;
     const categoryName = normalize(row.Category);
     if (!categoryName) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Category is required." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Category is required." });
       return;
     }
     const normCategoryName = categoryName.toLowerCase();
     let category = categories.get(normCategoryName);
     if (!category) {
       if (parseV1) {
-        issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: `Unknown category "${categoryName}".` });
+        issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: `Unknown category "${categoryName}".` });
         return;
       }
 
       const isMainParsed = parseBoolean(row["Is Main"]);
       if (normalize(row["Is Main"]) && isMainParsed === null) {
-        issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Is Main value. Use yes/no." });
+        issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Is Main value. Use yes/no." });
         return;
       }
 
-      const parsedCriteria = parseCategoryCriteriaFromRow(row, "Prizes", rowNum, issues);
+      const parsedCriteria = parseCategoryCriteriaFromRow(row, prizeSheetName, rowNum, issues);
       if (!parsedCriteria) return;
 
       category = {
@@ -299,15 +335,15 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
     } else if (!parseV1) {
       const isMainParsed = parseBoolean(row["Is Main"]);
       if (normalize(row["Is Main"]) && isMainParsed === null) {
-        issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Is Main value. Use yes/no." });
+        issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Is Main value. Use yes/no." });
         return;
       }
       if (isMainParsed !== null && isMainParsed !== category.is_main) {
-        issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: `Conflicting Is Main for category "${categoryName}".` });
+        issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: `Conflicting Is Main for category "${categoryName}".` });
         return;
       }
 
-      const parsedCriteria = parseCategoryCriteriaFromRow(row, "Prizes", rowNum, issues);
+      const parsedCriteria = parseCategoryCriteriaFromRow(row, prizeSheetName, rowNum, issues);
       if (!parsedCriteria) return;
 
       const providedMappings = CRITERIA_COLUMN_MAPPINGS.filter(([column]) => normalize(row[column]));
@@ -321,7 +357,7 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
         } else if (conflictingColumns.length > 0) {
           issues.push({
             severity: "error",
-            sheet: "Prizes",
+            sheet: prizeSheetName,
             row: rowNum,
             message: `Conflicting criteria for category "${categoryName}" (${conflictingColumns.join(", ")}).`,
           });
@@ -332,32 +368,32 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
 
     const places = parsePlaceRange(row.Place);
     if (!places || places.length === 0) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Place. Use 1 or range like 6-10." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Place. Use 1 or range like 6-10." });
       return;
     }
 
     const cashParsed = parseNumber(row["Cash Amount"]);
     if (normalize(row["Cash Amount"]) && cashParsed === null) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Cash Amount." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Cash Amount." });
       return;
     }
 
     const trophyParsed = parseBoolean(row.Trophy);
     if (normalize(row.Trophy) && trophyParsed === null) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Trophy value. Use yes/no." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Trophy value. Use yes/no." });
       return;
     }
 
     const medalParsed = parseBoolean(row.Medal);
     if (normalize(row.Medal) && medalParsed === null) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Medal value. Use yes/no." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Medal value. Use yes/no." });
       return;
     }
 
     const giftName = normalize(row.Gift) || normalize(row["Gift Name"]);
     const giftQty = normalize(row["Gift Qty"]) ? parseNumber(row["Gift Qty"]) : null;
     if (normalize(row["Gift Qty"]) && (giftQty === null || giftQty < 0 || !Number.isInteger(giftQty))) {
-      issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: "Invalid Gift Qty. Use a whole number >= 0." });
+      issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: "Invalid Gift Qty. Use a whole number >= 0." });
       return;
     }
 
@@ -373,7 +409,7 @@ export async function parsePrizeTemplateFile(file: File): Promise<PrizeTemplateP
     for (const place of places) {
       const key = `${category.name.toLowerCase()}:${place}`;
       if (seenCategoryPlace.has(key)) {
-        issues.push({ severity: "error", sheet: "Prizes", row: rowNum, message: `Duplicate place ${place} in category "${category.name}".` });
+        issues.push({ severity: "error", sheet: prizeSheetName, row: rowNum, message: `Duplicate place ${place} in category "${category.name}".` });
         continue;
       }
       seenCategoryPlace.add(key);

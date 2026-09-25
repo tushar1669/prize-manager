@@ -17,6 +17,75 @@ function workbookToFile(name: string, sheets: Record<string, unknown[][]>): File
 }
 
 describe('parsePrizeTemplateFile v2', () => {
+  it('prefers the exact Prizes worksheet when another sheet also has prize headers', async () => {
+    const file = workbookToFile('v2.xlsx', {
+      Prizes: [
+        ['Category', 'Place'],
+        ['Main Prize', 1],
+      ],
+      Sheet1: [
+        ['Category', 'Place'],
+        ['Other Prize', 1],
+      ],
+    });
+
+    const result = await parsePrizeTemplateFile(file);
+    expect(result.issues).toHaveLength(0);
+    expect(result.draft.categories.map((category) => category.name)).toEqual(['Main Prize']);
+  });
+
+  it('uses one unambiguously matching worksheet and warns when Prizes is absent', async () => {
+    const file = workbookToFile('eklavya.xlsx', {
+      Sheet1: [
+        ['Category', 'Is Main', 'Place', 'Cash Amount', 'Trophy', 'Medal', 'Gift Name', 'Gift Qty', 'Notes'],
+        ['Main Prize', 'Yes', 1, 31000, 'Yes', 'yes', '', '', ''],
+        ['Main Prize', 'Yes', 2, 25000, 'yes', 'no', '', '', ''],
+        ['Under 7', 'no', 2, '', 'no', 'yes', '', '', ''],
+        ['Under 7', 'no', 3, '', 'no', 'Yes', '', '', ''],
+      ],
+    });
+
+    const result = await parsePrizeTemplateFile(file);
+    expect(result.issues.filter((issue) => issue.severity === 'error')).toHaveLength(0);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'warning',
+      sheet: 'Sheet1',
+      message: expect.stringContaining('Using worksheet "Sheet1"'),
+    }));
+    expect(result.draft.categories).toHaveLength(2);
+    expect(result.draft.categories.find((category) => category.name === 'Under 7')?.prizes.map((prize) => prize.place)).toEqual([2, 3]);
+    expect(result.draft.categories.reduce((count, category) => count + category.prizes.length, 0)).toBe(4);
+  });
+
+  it('returns a clear blocking error when no worksheet has the v2 headers', async () => {
+    const file = workbookToFile('invalid.xlsx', {
+      Sheet1: [['Name', 'Amount'], ['Main Prize', 1000]],
+    });
+
+    const result = await parsePrizeTemplateFile(file);
+    expect(result.draft.categories).toHaveLength(0);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'error',
+      sheet: 'Workbook',
+      message: expect.stringContaining('No prize worksheet found'),
+    }));
+  });
+
+  it('returns a clear blocking error when multiple worksheets match', async () => {
+    const file = workbookToFile('ambiguous.xlsx', {
+      First: [['Category', 'Place'], ['Main Prize', 1]],
+      Second: [['Category', 'Place'], ['Women', 1]],
+    });
+
+    const result = await parsePrizeTemplateFile(file);
+    expect(result.draft.categories).toHaveLength(0);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'error',
+      sheet: 'Workbook',
+      message: expect.stringContaining('Multiple worksheets contain Category and Place columns'),
+    }));
+  });
+
   it('parses simplified v2 rows with default columns only', async () => {
     const file = workbookToFile('v2.xlsx', {
       Prizes: [
