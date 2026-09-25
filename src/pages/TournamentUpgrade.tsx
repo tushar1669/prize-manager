@@ -382,9 +382,10 @@ export default function TournamentUpgrade() {
           window.clearTimeout(abortTimer);
         }
 
+        const responseData = invokeResult.data as { extraction_id?: unknown; field_flags?: unknown } | null;
         const extractionId =
-          typeof invokeResult.data?.extraction_id === "string"
-            ? invokeResult.data.extraction_id
+          typeof responseData?.extraction_id === "string"
+            ? responseData.extraction_id
             : null;
         if (!extractionId) throw new Error("No extraction ID returned");
 
@@ -393,8 +394,7 @@ export default function TournamentUpgrade() {
 
         // Advisory duplicate warning (D31): field_flags comes back on the invoke response
         // itself, so this surfaces seconds after upload — before the organizer hits Submit.
-        const responseFlags = (invokeResult.data as { field_flags?: unknown } | null)
-          ?.field_flags;
+        const responseFlags = responseData?.field_flags;
         if (
           Array.isArray(responseFlags) &&
           responseFlags.some(

@@ -125,7 +125,7 @@ export default function AdminPayments() {
         for (const row of extractionRows ?? []) {
           extractionMap.set(row.id, {
             payload: ((row.payload ?? {}) as unknown) as ExtractionPayload,
-            field_flags: (Array.isArray(row.field_flags) ? row.field_flags : []) as ExtractionFlag[],
+            field_flags: (Array.isArray(row.field_flags) ? row.field_flags : []) as unknown as ExtractionFlag[],
             confidence: typeof row.confidence === "number" ? row.confidence : 0,
             file_path: pathMap.get(row.document_id) ?? null,
           });

@@ -159,7 +159,7 @@ export default function BrochureReview() {
       // Persist edits first so commit-extraction commits exactly what the reviewer saw.
       const { error: updateErr } = await supabase
         .from("extractions")
-        .update({ payload: committedPayload, updated_at: new Date().toISOString() })
+        .update({ payload: committedPayload as never, updated_at: new Date().toISOString() })
         .eq("id", extractionId);
       if (updateErr) throw updateErr;
 
