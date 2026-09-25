@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { User, Session, type AuthResponse } from "@supabase/supabase-js";
+import { User, Session, type AuthError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<AuthResponse>;
+  signUp: (email: string, password: string) => Promise<{
+    data: { user: User | null; session: Session | null };
+    error: AuthError | null;
+  }>;
   signIn: (email: string, password: string) => Promise<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>>;
   signOut: () => Promise<Awaited<ReturnType<typeof supabase.auth.signOut>>>;
 }
@@ -55,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string): Promise<AuthResponse> => {
+  const signUp = useCallback(async (email: string, password: string) => {
     // Use /auth/callback for proper email confirmation handling
     const redirectUrl = `${window.location.origin}/auth/callback`;
 
