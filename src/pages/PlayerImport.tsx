@@ -108,6 +108,7 @@ import {
 } from '@/utils/dedup';
 import { DeduplicationWizard } from "@/components/dedup/DeduplicationWizard";
 import { ImportLogsPanel } from "@/components/ImportLogsPanel";
+import { buildImportGenderSummary } from "@/utils/importGenderSummary";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
@@ -1392,6 +1393,10 @@ export default function PlayerImport() {
             dedupe_summary: dedupeMeta,
             import_success: results.failed.length === 0,
             import_summary: importSummary,
+            gender_summary: buildImportGenderSummary(players as Array<{ gender?: unknown; gender_source?: unknown }>, {
+              femaleFromLabels: femaleCountSummary?.femaleFromFmg ?? 0,
+              sources: femaleCountSummary?.genderSources ?? [],
+            }),
           })),
         };
 
