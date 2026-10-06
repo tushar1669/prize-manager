@@ -2,7 +2,7 @@
 // Feature flags for gradual rollout of import v2 enhancements
 
 const logsFlag = import.meta.env?.VITE_IMPORT_LOGS_ENABLED;
-export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : false;
+export const IMPORT_LOGS_ENABLED = logsFlag ? logsFlag === 'true' : true;
 
 const reactPdfFlag = import.meta.env?.VITE_ENABLE_REACT_PDF;
 export const ENABLE_REACT_PDF = reactPdfFlag ? reactPdfFlag === 'true' : false;

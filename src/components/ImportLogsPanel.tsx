@@ -64,7 +64,7 @@ export function ImportLogsPanel({ tournamentId }: Props) {
       const { data, error } = await supabase
         .from("import_logs")
         .select(
-          "id, imported_at, filename, sheet_name, header_row, total_rows, accepted_rows, skipped_rows, top_reasons, sample_errors"
+          "id, imported_at, filename, sheet_name, header_row, total_rows, accepted_rows, skipped_rows, top_reasons, sample_errors, meta"
         )
         .eq("tournament_id", tournamentId)
         .order("imported_at", { ascending: false })
@@ -124,6 +124,19 @@ export function ImportLogsPanel({ tournamentId }: Props) {
                     {log.sheet_name ? ` • Sheet: ${log.sheet_name}` : ""}
                     {log.header_row ? ` • Header row: ${log.header_row}` : ""}
                   </div>
+
+                  {(() => {
+                    const meta = (log.meta ?? {}) as { gender_summary?: { female_count?: number; female_sources?: Record<string, number> } };
+                    const gs = meta.gender_summary;
+                    if (!gs || typeof gs.female_count !== "number") return null;
+                    const srcs = Object.keys(gs.female_sources ?? {});
+                    return (
+                      <div className={gs.female_count === 0 ? "text-sm text-destructive" : "text-sm"}>
+                        Girls found: {gs.female_count}
+                        {srcs.length > 0 ? ` (from ${srcs.join(", ")})` : ""}
+                      </div>
+                    );
+                  })()}
 
                   {reasons.length > 0 && (
                     <div className="flex flex-wrap gap-2">
