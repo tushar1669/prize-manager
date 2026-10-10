@@ -1,4 +1,7 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
+
+> **Scoped work note · 10 October 2026 · Issue #459 (website only).** Latest verified `main` before the draft: `fbec110bdfb9a39b1614d7ba5142f84b777893b8` (20 commits after the older `251101b` baseline below). The approved Team Prizes organizer PDF (18 pp, SHA256 `6129f0ed1fa6e5d5508da31be7743929d9758ed3387044eef64ba844b1fdef11`) and public How it works/footer changes are staged on `feat/issue-459-team-prizes-guide-20261010` for an **unmerged draft PR**. This is source-only pending PR checks, visual/mobile QA, authorized release and production HTTP verification; the authentic Resolve Tie / Save Resolution capture remains unavailable. The rest of this legacy state document predates the current HEAD and is not normalized by Issue #459. `SOURCE_OF_TRUTH.md`, `BACKLOG.md`, `DOCUMENT_INDEX.md`, `RUNTIME_STATE.md`, `RISK_REGISTER.md` and `EVIDENCE_REGISTER.md` are absent; do not treat this note as their replacement.
+
 **Last updated:** 28 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
