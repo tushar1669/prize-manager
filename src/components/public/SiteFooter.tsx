@@ -11,6 +11,7 @@ export const socialLinks = [
 
 const productLinks = [
   { label: "How it works", to: "/how-it-works" },
+  { label: "Team Prizes", to: "/how-it-works#team-prizes" },
   { label: "Pricing", to: "/pricing" },
   { label: "Results", to: "/public" },
 ] as const;
@@ -34,9 +35,15 @@ function FooterColumn({ heading, links }: { heading: string; links: readonly { l
       <ul className="space-y-2">
         {links.map((link) => (
           <li key={link.to}>
-            <Link to={link.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              {link.label}
-            </Link>
+            {link.to.includes("#") ? (
+              <a href={link.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                {link.label}
+              </a>
+            ) : (
+              <Link to={link.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                {link.label}
+              </Link>
+            )}
           </li>
         ))}
       </ul>
