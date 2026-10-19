@@ -43,7 +43,7 @@ Every rule below is **numbered** and includes a summary + exact code pointers (p
 - **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1488–1514.
 
 ### R4.f Youngest categories require DOB
-- **Summary:** Youngest categories (`youngest_female`, `youngest_male`) fail eligibility if DOB is missing.
+- **Summary:** Youngest/oldest categories (`youngest_overall`, `youngest_female`, `youngest_male`, `oldest_overall`, `oldest_female`, `oldest_male`) fail eligibility if DOB is missing. `*_overall` applies no gender filter (F, M and blank all eligible).
 - **Where in code:** supabase/functions/allocatePrizes/index.ts → `evaluateEligibility`, lines ~1349–1354; `isYoungestCategory`, lines ~1718–1721.
 
 ## R5. Prize priority queue is global and deterministic
@@ -57,7 +57,7 @@ Every rule below is **numbered** and includes a summary + exact code pointers (p
 - **Inputs:** `players.rank`, `players.rating`, `players.name`, `rule_config.tie_break_strategy` (or request override).
 
 ## R7. Youngest categories use DOB, then rank/rating/name
-- **Summary:** Youngest categories sort by most recent DOB (youngest), then rank, rating, and name. 
+- **Summary:** Youngest categories sort by most recent DOB (youngest), oldest categories by earliest DOB, then rank, rating, and name. Same for the `*_overall` variants. 
 - **Where in code:** supabase/functions/allocatePrizes/index.ts → `compareYoungestEligible`, lines ~1736–1766.
 
 ## R8. Per‑player prize cap is enforced after eligibility

@@ -21,7 +21,7 @@ Prizes are **globally sorted** by value and priority, then allocated one‑by‑
 
 ## How winners are chosen
 - **Standard categories:** lowest tournament rank wins; ties break by rating then name by default. (supabase/functions/allocatePrizes/index.ts → `compareEligibleByRankRatingName`, lines ~1683–1715)
-- **Youngest categories:** youngest DOB wins; ties break by rank → rating → name. (supabase/functions/allocatePrizes/index.ts → `compareYoungestEligible`, lines ~1736–1766)
+- **Youngest / Oldest categories:** choose Youngest or Oldest in Special Category, then "Who qualifies?" — Everyone (Overall), Girls / women only, or Boys / not marked as girl (includes players with no gender recorded). Youngest (or oldest) DOB wins; players without DOB can't win; ties break by rank → rating → name. (supabase/functions/allocatePrizes/index.ts → `compareYoungestEligible`, lines ~1736–1766)
 
 ## Can a player win multiple prizes?
 Yes, but it depends on **multi_prize_policy**:
