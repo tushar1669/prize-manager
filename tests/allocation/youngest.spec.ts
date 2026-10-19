@@ -25,7 +25,7 @@ type Player = {
   rank?: number | null;
 };
 
-type YoungestType = 'youngest_female' | 'youngest_male';
+type YoungestType = 'youngest_female' | 'youngest_male' | 'youngest_overall';
 
 const runYoungestAllocation = (categoryType: YoungestType, players: Player[]) => {
   const cat = {
@@ -160,5 +160,30 @@ describe('youngest category allocation', () => {
 
     const result = runYoungestAllocation('youngest_male', players);
     expect(result.winner?.id).toBe('u1'); // Pat (unknown gender) is youngest
+  });
+
+  it('youngest_overall picks a girl when she is the youngest', () => {
+    const players: Player[] = [
+      { id: 'm1', name: 'Tom', dob: '2014-01-01', gender: 'M', rating: 1500, rank: 1 },
+      { id: 'f1', name: 'Sue', dob: '2016-01-01', gender: 'F', rating: 1200, rank: 2 },
+    ];
+    expect(runYoungestAllocation('youngest_overall', players).winner?.id).toBe('f1');
+  });
+
+  it('youngest_overall allows players with no gender recorded', () => {
+    const players: Player[] = [
+      { id: 'f1', name: 'Sue', dob: '2014-01-01', gender: 'F', rating: 1200, rank: 2 },
+      { id: 'u1', name: 'Pat', dob: '2017-01-01', gender: null, rating: 1000, rank: 3 },
+    ];
+    expect(runYoungestAllocation('youngest_overall', players).winner?.id).toBe('u1');
+  });
+
+  it('youngest_overall excludes players with no DOB', () => {
+    const players: Player[] = [
+      { id: 'f1', name: 'Gina', dob: null, gender: 'F', rating: 1200, rank: 1 },
+    ];
+    const result = runYoungestAllocation('youngest_overall', players);
+    expect(result.winner).toBeNull();
+    expect(result.failCodes).toContain('dob_missing');
   });
 });

@@ -5,7 +5,7 @@ import { defaultRules, runAllocation, type TestCategory, type TestPlayer } from 
 
 let allocator: typeof AllocatorModule;
 
-type OldestType = 'oldest_female' | 'oldest_male';
+type OldestType = 'oldest_female' | 'oldest_male' | 'oldest_overall';
 
 const category = (categoryType: OldestType): TestCategory => ({
   id: `cat-${categoryType}`,
@@ -142,5 +142,22 @@ describe('oldest category allocation', () => {
     const result = runAllocation(allocator, categories, players, defaultRules);
     expect(result.winners.find(w => w.prizeId === 'main-1')?.playerId).toBe('m1');
     expect(result.winners.find(w => w.prizeId === 'p-oldest_male')?.playerId).toBe('m2');
+  });
+
+  it('oldest_overall picks the oldest player of any gender', () => {
+    const players: TestPlayer[] = [
+      { id: 'm1', name: 'Evan', dob: '1950-01-01', gender: 'M', rating: 1500, rank: 1 },
+      { id: 'f1', name: 'Dana', dob: '1930-01-01', gender: 'F', rating: 1500, rank: 2 },
+      { id: 'u1', name: 'Blake', dob: '1940-01-01', gender: null, rating: 1520, rank: 3 },
+    ];
+    expect(runOldestAllocation('oldest_overall', players).winner?.id).toBe('f1');
+  });
+
+  it('oldest_overall breaks DOB ties by better rank', () => {
+    const players: TestPlayer[] = [
+      { id: 'a', name: 'A', dob: '1940-01-01', gender: 'F', rating: 1500, rank: 5 },
+      { id: 'b', name: 'B', dob: '1940-01-01', gender: 'M', rating: 1400, rank: 2 },
+    ];
+    expect(runOldestAllocation('oldest_overall', players).winner?.id).toBe('b');
   });
 });
