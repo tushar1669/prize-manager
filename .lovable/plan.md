@@ -1,5 +1,16 @@
 # Youngest Overall + Oldest Overall — grouped "Special Category" UI
 
+## Cross-check result: nothing blocks this, safe to go ahead
+- The prize-decision rule already has a "no gender limit" mode. Overall only needs to use it, so the existing Girls and Boys rules don't change.
+- The prize type is saved inside the category's rules. Old categories keep working, and there are no database changes.
+- Copying categories from another tournament already carries the prize type over, so Overall will copy correctly.
+- Only 3 places in the app read Youngest/Oldest: the prize-decision rule, the Setup drawer, and the category badges. All three are covered in the steps below.
+- **Small existing bug, fixed in Step 2:** when an organizer picks Oldest Woman or Oldest Man, the Gender box in the drawer doesn't update to match. The saved result is still correct; only the display is wrong. Youngest updates properly.
+- **Recommended wording changes:**
+  - Dropdown labels: "Girls / women only" and "Boys / not marked as girl", so they make sense for both Youngest and Oldest.
+  - Never call the second option just "Boys". Players with no gender recorded count there too.
+- The brochure reader isn't changed. It never chooses Overall on its own.
+
 ## Recommended UI: 3 tabs + one "Who qualifies?" dropdown
 
 Not seven separate buttons. The Category Rules drawer shows three choices:
