@@ -1,41 +1,65 @@
-# Two findings
+# Youngest Overall + Oldest Overall — grouped "Special Category" UI
 
-## A. Why "Top 3 Schools" gave no prizes (tournament 19a94d81)
+## Recommended UI: 3 tabs + one "Who qualifies?" dropdown
 
-**Settings:** Group by Club, Team size 4, Girls minimum 0, **Other players minimum 4**.
+Not seven separate buttons. The Category Rules drawer shows three choices:
 
-**Player list:** Only KR Mangalam has 4 players, and 2 of them are girls. Every other school has 3 players or fewer.
+```text
+Special Category
+[ Standard ]  [ Youngest ]  [ Oldest ]
 
-**Root cause:** "Other players minimum 4" with team size 4 means all 4 team members must be non-girls. KR Mangalam has only 2 such players, so it fails. The other 28 schools fail because they have fewer than 4 players. No school qualifies, so all 3 prizes stay empty. The app applied the rules as set. Your Excel is fine; the settings just can't be met by this player list.
+(only when Youngest or Oldest is picked)
+Who qualifies?   [ Everyone (Overall)   v ]
+                   Everyone (Overall)   <- default
+                   Girls only
+                   Boys / not marked as girl
+```
 
-**Fix for this tournament (organizer, no code):** Edit "Top 3 Schools":
-- Set Other players minimum to 0.
-- Then choose a team size:
-  - **Team size 3:** KR Mangalam, Kulachi Hansraj and Sardar Patel qualify, so all 3 prizes are filled.
-  - **Team size 4:** only KR Mangalam qualifies, so you get 1 winner.
-- Press Preview again on Review.
+Why this is better: it's shorter, it stays readable on small screens, and the organizer makes one decision at a time (what kind of prize, then who can win it).
 
-**Product fix (small, setup and review screens only):**
-1. In the team group drawer, warn when the minimums add up to the team size: "Girls will not count. Set Other players to 0 to allow any mix." Block saving when the minimums add up to more than the team size.
-2. On Review, when no school qualifies, add a summary line, for example "No school has 4 players. Largest: 4 (1 school). Try a smaller team size."
-3. Plain wording: replace "The rule asks for other players and the entry list does not meet it" with "Needs at least N non-girl players; this school has M."
+### Behaviour
+- Picking **Youngest** or **Oldest** sets "Who qualifies?" to **Everyone (Overall)**.
+- The Gender, Age and Rating fields are greyed out, as they are for today's Youngest/Oldest options. The dropdown controls gender.
+- Help text under the dropdown changes with the choice:
+  - Everyone: "Every player with a date of birth can win, boys and girls alike."
+  - Girls only: "Only players marked F."
+  - Boys / not marked: "Players not marked F, including players with no gender recorded."
+- The existing switch "Award true youngest/oldest even if already won another prize" stays as it is, and stays off by default.
+- Existing categories open correctly. For example, a saved Youngest Girl opens as Youngest + Girls only. Nothing needs converting.
 
-## B. Can a profile-reward coupon unlock free Pro?
+### Badges on category cards
+Youngest Overall, Youngest Girl, Youngest Boy, Oldest Overall, Oldest Woman and Oldest Man. The existing "Duplicate winner allowed" badge is kept.
 
-**What I checked (live data, read-only):**
-- There are 4 profile-reward coupons, all claimed by their owners. Each is 100% off Pro, active, and has no expiry. **0 have ever been used.**
-- The welcome, referral and admin coupons have exactly the same shape and go through the same redeem step. Their redemptions did unlock Pro: each one created a Pro access record (8 of 8).
-- The redeem step checks that the person using the coupon is the person it was issued to. All 4 profile coupons are issued to the right account, and each of those accounts owns a tournament.
+## How the prize is decided
+- **Overall:** any player with a date of birth can win, whatever their gender (F, M or blank).
+- Youngest uses the latest birth date. Oldest uses the earliest birth date.
+- Ties are broken as today: better rank, then higher rating, then name.
+- Players with no date of birth can't win (same as today).
+- The Girls and Boys versions work exactly as they do today.
 
-**Conclusion:** I found nothing in the system that blocks a profile-reward coupon. The same path works for the other coupon types with identical settings. The most likely reason none has been used is that nobody has tried yet. I could not run a real redemption: I can't sign in as an organizer here, and testing would use up a real coupon. So this is **not verified end to end**.
-
-**Proposed next step (no code):** an organizer with a profile coupon opens their tournament's Payment page, enters the code, and applies it. Pro should switch on straight away. If it fails, send a screenshot of the message.
-
-**Small proposed improvement:** on the Payment page, show the organizer's own unused coupons as "Use this code" buttons, so they don't have to copy codes from the Account page. This is display only; redemption rules stay as they are.
-
-## Not touched
-The allocation engine, coupon and payment rules, the database, permissions and publishing all stay as they are.
+## Steps (each step: build, test, verify, then wait for your OK)
+1. **Engine:** recognise the two new values, `youngest_overall` and `oldest_overall`, with no gender filter. Add unit tests:
+   - a girl who is the youngest wins Youngest Overall
+   - a player with blank gender can win
+   - a player with no date of birth is excluded
+   - tie-breaks work for Oldest Overall
+   - the existing youngest/oldest tests still pass
+   
+   This step changes the prize-allocation engine, which needs your explicit approval. Saying yes to this plan gives that approval for this one change only.
+2. **Setup drawer:** the three tabs and the dropdown described above. Gender is set from the dropdown: Overall leaves gender open, Girls sets F, Boys sets M_OR_UNKNOWN. Saved categories open on the right tab and dropdown choice.
+3. **Badges and labels:** category cards, and the reason labels on the Review page and in the exports.
+4. **Docs:** update RULES_AND_SETTINGS_REFERENCE.md, ALGORITHM_RULES.md and the organizer guide.
 
 ## Technical details
-- A: `institution_prize_groups` ca3caea5: team_size=4, female_slots=0, male_slots=4. Files: `TeamPrizeRulesSheet.tsx` (validation), `TeamPrizeResultsPanel.tsx` (summary and wording), plus a unit test for the slot-sum check.
-- B: `redeem_coupon_for_tournament` / `apply_coupon_for_tournament` check `issued_to_user_id = auth.uid()`, max redemptions, and expiry. Origin is not checked, so profile_reward follows the same branch as welcome (8/8 redemptions have a `source='coupon'` entitlement). Improvement file: `src/pages/TournamentUpgrade.tsx`.
+- Values stay in `criteria_json.category_type`. There are no database changes and no migration.
+- Engine (`supabase/functions/allocatePrizes/index.ts`):
+  - `isYoungestCategory` and `isOldestCategory` (around line 1940) also accept the `_overall` values.
+  - The forced gender (around line 1528) returns null, meaning no filter, for `_overall`.
+  - Lines 1517–1518 also include the `_overall` values.
+  - Redeploy `allocatePrizes`.
+- UI (`src/pages/TournamentSetup.tsx`):
+  - The options list (around line 2426) is replaced by three tabs plus a shadcn Select. The pair (kind, audience) maps to `category_type`.
+  - The DOB-special checks (around lines 2474 and 2833) and the forced gender (around line 2938, and the effect around line 480) are extended.
+- `src/components/prizes/CategoryCriteriaChips.tsx`: add the Overall labels.
+- Tests: add cases to `tests/allocation/youngest.spec.ts` and `oldest.spec.ts`, then run `npm run test:unit`.
+- Out of scope: team prizes, the database, permissions, publishing, and the rest of the engine.
