@@ -1514,8 +1514,8 @@ export const evaluateEligibility = (
     club_aliases?: AliasSpec;
   };
   const categoryType = (cat.category_type as string) || 'standard';
-  const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
-  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male';
+  const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male' || categoryType === 'youngest_overall';
+  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male' || categoryType === 'oldest_overall';
   const failCodes = new Set<string>();
   const passCodes = new Set<string>();
   const warnCodes = new Set<string>();
@@ -1523,7 +1523,9 @@ export const evaluateEligibility = (
   // Gender check
   // Unified logic: 'M' and 'M_OR_UNKNOWN' both mean "not F" (boys + unknown)
   // This ensures backwards compatibility with old configs using gender='M'
+  // *_overall special categories are gender-neutral (no gender filter).
   const reqG = (() => {
+    if (categoryType === 'youngest_overall' || categoryType === 'oldest_overall') return null;
     if (isYoungest || isOldest) {
       return categoryType === 'youngest_female' || categoryType === 'oldest_female' ? 'F' : 'M_OR_UNKNOWN';
     }
@@ -1939,12 +1941,12 @@ export const getCategoryType = (category: { category_type?: string | null }): st
 
 export const isYoungestCategory = (category: { category_type?: string | null }): boolean => {
   const type = getCategoryType(category);
-  return type === 'youngest_female' || type === 'youngest_male';
+  return type === 'youngest_female' || type === 'youngest_male' || type === 'youngest_overall';
 };
 
 export const isOldestCategory = (category: { category_type?: string | null }): boolean => {
   const type = getCategoryType(category);
-  return type === 'oldest_female' || type === 'oldest_male';
+  return type === 'oldest_female' || type === 'oldest_male' || type === 'oldest_overall';
 };
 
 /**
