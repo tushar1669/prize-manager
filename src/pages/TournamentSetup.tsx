@@ -69,6 +69,31 @@ const asCriteriaJson = (val: unknown): CriteriaJson => {
 };
 
 
+type SpecialKind = 'standard' | 'youngest' | 'oldest';
+type SpecialAudience = 'overall' | 'female' | 'male';
+
+function isDobSpecialType(type: string | null | undefined): boolean {
+  return /^(youngest|oldest)_(overall|female|male)$/.test(type ?? '');
+}
+
+function splitSpecialType(type: string | null | undefined): { kind: SpecialKind; audience: SpecialAudience } {
+  const m = /^(youngest|oldest)_(overall|female|male)$/.exec(type ?? '');
+  if (!m) return { kind: 'standard', audience: 'overall' };
+  return { kind: m[1] as SpecialKind, audience: m[2] as SpecialAudience };
+}
+
+function joinSpecialType(kind: SpecialKind, audience: SpecialAudience): string {
+  return kind === 'standard' ? 'standard' : `${kind}_${audience}`;
+}
+
+/** Gender the allocator enforces for a DOB-special type; null = open (Overall). */
+function forcedGenderForDobSpecial(type: string): 'F' | 'M_OR_UNKNOWN' | null {
+  const { audience } = splitSpecialType(type);
+  if (audience === 'female') return 'F';
+  if (audience === 'male') return 'M_OR_UNKNOWN';
+  return null;
+}
+
 export default function TournamentSetup() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -477,12 +502,10 @@ export default function TournamentSetup() {
     const genderEl = document.getElementById('criteria-gender') as HTMLSelectElement | null;
     if (!genderEl) return;
 
-    if (categoryTypeSelection === 'youngest_female') {
-      genderEl.value = 'F';
-      setCriteriaGenderSelection('F');
-    } else if (categoryTypeSelection === 'youngest_male') {
-      genderEl.value = 'M_OR_UNKNOWN';
-      setCriteriaGenderSelection('M_OR_UNKNOWN');
+    if (isDobSpecialType(categoryTypeSelection)) {
+      const forced = forcedGenderForDobSpecial(categoryTypeSelection) ?? '';
+      genderEl.value = forced;
+      setCriteriaGenderSelection(forced);
     } else if (criteriaSheet.category?.criteria_json) {
       const catCriteria = asCriteriaJson(criteriaSheet.category.criteria_json);
       const storedGender = catCriteria.gender;
@@ -2418,39 +2441,66 @@ export default function TournamentSetup() {
 
           <div className="space-y-6 py-6">
             {/* Special Category */}
-            <div className="border-b pb-4 mb-4">
-              <Label className="mb-2 block">Special Category</Label>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  { value: 'standard', label: 'Standard', disabled: false },
-                  { value: 'youngest_male', label: 'Youngest Boy', disabled: false },
-                  { value: 'youngest_female', label: 'Youngest Girl', disabled: false },
-                  { value: 'oldest_male', label: 'Oldest Man', disabled: false },
-                  { value: 'oldest_female', label: 'Oldest Woman', disabled: false },
-                ] as const).map((opt) => {
-                  const isActive = categoryTypeSelection === opt.value
-                    || (opt.value === 'standard' && (!categoryTypeSelection || categoryTypeSelection === 'standard'));
-                  return (
-                    <Button
-                      key={opt.value}
-                      type="button"
-                      size="sm"
-                      variant={isActive ? 'default' : 'outline'}
-                      disabled={opt.disabled}
-                      aria-pressed={isActive}
-                      onClick={() => {
-                        setCategoryTypeSelection(opt.value);
-                      }}
-                    >
-                      {opt.label}
-                    </Button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Special categories use DOB-based allocator behavior. Category names alone do not control this behavior.
-              </p>
-            </div>
+            {(() => {
+              const { kind, audience } = splitSpecialType(categoryTypeSelection);
+              const audienceHelp: Record<SpecialAudience, string> = {
+                overall: 'Every player with a date of birth can win — boys and girls alike.',
+                female: 'Only players marked F can win.',
+                male: 'Players not marked F can win, including players with no gender recorded.',
+              };
+              return (
+                <div className="border-b pb-4 mb-4">
+                  <Label className="mb-2 block">Special Category</Label>
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Special category">
+                    {([
+                      { value: 'standard', label: 'Standard' },
+                      { value: 'youngest', label: 'Youngest' },
+                      { value: 'oldest', label: 'Oldest' },
+                    ] as const).map((opt) => {
+                      const isActive = kind === opt.value;
+                      return (
+                        <Button
+                          key={opt.value}
+                          type="button"
+                          size="sm"
+                          variant={isActive ? 'default' : 'outline'}
+                          aria-pressed={isActive}
+                          onClick={() => {
+                            if (opt.value === kind) return;
+                            setCategoryTypeSelection(
+                              opt.value === 'standard' ? 'standard' : `${opt.value}_overall`
+                            );
+                          }}
+                        >
+                          {opt.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {kind !== 'standard' && (
+                    <div className="mt-3">
+                      <Label htmlFor="criteria-special-audience">Who qualifies?</Label>
+                      <select
+                        id="criteria-special-audience"
+                        className="border border-input bg-background text-foreground rounded px-2 py-1 w-full mt-2"
+                        value={audience}
+                        onChange={(e) => setCategoryTypeSelection(joinSpecialType(kind, e.target.value as SpecialAudience))}
+                      >
+                        <option value="overall">Everyone (Overall)</option>
+                        <option value="female">Girls / women only</option>
+                        <option value="male">Boys / not marked as girl</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-2">{audienceHelp[audience]}</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {kind === 'standard'
+                      ? 'Standard categories use the age, rating and gender rules below.'
+                      : `The ${kind} player by date of birth wins. Ties: better rank, then higher rating, then name. Players without a date of birth can't win.`}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Age Range */}
             {(() => {
@@ -2471,7 +2521,7 @@ export default function TournamentSetup() {
                 max_age_inclusive?: boolean;
                 allow_duplicate_winner_for_dob_special?: boolean;
               };
-              const dobSpecialCategory = categoryTypeSelection === 'youngest_female' || categoryTypeSelection === 'youngest_male' || categoryTypeSelection === 'oldest_female' || categoryTypeSelection === 'oldest_male';
+              const dobSpecialCategory = isDobSpecialType(categoryTypeSelection);
               const maxAgeOverrideActive = criteriaMaxAgeInclusiveOverride != null;
               const effectiveMaxAgeInclusive = criteriaMaxAgeInclusiveOverride ?? ((ruleConfig as { max_age_inclusive?: boolean })?.max_age_inclusive ?? true);
               const effectiveMaxAgeSymbol = effectiveMaxAgeInclusive ? '≤' : '<';
@@ -2830,7 +2880,7 @@ export default function TournamentSetup() {
             <Button
               onClick={() => {
                 const categoryType = categoryTypeSelection || 'standard';
-                const isDobSpecial = categoryType === 'youngest_female' || categoryType === 'youngest_male' || categoryType === 'oldest_female' || categoryType === 'oldest_male';
+                const isDobSpecial = isDobSpecialType(categoryType);
 
                 // Age fields (min_age/max_age)
                 const maxAgeRaw = (document.getElementById('criteria-max-age') as HTMLInputElement)?.value;
@@ -2935,7 +2985,9 @@ export default function TournamentSetup() {
                 if (!isDobSpecial) criteria.unrated_only = unratedOnly;
 
                 if (isDobSpecial) {
-                  criteria.gender = categoryType === 'youngest_female' || categoryType === 'oldest_female' ? 'F' : 'M_OR_UNKNOWN';
+                  const forced = forcedGenderForDobSpecial(categoryType);
+                  if (forced) criteria.gender = forced;
+                  else delete criteria.gender;
                   if (allowDuplicateForDobSpecial) {
                     criteria.allow_duplicate_winner_for_dob_special = true;
                   }
