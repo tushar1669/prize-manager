@@ -64,14 +64,14 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
     : '';
 
   // 1. Determine basis type (Main/Open, Age, Rating, Youngest)
-  const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male';
-  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male';
+  const isYoungest = categoryType === 'youngest_female' || categoryType === 'youngest_male' || categoryType === 'youngest_overall';
+  const isOldest = categoryType === 'oldest_female' || categoryType === 'oldest_male' || categoryType === 'oldest_overall';
   const hasAge = c.min_age != null || c.max_age != null;
   const hasRating = c.min_rating != null || c.max_rating != null || c.unrated_only;
   const allowDuplicateForDobSpecial = (isYoungest || isOldest) && c.allow_duplicate_winner_for_dob_special === true;
 
   if (isYoungest) {
-    const label = categoryType === 'youngest_female' ? 'Youngest Girl' : 'Youngest Boy';
+    const label = categoryType === 'youngest_overall' ? 'Youngest Overall' : categoryType === 'youngest_female' ? 'Youngest Girl' : 'Youngest Boy';
     chips.push(
       <Badge 
         key="youngest" 
@@ -84,7 +84,7 @@ export function CategoryCriteriaChips({ isMain, criteria, categoryType, classNam
       </Badge>
     );
   } else if (isOldest) {
-    const label = categoryType === 'oldest_female' ? 'Oldest Woman' : 'Oldest Man';
+    const label = categoryType === 'oldest_overall' ? 'Oldest Overall' : categoryType === 'oldest_female' ? 'Oldest Woman' : 'Oldest Man';
     chips.push(
       <Badge
         key="oldest"
