@@ -20,6 +20,7 @@ export function CategoryCardsUpdatedView({
 
   return (
     <section className="pm-category-cards-updated" aria-label="Category Cards Updated">
+      <img src="/brand/prize-manager-logo-print-contrast.png" alt="" aria-hidden="true" loading="eager" className="pmv6-print-logo-preload" />
       <div className="pmv6-intro">
         <span className="pmv6-intro-label">Category prize list</span>
         <span className="pmv6-brand">Prize-Manager.com</span>
