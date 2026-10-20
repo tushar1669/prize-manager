@@ -56,7 +56,21 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
   expect(footerCount).toBe(pages);
   for (let i=1; i<=pages; i++) expect(printed).toContain(`Page ${i} / ${pages}`);
   const imageList = execFileSync('pdfimages', ['-list', '-'], { input: pdf, encoding: 'utf8' });
-  expect(imageList.split('\n').length).toBeGreaterThan(3);
+  const imagePages = imageList.split('\n')
+    .slice(2)
+    .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
+    .map(line => Number(line.trim().split(/\s+/)[0]));
+  expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
+  const boxes = execFileSync('pdftotext', ['-bbox', '-', '-'], { input: pdf, encoding: 'utf8' });
+  const words = [...boxes.matchAll(/<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)"/g)];
+  expect(words.length).toBeGreaterThan(90);
+  for (const word of words) {
+    expect(Number(word[1])).toBeGreaterThanOrEqual(0);
+    expect(Number(word[3])).toBeLessThanOrEqual(595.2);
+    expect(Number(word[2])).toBeGreaterThanOrEqual(0);
+    expect(Number(word[4])).toBeLessThanOrEqual(842.2);
+  }
+
   console.log(`REAL_V6_LONG_PDF: ${pages} A4 pages, 90 names, ${footerCount} footers`);
 });
 
