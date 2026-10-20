@@ -24,7 +24,7 @@ jobs:
       - name: Build actual app
         run: npm run build
       - name: Check required PDF inspection tools
-        run: command -v pdftotext && command -v pdfinfo && command -v pdfimages
+        run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils && command -v pdftotext && command -v pdfinfo && command -v pdfimages
       - name: Run real Vite/React print and parity QA
         run: npx playwright test -c playwright.v6.qa.config.ts
       - name: Upload real React PDF artifacts
