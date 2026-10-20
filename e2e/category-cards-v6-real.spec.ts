@@ -95,6 +95,7 @@ test('no-gift variant prints without gift column and distinct category colors', 
   expect(text).toContain('Main Prizes');
   expect(text).toContain('Under-12 Girls');
   expect(text).toContain('Under-16 Open');
+  expect(text).not.toContain('Winner details');
   const info = execFileSync('pdfinfo', ['-'], { input: pdf, encoding: 'utf8' });
   const pages = Number(info.match(/Pages:\s+(\d+)/)?.[1] || 0);
   const images = execFileSync('pdfimages', ['-list', '-'], { input: pdf, encoding: 'utf8' });
