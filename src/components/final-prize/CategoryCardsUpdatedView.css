@@ -13,7 +13,6 @@
       height: 10mm;
       text-align: center;
       vertical-align: middle;
-      filter: brightness(0); /* print monochrome preview for visible transparent lockup */
     }
     @bottom-center {
       content: "prize-manager.com · DERA Tech";
