@@ -80,6 +80,7 @@ Key settings include:
 
 ## Print outputs
 - **`/t/:id/final/v1` (Card view):** Category cards flow dynamically; the layout no longer forces one-category-per-page, while still avoiding mid-card splits.
+- **`/t/:id/final/v6` (Category Cards — Updated, opt-in):** an alternative layout using the same winner data and access rules as v1. v1 remains the default and legacy choice. Print-specific styling allows long category tables to continue onto following pages with repeated table headers; review actual A4 print/PDF before any release. No allocation, data, or XLSX export changes.
 - **`/t/:id/final/v3` (Poster grid):** A toolbar toggle lets you switch **Compact** vs **One per page**; the toggle itself is hidden in print output. (`src/components/final-prize/FinalPrizeSummaryHeader.tsx`)
 
 ## Team / Institution Prizes
