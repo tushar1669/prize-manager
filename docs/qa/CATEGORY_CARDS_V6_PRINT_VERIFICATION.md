@@ -100,3 +100,14 @@ A separate branch `qa/category-cards-v6-integration-20261021` combines unchanged
 - Standard [draft lockfile prerequisite PR #462](https://github.com/tushar1669/prize-manager/pull/462) now passes `npm ci` but stops on the separate existing `assert:no-csv` text-scan guard. Neither that guard nor lint rules were weakened.
 
 **Release state: IMPLEMENTED / PARTIALLY VERIFIED / NOT RELEASED.** A4 logo print defect **resolved for the tested Chromium scenarios**; remaining explicit blockers are repository-wide lint and guard CI failures, plus authenticated application route-level and other browser/print-setting entitlement verification. No merge, deployment or production access. Keep B8b IN_PROGRESS and D2 outstanding; do not start Poster Grid.
+
+
+## Owner-requested transparent logo and duplicate-heading cleanup (21 October 2026)
+
+**Current owner review status:** Updated sample prepared, **awaiting explicit visual acceptance**; PR #461 remains draft/unmerged.
+
+- Removed the navy `background-color` from the v6 page-margin official logo. The unchanged RGBA logo file and `image-set(... 10x)` sizing stay in place. No changes to shared print styles or other views.
+- Removed the redundant `{category.name} · Winner details` table context row and its print/screen CSS. The large category heading and actual table column headings remain, as do automatic table header repetitions on page breaks.
+- On isolated `qa/category-cards-v6-integration-20261021`, [CI run 39492540821](https://github.com/tushar1669/prize-manager/actions/runs/39492540821) passed Vite build, 4/4 React/Chromium Playwright fixture checks (including absence of `Winner details`), TypeScript typecheck, and 548 unit tests across 62 files. The new long fixture has **7 A4 pages**, all **90** synthetic winners and **7** footers; official PNG is embedded on every page. The no-gift sample fits on **1 A4 page**; its three category headings remain distinct.
+- **Visual tradeoff to review:** The *official transparent PNG itself contains white lettering*; with its navy backing removed, the gold emblem stays visible on white print paper but the white wordmark has very low contrast. The separately printed navy `prize-manager.com · DERA Tech` footer text remains readable. No unapproved recoloring or alternative logo asset was introduced.
+- Full standard CI is still **not green** (19 existing lint errors, 10 warnings; existing CSV guard false positives). Real authenticated app-route QA has not been claimed. Neither PR #461 nor #462 was merged/deployed. B8b remains IN_PROGRESS and D2 outstanding.
