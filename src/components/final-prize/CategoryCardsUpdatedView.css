@@ -7,15 +7,10 @@
     size: A4;
     margin: 12mm 12mm 20mm;
     @bottom-left {
-      content: " ";
+      content: image-set(url("/brand/prize-manager-logo-transparent-cropped.png") 10x);
       width: 48mm;
       height: 10mm;
       background-color: #0B3D91;
-      background-image: url("/brand/prize-manager-logo-transparent-cropped.png");
-      /* Keep the original RGBA logo fully inside the 10mm print-footer slot. */
-      background-size: 34mm auto;
-      background-position: center;
-      background-repeat: no-repeat;
     }
     @bottom-center {
       content: "prize-manager.com · DERA Tech";
