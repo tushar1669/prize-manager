@@ -1,0 +1,60 @@
+/* All overrides are scoped to Category Cards Updated (v6).
+   The legacy Category Cards (v1) and shared print surface are unchanged. */
+.pm-category-cards-updated [data-category-card] {
+  overflow: visible;
+}
+
+.pm-category-cards-updated [data-category-card] table {
+  width: 100%;
+}
+
+.pm-category-cards-updated [data-category-card] th,
+.pm-category-cards-updated [data-category-card] td {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media print {
+  .pm-category-cards-updated {
+    width: 100%;
+  }
+
+  .pm-category-cards-updated [data-category-card] {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    -webkit-column-break-inside: auto !important;
+    overflow: visible !important;
+    margin-bottom: 4mm;
+    box-shadow: none !important;
+  }
+
+  .pm-category-cards-updated [data-category-card] .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .pm-category-cards-updated [data-category-card] table {
+    table-layout: auto;
+    max-width: 100%;
+  }
+
+  .pm-category-cards-updated [data-category-card] thead {
+    display: table-header-group;
+  }
+
+  .pm-category-cards-updated [data-category-card] tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pm-category-cards-updated [data-category-card] th,
+  .pm-category-cards-updated [data-category-card] td {
+    padding: 1.5mm 1mm;
+    vertical-align: top;
+    hyphens: auto;
+  }
+
+  .pm-category-cards-updated [data-category-card] th:last-child,
+  .pm-category-cards-updated [data-category-card] td:last-child {
+    padding-right: 0;
+  }
+}
