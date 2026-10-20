@@ -7,6 +7,14 @@ const fixture = '/qa-fixtures/category-cards-v6.html';
 async function load(page: import('@playwright/test').Page, scenario: string) {
   await page.goto(`${fixture}?scenario=${scenario}`);
   await expect(page.locator('#qa-updated .pmv6-category')).toHaveCount(scenario === 'long' ? 1 : 3);
+  const printAsset = await page.evaluate(async () => {
+    const image = new Image();
+    image.src = '/brand/prize-manager-logo-print-contrast.png';
+    await image.decode();
+    return [image.naturalWidth, image.naturalHeight];
+  });
+  expect(printAsset).toEqual([360, 102]);
+
 }
 
 test('real React component preserves normal winner names, places and cash from v1', async ({ page }) => {
