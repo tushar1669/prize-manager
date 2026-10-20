@@ -36,9 +36,10 @@ export function CategoryCardsUpdatedView({
           winner => formatGiftItems(winner.giftItems).length > 0
         );
         const numberOfColumns = showGiftColumn ? 7 : 6;
+        // Only existing brand colors: gold for Main, teal/navy for other categories.
         const tone = category.is_main
           ? 'main'
-          : (index % 3 === 1 ? 'teal' : index % 3 === 2 ? 'violet' : 'blue');
+          : (index % 2 === 1 ? 'green' : 'navy');
 
         return (
           <article
