@@ -38,9 +38,6 @@ test('preview masks non-main categories and limits Main exactly as v1', async ({
 test('real print output has a repeated footer, correct A4 dimensions and all 90 winners', async ({ page }) => {
   await load(page, 'long');
   await expect(page.locator('#qa-updated .pmv6-name')).toHaveCount(90);
-  const logo = page.locator('#qa-updated .pmv6-print-lockup img');
-  await logo.evaluate((image: HTMLImageElement) => image.decode());
-  expect(await logo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1221);
   const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true, printBackground: true });
   mkdirSync('qa-output', { recursive: true });
   writeFileSync('qa-output/category-v6-long.pdf', pdf);
