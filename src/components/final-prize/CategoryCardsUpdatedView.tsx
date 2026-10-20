@@ -75,11 +75,6 @@ export function CategoryCardsUpdatedView({
                 <div className="pmv6-table-wrap">
                   <table className={`pmv6-table ${showGiftColumn ? 'pmv6-table--gift' : ''}`}>
                     <thead>
-                      <tr className="pmv6-table-context">
-                        <th colSpan={numberOfColumns} scope="colgroup">
-                          {category.name} · Winner details
-                        </th>
-                      </tr>
                       <tr className="pmv6-table-head">
                         <th scope="col">Place</th>
                         <th scope="col">Player name</th>
