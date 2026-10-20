@@ -61,6 +61,24 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
     .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
     .map(line => Number(line.trim().split(/\s+/)[0]));
   expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
+  // Exploratory only: check supported scaling semantics for page-margin image content.
+  const official = '/brand/prize-manager-logo-transparent-cropped.png';
+  const probes = [
+    ['zoom', 'content: url("' + official + '"); zoom: 0.1;'],
+    ['transform', 'content: url("' + official + '"); transform: scale(0.1); transform-origin: center;'],
+    ['object-fit', 'content: url("' + official + '"); width: 34mm; height: 10mm; object-fit: contain;'],
+    ['image-set', 'content: image-set(url("' + official + '") 10x);'],
+  ] as const;
+  for (const [name, styles] of probes) {
+    await page.addStyleTag({ content: '@media print { @page pm-category-cards-v6 { @bottom-left { ' + styles + ' } } }' });
+    const probePdf = await page.pdf({ format:'A4', preferCSSPageSize:true, printBackground:true });
+    writeFileSync('qa-output/footer-margin-' + name + '.pdf', probePdf);
+    const probeImages = execFileSync('pdfimages', ['-list', '-'], { input: probePdf, encoding:'utf8' });
+    const entries = probeImages.split('\n').slice(2).filter(line => /\simage\s/.test(line));
+    console.log('FOOTER_MARGIN_PROBE', name, 'IMAGE_ENTRY', entries[0]?.slice(0,110) ?? 'none',
+      'IMAGE_PAGES', [...new Set(entries.map(line => line.trim().split(/\s+/)[0]))].join(','));
+  }
+
   const boxes = execFileSync('pdftotext', ['-bbox', '-', '-'], { input: pdf, encoding: 'utf8' });
   const words = [...boxes.matchAll(/<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)"/g)];
   expect(words.length).toBeGreaterThan(90);
