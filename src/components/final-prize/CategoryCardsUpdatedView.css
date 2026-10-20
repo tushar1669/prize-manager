@@ -8,7 +8,7 @@
     margin: 12mm 12mm 20mm;
     @bottom-left {
       content: "Prize Manager"; /* text fallback for unsupported image-set */
-      content: image-set(url("/brand/prize-manager-logo-print-contrast.svg") 10x);
+      content: image-set(url("/brand/prize-manager-logo-print-contrast.png") 3x);
       width: 48mm;
       height: 10mm;
       text-align: center;
