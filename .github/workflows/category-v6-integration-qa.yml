@@ -23,6 +23,14 @@ jobs:
         run: npm ci --no-audit --fund=false
       - name: Build actual app
         run: npm run build
+      - name: Typecheck, unit tests and lint (all report, any failure fails the run)
+        shell: bash
+        run: |
+          status=0
+          npm run typecheck || status=1
+          npm run test:unit || status=1
+          npm run lint || status=1
+          exit "$status"
       - name: Check required PDF inspection tools
         run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils && command -v pdftotext && command -v pdfinfo && command -v pdfimages
       - name: Run real Vite/React print and parity QA
