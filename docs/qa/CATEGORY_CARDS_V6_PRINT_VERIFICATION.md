@@ -1,33 +1,39 @@
-# Category Cards Updated (v6) — print verification
+# Category Cards Updated (v6) — QA and release gate
 
-**Scope:** PR #461, `feat/category-cards-updated-v6`. Owner chose Option A (opt-in v6, legacy v1 default). This is presentation-only; no engine, data, export workbook, or entitlement change.
+**Current state:** PR #461 draft, **NOT VERIFIED / NOT RELEASED**. Owner approved Option A: legacy v1 remains the default and separately accessible; updated v6 is opt-in. B8b remains IN_PROGRESS with D2 open.
 
-## Source checks
-- Base `main`: `943326ed529a205ffb5260035d1c0cb3ef00d35c`.
-- The legacy `CategoryCardsView.tsx` is unchanged; v6 delegates to it with the same props, access state and preview limits.
-- `Finalize.tsx` still initializes `FinalViewTab` to `'v1'`. The route `/t/:id/final/v1` remains intact, and `/t/:id/final/v6` is an optional tab.
-- Styling is scoped to `.pm-category-cards-updated`; shared `.pm-print-surface` remains unchanged.
-- The corrected stylesheet blob SHA is `25ef1e0ad13a5bcea1c8bacd6ab470dbac73159a`.
+## Visual-design correction
 
-## Browser-print fixture evidence (partial, not full-app QA)
-A local headless Chromium A4 browser-print probe used **synthetic winners**, representative markup based on `CategoryCardsView`, existing category print rules, and the exact v6 stylesheet (blob hash matched). It did **not** run the full React app, authentication, data loader, or production site.
+The first v6 attempt wrapped the original v1 view in CSS. It improved text fit but did not make category groups distinguishable. The owner's review of the delivered A4 PDF rejected the visual quality: near-monochrome tables, tiny main-category marker, weak section boundaries.
 
-| Fixture | A4 pages | Expected winner rows | Text extraction | Outside-page words |
-| --- | ---: | ---: | --- | ---: |
-| Two short categories | 1 | 6 (4+2) | All present | 0 |
-| One six-column category (no gifts) | 1 | 4 | All present | 0 |
-| 90-row category | 4 | 90 | All present, once each | 0 |
-| 26 long-name / long-gift rows | 3 | 26 | All present, once each | 0 |
+The revised v6 now renders its own *presentation* while reusing existing `FinalPrizeCategoryGroup` records, `formatCurrencyINR`, `formatGiftItems`, `stripAwardMarkers`, and `getAwardFlagsForPrizeRow`. No engine or data changes. Its visual structure has numbered category panels, distinct gold/blue/teal/violet top boundaries, large category headings, prominent main-category wording, zebra winner rows, printed category context on continued pages, and restrained site attribution. This styling applies only within `.pm-category-cards-updated` and preserves `.pm-print-surface`.
 
-Table header appeared on each printed page containing a continued table. A visual inspection identified a draft defect: narrow Rank, Amount, Trophy and Medal columns wrapped in the seven-column layout. The v6-only CSS was corrected to reserve explicit widths for six- versus seven-column tables and avoid wrapping rank/amount values. The printed fixture was then rerun with no missing rows or outside-page words. PDFs are transient QA artifacts, not product exports or production evidence.
+## Source parity checks
+- Legacy `src/components/final-prize/CategoryCardsView.tsx` and `/t/:id/final/v1` are unchanged.
+- `src/pages/Finalize.tsx` still initializes its active view to `'v1'`.
+- V6 retains the same filtering of empty groups, selection of visible main-category winners, `previewMainLimit`, and per-category permissions.
+- Non-main categories with no full access remain masked, without their placement count or names. The main preview still shows its allowed rows and a count of hidden prizes.
+- The same winner place, player name, club/state, rank, amount, gift, trophy and medal information is presented; only visual formatting and blank-award placeholders differ.
 
-**Important limits:** Neither visual inspection nor extracted-text counts prove zero overlap in all real tournament data. The full-app A4 print run, actual public/private entitlement behavior, in-app data parity, build, lint, and automated tests remain **NOT VERIFIED**.
+## Synthetic A4 browser-print prototype
 
-## GitHub CI dependency blocker
-- GitHub Actions CI run `39439579656` failed at `npm ci`, before build/lint/unit/Playwright execution.
-- Its logs show `EUSAGE`: `package.json` and `package-lock.json` are out of sync. Missing lockfile entries include `react-helmet-async@3.0.0`, `invariant@2.2.4`, `react-fast-compare@3.2.2`, and `shallowequal@1.1.0`.
-- The PR does not modify either package manifest or lockfile. Subsequent CI attempt after the CSS correction also failed at dependency installation. Do not declare CI or release verification passed.
-- Reconcile this existing lockfile issue independently under review; do not weaken CI or change dependencies speculatively to make tests green.
+Local headless Chromium A4 PDFs were generated with representative HTML matching the revised CSS, **not with the fully installed React application or live data**. The tests do not validate auth/session, server entitlements, actual data loading, or complete production behavior.
 
-## Release gate
-Keep PR #461 **draft and unmerged** until clean-install CI succeeds and a full-app, fixture-backed print test confirms readable A4 pages, winner/amount parity, long text and gifts, and entitlement equivalence. Do not access known auto-finalizing production tournament fixtures.
+| Fixture | Pages | Synthetic winners | Observed result |
+| --- | ---: | ---: | --- |
+| Multiple visually distinct categories | 2 | 9 | Category panels differentiated; all winners present; none outside page margins |
+| One long category with long names/gifts | 3 | 24 | Repeated category/table headings on continued pages; no off-page words |
+| Six-column categories without gifts | 1 | 6 | Readable columns and visual section boundaries; none outside page margins |
+
+Rendered previews were inspected as images. Actual site output can differ in CSS context, user print settings, browser or data. No conclusive claim of zero clipping, full data parity or accessibility compliance until full-app QA.
+
+## CI blocker (unchanged)
+- The PR CI fails in `npm ci`, before build, lint, unit or browser tests run.
+- GitHub workflow logs report package/lockfile mismatch: missing `react-helmet-async@3.0.0`, `invariant@2.2.4`, `react-fast-compare@3.2.2`, and `shallowequal@1.1.0` from `package-lock.json`.
+- This PR does not change package manifests. Investigate and reconcile the baseline lockfile issue in a separately reviewed change; do not bypass required checks.
+
+## Blocking final verification
+1. Get clean-install CI working, then run build, lint, unit tests and relevant Playwright.
+2. Render the **actual v6 React component** via a safe fixture-backed authenticated app context for A4 print with/without gift, multi-category and long-category cases.
+3. Verify v1-v6 winners/amounts/awards/permissions against the same input, clipping, page breaks, header continuation and print with background graphics disabled.
+4. Only then request owner review/approval for merge. Do not merge or deploy from this draft.
