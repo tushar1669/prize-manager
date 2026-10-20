@@ -63,22 +63,7 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
     .slice(2)
     .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
     .map(line => Number(line.trim().split(/\s+/)[0]));
-  console.log('FOOTER_BASE_IMAGE_PAGES', imagePages.join(','), 'PAGE_COUNT', pages);
-  // Exploratory: fixed images positioned deeper inside page margin vs page content.
-  // These are print fixtures only, not candidate source changes.
-  for (const bottom of [-12, -8, -4, 0, 4]) {
-    await page.addStyleTag({ content: `@media print { .pmv6-print-lockup { bottom: ${bottom}mm !important; } }` });
-    const sample = await page.pdf({ format:'A4', preferCSSPageSize:true, printBackground:true });
-    const report = execFileSync('pdfimages', ['-list', '-'], { input: sample, encoding: 'utf8' });
-    const imgPages = report.split('\n').slice(2)
-      .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
-      .map(line => Number(line.trim().split(/\s+/)[0]));
-    const pdfText = execFileSync('pdftotext', ['-layout', '-', '-'], { input: sample, encoding: 'utf8' });
-    const total = Number(execFileSync('pdfinfo', ['-'], { input: sample, encoding: 'utf8' }).match(/Pages:\s+(\d+)/)?.[1] || 0);
-    console.log('FOOTER_OFFSET_PROBE', bottom, 'PAGES', total, 'IMAGES', [...new Set(imgPages)].join(','), 'FOOTERS', (pdfText.match(/DERA Tech/g)||[]).length);
-    writeFileSync(`qa-output/footer-offset-${bottom}.pdf`, sample);
-  }
-
+  expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
   const boxes = execFileSync('pdftotext', ['-bbox', '-', '-'], { input: pdf, encoding: 'utf8' });
   const words = [...boxes.matchAll(/<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)"/g)];
   expect(words.length).toBeGreaterThan(90);
@@ -107,4 +92,12 @@ test('no-gift variant prints without gift column and distinct category colors', 
   expect(text).toContain('Main Prizes');
   expect(text).toContain('Under-12 Girls');
   expect(text).toContain('Under-16 Open');
+  const info = execFileSync('pdfinfo', ['-'], { input: pdf, encoding: 'utf8' });
+  const pages = Number(info.match(/Pages:\s+(\d+)/)?.[1] || 0);
+  const images = execFileSync('pdfimages', ['-list', '-'], { input: pdf, encoding: 'utf8' });
+  const imagePages = images.split('\n').slice(2)
+    .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
+    .map(line => Number(line.trim().split(/\s+/)[0]));
+  expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
+
 });
