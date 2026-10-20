@@ -1,0 +1,34 @@
+name: Temporary lockfile regeneration evidence
+on:
+  push:
+    branches: [chore/reconcile-npm-lock-20261021]
+permissions:
+  contents: read
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Recalculate npm lockfile from unchanged package manifests
+        run: npm install --package-lock-only --ignore-scripts --no-audit --fund=false
+      - name: Emit audited lockfile for pull request
+        shell: bash
+        run: |
+          git --no-pager diff --numstat -- package-lock.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const s = fs.readFileSync('package-lock.json');
+          const b64 = s.toString('base64');
+          console.log('LOCK_SHA256:' + crypto.createHash('sha256').update(s).digest('hex'));
+          console.log('LOCK_B64_START');
+          for (let i=0; i<b64.length; i+=2000) console.log('LOCK_B64_CHUNK:' + b64.slice(i,i+2000));
+          console.log('LOCK_B64_END');
+          NODE
+      - name: Validate clean install without altering tracked manifests
+        run: npm ci --no-audit --fund=false
