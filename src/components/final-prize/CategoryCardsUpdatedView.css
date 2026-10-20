@@ -16,12 +16,12 @@
     }
     @bottom-center {
       content: "prize-manager.com · DERA Tech";
-      color: #0B3D91;
+      color: #383838;
       font: 8pt ui-sans-serif, system-ui, sans-serif;
     }
     @bottom-right {
       content: "Page " counter(page) " / " counter(pages);
-      color: #0B3D91;
+      color: #383838;
       font: 700 8pt ui-sans-serif, system-ui, sans-serif;
     }
   }
