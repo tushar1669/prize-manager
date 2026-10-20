@@ -44,7 +44,10 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
   const info = execFileSync('pdfinfo', ['-'], { input: pdf, encoding: 'utf8' });
   const pages = Number(info.match(/Pages:\s+(\d+)/)?.[1] || 0);
   expect(pages).toBeGreaterThan(1);
-  expect(info).toMatch(/Page size:\s+595.*842.*pts/i);
+  const dimensions = info.match(/Page size:\s+([0-9.]+) x ([0-9.]+) pts/i);
+  expect(dimensions).not.toBeNull();
+  expect(Math.abs(Number(dimensions![1]) - 595)).toBeLessThan(0.2);
+  expect(Math.abs(Number(dimensions![2]) - 842)).toBeLessThan(0.2);
   const printed = execFileSync('pdftotext', ['-layout', '-', '-'], { input: pdf, encoding: 'utf8' });
   for (let i=1; i<=90; i++) {
     expect(printed).toContain(`Player-${String(i).padStart(3,'0')}`);
