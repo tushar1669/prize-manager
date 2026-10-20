@@ -70,11 +70,11 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
     await page.addStyleTag({ content: `@media print { .pmv6-print-lockup { bottom: ${bottom}mm !important; } }` });
     const sample = await page.pdf({ format:'A4', preferCSSPageSize:true, printBackground:true });
     const report = execFileSync('pdfimages', ['-list', '-'], { input: sample, encoding: 'utf8' });
-    const imgPages = report.split('\\n').slice(2)
-      .filter(line => /^\\s*\\d+\\s+\\d+\\s+image\\s/.test(line))
-      .map(line => Number(line.trim().split(/\\s+/)[0]));
+    const imgPages = report.split('\n').slice(2)
+      .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
+      .map(line => Number(line.trim().split(/\s+/)[0]));
     const pdfText = execFileSync('pdftotext', ['-layout', '-', '-'], { input: sample, encoding: 'utf8' });
-    const total = Number(execFileSync('pdfinfo', ['-'], { input: sample, encoding: 'utf8' }).match(/Pages:\\s+(\\d+)/)?.[1] || 0);
+    const total = Number(execFileSync('pdfinfo', ['-'], { input: sample, encoding: 'utf8' }).match(/Pages:\s+(\d+)/)?.[1] || 0);
     console.log('FOOTER_OFFSET_PROBE', bottom, 'PAGES', total, 'IMAGES', [...new Set(imgPages)].join(','), 'FOOTERS', (pdfText.match(/DERA Tech/g)||[]).length);
     writeFileSync(`qa-output/footer-offset-${bottom}.pdf`, sample);
   }
