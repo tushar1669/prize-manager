@@ -50,3 +50,28 @@ Evidence: `docs/BRANDING_ASSETS.md`, `docs/design/UI_CONVENTIONS.md`, `src/index
 - **Typography:** The application uses Tailwind's default UI sans-serif stack, and v6 inherits that stack; the margin footer explicitly uses `ui-sans-serif, system-ui, sans-serif`. Distinct heading/row/metadata sizes remain in v6 print rules. The manually edited PDF examples use an Arimo/Helvetica mix and a rasterized emblem approximation, so **they do not prove exact application font or pixel-perfect official logo fidelity**. Do not treat those examples as source-of-truth renders.
 
 The print-level color treatment is not an assertion that any category is in a success, warning, or error state. The existing `.pm-print-surface` implementation is untouched. No further brand palette or typography restructuring is authorized here.
+
+
+## Isolated CI recovery and real-component test evidence (21 October 2026)
+
+**Scope and releases:** `main` remains at `943326ed529a205ffb5260035d1c0cb3ef00d35c`. PR #461 remains **draft/unmerged**. No production access, secrets, allocation logic, global print tokens, or server entitlement code were changed.
+
+### Dependency lock recovered in separately reviewed draft PR #462
+- The baseline `package.json` declares `react-helmet-async@^3.0.0` but `package-lock.json` lacked the root entry and four installed packages.
+- An isolated GitHub Actions runner regenerated the lock with `npm install --package-lock-only --ignore-scripts` and verified `npm ci --no-audit --fund=false` **passed** (488 packages).
+- The resulting [draft PR #462](https://github.com/tushar1669/prize-manager/pull/462) changes **only `package-lock.json`** (36 changed lines), adding the expected root entry and four exact versioned packages with registry integrity hashes. No guard was bypassed or disabled, and the temporary regeneration workflow was removed.
+- Ordinary PR #462 CI subsequently passed `npm ci` but **failed the pre-existing `assert:no-csv` guard**, before build/lint/unit/e2e. Its logs show matches in baseline `bun.lock` hash, documentation (including statements of the no-CSV requirement) and an existing XLS/XLSX validation message. This is a separate CI false-positive/guard-semantics issue; it has not been silently fixed or weakened.
+
+### Direct React fixture / real Chromium print test (unmerged isolated QA branch)
+A separate branch `qa/category-cards-v6-integration-20261021` combines unchanged v6 screen and component sources from PR #461 with the exact lockfile from PR #462 **without merging either PR**. The Vite dev server compiles the real `CategoryCardsView` and `CategoryCardsUpdatedView` modules together and renders them with non-PII synthetic `FinalPrizeCategoryGroup` data. It does not exercise the real authenticated tournament page, Supabase calls, production access controls or route navigation.
+
+- `npm ci`: **passed**.
+- `npm run build`: **passed**.
+- Playwright: **3 of 4 targeted checks passed** in the latest test iterations: winner name/place/amount parity for v1 versus v6; restricted main preview/non-main locked categories; no-gift table and category color differentiation.
+- The long A4 fixture prints **90 unique synthetic winners across 13 pages**, confirmed using `pdftotext`. Footer text `DERA Tech` appears on all 13 pages and page `N / 13` counters are present for all pages. Chromium reports `594.96 × 841.92 pt`, matching nominal A4 with normal rounding.
+- **Real defect found:** PR #461's `@page` margin-box `background-image` does not embed the official logo at all (`pdfimages -list` reports no images). An experimental `image-set(content)` margin-box alternative also fails.
+- A separate experimental, fixed-position **normal React `<img>`** using the unchanged official `/brand/prize-manager-logo-transparent-cropped.png` embeds the image on printed pages **2 through 13, but not page 1**. This remains true when the fixture reproduces the application's preload link and the test awaits `HTMLImageElement.decode()`. The stricter each-page image verification therefore **fails**. See [run 39486137187](https://github.com/tushar1669/prize-manager/actions/runs/39486137187) and [run 39486452033](https://github.com/tushar1669/prize-manager/actions/runs/39486452033).
+- **Do not copy the experimental footer into PR #461** or claim branding complete: first-page logo coverage has not passed. Generated PDF artifacts are available in those runs for inspection (synthetic fixtures only).
+- The synthetic React checks provide stronger evidence than earlier handmade HTML/PDF previews, but they are **not full authenticated application verification** and do not prove that every real-world category length, print setting or entitlement is safe.
+
+**Release status:** **BLOCKED / NOT VERIFIED** pending reliable official-logo embedding on **every** A4 page, full route-level entitlement and print checks, and required lint/unit/CI gates. Maintain legacy v1 as default. B8b remains IN_PROGRESS and D2 outstanding. Do not merge or deploy; stop before Poster Grid.
