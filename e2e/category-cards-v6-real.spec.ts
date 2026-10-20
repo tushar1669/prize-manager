@@ -61,11 +61,11 @@ test('real print output has a repeated footer, correct A4 dimensions and all 90 
     .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
     .map(line => Number(line.trim().split(/\s+/)[0]));
   expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
-  // A 1221px-wide logo should print at roughly 34mm, not at its unscaled 96ppi size.
+  // The 360px-wide print-only derivative should print at ~32mm, not intrinsic 96ppi size.
   const imageDpi = imageList.split('\n').slice(2)
     .filter(line => /^\s*\d+\s+\d+\s+image\s/.test(line))
     .map(line => Number(line.trim().split(/\s+/)[12]));
-  expect(imageDpi.every(dpi => dpi >= 800 && dpi <= 1200)).toBe(true);
+  expect(imageDpi.every(dpi => dpi >= 250 && dpi <= 400)).toBe(true);
 
   const boxes = execFileSync('pdftotext', ['-bbox', '-', '-'], { input: pdf, encoding: 'utf8' });
   const words = [...boxes.matchAll(/<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)"/g)];
