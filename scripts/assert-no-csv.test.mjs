@@ -71,3 +71,23 @@ test('a shifted pinned line is rejected', () => {
   const result = check({ 'docs/PRD_V2.md': '\n' + pinnedDocument });
   assert.equal(result.code, 1);
 });
+
+const contextDocumentLines = Array(419).fill('');
+contextDocumentLines[143] = '### 8.1 NO CSV anywhere';
+contextDocumentLines[330] = '- no CSV support';
+contextDocumentLines[418] = '- whether CSV is supported';
+const pinnedContextDocument = contextDocumentLines.join('\n');
+
+test('all three original locked-PRD statements stay independently pinned', () => {
+  assert.equal(check({ 'docs/PRD_V2_1_CONTEXT_LOCKED.md': pinnedContextDocument }).code, 0);
+});
+
+test('changing a secondary pinned locked-PRD statement is rejected', () => {
+  const changed = pinnedContextDocument.replace('- no CSV support', '- CSV import is supported');
+  assert.equal(check({ 'docs/PRD_V2_1_CONTEXT_LOCKED.md': changed }).code, 1);
+});
+
+test('shifting a later pinned locked-PRD statement is rejected', () => {
+  const shifted = pinnedContextDocument.replace('- whether CSV is supported', '\n- whether CSV is supported');
+  assert.equal(check({ 'docs/PRD_V2_1_CONTEXT_LOCKED.md': shifted }).code, 1);
+});

@@ -25,19 +25,22 @@ const ignorePaths = new Set([
 // of these lines must fail the guard. Do not whitelist directories or files.
 // docs/extraction-engine/PHASE2_PRD.md is a conflicting *planned* export,
 // NOT an authorization to add import/export support. Locked V2 rule wins.
-const knownInertBaselineHits = new Map([
+const knownInertBaselineHits = [
   ["bun.lock", { lineNumber: 394, line: "    \"@swc/core-darwin-x64\": [\"@swc/core-darwin-x64@1.13.2\", \"\", { \"os\": \"darwin\", \"cpu\": \"x64\" }, \"sha512-Lb9EZi7X2XDAVmuUlBm2UvVAgSCbD3qKqDCxSI4jEOddzVOpNCnyZ/xEampdngUIyDDhhJLYU9duC+Mcsv5Y+A==\"]," }],
   ["docs/DEPLOY_AND_PUBLISH.md", { lineNumber: 16, line: "CI also runs `test:swiss`, `test:alloc`, `test:ux`, and `assert:no-csv` (`.github/workflows/ci.yml`, `package.json`)." }],
   ["docs/PRD_V2.md", { lineNumber: 43, line: "- NO CSV anywhere (import/export)" }],
   ["docs/PRD_V2_1_CONTEXT_LOCKED.md", { lineNumber: 144, line: "### 8.1 NO CSV anywhere" }],
+  ["docs/PRD_V2_1_CONTEXT_LOCKED.md", { lineNumber: 331, line: "- no CSV support" }],
+  ["docs/PRD_V2_1_CONTEXT_LOCKED.md", { lineNumber: 419, line: "- whether CSV is supported" }],
   ["docs/extraction-engine/PHASE2_PRD.md", { lineNumber: 115, line: "- Bank statement upload → UTR matching → confirmed/missing/unmatched report with CSV export." }],
   ["src/utils/excel.ts", { lineNumber: 475, line: "    ['Use only .xlsx or .xls files. CSV is not supported.']," }],
-]);
+];
 
-const isKnownInertBaselineHit = (file, lineNumber, line) => {
-  const pinned = knownInertBaselineHits.get(file);
-  return pinned?.lineNumber === lineNumber && pinned.line === line;
-};
+const isKnownInertBaselineHit = (file, lineNumber, line) =>
+  knownInertBaselineHits.some(
+    ([pinnedFile, pinned]) =>
+      pinnedFile === file && pinned.lineNumber === lineNumber && pinned.line === line
+  );
 
 const csvFiles = [];
 const csvMatches = [];
