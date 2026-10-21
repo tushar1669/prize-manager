@@ -47,7 +47,7 @@ export function useManualPrizes(tournamentId: string | undefined) {
     enabled: !!tournamentId,
     staleTime: 30_000,
     queryFn: async (): Promise<ManualPrize[]> => {
-      const { data, error } = await (supabase.from as any)("tournament_manual_prizes")
+      const { data, error } = await supabase.from("tournament_manual_prizes")
         .select("*")
         .eq("tournament_id", tournamentId)
         .order("sort_order", { ascending: true })
@@ -62,7 +62,7 @@ export function useCreateManualPrize(tournamentId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Omit<ManualPrizeInsert, "tournament_id">) => {
-      const { data, error } = await (supabase.from as any)("tournament_manual_prizes")
+      const { data, error } = await supabase.from("tournament_manual_prizes")
         .insert({ ...input, tournament_id: tournamentId })
         .select()
         .single();
@@ -84,7 +84,7 @@ export function useUpdateManualPrize(tournamentId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...fields }: ManualPrizeUpdate) => {
-      const { error } = await (supabase.from as any)("tournament_manual_prizes")
+      const { error } = await supabase.from("tournament_manual_prizes")
         .update(fields)
         .eq("id", id);
       if (error) throw error;
@@ -104,7 +104,7 @@ export function useDeleteManualPrize(tournamentId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase.from as any)("tournament_manual_prizes")
+      const { error } = await supabase.from("tournament_manual_prizes")
         .delete()
         .eq("id", id);
       if (error) throw error;
@@ -125,12 +125,12 @@ export function useReorderManualPrizes(tournamentId: string) {
   return useMutation({
     mutationFn: async (orderedIds: string[]) => {
       const updates = orderedIds.map((id, idx) =>
-        (supabase.from as any)("tournament_manual_prizes")
+        supabase.from("tournament_manual_prizes")
           .update({ sort_order: (idx + 1) * 10 })
           .eq("id", id)
       );
       const results = await Promise.all(updates);
-      const failed = results.find((r: any) => r.error);
+      const failed = results.find((r) => r.error);
       if (failed?.error) throw failed.error;
     },
     onSuccess: () => {
