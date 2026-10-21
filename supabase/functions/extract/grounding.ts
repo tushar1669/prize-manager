@@ -119,7 +119,7 @@ export function extractDateTokens(text: string): Map<string, number> {
     add(isoDate(Number(m[1]), Number(m[2]), Number(m[3])), m.index);
   }
 
-  const numeric = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/g;
+  const numeric = /\b(\d{1,2})(?:\/|\.|-)(\d{1,2})(?:\/|\.|-)(\d{2,4})\b/g;
   for (let m = numeric.exec(text); m !== null; m = numeric.exec(text)) {
     const a = Number(m[1]);
     const b = Number(m[2]);
