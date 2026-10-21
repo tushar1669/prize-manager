@@ -162,9 +162,11 @@ test('synthetic RPC preview mode hides non-main details, limits main and disable
 test('synthetic RPC failure preserves fail-closed preview and disabled print', async ({ page }) => {
   await mount(page, 'denied');
   await expect(page.locator('.pm-category-cards-updated .pmv6-category')).toHaveCount(3, { timeout: 25000 });
-  await expect(page.locator('.pmv6-name')).toHaveCount(2);
+  // On unavailable access RPC, fallback is the existing eight-row Main preview, not the synthetic RPC's two-row limit.
+  await expect(page.locator('.pmv6-name')).toHaveCount(6);
   await expect(page.locator('.pmv6-locked')).toHaveCount(2);
   await expect(page.getByRole('button', { name: /^print$/i })).toBeDisabled();
+  expect(await page.locator('.pm-category-cards-updated').innerText()).not.toContain('Player-007');
 });
 
 test('real route v6 long-content A4 PDF keeps 90 synthetic winners and footer on every page without background graphics', async ({ page }) => {
@@ -178,7 +180,10 @@ test('real route v6 long-content A4 PDF keeps 90 synthetic winners and footer on
   const info = execFileSync('pdfinfo', ['-'], { input: pdf, encoding: 'utf8' });
   const pages = Number(info.match(/Pages:\s+(\d+)/)?.[1] || 0);
   expect(pages).toBeGreaterThan(1);
-  expect(info).toMatch(/Page size:\s+595.* x 842.* pts/);
+  const a4 = info.match(/Page size:\s+([0-9.]+) x ([0-9.]+) pts/);
+  expect(a4).not.toBeNull();
+  expect(Math.abs(Number(a4![1]) - 595)).toBeLessThan(0.2);
+  expect(Math.abs(Number(a4![2]) - 842)).toBeLessThan(0.2);
   const content = execFileSync('pdftotext', ['-layout', '-', '-'], { input: pdf, encoding: 'utf8' });
   for (let n = 1; n <= 90; n++) expect(content).toContain('Player-' + String(n).padStart(3, '0'));
   expect((content.match(/DERA Tech/g) || []).length).toBe(pages);
