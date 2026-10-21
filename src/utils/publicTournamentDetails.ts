@@ -165,7 +165,9 @@ export async function fetchPublicTournamentDetails(
   );
 
   if (indexedResult.data) {
-    return indexedResult.data;
+    // The field list is built at runtime, so Supabase's static select parser cannot infer its shape.
+    // This retains the pre-existing projection contract without changing the published-view query.
+    return indexedResult.data as unknown as TournamentDetails;
   }
 
   const fallbackResult = await fetchWithLegacySupport(
@@ -176,5 +178,5 @@ export async function fetchPublicTournamentDetails(
     "computed"
   );
 
-  return fallbackResult.data;
+  return fallbackResult.data as unknown as TournamentDetails | null;
 }
