@@ -46,8 +46,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck (isolated QA branch only)
-        run: npm run typecheck
+      - name: Typecheck application (explicit project, QA only)
+        run: npx tsc -p tsconfig.app.json --noEmit
 
       - name: Unit tests
         run: npm run test:unit
