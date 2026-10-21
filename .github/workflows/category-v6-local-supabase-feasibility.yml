@@ -1,0 +1,64 @@
+name: QA ONLY - Disposable Supabase Local Feasibility
+on:
+  push:
+    branches: [qa/category-v6-local-supabase-feasibility-20261022]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - name: Local runner and migration inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker info --format 'Docker server version: {{.ServerVersion}}'
+          test -f supabase/config.toml
+          count=$(find supabase/migrations -name '*.sql' -type f | wc -l)
+          echo "Repository migration count: $count"
+          echo 'Earliest migration filename:'
+          find supabase/migrations -name '*.sql' -type f | LC_ALL=C sort | head -n 1
+          echo 'This probe intentionally does not fetch remote production state.'
+      - name: Install pinned Supabase CLI into disposable runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.121.0 --version
+          npx --yes supabase@2.121.0 start --help >/dev/null
+      - name: Start local Auth, REST and Postgres with repository migrations
+        shell: bash
+        timeout-minutes: 9
+        run: |
+          set -euo pipefail
+          unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD
+          export SUPABASE_TELEMETRY_ENABLED=false
+          sandbox="$RUNNER_TEMP/pm-category-v6-local-only"
+          mkdir -p "$sandbox/supabase"
+          cp -R supabase/migrations "$sandbox/supabase/migrations"
+          # An unrelated local project ID, never the real linked project or its credentials.
+          printf 'project_id = "pm-category-v6-local-only"\n' > "$sandbox/supabase/config.toml"
+          cd "$sandbox"
+          echo 'Starting local-only Docker-backed Supabase; production linking and db push are prohibited.'
+          set +e
+          timeout 450s npx --yes supabase@2.121.0 start --exclude studio,mail,realtime,functions,analytics,pooler > "$RUNNER_TEMP/pm-local-start.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "LOCAL_STACK_STATUS=BLOCKED exit=$status"
+            echo 'Local setup diagnostic (limited to migration and error status lines):'
+            grep -Eai 'applying migration|failed|error|does not exist|relation |invalid migration|no such|cannot |permission denied|docker|starting' "$RUNNER_TEMP/pm-local-start.log" | tail -n 48 | cut -c 1-270 || true
+            exit 1
+          fi
+          echo 'LOCAL_STACK_STATUS=STARTED'
+          # Never print local service credentials to GitHub Actions logs.
+          npx --yes supabase@2.121.0 migration list --local 2>&1 | tail -n 8 | cut -c 1-160
+          npx --yes supabase@2.121.0 stop --no-backup >/dev/null 2>&1 || true
+      - name: QA scope reminder
+        if: always()
+        run: echo "Only ephemeral runner. No hosted branch, remote data, deployment, merge, auth role or policy change."
