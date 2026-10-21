@@ -1,3 +1,4 @@
+# TEMPORARY diagnostic instrumentation on isolated PR #464 only; restore original CI workflow after run.
 name: CI
 
 on:
@@ -47,16 +48,21 @@ jobs:
         run: npm run lint
 
       - name: Unit tests
+        if: ${{ !cancelled() }}
         run: npm run test:unit
 
       - name: Test - Smoke (public)
+        if: ${{ !cancelled() }}
         run: npm run test:smoke
 
       - name: Test - Swiss imports
+        if: ${{ !cancelled() }}
         run: npm run test:swiss
       - name: Test - Allocator Null-Safety
+        if: ${{ !cancelled() }}
         run: npm run test:alloc
       - name: Test - UX improvements
+        if: ${{ !cancelled() }}
         run: npm run test:ux
 
       - name: Upload Playwright Report (always)
