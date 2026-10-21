@@ -105,8 +105,8 @@ function pruneStructuralNoise(payload: Record<string, unknown>): { nameless: num
  * keyword that would have to be present for the claim to be true.
  */
 const KEYWORD_PATTERNS: Record<string, RegExp> = {
-  fide_rated: /fide[\s\-]*rat/i,
-  aicf_rated: /aicf[\s\-]*rat/i,
+  fide_rated: /fide[\s-]*rat/i,
+  aicf_rated: /aicf[\s-]*rat/i,
   // Brochures frequently denote trophies/medals with the symbol instead of the word — a printed
   // trophy emoji IS the document's claim. A boolean set with neither word nor symbol still fails.
   has_trophy: /troph|\u{1F3C6}/iu,

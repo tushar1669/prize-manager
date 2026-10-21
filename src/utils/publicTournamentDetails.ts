@@ -1,4 +1,5 @@
 import type { PostgrestError } from "@supabase/supabase-js";
+import type { supabase } from "@/integrations/supabase/client";
 
 const MISSING_EVENT_CODE_SNIPPET = "published_tournaments.event_code";
 
@@ -37,27 +38,7 @@ const PUBLIC_TOURNAMENT_DETAILS_LEGACY_FIELDS = [
   "public_slug",
 ];
 
-type SupabaseQueryResult<T> = {
-  data: T | null;
-  error: PostgrestError | null;
-  status?: number;
-};
-
-type SupabasePublishedTournamentQuery<T> = {
-  or(filters: string): SupabaseMaybeSingleQuery<T>;
-  eq(column: string, value: string): SupabaseMaybeSingleQuery<T>;
-};
-
-type SupabaseMaybeSingleQuery<T> = {
-  maybeSingle(): Promise<SupabaseQueryResult<T>>;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientLike = {
-  from(table: "published_tournaments"): {
-    select(fields: string): any;
-  };
-};
+type SupabaseClientLike = Pick<typeof supabase, "from">;
 
 type SupabaseQueryError = Error & {
   status?: number;
@@ -184,7 +165,9 @@ export async function fetchPublicTournamentDetails(
   );
 
   if (indexedResult.data) {
-    return indexedResult.data;
+    // The field list is built at runtime, so Supabase's static select parser cannot infer its shape.
+    // This retains the pre-existing projection contract without changing the published-view query.
+    return indexedResult.data as unknown as TournamentDetails;
   }
 
   const fallbackResult = await fetchWithLegacySupport(
@@ -195,5 +178,5 @@ export async function fetchPublicTournamentDetails(
     "computed"
   );
 
-  return fallbackResult.data;
+  return fallbackResult.data as unknown as TournamentDetails | null;
 }

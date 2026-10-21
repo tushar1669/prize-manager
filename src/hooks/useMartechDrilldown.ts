@@ -113,7 +113,7 @@ async function fetchOrganizerDrilldown(key: string, range: DateRange, offset: nu
 }
 
 async function fetchTournamentDrilldown(key: string, range: DateRange, offset: number) {
-  let limitation: string | null = null;
+  const limitation: string | null = null;
 
   if (key === "Published") {
     const { data, error } = await supabase.from("published_tournaments").select("id,title,published_at,city,venue");
