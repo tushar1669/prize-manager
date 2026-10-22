@@ -1,0 +1,52 @@
+name: QA ONLY - Poster Grid visual evidence
+on:
+  push:
+    branches: [qa/poster-grid-visual-preview-20261022]
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install with corrected unmerged lockfile
+        run: npm ci --no-audit --fund=false
+      - name: Build Poster Grid draft
+        run: npm run build
+      - name: Install PDF inspectors
+        run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils
+      - name: Browser screenshot and A4 print QA
+        run: npx playwright test -c playwright.poster-grid.visual.config.ts
+      - name: Render A4 PDF first page for review
+        if: always()
+        run: |
+          if [ -f qa-output/poster-grid-compact.pdf ]; then
+            pdftoppm -f 1 -singlefile -scale-to 1150 -jpeg -jpegopt quality=65 qa-output/poster-grid-compact.pdf qa-output/poster-grid-a4-preview
+          fi
+          for file in qa-output/poster-grid-desktop.jpg qa-output/poster-grid-mobile.jpg qa-output/poster-grid-a4-preview.jpg; do
+            if [ -f "$file" ]; then
+              echo "VISUAL_BASE64_BEGIN $(basename "$file")"
+              base64 -w0 "$file"
+              echo
+              echo "VISUAL_BASE64_END $(basename "$file")"
+            fi
+          done
+      - name: Upload screenshots PDFs and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poster-grid-design-visual-qa
+          path: |
+            qa-output/
+            test-results/
+          if-no-files-found: ignore
