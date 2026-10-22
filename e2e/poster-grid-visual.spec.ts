@@ -47,26 +47,33 @@ test('category accents also tint gift blocks and awards, on screen and A4 print'
  await open(page);
  for (const media of ['screen','print'] as const) {
   await page.emulateMedia({media});
-  const samples=await page.locator('.pm-poster-group').evaluateAll(groups => groups.map(g => {
+  const samples=await page.locator('.pm-poster-group').evaluateAll((groups, mode) => groups.map(g => {
    const card=g.querySelector('.pm-poster-card');
    const gift=g.querySelector('.pm-poster-gift');
    const icons=Array.from(g.querySelectorAll('.pm-poster-awards > span svg'));
    const accent=card ? getComputedStyle(card).borderTopColor : '';
+   const reference=document.createElement('span');
+   reference.style.color=mode==='print' ? 'var(--pm-poster-accent)' : 'color-mix(in srgb, var(--pm-poster-accent) 65%, white)';
+   g.appendChild(reference);
+   const expectedIconColor=getComputedStyle(reference).color;
+   reference.remove();
    return {
     group:g.className,
     accent,
+    expectedIconColor,
     giftBackground:gift ? getComputedStyle(gift).backgroundColor : null,
     giftRail:gift ? getComputedStyle(gift).borderLeftColor : null,
     iconColors:icons.map(svg => getComputedStyle(svg).color),
    };
-  }));
+  }), media);
   expect(samples).toHaveLength(3);
   expect(new Set(samples.map(x=>x.accent)).size).toBe(3);
+  expect(new Set(samples.map(x=>x.expectedIconColor)).size).toBe(3);
   if (media==='screen') expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(3);
   else expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(1); // White paper background is intentional.
   for (const sample of samples) {
    expect(sample.iconColors.length).toBeGreaterThan(0);
-   expect(sample.iconColors.every(color=>color===sample.accent), sample.group+' icons vs '+media).toBe(true);
+   expect(sample.iconColors.every(color=>color===sample.expectedIconColor), sample.group+' icons vs '+media).toBe(true);
    expect(sample.giftRail, sample.group+' gift left border vs '+media).toBe(sample.accent);
   }
  }
