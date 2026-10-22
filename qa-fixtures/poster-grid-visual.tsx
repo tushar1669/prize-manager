@@ -1,5 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import { PosterGridView } from '../src/components/final-prize/PosterGridView';
 import type { FinalPrizeWinnerRow } from '../src/hooks/useFinalPrizeData';
 import '../src/index.css';
@@ -42,6 +43,8 @@ const winners:FinalPrizeWinnerRow[]=groups.flatMap((group)=>{
 });
 createRoot(document.getElementById('root')!).render(
   <div className="pm-print-surface">
-    <PosterGridView winners={winners} tournamentId="11111111-1111-4111-8111-111111111111" hasFullAccess={allowed} freePlayerThreshold={150}/>
+    <BrowserRouter>
+      <PosterGridView winners={winners} tournamentId="11111111-1111-4111-8111-111111111111" hasFullAccess={allowed} freePlayerThreshold={150}/>
+    </BrowserRouter>
   </div>
 );
