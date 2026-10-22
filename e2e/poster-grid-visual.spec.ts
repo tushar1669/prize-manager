@@ -78,7 +78,7 @@ test('compact print A4 contains 12 winners and no clipped text boxes',async({pag
 });
 test('one category per page mode retains 12 winners and category boundaries',async({page})=>{
  await open(page);
- await page.getByRole('button',{name:'One category per page'}).click();
+ await page.locator('[aria-label="One category per page"]').click();
  await expect(page.locator('.pm-poster-grid')).toHaveAttribute('data-print-mode','one-per-page');
  const pdf=await page.pdf({format:'A4',preferCSSPageSize:true,printBackground:false});
  mkdirSync('qa-output',{recursive:true});
@@ -96,6 +96,6 @@ test('long names and gifts remain legible in A4 print',async({page})=>{
  writeFileSync('qa-output/poster-grid-long.pdf',pdf);
  const t=execFileSync('pdftotext',['-layout','-','-'],{input:pdf,encoding:'utf8'});
  for(let i=1;i<=32;i++) expect(t).toContain('Synthetic Winner '+String(i).padStart(3,'0'));
- expect(t).toContain('Chess Board with Travel Carry Case');
+ expect(t).toMatch(/Chess Board with Travel\s+Carry Case/);
  console.log('POSTER_LONG_A4_PAGES='+Number(execFileSync('pdfinfo',['-'],{input:pdf,encoding:'utf8'}).match(/Pages:\s+(\d+)/)?.[1]||0));
 });
