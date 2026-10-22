@@ -100,12 +100,19 @@
   max-width: 100%;
   line-height: 1.4;
   border-left: 2px solid var(--pm-poster-accent);
+  background: color-mix(in srgb, var(--pm-poster-accent) 12%, transparent);
   overflow-wrap: anywhere;
   white-space: normal;
   border-radius: 5px;
   color: hsl(var(--foreground));
 }
 .pm-poster-grid .pm-poster-awards { flex: none; color: var(--pm-poster-accent); }
+/* The shared award helper uses text-primary; inside posters, award marks are
+   category identity rather than success/status green. Scope its override here. */
+.pm-poster-grid .pm-poster-awards > span {
+  /* Lighten brand navy/teal so small symbols stay legible on charcoal cards. */
+  color: color-mix(in srgb, var(--pm-poster-accent) 65%, white);
+}
 
 @media print {
   /* Preserve existing compact (3-up) and one-category-per-page logic and @page.
@@ -166,10 +173,12 @@
     background: #fff !important;
     color: #25394b !important;
     border-color: #bcc9d6 !important;
+    border-left-color: var(--pm-poster-accent) !important;
     padding: 1mm 1.5mm !important;
     font-size: 8pt !important;
     line-height: 1.35 !important;
   }
-  .pm-poster-grid .pm-poster-awards { color: #25394b !important; gap: 1mm !important; }
+  .pm-poster-grid .pm-poster-awards { color: var(--pm-poster-accent) !important; gap: 1mm !important; }
+  .pm-poster-grid .pm-poster-awards > span { color: var(--pm-poster-accent) !important; }
   .pm-poster-grid .pm-poster-awards svg { width: 13px; height: 13px; }
 }
