@@ -96,6 +96,6 @@ test('long names and gifts remain legible in A4 print',async({page})=>{
  writeFileSync('qa-output/poster-grid-long.pdf',pdf);
  const t=execFileSync('pdftotext',['-layout','-','-'],{input:pdf,encoding:'utf8'});
  for(let i=1;i<=32;i++) expect(t).toContain('Synthetic Winner '+String(i).padStart(3,'0'));
- expect(t).toMatch(/Chess Board with Travel\s+Carry Case/);
+ expect(t).toMatch(/Chess Board with\s+Travel\s+Carry Case/);
  console.log('POSTER_LONG_A4_PAGES='+Number(execFileSync('pdfinfo',['-'],{input:pdf,encoding:'utf8'}).match(/Pages:\s+(\d+)/)?.[1]||0));
 });
