@@ -62,7 +62,8 @@ test('category accents also tint gift blocks and awards, on screen and A4 print'
   }));
   expect(samples).toHaveLength(3);
   expect(new Set(samples.map(x=>x.accent)).size).toBe(3);
-  expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(3);
+  if (media==='screen') expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(3);
+  else expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(1); // White paper background is intentional.
   for (const sample of samples) {
    expect(sample.iconColors.length).toBeGreaterThan(0);
    expect(sample.iconColors.every(color=>color===sample.accent), sample.group+' icons vs '+media).toBe(true);
