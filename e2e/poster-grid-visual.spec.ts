@@ -42,6 +42,34 @@ test('mobile 390px: single-column readable cards, no horizontal overflow',async(
  await page.screenshot({path:'qa-output/poster-grid-mobile.jpg',type:'jpeg',quality:55,fullPage:true});
  console.log('POSTER_MOBILE_PASS 390px; single-column; no horizontal overflow');
 });
+test('category accents also tint gift blocks and awards, on screen and A4 print', async ({page}) => {
+ await page.setViewportSize({width:390,height:844});
+ await open(page);
+ for (const media of ['screen','print'] as const) {
+  await page.emulateMedia({media});
+  const samples=await page.locator('.pm-poster-group').evaluateAll(groups => groups.map(g => {
+   const card=g.querySelector('.pm-poster-card');
+   const gift=g.querySelector('.pm-poster-gift');
+   const icons=Array.from(g.querySelectorAll('.pm-poster-awards > span svg'));
+   const accent=card ? getComputedStyle(card).borderTopColor : '';
+   return {
+    group:g.className,
+    accent,
+    giftBackground:gift ? getComputedStyle(gift).backgroundColor : null,
+    giftRail:gift ? getComputedStyle(gift).borderLeftColor : null,
+    iconColors:icons.map(svg => getComputedStyle(svg).color),
+   };
+  }));
+  expect(samples).toHaveLength(3);
+  expect(new Set(samples.map(x=>x.accent)).size).toBe(3);
+  expect(new Set(samples.map(x=>x.giftBackground)).size).toBe(3);
+  for (const sample of samples) {
+   expect(sample.iconColors.length).toBeGreaterThan(0);
+   expect(sample.iconColors.every(color=>color===sample.accent), sample.group+' icons vs '+media).toBe(true);
+   expect(sample.giftRail, sample.group+' gift left border vs '+media).toBe(sample.accent);
+  }
+ }
+});
 test('restricted poster stays locked; winners and print controls not exposed',async({page})=>{
  await open(page,'restricted');
  await expect(page.getByText('Poster Grid — Pro Only')).toBeVisible();
