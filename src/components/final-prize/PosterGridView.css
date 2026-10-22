@@ -49,8 +49,8 @@
   border: 1px solid var(--pm-poster-accent);
   border-radius: 5px;
   color: hsl(var(--foreground));
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 12px;
+  line-height: 1.35;
   letter-spacing: .035em;
   text-align: left;
 }
@@ -98,6 +98,8 @@
 }
 .pm-poster-grid .pm-poster-gift {
   max-width: 100%;
+  line-height: 1.4;
+  border-left: 2px solid var(--pm-poster-accent);
   overflow-wrap: anywhere;
   white-space: normal;
   border-radius: 5px;
@@ -115,55 +117,58 @@
     box-shadow: none !important;
     border-radius: 2mm !important;
     overflow: hidden;
+    max-height: none !important; /* Long names/gifts must grow instead of being clipped. */
   }
   .pm-poster-grid .pm-poster-group--main { --pm-poster-accent: #b38a32; }
   .pm-poster-grid .pm-poster-group--green { --pm-poster-accent: #1f6e5b; }
   .pm-poster-grid .pm-poster-group--navy { --pm-poster-accent: #0b3d91; }
-  .pm-poster-grid .pm-poster-card-top { padding-bottom: 2mm !important; }
+  .pm-poster-grid .pm-poster-card-top { padding-bottom: 3mm !important; }
   .pm-poster-grid .pm-poster-category {
     padding: 1mm 1.4mm !important;
     background: #fff !important;
     color: #243246 !important;
     border-color: var(--pm-poster-accent) !important;
-    font-size: 7pt !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
   }
   .pm-poster-grid .pm-poster-place {
     padding: 1mm 1.4mm !important;
     background: #fff !important;
     color: #243246 !important;
     border-color: #a7b5c5 !important;
-    font-size: 8pt !important;
+    font-size: 9pt !important;
   }
-  .pm-poster-grid .pm-poster-winner { padding: 2mm 0 !important; }
+  .pm-poster-grid .pm-poster-winner { padding: 3mm 0 !important; }
   .pm-poster-grid .pm-poster-winner-label,
   .pm-poster-grid .pm-poster-cash-label {
     margin-bottom: 1mm;
     color: #516274 !important;
-    font-size: 6.5pt;
-    letter-spacing: .08em;
+    font-size: 7.5pt;
+    letter-spacing: .06em;
   }
   .pm-poster-grid .poster-grid-name.pm-poster-name {
-    font-size: 10.5pt !important;
+    font-size: 12pt !important;
     font-weight: 800 !important;
-    line-height: 1.14 !important;
+    line-height: 1.2 !important;
     color: #182c43 !important;
     overflow-wrap: anywhere;
   }
-  .pm-poster-grid .pm-poster-bottom { padding-top: 2mm !important; }
-  .pm-poster-grid .pm-poster-prizes { gap: 1mm !important; }
+  .pm-poster-grid .pm-poster-bottom { padding-top: 3mm !important; }
+  .pm-poster-grid .pm-poster-prizes { gap: 2mm !important; align-items: flex-start !important; }
   .pm-poster-grid .pm-poster-amount {
     background: #fff !important;
     color: #182c43 !important;
     border-color: #b8c5d2 !important;
     padding: 1mm 1.4mm !important;
-    font-size: 8pt !important;
+    font-size: 9pt !important;
   }
   .pm-poster-grid .pm-poster-gift {
     background: #fff !important;
     color: #25394b !important;
     border-color: #bcc9d6 !important;
-    padding: .7mm 1mm !important;
-    font-size: 7pt !important;
+    padding: 1mm 1.5mm !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
   }
   .pm-poster-grid .pm-poster-awards { color: #25394b !important; gap: 1mm !important; }
   .pm-poster-grid .pm-poster-awards svg { width: 13px; height: 13px; }
