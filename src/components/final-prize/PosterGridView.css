@@ -110,7 +110,8 @@
 /* The shared award helper uses text-primary; inside posters, award marks are
    category identity rather than success/status green. Scope its override here. */
 .pm-poster-grid .pm-poster-awards > span {
-  color: var(--pm-poster-accent);
+  /* Lighten brand navy/teal so small symbols stay legible on charcoal cards. */
+  color: color-mix(in srgb, var(--pm-poster-accent) 65%, white);
 }
 
 @media print {
