@@ -156,11 +156,13 @@ function formatCurrency(amount: number): string {
 
 function GroupCard({
   group,
+  groupIndex,
   onTieResolutionRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
+  groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
@@ -212,9 +214,9 @@ function GroupCard({
     diagnostics.players_without_points === selectedPoolSize;
 
   return (
-    <Card>
+    <Card className="pm-team-prize-group" data-team-tone={['gold', 'teal', 'navy'][groupIndex % 3]}>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3" data-team-group-header>
           <div className="flex items-center justify-between">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
@@ -243,7 +245,7 @@ function GroupCard({
           </div>
         </CardHeader>
 
-        <CollapsibleContent>
+        <CollapsibleContent forceMount>
           <CardContent className="pt-0 space-y-4">
             {/* Winners table */}
             {filledPrizes.length > 0 ? (
@@ -427,7 +429,7 @@ function GroupCard({
                 persisted and public paths until TC1.6, and the empty array renders
                 nothing rather than an empty collapsible. */}
             {showDiagnostics && ineligibleDetails.length > 0 && (
-              <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>
+              <Collapsible data-team-print-hide open={showIneligible} onOpenChange={setShowIneligible}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     {showIneligible ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
@@ -513,10 +515,11 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
       </Alert>
 
       <div className="space-y-4">
-        {data.groups.map((group) => (
+        {data.groups.map((group, groupIndex) => (
           <GroupCard
             key={group.group_id}
             group={group}
+            groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
