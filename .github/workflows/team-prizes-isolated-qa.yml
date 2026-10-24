@@ -25,3 +25,12 @@ jobs:
         run: npx eslint src/utils/teamPrizeExport.ts src/utils/finalPrizeWorkbook.ts src/components/final-prize/TeamPrizesTabView.tsx src/components/final-prize/FinalPrizeSummaryHeader.tsx src/components/allocation/TeamPrizeResultsPanel.tsx src/pages/Finalize.tsx src/pages/FinalPrizeView.tsx tests/utils/team-final-workbook.spec.ts
       - name: Production build
         run: npm run build
+      - name: Synthetic A4 print and masked team winner tests
+        run: npx playwright test --config qa/team-prizes/playwright.config.ts
+      - name: Upload team A4 PDFs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-prizes-a4
+          path: artifacts/team-prizes-a4/
+          if-no-files-found: ignore
