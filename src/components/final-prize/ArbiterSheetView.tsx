@@ -46,7 +46,7 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
             Preparing arbiter sheet…
           </div>
         ) : (
-          <Table className="pm-arbiter-table min-w-full text-base print:text-[11px]">
+          <Table data-has-gift={showGiftColumn ? "yes" : "no"} className="pm-arbiter-table min-w-full text-base print:text-[11px]">
             <TableHeader className="pm-arbiter-thead bg-primary/10 text-left print:table-header-group print:bg-black/5">
               <TableRow className="border-border print:border-black">
                 <TableHead className="w-16 font-bold text-foreground print:text-black">Place</TableHead>
