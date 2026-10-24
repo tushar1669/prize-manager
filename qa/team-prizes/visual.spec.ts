@@ -31,3 +31,13 @@ test('preview access never exposes 1st-placed team winner', async ({ page }) => 
   await expect(page.getByText('Synthetic International Chess Academy 1 — Institution 1')).toHaveCount(0);
   await expect(page.getByText('Synthetic International Chess Academy 1 — Institution 2')).toBeVisible();
 });
+
+test('organizer-expanded ineligible teams are never present on printed handout', async ({ page }) => {
+  await page.goto('/qa/team-prizes/?diagnostics');
+  const button = page.getByRole('button', { name: /1 ineligible team/ }).first();
+  await button.click();
+  await expect(page.getByText('EXCLUDED_NEVER_PRINT').first()).toBeVisible();
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByText('EXCLUDED_NEVER_PRINT').first()).toBeHidden();
+  await expect(page.locator('.pm-team-prize-group tbody tr')).toHaveCount(12);
+});
