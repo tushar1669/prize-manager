@@ -34,7 +34,7 @@ type ExportSheet = XLSXStyle.WorkSheet & { '!freeze'?: { xSplit: number; ySplit:
 
 function sectionShade(index: number, isMain: boolean): string {
   if (isMain) return COLORS.main;
-  return index % 2 === 0 ? COLORS.green : COLORS.blue;
+  return index % 2 === 1 ? COLORS.green : COLORS.blue;
 }
 
 function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>[], report: string) {
