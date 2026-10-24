@@ -37,8 +37,10 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
   return (
     <div className="pm-arbiter-sheet mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:w-full print:max-w-none print:px-0 print:pb-4">
       <div className="pm-arbiter-titleband" aria-label="Arbiter Sheet heading">
-        <span className="pm-arbiter-title">Arbiter Sheet</span>
-        <span className="pm-arbiter-subtitle">Prize allocations · signature register</span>
+        <div className="pm-arbiter-titlegroup">
+          <span className="pm-arbiter-title">Arbiter Sheet</span>
+          <span className="pm-arbiter-subtitle">Prize allocations · signature register</span>
+        </div>
       </div>
       <div className="pm-arbiter-frame overflow-x-auto rounded-lg border border-border bg-card shadow-sm print:overflow-visible print:rounded-none print:border-black print:bg-white print:shadow-none">
         {isLoading && winners.length === 0 ? (
@@ -64,13 +66,13 @@ export function ArbiterSheetView({ winners: providedWinners, tournamentId, hasFu
             </TableHeader>
             <TableBody>
               {winners.map((winner, index) => (
-                <TableRow key={winner.prizeId} className={`pm-arbiter-row ${winner.isMain ? 'pm-arbiter-row--main' : winner.categoryOrder % 2 === 0 ? 'pm-arbiter-row--navy' : 'pm-arbiter-row--teal'} ${index % 2 === 0 ? 'bg-muted/40 print:bg-transparent border-border' : 'border-border print:border-black/20'}`}>
+                <TableRow key={winner.prizeId} className={`pm-arbiter-row ${winner.isMain ? 'pm-arbiter-row--main' : winner.categoryOrder % 2 === 0 ? 'pm-arbiter-row--navy' : 'pm-arbiter-row--teal'} ${index === 0 || winners[index - 1]?.categoryId !== winner.categoryId ? 'pm-arbiter-row--section-start' : ''} ${index === winners.length - 1 || winners[index + 1]?.categoryId !== winner.categoryId ? 'pm-arbiter-row--section-end' : ''} ${index % 2 === 0 ? 'bg-muted/40 print:bg-transparent border-border' : 'border-border print:border-black/20'}`}>
                   <TableCell className="pm-arbiter-place font-bold text-primary print:text-black">{winner.place}</TableCell>
                   <TableCell className="pm-arbiter-category text-muted-foreground print:text-black/70">{winner.categoryName}</TableCell>
                   <TableCell>
                     <div className="pm-arbiter-player font-semibold text-foreground print:text-black">{winner.playerName}</div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground print:text-black/70">{winner.rank || '—'}</TableCell>
+                  <TableCell className="pm-arbiter-rank text-muted-foreground print:text-black/70">{winner.rank || '—'}</TableCell>
                   <TableCell className="pm-arbiter-cash text-right font-bold text-success print:text-black">{formatCurrencyINR(winner.amount)}</TableCell>
                   {showGiftColumn && (
                     <TableCell className="pm-arbiter-gift font-medium text-foreground print:text-black">{formatGiftItems(winner.giftItems) || '—'}</TableCell>
