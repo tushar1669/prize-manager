@@ -7,6 +7,8 @@ on:
 jobs:
   lock:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,6 +19,16 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts --no-audit --fund=false
       - name: Validate locked install
         run: npm ci --no-audit --fund=false
+      - name: Commit generated lockfile to the draft branch only
+        if: github.event_name == 'push' && github.ref == 'refs/heads/design/final-allocation-rca-xlsx-20261024'
+        run: |
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore(xlsx): lock styled report writer resolved by npm"
+            git push origin HEAD:refs/heads/design/final-allocation-rca-xlsx-20261024
+          fi
       - name: Upload generated npm lock for review
         uses: actions/upload-artifact@v4
         with:
