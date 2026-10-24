@@ -39,7 +39,7 @@ export async function downloadFinalPrizeWorkbook({
 
     if ((count ?? 0) > 0) {
       const data = await fetchTeamPrizeResults(tournamentId, teamAllocationVersion);
-      if (!data || !Array.isArray(data.groups)) return { ok: false, reason: 'team_data_unavailable' };
+      if (!data || !Array.isArray(data.groups) || data.groups.length === 0) return { ok: false, reason: 'team_data_unavailable' };
       teamRows = buildTeamPrizeExportRows(data, hasFullAccess);
     }
   } catch {
