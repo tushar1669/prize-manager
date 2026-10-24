@@ -1,0 +1,135 @@
+/* Team Prize handout only. Related to Category Cards / Poster Grid / Arbiter
+   palette; no changes to calculation, masking, or shared application styles. */
+.pm-team-prizes {
+  --pm-team-ink: #182c43;
+  --pm-team-grid: #c4cfdb;
+}
+.pm-team-prizes .pm-team-prize-group {
+  --pm-team-accent: #a6802e;
+  --pm-team-surface: #fbf6e9;
+  border-top: 4px solid var(--pm-team-accent);
+  overflow: hidden;
+}
+.pm-team-prizes .pm-team-prize-group:nth-child(3n + 2) {
+  --pm-team-accent: #1f6e5b;
+  --pm-team-surface: #ecf6f1;
+}
+.pm-team-prizes .pm-team-prize-group:nth-child(3n) {
+  --pm-team-accent: #0b3d91;
+  --pm-team-surface: #edf3fc;
+}
+.pm-team-prizes .pm-team-prize-group [class*="CardHeader"] {
+  border-bottom: 1px solid var(--pm-team-grid);
+}
+.pm-team-prizes .pm-team-prize-group table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pm-team-prizes .pm-team-prize-group thead th {
+  background: var(--pm-team-surface);
+  color: var(--pm-team-ink);
+  font-size: .77rem;
+  font-weight: 800;
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 10px 8px;
+  border: 1px solid var(--pm-team-grid);
+}
+.pm-team-prizes .pm-team-prize-group tbody td {
+  background: var(--pm-team-surface);
+  padding: 11px 8px;
+  vertical-align: top;
+  border: 1px solid var(--pm-team-grid);
+}
+.pm-team-prizes .pm-team-prize-group tbody td:first-child {
+  font-size: 1.05rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: center;
+}
+.pm-team-prizes .pm-team-prize-group tbody td:nth-child(n+3) {
+  font-variant-numeric: tabular-nums;
+}
+.pm-team-prizes .pm-team-prize-group tbody td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+
+/* The browser's print-to-PDF is a handout, not the interactive review screen. */
+@media print {
+  .pm-team-prizes {
+    color: var(--pm-team-ink);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-team-prizes .pm-team-prize-group {
+    border: 1px solid var(--pm-team-grid) !important;
+    border-top: 2.5mm solid var(--pm-team-accent) !important;
+    border-radius: 1.5mm !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    margin: 0 0 4mm;
+    break-inside: auto;
+  }
+  .pm-team-prizes .pm-team-prize-group [data-state] {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-team-prizes .pm-team-prize-group thead {
+    display: table-header-group !important;
+  }
+  .pm-team-prizes .pm-team-prize-group thead th {
+    font-size: 7pt;
+    padding: 2.4mm 1.3mm !important;
+    color: #182c43 !important;
+    background: var(--pm-team-surface) !important;
+    border: .3pt solid var(--pm-team-grid) !important;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody td {
+    font-size: 7.8pt;
+    line-height: 1.35;
+    padding: 2.5mm 1.3mm !important;
+    background: var(--pm-team-surface) !important;
+    color: #182c43 !important;
+    border: .3pt solid var(--pm-team-grid) !important;
+    overflow-wrap: anywhere;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody td:first-child {
+    font-size: 10pt;
+    text-align: center;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody td:nth-child(2) {
+    width: 34%;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody td:nth-child(3),
+  .pm-team-prizes .pm-team-prize-group tbody td:nth-child(4),
+  .pm-team-prizes .pm-team-prize-group tbody td:nth-child(5) {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .pm-team-prizes .pm-team-prize-group tbody td:nth-child(6) {
+    min-width: 22mm;
+  }
+  .pm-team-prizes .pm-team-prize-group svg {
+    width: 11px;
+    height: 11px;
+    display: inline-block;
+  }
+  .pm-team-prizes .pm-team-prize-group button {
+    pointer-events: none;
+    background: transparent !important;
+    color: #182c43 !important;
+  }
+  .pm-team-prizes .pm-team-prize-group button > svg {
+    display: none !important;
+  }
+  .pm-team-prizes .pm-team-prize-group .text-muted-foreground,
+  .pm-team-prizes .pm-team-prize-group .text-foreground {
+    color: #34465b !important;
+  }
+}
