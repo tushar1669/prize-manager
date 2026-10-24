@@ -135,3 +135,19 @@ test('long names and gifts remain legible in A4 print',async({page})=>{
  expect(t).toMatch(/Chess Board with\s+Travel\s+Carry Case/);
  console.log('POSTER_LONG_A4_PAGES='+Number(execFileSync('pdfinfo',['-'],{input:pdf,encoding:'utf8'}).match(/Pages:\s+(\d+)/)?.[1]||0));
 });
+
+
+test('printed full-card surfaces use understated gold teal navy pastels', async ({page}) => {
+ await open(page);
+ await page.emulateMedia({media:'print'});
+ const colors = await page.locator('.pm-poster-group').evaluateAll(groups =>
+   groups.map(group => {
+     const card = group.querySelector('.pm-poster-card');
+     return card ? getComputedStyle(card).backgroundColor : '';
+   })
+ );
+ expect(colors).toEqual(['rgb(252, 249, 241)', 'rgb(243, 249, 246)', 'rgb(242, 246, 252)']);
+ mkdirSync('qa-output',{recursive:true});
+ const pdf = await page.pdf({format:'A4',preferCSSPageSize:true,printBackground:true});
+ writeFileSync('qa-output/poster-grid-compact-tinted.pdf',pdf);
+});
