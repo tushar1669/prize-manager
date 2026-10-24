@@ -1,0 +1,34 @@
+name: Category cards pastel A4 QA (not release)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install exact QA lockfile
+        run: npm ci --no-audit --fund=false
+      - name: Compile isolated real React fixtures
+        run: npm run build
+      - name: Install PDF inspection utilities
+        run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils
+      - name: Actual browser A4 and category tint checks
+        run: npx playwright test -c playwright.v6.qa.config.ts
+      - name: Upload real A4 proofs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: category-v6-tint-evidence
+          path: qa-output/
+          if-no-files-found: ignore
