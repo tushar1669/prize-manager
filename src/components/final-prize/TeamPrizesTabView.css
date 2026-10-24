@@ -186,3 +186,44 @@
     color: #654a12 !important;
   }
 }
+
+
+/* Final review correction ONLY: distinct rupee glyph/numerals, centered numeric
+   prize columns and visible separation between cash and trophy/medal icons. */
+.pm-team-prizes-print .pm-team-cash {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  column-gap: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  vertical-align: baseline;
+}
+.pm-team-prizes-print .pm-team-cash-symbol,
+.pm-team-prizes-print .pm-team-cash-digits { display: inline-block; flex-shrink: 0; }
+.pm-team-prizes-print .pm-team-prize-group tbody td.pm-team-prize-stat,
+.pm-team-prizes-print .pm-team-prize-group tbody td.pm-team-prize-amount { text-align: center !important; }
+.pm-team-prizes-print .pm-team-prize-value {
+  display: flex;
+  align-items: center;
+  justify-content: center !important;
+  flex-wrap: wrap;
+  column-gap: 8px !important;
+  row-gap: 2px !important;
+}
+.pm-team-prizes-print .pm-team-prize-awards {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  column-gap: 5px;
+}
+@media print {
+  .pm-team-prizes-print .pm-team-cash { column-gap: .9mm; }
+  .pm-team-prizes-print .pm-team-prize-value {
+    justify-content: center !important;
+    column-gap: 2mm !important;
+    row-gap: .5mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-awards { column-gap: 1.2mm; }
+}
