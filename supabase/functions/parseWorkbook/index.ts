@@ -227,7 +227,7 @@ function looksLikeStrictGenderValue(value: unknown): boolean {
 }
 
 // Female markers in Type/Group labels
-const FEMALE_MARKER_FMG = /FMG/i;
+const FEMALE_MARKER_FMG = /^FMG$/i; // whole word only
 const FEMALE_MARKER_F_PREFIX = /^F\d{1,2}$/;
 const FEMALE_LABEL_TOKENS = new Set(["GIRL", "GIRLS"]);
 

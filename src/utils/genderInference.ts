@@ -80,7 +80,7 @@ export function analyzeGenderColumns(rows: Array<Record<string, unknown>>): Gend
 }
 
 // Female markers in Type/Group labels
-const FEMALE_MARKER_FMG = /FMG/i;
+const FEMALE_MARKER_FMG = /^FMG$/i; // whole word only
 const FEMALE_MARKER_F_PREFIX = /^F\d{1,2}$/; // F9, F13, etc.
 const FEMALE_TOKENS = new Set(['GIRL', 'GIRLS']);
 
