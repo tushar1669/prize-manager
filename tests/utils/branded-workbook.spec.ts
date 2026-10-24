@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import * as ReaderXLSX from 'xlsx';
 import * as StyledXLSX from 'xlsx-js-style';
 import { buildBrandedReportWorkbook } from '@/utils/brandedWorkbookXlsx';
@@ -53,4 +54,19 @@ describe('Branded report XLSX: structure and serializable data contracts', () =>
     expect(wb.Sheets.AllocationCoverage['!autofilter']).toBeTruthy();
     expect(wb.Sheets.RCA['!autofilter']).toBeTruthy();
   });
+});
+
+
+it('writes two complete synthetic XLSX files for actual OOXML and visual inspection', () => {
+  mkdirSync('artifacts/branded-xlsx', { recursive: true });
+  const final = buildBrandedReportWorkbook({
+    Winners: winners.map(({ Signature: _signature, ...fields }) => fields),
+    'Poster Grid': winners.map(({ Signature: _signature, ...fields }) => fields),
+    'Arbiter Sheet': winners,
+  });
+  const reports = buildBrandedReportWorkbook({ AllocationCoverage: coverage, RCA: rca });
+  writeFileSync('artifacts/branded-xlsx/final-winners.xlsx',
+    StyledXLSX.write(final, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
+  writeFileSync('artifacts/branded-xlsx/allocation-and-rca.xlsx',
+    StyledXLSX.write(reports, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
 });
