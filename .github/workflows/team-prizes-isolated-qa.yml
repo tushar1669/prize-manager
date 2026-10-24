@@ -1,0 +1,27 @@
+name: Team Prizes isolated QA (not release)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install locked dependencies
+        run: npm ci --no-audit --fund=false
+      - name: Team Prize XLSX regression
+        run: npx vitest run tests/utils/team-final-workbook.spec.ts tests/utils/team-prize-masking.spec.ts tests/utils/final-prize-export.spec.ts
+      - name: Targeted ESLint
+        run: npx eslint src/utils/teamPrizeExport.ts src/utils/finalPrizeWorkbook.ts src/components/final-prize/TeamPrizesTabView.tsx src/components/final-prize/FinalPrizeSummaryHeader.tsx src/components/allocation/TeamPrizeResultsPanel.tsx src/pages/Finalize.tsx src/pages/FinalPrizeView.tsx tests/utils/team-final-workbook.spec.ts
+      - name: Production build
+        run: npm run build
