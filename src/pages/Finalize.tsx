@@ -445,7 +445,6 @@ export default function Finalize() {
     return <NoAllocationGuard />;
   }
 
-  const isTeamTab = activeView === 'v5';
 
   // B13 #8 — single publish surface. The public link is gated on a positive
   // is_published read (D32): if the summary query has not resolved or has
