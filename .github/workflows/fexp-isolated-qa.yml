@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - qa/fexp-contract-01-lockfile-fixture-20261024
+  pull_request:
+    branches:
+      - main
 
 jobs:
   focused:
