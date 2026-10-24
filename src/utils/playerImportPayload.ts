@@ -1,7 +1,7 @@
 import type { PlayerImportRow } from '@/lib/validations';
 import type { Json } from '@/integrations/supabase/types';
 import { ALIASES } from './headerAliases';
-import { normalizeGrColumn, normalizeTypeColumn } from './valueNormalizers';
+import { normalizeGrColumn, normalizeTypeColumn, hasPcToken } from './valueNormalizers';
 import { extractStateFromIdent } from './stateExtract';
 
 export type SupabasePlayerPayload = {
@@ -104,7 +104,7 @@ export function buildSupabasePlayerPayload(
   const existingTypeLabel = player.type_label;
   
   const grInfo = existingGroupLabel !== undefined 
-    ? { disability: existingGroupLabel?.toUpperCase?.() === 'PC' ? 'PC' : null, tags: existingGroupLabel?.toUpperCase?.() === 'PC' ? ['PC'] : [], group_label: existingGroupLabel }
+    ? { disability: hasPcToken(existingGroupLabel) ? 'PC' : null, tags: hasPcToken(existingGroupLabel) ? ['PC'] : [], group_label: existingGroupLabel }
     : normalizeGrColumn(getAliasedValue('gr'));
   const typeLabel = existingTypeLabel !== undefined 
     ? existingTypeLabel 
@@ -150,7 +150,10 @@ export function buildSupabasePlayerPayload(
     existingGroups.filter((group): group is string => typeof group === 'string')
   );
 
-  const disability = grInfo.disability ?? disabilityFromField ?? null;
+  // A value from the Disability column wins; otherwise Gr or Type containing the word "PC" marks PC.
+  const disabilityColumnValue =
+    disabilityFromField != null && String(disabilityFromField).trim() !== '' ? disabilityFromField : null;
+  const disability = disabilityColumnValue ?? grInfo.disability ?? (hasPcToken(typeLabel) ? 'PC' : null);
   grInfo.tags.forEach(tag => mergedGroups.add(tag));
   if (disability === 'PC') {
     mergedGroups.add('PC');

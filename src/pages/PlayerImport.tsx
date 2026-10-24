@@ -124,6 +124,7 @@ import { GenderSummaryChip } from "@/components/import/GenderSummaryChip";
 import { MissingGenderWarning } from "@/components/import/MissingGenderWarning";
 import { checkHasFemaleCategories } from "@/components/import/MissingGenderWarning.helpers";
 import { analyzeGenderColumns, hasFemaleMarker, inferGenderForRow, type GenderColumnConfig } from '@/utils/genderInference';
+import { GenderOverrideNotice } from '@/components/import/GenderOverrideNotice';
 
 /**
  * Bulk upsert players via PostgREST with precise conflict handling.
@@ -3196,6 +3197,8 @@ export default function PlayerImport() {
                 hasFemaleCategories={hasFemaleCategories}
               />
             )}
+
+            {mappedPlayers.length > 0 && <GenderOverrideNotice players={mappedPlayers as never} />}
             
             <Card>
               <CardHeader>
