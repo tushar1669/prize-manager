@@ -67,6 +67,7 @@ export default function FinalPrizeView() {
       </div>
       {data && (
         <FinalPrizeSummaryHeader
+          tournamentId={id}
           tournamentTitle={data.tournament?.title}
           city={data.tournament?.city}
           dateRange={dateRange}
