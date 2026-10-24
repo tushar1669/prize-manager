@@ -25,8 +25,7 @@ import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
-import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
-import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
+import { downloadFinalPrizeWorkbook } from "@/utils/finalPrizeWorkbook";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { freeTierSummaryBody, freeTierSummaryLabel } from '@/constants/tournamentAccess';
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
@@ -267,39 +266,27 @@ export default function Finalize() {
   const finalizeUpgradeUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`) : '/dashboard'), [id]);
   const finalizeCouponUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`, { coupon: true }) : '/dashboard'), [id]);
 
-  // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
-  const exportRows = useMemo(
-    () => buildFinalPrizeExportRows(finalPrizeData?.winners ?? []),
-    [finalPrizeData?.winners]
-  );
-
-  const arbiterRows = useMemo(
-    () => exportRows.map(row => ({ ...row, Signature: '' })),
-    [exportRows]
-  );
-
-  const handleTabExportXlsx = useCallback(() => {
-    if (!finalPrizeData?.winners?.length) {
-      toast.error('No data to export');
-      return;
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const safeSlug = sanitizeFilename(finalPrizeData?.tournament?.title || 'final_prize');
-    const filename = `${safeSlug}_final_prizes_${today}.xlsx`;
-
-    const success = downloadWorkbookXlsx(filename, {
-      Winners: exportRows,
-      'Poster Grid': exportRows,
-      'Arbiter Sheet': arbiterRows,
+  // Both Final Prize screens use the same guarded four-sheet export.
+  const handleTabExportXlsx = useCallback(async () => {
+    if (!id) return;
+    const result = await downloadFinalPrizeWorkbook({
+      tournamentId: id,
+      title: finalPrizeData?.tournament?.title,
+      winners: finalPrizeData?.winners ?? [],
+      hasFullAccess,
+      teamAllocationVersion: allocationVersion,
     });
 
-    if (success) {
-      toast.success(`Exported ${exportRows.length} rows to ${filename}`);
+    if (result.ok) {
+      toast.success(`Exported ${result.winnerCount} individual and ${result.teamCount} team awards`);
     } else {
-      toast.error('Export failed');
+      toast.error(result.reason === 'team_data_unavailable'
+        ? 'Team prizes could not be loaded. Please retry before exporting.'
+        : result.reason === 'no_data' ? 'No prize results to export'
+        : result.reason === 'access_denied' ? 'Full access required to export'
+        : 'Export failed');
     }
-  }, [arbiterRows, exportRows, finalPrizeData?.winners?.length, finalPrizeData?.tournament?.title]);
+  }, [id, finalPrizeData?.tournament?.title, finalPrizeData?.winners, hasFullAccess, allocationVersion]);
 
   const handleTabPrint = useCallback(() => {
     window.print();
@@ -614,7 +601,7 @@ export default function Finalize() {
                   variant="outline"
                   size="sm"
                   onClick={handleTabExportXlsx}
-                  disabled={isTeamTab || !finalPrizeData?.winners?.length || !hasFullAccess}
+                  disabled={!hasFullAccess}
                   title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to export') : undefined}
                   className="rounded-full"
                 >
@@ -623,7 +610,7 @@ export default function Finalize() {
                 <Button
                   size="sm"
                   onClick={handleTabPrint}
-                  disabled={(isTeamTab && !finalPrizeData?.winners?.length) || !hasFullAccess}
+                  disabled={!hasFullAccess}
                   title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to print') : undefined}
                   className="rounded-full"
                 >
