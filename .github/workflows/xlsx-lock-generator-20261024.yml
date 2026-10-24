@@ -2,6 +2,8 @@ name: XLSX lockfile generation (temporary evidence only)
 on:
   push:
     branches: [design/final-allocation-rca-xlsx-20261024]
+  pull_request:
+    branches: [chore/reconcile-npm-lock-20261021]
 jobs:
   lock:
     runs-on: ubuntu-latest
