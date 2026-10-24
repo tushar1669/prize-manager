@@ -80,6 +80,7 @@ Key settings include:
 
 ## Print outputs
 - **`/t/:id/final/v1` (Card view):** Category cards flow dynamically; the layout no longer forces one-category-per-page, while still avoiding mid-card splits.
+- **`/t/:id/final/v6` (Category Cards — Updated, opt-in):** keeps v1 as the default/legacy presentation but adds clearer numbered category panels, distinct category color accents and borders, a readable winner table, and a subtle Prize-Manager.com credit. The same winners, access limits, and prize/award fields are used. Print headers repeat the category context for continued tables; this updated view remains in draft pending full-app A4 verification.
 - **`/t/:id/final/v3` (Poster grid):** A toolbar toggle lets you switch **Compact** vs **One per page**; the toggle itself is hidden in print output. (`src/components/final-prize/FinalPrizeSummaryHeader.tsx`)
 
 ## Team / Institution Prizes
