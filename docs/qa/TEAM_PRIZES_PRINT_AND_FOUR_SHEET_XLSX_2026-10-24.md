@@ -29,3 +29,16 @@ The owner expressly chose **B**, adding **Team Prizes as a fourth worksheet** of
 4. #478 remains **DRAFT, UNMERGED, UNDEPLOYED**. If rejected, close the isolated draft PR. No migration, auth/role change or production rollback required because no deployment happened.
 
 **Missing authority:** `SOURCE_OF_TRUTH.md`, `BACKLOG.md`, `DOCUMENT_INDEX.md`, `QA_STATUS.md` and `EVIDENCE_REGISTER.md` were not found on `main`; priority and backlog ID remain **UNKNOWN**. Do not manufacture them or turn visual approval into release authorization.
+
+
+## Owner-requested print alignment and metadata refinement — 25 October 2026
+
+**Feedback:** Center the Team Prizes award-group titles **and all six prize-table column headers**, and replace generic blue metadata pills with **filled, readable color-coded badges** for `Grouped by`, `Top X players`, `Rule` (when present), `X eligible teams`, and `X winners • prize total`. Make the summary winner/group badges use neutral brand gold, not blue. No data, calculations, scoring, permissions or Excel logic changes.
+
+**Implemented in existing draft PR #478:** `TeamPrizeResultsPanel.tsx` adds style-only badge classes and summary wrapper; scoped `TeamPrizesTabView.css` centers group/table headings and applies **gold first group, teal second, navy third; repeat every three groups** to each badge's entire background, text, and border. The color varies **by prize group** and is not an award-ranking signal. It applies only inside `.pm-team-prizes-print`, leaving shared allocation and public views unstyled. Backgrounds are print-color-adjusted and labels remain readable without color.
+
+**Exact QA evidence:** [run 40124275232](https://github.com/tushar1669/prize-manager/actions/runs/40124275232) on reused temporary draft QA #479, using **blob-identical** updated Team component and CSS. `npm ci` PASS, **15/15 Vitest** PASS, targeted ESLint PASS, Vite build PASS, **5/5 React/Chromium** PASS; the new browser assertion checks actual computed centered `thead th` and group `h3`, and all four colored group metadata badges in gold/teal/navy plus gold summary badges. Existing tests continue checking hidden first-place preview winners and expanded organizer ineligible diagnostics **not printed**.
+
+**Pagination regression found and fixed:** First enlarged pill-spacing fixture yielded **12 synthetic teams / 3 pages**, with one orphaned final row on page 3. Reduced **print-only** row and badge padding without changing values or typography; final regenerated browser PDFs are **12 team awards / 2 A4 pages** and **42 / 5 A4 pages**, with **12/12 and 42/42** institution labels in text extraction. Visually inspected short A4 pages 1–2 and long page 5: centered headings, matching pastel pills, readable tabular values, intact grid and no orphan page. Artifact `team-prizes-a4`, ID `12571983667` on that exact run.
+
+**Lifecycle:** targeted design refinement **IMPLEMENTED / fixture-VERIFIED / owner visual signoff PENDING**. Previous Team PDF design was not yet signed off; the owner requested this change instead. Normal full CI still **NOT GREEN** at independent legacy prerequisites #462/#463/#466. No merge/deployment/draft-state change authorization; #478 stays open draft and #479 is temporary evidence-only.
