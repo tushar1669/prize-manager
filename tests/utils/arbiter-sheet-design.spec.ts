@@ -60,6 +60,12 @@ describe('Arbiter Sheet presentation-only visual refresh', () => {
     expect(rows[1].classList.contains('pm-arbiter-row--main')).toBe(true);
     expect(rows[2].classList.contains('pm-arbiter-row--teal')).toBe(true);
     expect(rows[3].classList.contains('pm-arbiter-row--navy')).toBe(true);
+    for (const row of rows.slice(1)) {
+      expect(row.classList.contains('pm-arbiter-row--section-start')).toBe(true);
+      expect(row.classList.contains('pm-arbiter-row--section-end')).toBe(true);
+    }
+    expect(container.querySelector('.pm-arbiter-titlegroup')).toBeTruthy();
+    expect(container.querySelectorAll('.pm-arbiter-rank')).toHaveLength(fixtures.length);
     expect(container.querySelector('.pm-arbiter-table')).toBeTruthy();
   });
 
