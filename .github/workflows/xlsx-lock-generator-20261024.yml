@@ -1,0 +1,22 @@
+name: XLSX lockfile generation (temporary evidence only)
+on:
+  push:
+    branches: [design/final-allocation-rca-xlsx-20261024]
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+      - name: Resolve exact XLSX styling library in lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --fund=false
+      - name: Validate locked install
+        run: npm ci --no-audit --fund=false
+      - name: Upload generated npm lock for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: xlsx-generated-lock
+          path: package-lock.json
