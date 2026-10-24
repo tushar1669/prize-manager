@@ -105,8 +105,8 @@ function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>
   typed['!freeze'] = { xSplit: 0, ySplit: 1 };
 }
 
-/** Only used by the existing XLSX report download path, not input/import parsers. */
-export function writeBrandedReportWorkbook(filename: string, sheets: Record<string, unknown[]>): void {
+/** Pure helper for roundtrip tests and the existing export-only download path. */
+export function buildBrandedReportWorkbook(sheets: Record<string, unknown[]>): XLSXStyle.WorkBook {
   const wb = XLSXStyle.utils.book_new();
   for (const [name, rawRows] of Object.entries(sheets)) {
     const rows = (rawRows ?? []) as Record<string, unknown>[];
@@ -115,5 +115,11 @@ export function writeBrandedReportWorkbook(filename: string, sheets: Record<stri
     XLSXStyle.utils.book_append_sheet(wb, ws, name);
   }
   wb.Props = { Title: 'Prize Manager — Tournament Prize Reports', Subject: 'Prize Manager XLSX Reports' };
+  return wb;
+}
+
+/** Only used by reports — never the importer/parser code path. */
+export function writeBrandedReportWorkbook(filename: string, sheets: Record<string, unknown[]>): void {
+  const wb = buildBrandedReportWorkbook(sheets);
   XLSXStyle.writeFile(wb, filename, { bookType: 'xlsx', cellStyles: true });
 }
