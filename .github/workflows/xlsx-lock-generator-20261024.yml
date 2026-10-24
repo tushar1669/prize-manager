@@ -1,36 +1,38 @@
-name: XLSX lockfile generation (temporary evidence only)
+name: Branded XLSX isolated QA (temporary evidence only)
 on:
   push:
     branches: [design/final-allocation-rca-xlsx-20261024]
   pull_request:
     branches: [chore/reconcile-npm-lock-20261021]
 jobs:
-  lock:
+  xlsx:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
           registry-url: https://registry.npmjs.org
-      - name: Resolve exact XLSX styling library in lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --fund=false
-      - name: Validate locked install
+      - name: Install exact locked dependencies
         run: npm ci --no-audit --fund=false
-      - name: Commit generated lockfile to the draft branch only
-        if: github.event_name == 'push' && github.ref == 'refs/heads/design/final-allocation-rca-xlsx-20261024'
+      - name: Targeted XLSX contracts and style tests
+        run: npx vitest run tests/utils/branded-workbook.spec.ts tests/utils/final-prize-export.spec.ts tests/utils/allocation-rca-export.spec.ts
+      - name: Targeted lint
+        run: npx eslint src/utils/excel.ts src/utils/brandedWorkbookXlsx.ts tests/utils/branded-workbook.spec.ts
+      - name: Compile app
+        run: npm run build
+      - name: Inspect real XLSX style archive parts
         run: |
-          git add package-lock.json
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore(xlsx): lock styled report writer resolved by npm"
-            git push origin HEAD:refs/heads/design/final-allocation-rca-xlsx-20261024
-          fi
-      - name: Upload generated npm lock for review
+          test -f artifacts/branded-xlsx/final-winners.xlsx
+          test -f artifacts/branded-xlsx/allocation-and-rca.xlsx
+          unzip -p artifacts/branded-xlsx/final-winners.xlsx xl/styles.xml | grep -q "B38A32"
+          unzip -p artifacts/branded-xlsx/allocation-and-rca.xlsx xl/styles.xml | grep -q "1F6E5B"
+          unzip -p artifacts/branded-xlsx/allocation-and-rca.xlsx xl/styles.xml | grep -q "99571F"
+      - name: Upload real XLSX fixture files
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: xlsx-generated-lock
-          path: package-lock.json
+          name: styled-xlsx-synthetic-fixtures
+          path: artifacts/branded-xlsx/
+          if-no-files-found: ignore
