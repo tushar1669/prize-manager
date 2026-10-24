@@ -56,9 +56,9 @@ When multiple gender sources are available, this priority order applies:
 1. **Explicit gender column** (`Gender`, `Sex`, etc.) - highest priority
 2. **FS column** with `F`, `G`, `W`, or title prefixes (`WFM`, `WIM`, `WGM`, `WCM`)
 3. **Headerless gender column** (Name-Rtg gap)
-4. **Type/Group labels** (`FMG`, `F9`, `F13`, `GIRL`, `GIRLS`) - lowest priority
+4. **Type/Group labels** - lowest priority. Labels are split into words at spaces, commas, `;`, `|`, `/`. A word counts when it is exactly `FMG`, `GIRL`, `GIRLS`, or `F` + 1–2 digits (`F9`, `F09`, `F13`). "XFMGY", "F100", "F-13", "U13F" do not count.
 
-Female signals from any source override explicit male gender (with a warning).
+Female signals from any source override explicit male gender (with a warning). The Import screen shows a notice listing these players so the organizer can check them before saving.
 
 ## Validation Rules
 

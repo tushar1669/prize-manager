@@ -24,7 +24,7 @@ When importing players from Swiss-Manager:
 
 1. The `Gr` column value is read and trimmed
 2. The raw value is stored in `players.group_label`
-3. **PC Compatibility**: If the value contains "PC" (case-insensitive), it also sets:
+3. **PC Compatibility**: If one of the words in the value is exactly "PC" (case-insensitive; words split at spaces, commas, `;`, `|`, `/`, `-` — so "PC", "U12 PC", "PC/U15" count, "NPC" or "PCMC" do not), and the Disability column is empty, it also sets:
    - `players.disability = 'PC'`
    - `players.tags_json.special_group = ['PC']`
 
