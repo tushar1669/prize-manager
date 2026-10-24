@@ -49,17 +49,17 @@ describe('Arbiter Sheet presentation-only visual refresh', () => {
     ]);
     for (const [index, fixture] of fixtures.entries()) {
       const row = rows[index + 1];
-      expect(row).toHaveTextContent(fixture.playerName);
-      expect(row).toHaveTextContent(fixture.categoryName);
+      expect(row.textContent).toContain(fixture.playerName);
+      expect(row.textContent).toContain(fixture.categoryName);
       expect(within(row).getAllByRole('cell')).toHaveLength(9);
     }
     expect(screen.getByText('₹15,000')).toBeTruthy();
     expect(screen.getByText('₹3,421')).toBeTruthy();
     expect(screen.getByText('Synthetic Chess Clock ×2')).toBeTruthy();
     expect(container.querySelectorAll('.pm-arbiter-sign-box')).toHaveLength(fixtures.length);
-    expect(rows[1]).toHaveClass('pm-arbiter-row--main');
-    expect(rows[2]).toHaveClass('pm-arbiter-row--teal');
-    expect(rows[3]).toHaveClass('pm-arbiter-row--navy');
+    expect(rows[1].classList.contains('pm-arbiter-row--main')).toBe(true);
+    expect(rows[2].classList.contains('pm-arbiter-row--teal')).toBe(true);
+    expect(rows[3].classList.contains('pm-arbiter-row--navy')).toBe(true);
     expect(container.querySelector('.pm-arbiter-table')).toBeTruthy();
   });
 
