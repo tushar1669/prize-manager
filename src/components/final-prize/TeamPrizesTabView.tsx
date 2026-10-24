@@ -8,6 +8,7 @@ import type { GroupResponse } from '@/components/team-prizes/useTeamPrizeResults
 import type { TieInfo } from '@/utils/teamTieDetection';
 import { hasUnresolvedTeamTies } from '@/utils/teamTieDetection';
 import { Loader2, Users } from 'lucide-react';
+import './TeamPrizesTabView.css';
 
 interface TeamPrizesTabViewProps {
   tournamentId: string;
@@ -114,7 +115,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
 
   // Render team prize results
   return (
-    <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
+    <div className="pm-team-prizes mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
       <TeamPrizeResultsPanel
         data={data}
         isLoading={false}
