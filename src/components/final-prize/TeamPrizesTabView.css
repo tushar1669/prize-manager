@@ -1,0 +1,89 @@
+/* Team Prizes handout only. No shared table or public page styling is changed. */
+.pm-team-prizes-print {
+  --pm-team-gold: #b38a32;
+  --pm-team-teal: #1f6e5b;
+  --pm-team-navy: #0b3d91;
+}
+.pm-team-prizes-print .pm-team-prizes-heading {
+  padding: 12px 14px;
+  border-left: 4px solid var(--pm-team-gold);
+  border-radius: 6px;
+  background: hsl(var(--card));
+  font-weight: 800;
+}
+@media print {
+  .pm-team-prizes-print { color: #182c43; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pm-team-prizes-print .pm-team-prize-group {
+    --pm-team-accent: var(--pm-team-gold);
+    --pm-team-fill: #faf3e3;
+    break-inside: auto;
+    background: white !important;
+    border: 1px solid #cad4df !important;
+    border-top: 3px solid var(--pm-team-accent) !important;
+    box-shadow: none !important;
+    margin: 0 0 5mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="teal"] {
+    --pm-team-accent: var(--pm-team-teal);
+    --pm-team-fill: #eaf5ef;
+  }
+  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="navy"] {
+    --pm-team-accent: var(--pm-team-navy);
+    --pm-team-fill: #eaf1fc;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] {
+    padding: 3mm 3mm 2mm !important;
+    border-bottom: 1px solid #c7d3df !important;
+    break-after: avoid;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+    color: var(--pm-team-accent) !important;
+    font-size: 11pt;
+    font-weight: 800;
+  }
+  .pm-team-prizes-print button { pointer-events: none !important; }
+  .pm-team-prizes-print [data-team-group-header] svg { display: none !important; }
+  .pm-team-prizes-print [data-team-print-hide] { display: none !important; }
+  .pm-team-prizes-print .pm-team-prize-group table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+  }
+  .pm-team-prizes-print .pm-team-prize-group thead { display: table-header-group !important; }
+  .pm-team-prizes-print .pm-team-prize-group th {
+    background: #edf2f8 !important;
+    color: #182c43 !important;
+    font-size: 7.3pt;
+    padding: 2mm 1mm !important;
+    border: 1px solid #bcc9d6 !important;
+    white-space: normal;
+  }
+  .pm-team-prizes-print .pm-team-prize-group tbody tr { break-inside: avoid; page-break-inside: avoid; }
+  .pm-team-prizes-print .pm-team-prize-group tbody td {
+    padding: 2.2mm 1mm !important;
+    background: var(--pm-team-fill) !important;
+    border: 1px solid #c7d3df !important;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    color: #243246 !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group th:first-child { width: 9%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(2) { width: 40%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(3) { width: 11%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(4) { width: 13%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(5) { width: 13%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(6) { width: 14%; }
+  .pm-team-prizes-print .pm-team-prize-group td:first-child {
+    font-weight: 800;
+    font-size: 10pt;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-winner-name] {
+    color: #182c43 !important;
+    font-weight: 800;
+  }
+  .pm-team-prizes-print .pm-team-prize-group svg { width: 11px; height: 11px; }
+  .pm-team-prizes-print .pm-team-prize-group [data-state="closed"] { display: block !important; height: auto !important; overflow: visible !important; }
+}
