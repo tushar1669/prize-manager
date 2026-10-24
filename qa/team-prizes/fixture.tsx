@@ -22,7 +22,7 @@ const data: TeamPrizeResultsResponse = {
     ineligible_details: [{ key: 'EXCLUDED_NEVER_PRINT', reason: 'team_short_roster', playerCount: 1 }],
     prizes: Array.from({ length: prizesPerGroup }, (_, index) => ({
       id: `synthetic-team-award-${groupIndex + 1}-${index + 1}`,
-      place: index + 1, cash_amount: 15000 - index * 1500,
+      place: index + 1, cash_amount: 15000 - index * 800,
       has_trophy: index === 0, has_medal: index === 1, is_active: true,
       winner_institution: {
         key: `fixture-institution-${groupIndex}-${index}`,
