@@ -7,6 +7,7 @@ import '../../src/components/final-prize/TeamPrizesTabView.css';
 
 const long = new URLSearchParams(window.location.search).has('long');
 const restricted = new URLSearchParams(window.location.search).has('restricted');
+const diagnostics = new URLSearchParams(window.location.search).has('diagnostics');
 const groups = ['Open Institution Awards', 'Junior Girls Institution Awards', 'Youth Open Institution Awards'];
 const prizesPerGroup = long ? 14 : 4;
 const data: TeamPrizeResultsResponse = {
@@ -43,7 +44,7 @@ createRoot(document.getElementById('root')!).render(
       <p>Prize Manager · Team / Institution Prizes</p>
     </header>
     <main className="pm-print-surface pm-team-prizes-print" style={{padding:'8px 20px'}}>
-      <TeamPrizeResultsPanel data={data} hasFullAccess={!restricted} showDiagnostics={false} />
+      <TeamPrizeResultsPanel data={data} hasFullAccess={!restricted} showDiagnostics={diagnostics} />
     </main>
   </div>
 );
