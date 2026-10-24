@@ -41,7 +41,8 @@
     font-size: 11pt;
     font-weight: 800;
   }
-  .pm-team-prizes-print button { display: none !important; }
+  .pm-team-prizes-print button { pointer-events: none !important; }
+  .pm-team-prizes-print [data-team-group-header] svg { display: none !important; }
   .pm-team-prizes-print [data-team-print-hide] { display: none !important; }
   .pm-team-prizes-print .pm-team-prize-group table {
     table-layout: fixed;
