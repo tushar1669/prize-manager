@@ -1,0 +1,36 @@
+name: Team print isolated QA (evidence-only)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  print:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install locked packages
+        run: npm ci --no-audit --fund=false
+      - name: Team unit tests
+        run: npx vitest run tests/institution/team-print-design.spec.tsx tests/institution/team-rule-sentence.spec.ts
+      - name: Team source lint
+        run: npx eslint src/components/final-prize/TeamPrizesTabView.tsx src/components/allocation/TeamPrizeResultsPanel.tsx tests/institution/team-print-design.spec.tsx
+      - name: Build
+        run: npm run build
+      - name: Team A4 Chromium synthetic fixture
+        run: npx playwright test --config qa/team-prizes/playwright.config.ts
+      - name: Upload A4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-prizes-a4-qa
+          path: artifacts/team-a4/
+          if-no-files-found: ignore
