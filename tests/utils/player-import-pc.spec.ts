@@ -33,3 +33,13 @@ describe("gender override notice", () => {
     expect(findGenderOverrides(players).map((p) => p.rank)).toEqual([1]);
   });
 });
+
+import { buildSupabasePlayerPayload } from "@/utils/playerImportPayload";
+describe("saved disability", () => {
+  const base = { rank: 1, name: "X" };
+  const build = (p: Record<string, unknown>) => buildSupabasePlayerPayload({ ...base, ...p } as never, "t1");
+  it("Gr 'U12 PC' marks PC", () => expect(build({ group_label: "U12 PC" }).disability).toBe("PC"));
+  it("Type 'PC' marks PC", () => expect(build({ type_label: "PC" }).disability).toBe("PC"));
+  it("Gr 'NPC' does not mark PC", () => expect(build({ group_label: "NPC" }).disability).toBeNull());
+  it("Disability column wins", () => expect(build({ group_label: "PC", disability: "PWD" }).disability).toBe("PWD"));
+});
