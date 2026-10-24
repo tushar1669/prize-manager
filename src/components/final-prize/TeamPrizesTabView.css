@@ -32,7 +32,7 @@
     --pm-team-fill: #eaf1fc;
   }
   .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] {
-    padding: 3mm 3mm 2mm !important;
+    padding: 2mm 3mm 1.5mm !important;
     border-bottom: 1px solid #c7d3df !important;
     break-after: avoid;
   }
@@ -61,7 +61,7 @@
   }
   .pm-team-prizes-print .pm-team-prize-group tbody tr { break-inside: avoid; page-break-inside: avoid; }
   .pm-team-prizes-print .pm-team-prize-group tbody td {
-    padding: 2.2mm 1mm !important;
+    padding: 1.15mm 1mm !important;
     background: var(--pm-team-fill) !important;
     border: 1px solid #c7d3df !important;
     line-height: 1.35;
@@ -166,7 +166,7 @@
     margin-top: 2mm !important;
   }
   .pm-team-prizes-print .pm-team-prize-group .pm-team-prize-meta-badge {
-    padding: 1.1mm 2mm !important;
+    padding: .8mm 1.8mm !important;
     font-size: 7.1pt !important;
     background: var(--pm-team-fill) !important;
     color: var(--pm-team-badge-ink) !important;
