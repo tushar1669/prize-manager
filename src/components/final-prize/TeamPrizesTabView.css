@@ -87,3 +87,102 @@
   .pm-team-prizes-print .pm-team-prize-group svg { width: 11px; height: 11px; }
   .pm-team-prizes-print .pm-team-prize-group [data-state="closed"] { display: block !important; height: auto !important; overflow: visible !important; }
 }
+
+
+/* Owner-requested refinement: centered headings and group-matched metadata.
+   Deliberately scoped to the final Team Prizes view, not the allocation/public panels. */
+.pm-team-prizes-print .pm-team-prize-group {
+  --pm-team-accent: #9b741f;
+  --pm-team-fill: #faf3e3;
+  --pm-team-badge-ink: #654a12;
+}
+.pm-team-prizes-print .pm-team-prize-group[data-team-tone="teal"] {
+  --pm-team-accent: #1f6e5b;
+  --pm-team-fill: #eaf5ef;
+  --pm-team-badge-ink: #14503f;
+}
+.pm-team-prizes-print .pm-team-prize-group[data-team-tone="navy"] {
+  --pm-team-accent: #0b3d91;
+  --pm-team-fill: #eaf1fc;
+  --pm-team-badge-ink: #123b80;
+}
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child {
+  justify-content: center;
+  text-align: center;
+}
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child button,
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+  justify-content: center;
+  text-align: center;
+  margin-inline: auto;
+}
+.pm-team-prizes-print .pm-team-prize-meta-row {
+  justify-content: center;
+  align-items: center;
+}
+.pm-team-prizes-print .pm-team-prize-group .pm-team-prize-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  text-align: center;
+  background: var(--pm-team-fill) !important;
+  color: var(--pm-team-badge-ink) !important;
+  border: 1px solid var(--pm-team-accent) !important;
+  border-radius: 4px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.pm-team-prizes-print .pm-team-prizes-overview-badge {
+  background: #faf3e3 !important;
+  border: 1px solid #b38a32 !important;
+  color: #654a12 !important;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.pm-team-prizes-print .pm-team-prize-group thead th {
+  text-align: center !important;
+  vertical-align: middle;
+}
+@media print {
+  .pm-team-prizes-print .pm-team-prizes-overview {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2mm;
+    text-align: center;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+    width: 100%;
+    font-size: 11pt;
+    line-height: 1.3;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child button {
+    width: 100%;
+    background: transparent !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-meta-row {
+    gap: 1.4mm !important;
+    margin-top: 2mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group .pm-team-prize-meta-badge {
+    padding: 1.1mm 2mm !important;
+    font-size: 7.1pt !important;
+    background: var(--pm-team-fill) !important;
+    color: var(--pm-team-badge-ink) !important;
+    border: 1px solid var(--pm-team-accent) !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-team-prizes-print .pm-team-prize-group thead th {
+    text-align: center !important;
+    vertical-align: middle !important;
+    padding: 2.3mm .9mm !important;
+    line-height: 1.25;
+  }
+  .pm-team-prizes-print .pm-team-prizes-overview-badge {
+    background: #faf3e3 !important;
+    border: 1px solid #b38a32 !important;
+    color: #654a12 !important;
+  }
+}
