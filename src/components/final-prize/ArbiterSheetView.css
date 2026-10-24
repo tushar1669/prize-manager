@@ -85,7 +85,7 @@
     width: 100%;
     min-width: 0;
     border-collapse: collapse;
-    table-layout: auto;
+    table-layout: fixed;
     font-size: 8.2pt;
     color: var(--pm-arbiter-ink);
   }
@@ -101,8 +101,8 @@
     font-size: 7.2pt;
     font-weight: 800;
     line-height: 1.25;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
   .pm-arbiter-sheet .pm-arbiter-row {
     break-inside: avoid;
@@ -154,6 +154,27 @@
     border-radius: 1mm;
     background: #fff;
   }
+  /* Explicit proportions stop Category/Rank from breaking into stacked letters
+     when the optional Gift column is present, while preserving signature space. */
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(1) { width: 5%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(2) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(3) { width: 23%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(4) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(5) { width: 13%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(6) { width: 16%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(7) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(8) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(9) { width: 11%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(1) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(2) { width: 16%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(3) { width: 27%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(4) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(5) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(6) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(7) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(8) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-row td:nth-child(4) { white-space: nowrap; }
+  .pm-arbiter-sheet .pm-arbiter-row--main { --pm-arbiter-category-color: #86651d; }
   .pm-arbiter-sheet .pm-arbiter-row svg { width: 12px; height: 12px; }
   .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign { break-inside: avoid; }
 }
