@@ -1,4 +1,20 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
+
+## 0. Continuity checkpoint — 24 October 2026 (draft documentation only)
+
+This is a bounded resume note. The 28 September body below is legacy history, not proof of current deployments; do not discard it or infer priorities from absent canonical files.
+
+- **Source reconciliation:** Default `main` = `943326ed529a205ffb5260035d1c0cb3ef00d35c`, 38 commits after the historical `251101b` reference below. Source/CI evidence does not establish production deployment.
+- **Missing canonical files on main:** `SOURCE_OF_TRUTH.md`, `BACKLOG.md`, `DOCUMENT_INDEX.md`. `AGENTS.md` exists. Priority inventory is **UNKNOWN**, not a guessed P0/P1/P2 list.
+- **Category Cards v6:** Draft/unmerged [PR #461](https://github.com/tushar1669/prize-manager/pull/461), head `674f578264027c440cba3723d93d87590631256f`, design-complete/fixture-verified/release-pending. Six QA-document lines were reworded without changing app behavior to avoid new matches in strict format-guard scanning; [evidence comment 6380088478](https://github.com/tushar1669/prize-manager/pull/461#issuecomment-6380088478). Standalone [CI run 40064146458](https://github.com/tushar1669/prize-manager/actions/runs/40064146458) failed at `npm ci` due to still-unmerged lockfile #462; following checks were skipped.
+- **Poster Grid:** Draft/unmerged [PR #467](https://github.com/tushar1669/prize-manager/pull/467), head `7583cd5b8243c97fa315a531aa1dda530d8e2397`; final design-only owner signoff [comment 6368233823](https://github.com/tushar1669/prize-manager/pull/467#issuecomment-6368233823) and 8/8 isolated fixture tests; release-pending, not deployed.
+- **Separate CI prerequisites:** [#462](https://github.com/tushar1669/prize-manager/pull/462) (lockfile), [#463](https://github.com/tushar1669/prize-manager/pull/463) (strict guard), and [#466](https://github.com/tushar1669/prize-manager/pull/466) (existing lint errors) remain draft and unmerged. The earlier combined QA passed guard/build/lint/unit but failed public smoke; do not claim overall CI green.
+- **Unrelated active work preserved:** B8b extraction **IN_PROGRESS**; D2 harness billing decision **OUTSTANDING**.
+- **Excel/PDF request — BLOCKED on specific scope (priority UNKNOWN):** The owner requested continuation of previously discussed Excel and PDF updates, but no exact approved change list or target artifact files were identified in accessible repository/Project materials for this cycle. Historical merged [PR #124](https://github.com/tushar1669/prize-manager/pull/124) replaced user-facing spreadsheet exports with XLSX and preserved Winners PDF; it is **not** authority to invent another change. **No Excel/PDF files were edited or produced.** Do not change exporters, visual layouts, access controls, allocation rules, or production without an exact intended delta.
+- **Next single action:** Locate the approved Excel/PDF update plan or obtain its exact text/link/file. Then implement just one confirmed bounded item and verify once at the end. No merge, deploy, publish, or draft-state transition is authorized by a handoff.
+
+---
+
 **Last updated:** 28 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
