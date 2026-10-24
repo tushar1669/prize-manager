@@ -89,3 +89,34 @@ test('printed Team Prizes headings and all metadata blocks use centered, group-s
     nodes.map(node => getComputedStyle(node).backgroundColor));
   expect(globalFills).toEqual(['rgb(250, 243, 227)', 'rgb(250, 243, 227)']);
 });
+
+test('printed rupee and numerals do not collide; centered prize stats and awards have breathing room', async ({ page }) => {
+  await page.goto('/qa/team-prizes/');
+  await page.emulateMedia({ media: 'print' });
+  const group = page.locator('.pm-team-prize-group').first();
+  const firstRow = group.locator('tbody tr').first();
+  const centers = await firstRow.locator('td.pm-team-prize-stat, td.pm-team-prize-amount')
+    .evaluateAll(nodes => nodes.map(node => getComputedStyle(node).textAlign));
+  expect(centers).toEqual(['center', 'center', 'center', 'center']);
+  expect(await firstRow.locator('.pm-team-prize-value').evaluate(node => getComputedStyle(node).justifyContent)).toBe('center');
+
+  const layout = await firstRow.evaluate(row => {
+    const box = (selector: string) => {
+      const rect = row.querySelector(selector)!.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    return {
+      currency: box('.pm-team-prize-amount .pm-team-cash'),
+      symbol: box('.pm-team-prize-amount .pm-team-cash-symbol'),
+      digits: box('.pm-team-prize-amount .pm-team-cash-digits'),
+      awards: box('.pm-team-prize-awards'),
+      prizeCell: box('.pm-team-prize-amount'),
+    };
+  });
+  expect(layout.digits.left - layout.symbol.right).toBeGreaterThan(1);
+  expect(layout.awards.left - layout.digits.right).toBeGreaterThan(5);
+  expect(layout.currency.left).toBeGreaterThanOrEqual(layout.prizeCell.left);
+  expect(layout.awards.right).toBeLessThanOrEqual(layout.prizeCell.right + 1);
+  await expect(group.locator('.pm-team-prize-amount .pm-team-cash')).toHaveCount(4);
+  await expect(page.locator('.pm-team-prizes-overview-badge .pm-team-cash')).toHaveCount(1);
+});
