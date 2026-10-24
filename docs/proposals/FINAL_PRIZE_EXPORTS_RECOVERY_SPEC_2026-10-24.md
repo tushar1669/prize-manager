@@ -1,6 +1,6 @@
 # Final Prize exports — source-verified recovery proposal (2026-10-24)
 
-**Status:** PROPOSED / AWAITING OWNER SCOPE APPROVAL. **Not the recovered historical request, not a backlog item and not authorization to implement, merge or deploy.** Priority / backlog ID UNKNOWN.
+**Status (updated 24 October 2026):** Owner **APPROVED implementation of FEXP-CONTRACT-01 as bounded below**, without merge or deployment authorization. Source implementation exists in [draft PR #469](https://github.com/tushar1669/prize-manager/pull/469), head `998a51554c0b2f7191b1a1420dd964ef3247c88c`. CI verification is **BLOCKED** at existing dependency lockfile drift; print-to-PDF synthetic-fixture run is **NOT EXECUTED**. **Not the recovered historical request or a new approved output redesign.** Priority / backlog ID UNKNOWN.
 
 **Owner's new scope selection:** “Final prize exports” (no further details). The available-chat record did not preserve the original approved Excel/PDF delta. This proposal is reconstructed from the verified `main` source, not attributed to a lost decision.
 
@@ -20,9 +20,9 @@
 
 Relevant prior merged PRs: [#124](https://github.com/tushar1669/prize-manager/pull/124) (CSV→XLSX), [#140](https://github.com/tushar1669/prize-manager/pull/140) (three-sheet final workbook), [#224](https://github.com/tushar1669/prize-manager/pull/224) (Coverage all, RCA unfilled-only). This history grounds existing decisions, **not** an unrecorded new request.
 
-## 2. Bounded proposed change set — not approved
+## 2. Bounded FEXP-CONTRACT-01 change set — approved for implementation only
 
-**Recommended first implementation item after owner approval: FEXP-CONTRACT-01, final-exports contract clarification and regression coverage.** Keep this one independently reviewable. It must **not** redesign any output or extend team awards.
+**Owner-approved implementation item: FEXP-CONTRACT-01, final-exports contract clarification and regression coverage.** Implemented in an independent draft PR, verification incomplete. No authorization to redesign outputs, extend team awards, merge or deploy.
 
 1. **Contract and copy alignment (proposed change):** Make docs and on-screen descriptions accurately distinguish (a) the three-sheet final-winner XLSX, (b) pre-finalization Coverage (all prizes), (c) pre-finalization RCA (unfilled only), (d) browser Print → Save as PDF. Replace misleading “engine vs final winners” RCA guide/tooltip wording. No change to the data exported.
 2. **Data parity tests (proposed change):** Add isolated fixture-level assertions that final XLSX's **Winners** and **Poster Grid** worksheets contain the same correctly ordered winner rows, that **Arbiter Sheet** adds a blank Signature field, and that amount, gift text, award flags, plain player names and null ranks are handled without silently dropping winners. Verify that each sheet has stable headers for normal datasets. Do not conflate same rows in different sheets with duplicate awards.
@@ -49,8 +49,14 @@ No allocation computation, prize grouping/deduplication, schema/data/migrations,
 
 Existing direct tests in main: `tests/utils/final-prize-export.spec.ts` verifies award-marker stripping and gift formatting; `tests/utils/allocation-rca-export.spec.ts` verifies no-data, all-filled, write-failure and successful unfilled-only branches; `tests/utils/review-access.spec.ts` covers gated diagnostics. Current tests inspected do **not** prove full generated three-sheet XLSX correctness or A4 PDF appearance. Source review is not a release test.
 
-## 4. Owner decision needed before implementation
+## 4. Owner decision, evidence and remaining gates
 
-**Single approval gate:** Confirm whether **FEXP-CONTRACT-01 (docs/copy alignment + regression tests and synthetic print QA, with NO output layout or column changes)** is the intended first item, or specify the concrete observed defect/output delta instead. If the original request concerned a layout/column change, write one expected before→after example and do not implement this substitute by assumption.
+**Owner decision (24 October 2026, project chat):** Approved implementation of the **bounded FEXP-CONTRACT-01 scope only** on an isolated draft PR, with explicit **no-merge / no-deployment** restriction. Historical output-change instructions remain unrecovered; the approved item corrects guidance and adds tests without changing export content or layouts.
 
-**State:** This proposal is a durable reconstructed plan, NOT historical approval. Priority and backlog ID stay UNKNOWN while `BACKLOG.md` is missing from main. B8b extraction IN_PROGRESS and existing #461/#467 release blockers remain untouched. Keep draft PR #468 open/unmerged; no main push or deployment.
+**Source implementation:** [draft PR #469](https://github.com/tushar1669/prize-manager/pull/469) at `998a51554c0b2f7191b1a1420dd964ef3247c88c` contains documentation/tooltip-only wording, comment-only RCA clarification, three new Vitest suites and an opt-in browser A4 fixture suite. PR #468 retains this continuity evidence only, and is also draft/unmerged.
+
+**CI evidence:** [run 40081935190](https://github.com/tushar1669/prize-manager/actions/runs/40081935190) **FAILED** at `npm ci --no-audit --fund=false` (`EUSAGE`, missing `react-helmet-async`, `invariant`, `react-fast-compare`, `shallowequal` lock entries). Consequently guard/build/lint/unit/Playwright tests were **SKIPPED**, not passed. Related pre-existing separate draft lockfile prerequisite [PR #462](https://github.com/tushar1669/prize-manager/pull/462) remains unmerged; strict guard #463 and lint #466 remain separate. Fixture Playwright test is opt-in and **SKIPPED without synthetic authorized tournament/auth fixture**. Browser PDFs have not been inspected, so there is **no fixture, visual, runtime or release verification** from this cycle.
+
+**Remaining exactly one next action:** Unblock isolated QA using the existing separately reviewed lockfile prerequisite and rerun checks against the exact FEXP implementation ref without merging/deploying. Then provide synthetic fixture and inspect attached A4 PDFs. Until then: **FEXP-CONTRACT-01 source IMPLEMENTED, verification BLOCKED**.
+
+**State:** No main push, release, schema, auth, allocation or PDF-export behavior change. Priority and backlog ID remain UNKNOWN while `BACKLOG.md` is absent. B8b extraction IN_PROGRESS and #461/#467 release states unchanged.
