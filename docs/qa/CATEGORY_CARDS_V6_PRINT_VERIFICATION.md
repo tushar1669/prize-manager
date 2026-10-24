@@ -1,6 +1,6 @@
 # Category Cards Updated (v6) — QA and release gate
 
-**Current state:** PR #461 draft, **NOT VERIFIED / NOT RELEASED**. Owner approved Option A: legacy v1 remains the default and separately accessible; updated v6 is opt-in. B8b remains IN_PROGRESS with D2 open.
+**Current design state (24 October 2026):** PR #461 is **OWNER VISUALLY APPROVED / SYNTHETIC FIXTURE-VERIFIED / NOT RELEASED** for exact source `9e09acf8a2db3bb28af714b59f781a36afb3ab48`, including pale gold/teal/navy backgrounds throughout each category's table rows. Legacy v1 remains default and unchanged; updated v6 is opt-in. Prior QA history below documents earlier evidence and must not be confused with the current gate. B8b remains IN_PROGRESS; D2 remains outstanding.
 
 ## Visual-design correction
 
@@ -134,3 +134,12 @@ A separate branch `qa/category-cards-v6-integration-20261021` combines unchanged
 - Same run: `npm run typecheck` **PASS**, `npm run test:unit` **PASS** (548 tests across 62 files), `npm run lint` **FAIL** (19 errors and 10 warnings in unrelated paths). Standard CI's existing restricted-format text guard remains a separate blocker; neither check was weakened, skipped or made green by changes to product logic.
 
 **Status:** v6 **IMPLEMENTED / fixture print VERIFIED / NOT RELEASED**. Owner-approved design is on draft PR #461; PR #462 remains unmerged. No production deployment or next-view work. Remaining release gates: unrelated existing lint and restricted-format guard failures, plus real authenticated route and entitlement QA. B8b remains IN_PROGRESS, D2 outstanding.
+
+
+## Final three-design visual signoff — 24 October 2026
+
+- **Owner decision:** The owner approved the **three updated print designs** together after reviewing the revised Category Cards and Poster Grid A4 PDFs; the separately corrected Arbiter Sheet was already accepted. **This is visual signoff, not merge/deployment authorization.**
+- **Final v6 styling:** Complete prize-table body rows receive **pale gold (Main), teal (next), navy (next), repeating teal/navy** category tones; vertical rules are restrained and existing category headers, numbered panels, winners, print-contrast logo and permissions remain unchanged. Legacy v1 remains unaffected.
+- **Exact source:** `src/components/final-prize/CategoryCardsUpdatedView.css` blob `a8669ff2eda7536d4a233e33dc82b069255bc368` at initial finalized PR #461 head `9e09acf8a2db3bb28af714b59f781a36afb3ab48` (this QA-doc update adds a docs-only commit). The synthetic QA branch used an identical stylesheet blob.
+- **Focused proof:** [run 40111901060](https://github.com/tushar1669/prize-manager/actions/runs/40111901060) **SUCCESS** — install and build PASS; **5/5** React/Chromium tests PASS, including computed full-table gold/teal/navy colors, legacy v1 row parity, preview masking, long-page/footer verification. No-gift three-category **1-page A4 PDF**; 90-winner long **7-page A4 PDF**. Temporary [QA #473](https://github.com/tushar1669/prize-manager/pull/473) closed unmerged.
+- **Remaining release gates:** Required full CI not green. Authenticated print/access parity and explicit **separate** merge/deployment approval still apply. PR stays draft, unmerged, undeployed. See [three-view decision (draft #468)](https://github.com/tushar1669/prize-manager/blob/docs/handoff-excel-pdf-scope-blocked-20261024/docs/design/FINAL_PRIZE_THREE_VIEW_SIGNOFF_2026-10-24.md).
