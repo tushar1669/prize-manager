@@ -16,8 +16,10 @@ for(const size of ['short','long'] as const){
    await page.pdf({path:`artifacts/team-a4/team-${size}.pdf`,format:'A4',printBackground:true});
  });
 }
-test('restricted print output never contains the winning institutions',async({page})=>{
+test('restricted print hides the first prize, preserving permitted remaining rows',async({page})=>{
  await page.goto('/qa/team-prizes/?access=restricted');
  await expect(page.locator('.pm-team-prize-group')).toHaveCount(3);
- await expect(page.getByText('Synthetic International Academy',{exact:false})).toHaveCount(0);
+ await expect(page.getByText('Locked — upgrade to Pro to reveal this placing',{exact:false})).toHaveCount(3);
+ await expect(page.getByText('Synthetic International Academy of Chess and Sports Club 1 / 1',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Synthetic International Academy of Chess and Sports Club 1 / 2',{exact:true})).toHaveCount(1);
 });
