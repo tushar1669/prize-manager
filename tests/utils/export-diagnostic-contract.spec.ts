@@ -3,7 +3,10 @@ import type { AllocationCoverageEntry } from '@/types/allocation';
 import type { RcaRow } from '@/types/rca';
 
 const downloadWorkbookXlsx = vi.fn<[string, Record<string, unknown[]>], boolean>();
-vi.mock('@/utils/excel', () => ({ downloadWorkbookXlsx }));
+vi.mock('@/utils/excel', () => ({
+  downloadWorkbookXlsx: (...args: [string, Record<string, unknown[]>]) =>
+    downloadWorkbookXlsx(...args),
+}));
 
 import { exportCoverageToXlsx } from '@/utils/allocationCoverageExport';
 import { exportRcaToXlsx } from '@/utils/allocationRcaExport';
