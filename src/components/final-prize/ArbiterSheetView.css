@@ -219,7 +219,7 @@
   .pm-arbiter-sheet .pm-arbiter-row--teal { --pm-arbiter-category-color: #1f6e5b; --pm-arbiter-section-fill: #eaf5ef; }
   .pm-arbiter-sheet .pm-arbiter-row--navy { --pm-arbiter-category-color: #0b3d91; --pm-arbiter-section-fill: #eaf1fc; }
   .pm-arbiter-sheet .pm-arbiter-row td {
-    padding: 2.5mm 1.1mm !important;
+    padding: 1.8mm 1.1mm !important;
     background: var(--pm-arbiter-section-fill) !important;
     border-right: 1px solid #bcc9d6 !important;
     border-bottom: 1px solid #d2dce6 !important;
