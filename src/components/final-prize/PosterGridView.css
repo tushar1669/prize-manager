@@ -182,3 +182,26 @@
   .pm-poster-grid .pm-poster-awards > span { color: var(--pm-poster-accent) !important; }
   .pm-poster-grid .pm-poster-awards svg { width: 13px; height: 13px; }
 }
+
+
+/* Category-wide coloring is lighter on individual poster cards than in a table:
+   preserve winner-name contrast and the generous white-space hierarchy. */
+.pm-poster-grid .pm-poster-group--main { --pm-poster-paper-fill: #fcf9f1; }
+.pm-poster-grid .pm-poster-group--green { --pm-poster-paper-fill: #f3f9f6; }
+.pm-poster-grid .pm-poster-group--navy { --pm-poster-paper-fill: #f2f6fc; }
+.pm-poster-grid .pm-poster-card {
+  background: color-mix(in srgb, var(--pm-poster-accent) 5%, hsl(var(--card)));
+}
+@media print {
+  /* Tints the WHOLE card, but never turns poster cards into data-grid rows. */
+  .pm-poster-grid .poster-grid-card.pm-poster-card {
+    background: var(--pm-poster-paper-fill) !important;
+  }
+  /* Keep amount/category/gift surfaces crisp against the light card interior. */
+  .pm-poster-grid .pm-poster-category,
+  .pm-poster-grid .pm-poster-place,
+  .pm-poster-grid .pm-poster-amount,
+  .pm-poster-grid .pm-poster-gift {
+    background: #fff !important;
+  }
+}
