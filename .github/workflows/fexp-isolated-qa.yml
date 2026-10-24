@@ -1,0 +1,37 @@
+name: FEXP isolated regression QA (not release)
+
+on:
+  push:
+    branches:
+      - qa/fexp-contract-01-lockfile-fixture-20261024
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Harden npm registry
+        run: |
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 2000
+          npm config set fetch-retry-maxtimeout 60000
+      - name: Install locked dependencies
+        run: npm ci --no-audit --fund=false
+      - name: Focused XLSX and diagnosis Vitest suites
+        run: npx vitest run tests/utils/final-prize-xlsx-contract.spec.ts tests/utils/export-diagnostic-contract.spec.ts tests/utils/workbook-xlsx-roundtrip.spec.ts
+      - name: Lint only added regression test files
+        run: npx eslint tests/utils/final-prize-xlsx-contract.spec.ts tests/utils/export-diagnostic-contract.spec.ts tests/utils/workbook-xlsx-roundtrip.spec.ts
+      - name: Build
+        run: npm run build
