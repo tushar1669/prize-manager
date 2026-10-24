@@ -109,3 +109,16 @@ test('no-gift variant prints without gift column and distinct category colors', 
   expect(new Set(imagePages)).toEqual(new Set(Array.from({ length: pages }, (_, i) => i + 1)));
 
 });
+
+
+test('printed category row fill tracks gold, teal and navy rather than generic blue', async ({ page }) => {
+  await load(page, 'no-gift');
+  await page.emulateMedia({ media: 'print' });
+  const colors = await page.locator('#qa-updated .pmv6-category').evaluateAll(nodes =>
+    nodes.map(node => {
+      const cell = node.querySelector('.pmv6-table tbody td');
+      return cell ? getComputedStyle(cell).backgroundColor : '';
+    })
+  );
+  expect(colors).toEqual(['rgb(251, 246, 233)', 'rgb(236, 246, 241)', 'rgb(237, 243, 252)']);
+});
