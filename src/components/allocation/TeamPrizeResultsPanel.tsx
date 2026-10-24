@@ -230,15 +230,15 @@ function GroupCard({
           </div>
 
           {/* Config badges */}
-          <div className="flex flex-wrap gap-2 mt-2">
-            <Badge variant="secondary">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
-            <Badge variant="outline">Top {group.config.team_size} players</Badge>
-            {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
-            <Badge variant="secondary">
+          <div className="pm-team-prize-meta-row flex flex-wrap gap-2 mt-2">
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
+            <Badge variant="outline" className="pm-team-prize-meta-badge">Top {group.config.team_size} players</Badge>
+            {ruleClause && <Badge variant="outline" className="pm-team-prize-meta-badge">Rule: {ruleClause}</Badge>}
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">
               {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
             {filledPrizes.length > 0 && (
-              <Badge className="bg-primary/10 text-primary border-primary/20">
+              <Badge className="pm-team-prize-meta-badge">
                 {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
               </Badge>
             )}
@@ -492,15 +492,15 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="pm-team-prizes-overview flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Users className="h-5 w-5" />
           Team Prizes
         </h2>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
+          <Badge variant="secondary" className="pm-team-prizes-overview-badge">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
           {totalWinners > 0 && (
-            <Badge className="bg-primary/10 text-primary border-primary/20">
+            <Badge className="pm-team-prizes-overview-badge">
               {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
             </Badge>
           )}
