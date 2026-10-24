@@ -1,6 +1,6 @@
 /**
  * RCA (Root Cause Analysis) XLSX export utility for prize allocations.
- * Exports engine vs final allocation comparison for audit/post-mortem.
+ * Exports only unfilled prize diagnostics for review and remediation.
  */
 
 import { downloadWorkbookXlsx } from './excel';
@@ -28,7 +28,7 @@ export type RcaExportResult =
 
 /**
  * Export RCA data to XLSX file.
- * Single sheet with one row per prize comparing engine vs final allocation.
+ * Single sheet with one row per unfilled prize (no workbook if all prizes are filled).
  *
  * @param rcaRows - Array of RCA row objects
  * @param tournamentSlug - Tournament slug for filename

@@ -63,8 +63,8 @@ Key settings include:
   - **"No eligible winner"** means no player matches the criteria after applying one-prize rules.
   - **Contrast note:** The report highlights “success” states with the success token for readable contrast in dark mode.
 - **Exports**
-  - **Coverage export (.xlsx):** prize-level eligibility, winner details, candidate counts before/after one-prize, reason codes, diagnosis summary.
-  - **RCA export (.xlsx):** compares engine winners vs final winners with statuses (MATCH / OVERRIDDEN / NO_ELIGIBLE_WINNER), override reasons, and diagnostics.
+  - **Coverage export (.xlsx):** all previewed prizes, filled and unfilled, with winner details, eligibility counts, reason labels, and diagnosis.
+  - **RCA export (.xlsx):** only unfilled prizes, with root causes, diagnosis, eligibility counts, fail codes, and suggested fixes. If every prize is filled, no RCA file is generated; this is an expected outcome, not an export error. Both reports describe the Review preview, not the finalized winners workbook.
 - **Commit Allocation**
   - Allowed when only non-critical prizes remain unfilled. Critical missing fields block commit until resolved.
   - Committing locks winners and updates the public winners page.
@@ -78,7 +78,9 @@ Key settings include:
   - **Cash Distributed** = sum of winners’ allocated prize cash.
 - **Allocation Summary counts:** Winners Allocated and Unfilled Prizes are shown alongside main/category/trophy/medal counts.
 
-## Print outputs
+## Final prize Excel and print/PDF outputs
+- **Final winners XLSX:** From `/t/:id/finalize` or the Final Prize view header, **Export XLSX** downloads one workbook with **Winners**, **Poster Grid**, and **Arbiter Sheet** worksheets. Winners and Poster Grid use the same flat winner rows (not screenshots of their layouts). Arbiter Sheet adds an empty **Signature** column. These exports require full tournament access; Finalize disables individual-winner XLSX when the Team Prizes tab is active or there are no individual winners. This workbook is separate from Review's Coverage and RCA reports.
+- **Print / save to PDF:** Use **Print** on the permitted Final Prize view, then select **Save as PDF** in the browser print dialog. This is browser printing, not a separate automatically downloaded PDF file. Printed content follows the selected view; access restrictions still apply.
 - **`/t/:id/final/v1` (Card view):** Category cards flow dynamically; the layout no longer forces one-category-per-page, while still avoiding mid-card splits.
 - **`/t/:id/final/v3` (Poster grid):** A toolbar toggle lets you switch **Compact** vs **One per page**; the toggle itself is hidden in print output. (`src/components/final-prize/FinalPrizeSummaryHeader.tsx`)
 
@@ -103,7 +105,7 @@ Team prizes (Best School, Best Academy, Best City, etc.) are configured separate
 ### Where team results appear
 - **Conflict Review**: After individual preview completes, team results appear in a separate panel.
 - **Finalize**: Team winners shown alongside individual winners.
-- **PDF Export**: Includes a "Team / Institution Prizes" section at the end.
+- **Team Prizes view**: Team results have their own Finalize/print view. The separate legacy `generatePdf` HTML-report function includes a "Team / Institution Prizes" section; it is not the browser's Print → Save as PDF path.
 
 ## Public pages
 - **Public home listing:** Shows the newest published tournaments first with time-control badge (BLITZ/RAPID/CLASSICAL), arbiter/director names, entry fees, cash prize totals, city/venue, brochure and ChessResults/public-result links when provided.
