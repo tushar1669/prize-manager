@@ -144,6 +144,15 @@ describe('Team Prizes worksheet data and access', () => {
     expect(mocks.downloadXlsx).not.toHaveBeenCalled();
   });
 
+  it('fails closed when configured team groups unexpectedly resolve to an empty result', async () => {
+    mocks.fetchTeams.mockResolvedValue({ ...teams, groups: [] });
+    const result = await downloadFinalPrizeWorkbook({
+      tournamentId: 't-synthetic', winners: individual, hasFullAccess: true,
+    });
+    expect(result).toEqual({ ok: false, reason: 'team_data_unavailable' });
+    expect(mocks.downloadXlsx).not.toHaveBeenCalled();
+  });
+
   it('does not query or export when full access is denied', async () => {
     const result = await downloadFinalPrizeWorkbook({
       tournamentId: 't-synthetic', winners: individual, hasFullAccess: false,
