@@ -1,0 +1,37 @@
+name: Arbiter isolated design QA (not release)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install locked dependencies
+        run: npm ci --no-audit --fund=false
+      - name: Arbiter fixture and access regression tests
+        run: npx vitest run tests/utils/arbiter-sheet-design.spec.ts
+      - name: Arbiter TSX and test targeted lint
+        run: npx eslint src/components/final-prize/ArbiterSheetView.tsx tests/utils/arbiter-sheet-design.spec.ts
+      - name: Vite build
+        run: npm run build
+      - name: Real React component A4 Playwright
+        run: npx playwright test --config qa/arbiter-sheet/playwright.config.ts
+      - name: Upload A4 PDFs/screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arbiter-sheet-visual-qa
+          path: artifacts/arbiter-a4/
+          if-no-files-found: ignore
