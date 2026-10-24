@@ -1,0 +1,159 @@
+/* Arbiter Sheet only — complements approved Category Cards / Poster Grid print family.
+   Data, signature fields, access checks and the shared print surface are unchanged. */
+.pm-arbiter-sheet {
+  --pm-arbiter-gold: #b38a32;
+  --pm-arbiter-teal: #1f6e5b;
+  --pm-arbiter-navy: #0b3d91;
+  --pm-arbiter-ink: #182c43;
+}
+
+.pm-arbiter-titleband {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  border: 1px solid hsl(var(--border));
+  border-left: 4px solid var(--pm-arbiter-gold);
+  border-radius: 8px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+.pm-arbiter-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.pm-arbiter-subtitle { font-size: 11px; letter-spacing: .06em; color: hsl(var(--muted-foreground)); }
+.pm-arbiter-frame { border-top: 3px solid var(--pm-arbiter-gold); }
+.pm-arbiter-table { border-collapse: collapse; }
+.pm-arbiter-table th, .pm-arbiter-table td { vertical-align: middle; }
+.pm-arbiter-thead { color: hsl(var(--foreground)); }
+.pm-arbiter-thead th {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.pm-arbiter-row td { padding-top: 13px; padding-bottom: 13px; }
+.pm-arbiter-player { overflow-wrap: anywhere; line-height: 1.4; }
+.pm-arbiter-category, .pm-arbiter-gift { overflow-wrap: anywhere; }
+.pm-arbiter-row--main { --pm-arbiter-category-color: var(--pm-arbiter-gold); }
+.pm-arbiter-row--teal { --pm-arbiter-category-color: var(--pm-arbiter-teal); }
+.pm-arbiter-row--navy { --pm-arbiter-category-color: var(--pm-arbiter-navy); }
+.pm-arbiter-row .pm-arbiter-place {
+  border-left: 3px solid var(--pm-arbiter-category-color);
+  font-variant-numeric: tabular-nums;
+}
+.pm-arbiter-row .pm-arbiter-category { font-weight: 650; }
+.pm-arbiter-cash { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pm-arbiter-sign-box { min-width: 58px; }
+
+@media (max-width: 640px) {
+  .pm-arbiter-titleband { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
+
+/* Clean white A4 table with repeatable navy headers, thin brand rails and
+   signature boxes sized for handwriting. No page-break changes outside this view. */
+@media print {
+  .pm-arbiter-sheet {
+    --pm-arbiter-gold: #b38a32;
+    --pm-arbiter-teal: #1f6e5b;
+    --pm-arbiter-navy: #0b3d91;
+    color: var(--pm-arbiter-ink);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-arbiter-sheet .pm-arbiter-titleband {
+    margin: 0 0 3mm;
+    padding: 2.6mm 3mm;
+    border: 1px solid #c3ced9;
+    border-left: 3px solid var(--pm-arbiter-gold);
+    border-radius: 1.5mm;
+    background: #fff;
+    color: var(--pm-arbiter-ink);
+    break-after: avoid;
+  }
+  .pm-arbiter-sheet .pm-arbiter-title { font-size: 11pt; font-weight: 800; }
+  .pm-arbiter-sheet .pm-arbiter-subtitle { font-size: 7.5pt; color: #516274; }
+  .pm-arbiter-sheet .pm-arbiter-frame {
+    border: 1px solid #c4cfdb !important;
+    border-top: 2px solid var(--pm-arbiter-gold) !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    table-layout: auto;
+    font-size: 8.2pt;
+    color: var(--pm-arbiter-ink);
+  }
+  .pm-arbiter-sheet .pm-arbiter-thead {
+    display: table-header-group !important;
+    background: #edf2f8 !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-thead th {
+    padding: 2.1mm 1.1mm !important;
+    border-bottom: 1px solid #aebfce;
+    color: #182c43 !important;
+    background: #edf2f8 !important;
+    font-size: 7.2pt;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #fff !important;
+    border-bottom: 1px solid #dbe2ea !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row:nth-child(even) { background: #f5f7fa !important; }
+  .pm-arbiter-sheet .pm-arbiter-row td {
+    padding: 2.2mm 1.1mm !important;
+    color: #243246 !important;
+    font-size: 8pt;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid #e0e6ed;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-place {
+    border-left: 2px solid var(--pm-arbiter-category-color);
+    font-weight: 800;
+    color: #182c43 !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-category {
+    color: var(--pm-arbiter-category-color) !important;
+    font-weight: 700;
+  }
+  .pm-arbiter-sheet .pm-arbiter-player {
+    color: #182c43 !important;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-cash {
+    color: #182c43 !important;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-gift {
+    color: #34465b !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign {
+    border-left: 1px solid #c4cfdb !important;
+    min-width: 17mm;
+  }
+  .pm-arbiter-sheet .pm-arbiter-sign-box {
+    min-width: 15mm;
+    min-height: 7mm;
+    border: 1px dashed #8e9fb0 !important;
+    border-radius: 1mm;
+    background: #fff;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row svg { width: 12px; height: 12px; }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign { break-inside: avoid; }
+}
