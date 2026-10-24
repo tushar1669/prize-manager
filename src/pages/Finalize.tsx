@@ -22,6 +22,7 @@ import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
+import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
@@ -72,7 +73,7 @@ interface CategoryRecord {
   is_main?: boolean | null;
 }
 
-type FinalViewTab = 'v1' | 'v3' | 'v4' | 'v5';
+type FinalViewTab = 'v1' | 'v6' | 'v3' | 'v4' | 'v5';
 
 export default function Finalize() {
   const { id } = useParams();
@@ -662,6 +663,9 @@ export default function Finalize() {
                     <TabsTrigger value="v1" className="rounded-md px-4 py-2 text-sm font-medium">
                       Category Cards
                     </TabsTrigger>
+                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">
+                      Category Cards — Updated
+                    </TabsTrigger>
                     <TabsTrigger value="v3" className="rounded-md px-4 py-2 text-sm font-medium">
                       Poster Grid
                     </TabsTrigger>
@@ -675,6 +679,9 @@ export default function Finalize() {
                   <div className="pm-print-surface">
                     <TabsContent value="v1" className="m-0">
                       <CategoryCardsView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
+                    </TabsContent>
+                    <TabsContent value="v6" className="m-0">
+                      <CategoryCardsUpdatedView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                     </TabsContent>
                     <TabsContent value="v3" className="m-0">
                       <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />
