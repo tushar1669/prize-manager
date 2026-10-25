@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { detectImportedTieBreakColumns } from '@/utils/importTieBreakColumns';
+import { detectImportedTieBreakColumns, extractPlayerTieBreakValues } from '@/utils/importTieBreakColumns';
+import { buildSupabasePlayerPayload } from '@/utils/playerImportPayload';
 
 describe('Swiss-Manager individual tie-break column discovery', () => {
   it('detects all available ordinals numerically, not lexicographically', () => {
@@ -41,5 +42,40 @@ describe('Swiss-Manager individual tie-break column discovery', () => {
   it('reports preview coverage without pretending it is full-import coverage', () => {
     const cols = detectImportedTieBreakColumns(['TB2'], [{ TB2: '2' }, { TB2: undefined }]);
     expect(cols[0]).toMatchObject({ samplePresent: 1, sampleMissing: 1, sampleInvalid: 0 });
+  });
+});
+
+describe('TB import persistence using the existing player tags JSON path', () => {
+  it('preserves source ordinal, valid zero and missing values through the payload', () => {
+    const raw = { Name: 'Synthetic Player', Rank: 1, TB1: 0, TB2: '', TB3: 12.5 };
+    const columns = detectImportedTieBreakColumns(['Rank', 'Name', 'TB1', 'TB2', 'TB3'], [raw]);
+    const values = extractPlayerTieBreakValues(columns, raw, 'test-file-hash');
+    expect(values).toMatchObject({
+      version: 1, source_hash: 'test-file-hash',
+      values: { '1': 0, '2': null, '3': 12.5 },
+    });
+    const payload = buildSupabasePlayerPayload({
+      rank: 1, name: 'Synthetic Player', tags_json: { special_group: ['PC'] },
+      _originalIndex: 1, _individualTieBreaks: values,
+    } as never, 'synthetic-tournament');
+    expect((payload.tags_json as Record<string, unknown>).special_group).toEqual(['PC']);
+    expect((payload.tags_json as Record<string, unknown>).team_tiebreak_v2).toEqual(values);
+  });
+
+  it('refuses an ambiguous duplicate source ordinal and retains null rather than guessing', () => {
+    const raw = { TB1: 12.5, 'TB 01': 9 };
+    const columns = detectImportedTieBreakColumns(['TB1', 'TB 01'], [raw]);
+    expect(extractPlayerTieBreakValues(columns, raw, null)?.values).toEqual({ '1': null });
+  });
+
+  it('does not carry any stale team TB metadata across new files without TB columns', () => {
+    const payload = buildSupabasePlayerPayload({
+      rank: 1, name: 'Synthetic Player', _originalIndex: 1,
+      tags_json: { special_group: ['PC'], team_tiebreak_v2: { version: 1, values: { 1: 999 } } },
+      _individualTieBreaks: null,
+    } as never, 'synthetic-tournament');
+    const tags = payload.tags_json as Record<string, unknown>;
+    expect(tags.team_tiebreak_v2).toBeUndefined();
+    expect(tags.special_group).toEqual(['PC']);
   });
 });
