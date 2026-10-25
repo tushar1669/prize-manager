@@ -8,7 +8,7 @@
  * race-safe idempotency lock; this function never inserts a row itself.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam } from "../_shared/health.ts";
 import { MappingError, mapPayloadToTables, type ExtractionPayload } from "./mapper.ts";
 
@@ -61,8 +61,7 @@ const BROCHURE_BUCKET = "brochures";
  * must not fail the commit. On failure we log and return a warning instead of throwing.
  */
 async function attachBrochure(
-  // deno-lint-ignore no-explicit-any
-  service: any,
+  service: SupabaseClient,
   tournamentId: string,
   filePath: string,
   fileName: string,
@@ -71,7 +70,7 @@ async function attachBrochure(
     const { data: file, error: dlErr } = await service.storage.from(IMPORT_BUCKET).download(filePath);
     if (dlErr || !file) return `brochure not attached: could not read uploaded file (${dlErr?.message ?? "no data"})`;
 
-    const safeName = (fileName || "brochure.pdf").replace(/[^\w.\-]+/g, "_");
+    const safeName = (fileName || "brochure.pdf").replace(/[^\w.-]+/g, "_");
     const destPath = `${tournamentId}/${Date.now()}_${safeName}`;
 
     const { error: upErr } = await service.storage
