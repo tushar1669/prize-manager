@@ -77,7 +77,7 @@ import {
 } from '@/utils/valueNormalizers';
 import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
-import { detectImportedTieBreakColumns } from '@/utils/importTieBreakColumns';
+import { detectImportedTieBreakColumns, extractPlayerTieBreakValues } from '@/utils/importTieBreakColumns';
 import {
   isFeatureEnabled,
   IMPORT_DEDUP_ENABLED,
@@ -2041,6 +2041,12 @@ export default function PlayerImport() {
 
     const preset = selectPresetBySource(importSource as 'organizer-template' | 'swiss-manager' | 'unknown');
     
+    // Tie-break columns belong to the source Excel, not the individual
+    // allocator. Capture each player's actual values for future verified
+    // team-only rules; missing/invalid values remain null, not zero.
+    const sourceTieBreaks = detectImportedTieBreakColumns(headers, parsedData as Record<string, unknown>[]);
+    const sourceHash = lastFileInfoRef.current.hash;
+
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
     const primaryNameHeader = nameHeaderCandidates[0] ?? null;
@@ -2055,6 +2061,9 @@ export default function PlayerImport() {
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
       const player: Record<string, unknown> = { _originalIndex: idx + 1 };
+      player._individualTieBreaks = extractPlayerTieBreakValues(
+        sourceTieBreaks, row as Record<string, unknown>, sourceHash,
+      );
 
       Object.keys(mapping).forEach((fieldKey) => {
         const col = mapping[fieldKey];
