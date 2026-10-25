@@ -105,6 +105,22 @@ function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>
   typed['!freeze'] = { xSplit: 0, ySplit: 1 };
 }
 
+/**
+ * Only these established prize-report workbook shapes receive branding. This
+ * guards the shared generic helper used by unrelated player-import diagnostics.
+ * Keep the three Final Prize sheets unchanged; Team Prizes is optional until
+ * its separately reviewed fourth-sheet implementation is integrated.
+ */
+export function isBrandedPrizeReportSheetSet(sheets: Record<string, unknown[]>): boolean {
+  const names = Object.keys(sheets);
+  if (names.length === 1) return names[0] === 'AllocationCoverage' || names[0] === 'RCA';
+  if (names.length !== 3 && names.length !== 4) return false;
+  const allowed = new Set(['Winners', 'Poster Grid', 'Arbiter Sheet', 'Team Prizes']);
+  return names.includes('Winners') && names.includes('Poster Grid') &&
+    names.includes('Arbiter Sheet') && names.every(name => allowed.has(name)) &&
+    (names.length === 3 || names.includes('Team Prizes'));
+}
+
 /** Pure helper for roundtrip tests and the existing export-only download path. */
 export function buildBrandedReportWorkbook(sheets: Record<string, unknown[]>): XLSXStyle.WorkBook {
   const wb = XLSXStyle.utils.book_new();
