@@ -48,6 +48,8 @@ export interface GroupResponse {
   ineligible_institutions: number;
   ineligible_reasons: string[];
   scored_institutions?: WinnerInstitution[];
+  /** Preview-only v2 award holds; never treat null winners as arbitrary ranking. */
+  ranking_issues?: string[];
 }
 
 export interface TeamPrizeResultsResponse {
