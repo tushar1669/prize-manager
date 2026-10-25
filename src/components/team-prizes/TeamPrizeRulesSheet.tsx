@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { GROUP_BY_OPTIONS, SCORING_MODE_OPTIONS, type InstitutionPrizeGroup } from './types';
+import { GROUP_BY_OPTIONS, type InstitutionPrizeGroup } from './types';
+import { TeamRankingRulesEditor, parseTeamRankingRuleConfig, type TeamRankingRuleConfig } from './TeamRankingRulesEditor';
+import type { Json } from '@/integrations/supabase/types';
 
 interface Props {
   open: boolean;
@@ -23,6 +25,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
   const [femaleSlots, setFemaleSlots] = useState(0);
   const [maleSlots, setMaleSlots] = useState(0);
   const [scoringMode, setScoringMode] = useState('by_top_k_score');
+  const [rankingRules, setRankingRules] = useState<TeamRankingRuleConfig | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Reset form when group changes
@@ -34,6 +37,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
       setFemaleSlots(group.female_slots || 0);
       setMaleSlots(group.male_slots || 0);
       setScoringMode(group.scoring_mode || 'by_top_k_score');
+      setRankingRules(parseTeamRankingRuleConfig(group.ranking_rules));
     } else {
       // Defaults for new group
       setName('');
@@ -42,6 +46,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
       setFemaleSlots(0);
       setMaleSlots(0);
       setScoringMode('by_top_k_score');
+      setRankingRules(null);
     }
     setValidationError(null);
   }, [group, open]);
@@ -83,6 +88,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
       female_slots: femaleSlots,
       male_slots: maleSlots,
       scoring_mode: scoringMode,
+      ranking_rules: rankingRules as unknown as Json | null,
       is_active: group?.is_active ?? true,
     });
   };
@@ -214,28 +220,12 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             </div>
           </div>
 
-          {/* Scoring Mode */}
-          <div className="space-y-2">
-            <Label htmlFor="scoring-mode">Scoring Mode</Label>
-            <Select value={scoringMode} onValueChange={setScoringMode} disabled>
-              <SelectTrigger>
-                <SelectValue placeholder="Select scoring mode" />
-              </SelectTrigger>
-              <SelectContent>
-                {SCORING_MODE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {SCORING_MODE_OPTIONS.find(o => o.value === scoringMode)?.description}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              More scoring modes can be added later (Phase 2.2).
-            </p>
-          </div>
+          <TeamRankingRulesEditor
+            tournamentId={tournamentId}
+            open={open}
+            value={rankingRules}
+            onChange={setRankingRules}
+          />
         </div>
 
         <SheetFooter>
