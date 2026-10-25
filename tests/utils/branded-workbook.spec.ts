@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import * as ReaderXLSX from 'xlsx';
 import * as StyledXLSX from 'xlsx-js-style';
-import { buildBrandedReportWorkbook } from '@/utils/brandedWorkbookXlsx';
+import { buildBrandedReportWorkbook, isBrandedPrizeReportSheetSet } from '@/utils/brandedWorkbookXlsx';
 
 const winners = [
   { 'Category Order': 0, 'Category Name': 'Main', Place: 1, 'Player Name': 'Synthetic Winner One', Rank: 3, Amount: 15000, Trophy: 'Yes', Medal: 'No', Signature: '' },
@@ -69,4 +69,30 @@ it('writes two complete synthetic XLSX files for actual OOXML and visual inspect
     StyledXLSX.write(final, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
   writeFileSync('artifacts/branded-xlsx/allocation-and-rca.xlsx',
     StyledXLSX.write(reports, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
+});
+
+describe('Prize report-only XLSX scope guard', () => {
+  const report = [{ Category: 'Synthetic', Place: 1, Amount: 42 }];
+  it('accepts exactly the established three- or four-sheet Final Prize contract', () => {
+    expect(isBrandedPrizeReportSheetSet({
+      Winners: report, 'Poster Grid': report, 'Arbiter Sheet': report,
+    })).toBe(true);
+    expect(isBrandedPrizeReportSheetSet({
+      Winners: report, 'Poster Grid': report, 'Arbiter Sheet': report, 'Team Prizes': [],
+    })).toBe(true);
+    expect(isBrandedPrizeReportSheetSet({ Winners: report })).toBe(false);
+    expect(isBrandedPrizeReportSheetSet({
+      Winners: report, 'Poster Grid': report, 'Arbiter Sheet': report, Errors: report,
+    })).toBe(false);
+  });
+
+  it('accepts Coverage and RCA but leaves unrelated import diagnostics unbranded', () => {
+    expect(isBrandedPrizeReportSheetSet({ AllocationCoverage: report })).toBe(true);
+    expect(isBrandedPrizeReportSheetSet({ RCA: report })).toBe(true);
+    for (const name of ['Errors', 'Conflicts', 'Players', 'ImportQuality']) {
+      expect(isBrandedPrizeReportSheetSet({ [name]: report })).toBe(false);
+    }
+    expect(isBrandedPrizeReportSheetSet({})).toBe(false);
+    expect(isBrandedPrizeReportSheetSet({ AllocationCoverage: report, Errors: report })).toBe(false);
+  });
 });
