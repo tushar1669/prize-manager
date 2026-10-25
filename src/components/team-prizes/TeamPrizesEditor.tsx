@@ -18,6 +18,7 @@ import {
 } from './useInstitutionPrizes';
 import { formatTeamRuleClause } from '@/components/allocation/TeamPrizeResultsPanel';
 import TeamPrizeRulesSheet from './TeamPrizeRulesSheet';
+import { parseTeamRankingRuleConfig } from './TeamRankingRulesEditor';
 import TeamGroupPrizesTable from './TeamGroupPrizesTable';
 import { useTournamentAccess } from '@/hooks/useTournamentAccess';
 import { teamPrizeGroupLimitHint } from '@/constants/tournamentAccess';
@@ -272,9 +273,18 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                       {formatTeamRuleClause(group, 'compact') && (
                         <Badge variant="outline">{formatTeamRuleClause(group, 'compact')}</Badge>
                       )}
-                      <Badge variant="outline" className="capitalize">
-                        {group.scoring_mode.replace(/_/g, ' ')}
-                      </Badge>
+                      {(() => {
+                        const rules = parseTeamRankingRuleConfig(group.ranking_rules);
+                        if (!rules) return null;
+                        const ordered = rules.criteria.map(rule => rule.kind === 'score_vector'
+                          ? 'Highest scorer'
+                          : `TB${rule.ordinal}`);
+                        return (
+                          <Badge variant="outline" className="max-w-full whitespace-normal">
+                            Ranking: Total points → {ordered.join(' → ')}
+                          </Badge>
+                        );
+                      })()}
                       <Badge variant="secondary">
                         {groupPrizes.length} prize{groupPrizes.length !== 1 ? 's' : ''}
                         {totalCash > 0 && ` • ₹${totalCash.toLocaleString('en-IN')}`}
