@@ -6,59 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { defaultTeamRankingCriteria, type TeamRankingCriterion } from '@/utils/teamRankingV2';
-
-export type TeamRankingRuleConfig = {
-  version: 2;
-  source_hash: string | null;
-  published_reference: string;
-  organizer_confirmed: boolean;
-  criteria: TeamRankingCriterion[];
-};
+import { defaultTeamRankingCriteria, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
+export { parseTeamRankingRuleConfig } from '@/utils/teamRankingV2';
 
 type ImportColumn = { ordinal: number; header: string; duplicate: boolean; present: number; missing: number; invalid: number };
-
-export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const item = raw as Record<string, unknown>;
-  if (item.version !== 2 || !Array.isArray(item.criteria)) return null;
-  const criteria: TeamRankingCriterion[] = [];
-  const seen = new Set<string>();
-  for (const entry of item.criteria) {
-    if (!entry || typeof entry !== 'object') return null;
-    const rule = entry as Record<string, unknown>;
-    const identifier = rule.kind === 'score_vector'
-      ? 'score_vector'
-      : rule.kind === 'source_tb' && Number.isSafeInteger(rule.ordinal) && Number(rule.ordinal) >= 1
-        ? `TB${rule.ordinal}`
-        : null;
-    if (!identifier || seen.has(identifier)) return null;
-    seen.add(identifier);
-    if (rule.kind === 'score_vector') {
-      criteria.push({ kind: 'score_vector' });
-    } else {
-      if (rule.aggregation !== 'sum' ||
-          (rule.direction !== 'higher' && rule.direction !== 'lower') ||
-          typeof rule.name !== 'string' || typeof rule.verified !== 'boolean') return null;
-      criteria.push({
-        kind: 'source_tb',
-        ordinal: Number(rule.ordinal),
-        name: rule.name,
-        aggregation: 'sum',
-        direction: rule.direction,
-        verified: rule.verified,
-      });
-    }
-  }
-  if (!seen.has('score_vector')) return null;
-  return {
-    version: 2,
-    source_hash: typeof item.source_hash === 'string' ? item.source_hash : null,
-    published_reference: typeof item.published_reference === 'string' ? item.published_reference : '',
-    organizer_confirmed: item.organizer_confirmed === true,
-    criteria,
-  };
-}
 
 type Props = {
   tournamentId: string;
