@@ -47,7 +47,10 @@ const teams: TeamPrizeResultsResponse = {
           winner_institution: {
             key: 'synthetic-two', label: 'Synthetic Academy B', total_points: 7,
             rank_sum: 9, best_individual_rank: 4,
-            players: [{ player_id: 'p3', name: 'Fixture Person C', rank: 4, points: 4, gender: null }],
+            players: [
+              { player_id: 'p3', name: 'Fixture Person C', rank: 4, points: 4, gender: null },
+              { player_id: 'p4', name: 'Fixture Person D', rank: 5, points: 3, gender: null },
+            ],
           },
         },
         {
@@ -56,7 +59,10 @@ const teams: TeamPrizeResultsResponse = {
           winner_institution: {
             key: 'synthetic-one', label: 'Synthetic Academy A', total_points: 11,
             rank_sum: 3, best_individual_rank: 1,
-            players: [{ player_id: 'p1', name: 'Fixture Person A', rank: 1, points: 6, gender: null }],
+            players: [
+              { player_id: 'p1', name: 'Fixture Person A', rank: 1, points: 6, gender: null },
+              { player_id: 'p2', name: 'Fixture Person B', rank: 2, points: 5, gender: null },
+            ],
           },
         },
         {
@@ -93,7 +99,9 @@ describe('Team Prizes worksheet data and access', () => {
     expect(rows).toHaveLength(2);
     expect(rows.map(r => r.Place)).toEqual([1, 2]);
     expect(rows.map(r => r['Team / Institution'])).toEqual(['Synthetic Academy A', 'Synthetic Academy B']);
-    expect(rows[0]['Team Players']).toBe('Fixture Person A (#1)');
+    expect(rows[0]['Team Players']).toBe('Fixture Person A (#1), Fixture Person B (#2)');
+    expect(rows[1]['Team Players']).toBe('Fixture Person C (#4), Fixture Person D (#5)');
+    expect(rows.every(row => row['Team Players'].split(', ').length === 2)).toBe(true);
     expect(rows[0]['Cash Amount']).toBe(5000);
     expect(rows[0].Trophy).toBe('Yes');
     expect(rows[1].Medal).toBe('Yes');
