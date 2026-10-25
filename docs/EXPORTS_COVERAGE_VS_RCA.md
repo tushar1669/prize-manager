@@ -1,6 +1,6 @@
 # Exports: Coverage vs RCA
 
-This page explains the two review exports from `/t/:id/review`.
+This page explains the two diagnostic **XLSX** exports from `/t/:id/review`. Both describe a Review preview; neither is the three-sheet final-winners workbook from `/t/:id/finalize`. For final winners and browser Print → Save as PDF, see [the User Guide](./USER_GUIDE.md).
 
 ## Coverage export (broad visibility)
 - **Purpose:** full allocation coverage context for prizes/winners and non-critical diagnostics.

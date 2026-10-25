@@ -621,7 +621,7 @@ export function AllocationDebugReport({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{rcaHintText ?? 'Engine vs final winners (for audit / RCA)'}</p>
+                    <p>{rcaHintText ?? 'Unfilled prizes: root causes and suggested fixes'}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
