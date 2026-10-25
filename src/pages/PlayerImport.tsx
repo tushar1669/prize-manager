@@ -1399,6 +1399,19 @@ export default function PlayerImport() {
             dedupe_summary: dedupeMeta,
             import_success: results.failed.length === 0,
             import_summary: importSummary,
+            // Source column identities only (no player names/values). Team
+            // rules remain unverified until an organizer defines each method.
+            individual_tb_columns: detectImportedTieBreakColumns(
+              headers, parsedData as Record<string, unknown>[],
+            ).map(column => ({
+              ordinal: column.ordinal,
+              header: column.sourceHeader.slice(0, 128),
+              column: column.sourceColumn,
+              duplicate: column.duplicateOrdinal,
+              present: column.samplePresent,
+              missing: column.sampleMissing,
+              invalid: column.sampleInvalid,
+            })),
             gender_summary: buildImportGenderSummary(players as Array<{ gender?: unknown; gender_source?: unknown }>, {
               femaleFromLabels: femaleCountSummary?.femaleFromFmg ?? 0,
               sources: femaleCountSummary?.genderSources ?? [],
