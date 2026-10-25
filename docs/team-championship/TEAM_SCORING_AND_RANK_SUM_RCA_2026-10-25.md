@@ -24,6 +24,29 @@ Checked default `main` at `9800fdc8805d678d29e6023b6f47d9672db448df` and the ope
 
 Example with equal primary points: Team A ranks [1,100] -> rank sum 101, Team B ranks [49,50] -> sum 99. Existing secondary rule awards B, despite A having the event's #1 player. Conversely, at equal rank sums the next rule favors the better individual rank. Neither is inherently the globally 'fair' answer; the published tournament rule should decide.
 
+## User's exact scenario — computed against the shipped comparator (25 October 2026)
+
+Both team scores **tie at 12 genuine game points**:
+
+| Team | Selected players (points, individual place) | Sum of points | Rank Sum | Highest placed individual |
+| --- | --- | ---: | ---: | ---: |
+| **A** | (7, #1), (5, #5) | **12** | **6** | **#1** |
+| **B** | (6, #2), (6, #3) | **12** | **5** | **#2** |
+
+Shipped `compareInstitutions` first ties on 12 points, then chooses **B** because **5 < 6** in the secondary `rank_sum` comparison; it **never consults A's #1 player**, because `best_individual_rank` is a third-tier criterion used only if Rank Sum ALSO ties. **Thus this exact disputed outcome is real source behavior**, not an imagined primary-rank bug. The existing `detectTeamTiesAtBoundary` compares points **AND** rank sum **AND** best rank: this A/B pair is **not** flagged for the existing organizer tie-resolution dialog, even though their primary points are tied. Separate `detectTieAtPrizeBoundary` does group equal points but is not the same as the display's decision gate; do not infer working manual control for this scenario.
+
+**Finding, with fair qualification:** Team B need not be objectively 'wrong'—both teams scored 12, and different **pre-announced** tie-breaks can favor either team. However, a hidden/reason-unsupported Rank Sum algorithm has **no demonstrated FIDE/AICF mandate** for a prize based on the *best two individual players from separate groups*, so it must **not be represented as a federation-prescribed rule**.
+
+**Applicable external comparisons** (independent of repo source):
+- [FIDE C.07, effective 1 March 2026](https://handbook.fide.com/chapter/TieBreakRegulations032026): the event's own published regulations specify the ordered tie-breaks; its team MP/GP provisions concern **actual team matches**, unlike a school/club aggregate prize from an individual Swiss competition.
+- [FIDE World Schools Team Championships](https://handbook.fide.com/chapter/WSTCRegulations) ranks head-to-head teams by Match Points then Olympiad Sonneborn-Berger and Game Points. Again, not an automatic rule for derived academy/school awards.
+- [AICF team championship tie-break guidance](https://aicf.in/tie-break-regulations/) starts with game points and opponent-dependent match calculations when **teams play each other**; it does not establish Rank Sum as a default for schools and academies ranked from individual results.
+- An actual [AICF-hosted 2025 Maharathi tournament circular](https://aicf.in/wp-content/uploads/2025/07/1st-Maharathi-Classical-1.pdf) specifies **average points of the best four players** for Best School and Best Academy; it does **not** prescribe an unconditional Rank Sum tie-break for those institutions. With a fixed same K, average points and sum points are equivalent as ranking measures.
+
+**Proposed replacement (requires explicit authorization and safe rollout plan):** Use complete and validated **sum of top-K individual tournament points** as the primary score; on equal verified points, honor an event's **published** tie-break if the necessary values exist and are validated, otherwise **stop automatic winner assignment at the affected monetary-prize boundary** and require organizer/arbiter resolution with an audit note. Remove Rank Sum from the headline printed table and fourth Team XLSX **after** that new decision contract is approved; do not destructively delete persisted rank_sum fields or historical snapshots without recovery/impact evidence. Treat *any missing selected player points* as a data-integrity blocker rather than silently zero-scoring a team. For this precise A/B case, the proposal records an **unresolved tie** until a legitimate predeclared tie-break or documented decision resolves it; it does **not** automatically crown A either.
+
+**Additional engineering gate:** change `compareInstitutions`, `detectTieAtPrizeBoundary`, `detectTeamTiesAtBoundary`, `TeamTieBreakDialog`, `allocateInstitutionPrizes`, versioned persistence/backfill, public reader, `generatePdf`, UI, fourth team worksheet, and team tests coherently in **one separately scoped scoring item**, not as a CSS/print edit or drive-by field deletion. First verify published production dependencies, version pinning, historical results, manual override authorization and rollback. Do not merge/deploy without distinct owner authorization.
+
 ## Recommended product contract (PROPOSED, NOT APPROVED)
 
 - **Primary:** label everywhere `Total Points (higher wins)`, computed as sum of the selected K players' actual verified tournament points. Show which K scored, including gender-slot selection. Never call it `Match Points` unless the source is an actual team match.
