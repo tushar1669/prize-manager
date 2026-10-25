@@ -2,7 +2,7 @@
 // Excel template and error export utilities for player import
 
 import * as XLSX from 'xlsx';
-import { writeBrandedReportWorkbook } from './brandedWorkbookXlsx';
+import { isBrandedPrizeReportSheetSet, writeBrandedReportWorkbook } from './brandedWorkbookXlsx';
 import { PRIZE_TEMPLATE_V2_HEADERS, PRIZE_TEMPLATE_V2_SAMPLE_ROWS } from '@/constants/prizeTemplateV2';
 import { getPlayerDisplayName } from './playerName';
 
@@ -537,7 +537,19 @@ export function downloadWorkbookXlsx(
     if (!/\.xlsx$/i.test(safeFilename)) {
       safeFilename = safeFilename.replace(/\.[^.]+$/, '') + '.xlsx';
     }
-    writeBrandedReportWorkbook(safeFilename, safeSheets);
+    if (isBrandedPrizeReportSheetSet(safeSheets)) {
+      // Only Final Prize, Coverage and RCA prize reports are restyled.
+      writeBrandedReportWorkbook(safeFilename, safeSheets);
+    } else {
+      // Preserve the original SheetJS writer for import errors, conflicts,
+      // and unrelated Excel exports; no new data/schema/formatting behavior.
+      const wb = XLSX.utils.book_new();
+      for (const [sheetName, rows] of Object.entries(safeSheets)) {
+        const ws = XLSX.utils.json_to_sheet(rows ?? []);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+      XLSX.writeFile(wb, safeFilename, { bookType: 'xlsx' });
+    }
     console.log('[excel] downloadWorkbookXlsx:', safeFilename);
     return true;
   } catch (e) {
