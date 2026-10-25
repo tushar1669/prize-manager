@@ -96,11 +96,14 @@ export function compareTeamRankingV2(
       continue;
     }
 
-    if (!Number.isSafeInteger(criterion.ordinal) || criterion.ordinal < 1 || !criterion.name.trim()) {
+    if (!Number.isSafeInteger(criterion.ordinal) || criterion.ordinal < 1) {
       return { status: 'blocked', order: 0, criterion: identifier, reason: 'invalid_criterion' };
     }
     if (!criterion.verified) {
       return { status: 'blocked', order: 0, criterion: identifier, reason: 'undefined_tb' };
+    }
+    if (!criterion.name.trim()) {
+      return { status: 'blocked', order: 0, criterion: identifier, reason: 'invalid_criterion' };
     }
     const rowsA = a.selectedPlayers.map(player => player.individualTieBreaks?.[criterion.ordinal]);
     const rowsB = b.selectedPlayers.map(player => player.individualTieBreaks?.[criterion.ordinal]);
