@@ -1,0 +1,91 @@
+# Team / Institution Prize tie-break policy v2 — OWNER INTENT, RESEARCH, BLOCKERS AND HANDOFF
+
+**Date:** 25 October 2026 (Asia/Kolkata)
+**Project:** Prize-Manager.com — https://github.com/tushar1669/prize-manager
+**Status:** **PARTIALLY DECIDED / detailed new cascade PROPOSED / IMPLEMENTATION BLOCKED** on rule identification, historical production dependency and rollback evidence.
+**Approval boundary:** owner approved a revised *policy direction*, NOT source changes, migration, final design revision, merge, publication or deployment. Preserve approved A4 artwork until a reviewed and verified replacement exists.
+**Priority/backlog ID:** UNKNOWN, because BACKLOG.md absent from main.
+**Tracking:** record lives on existing unmerged documentation draft [#468](https://github.com/tushar1669/prize-manager/pull/468), beside [prior scoring RCA](TEAM_SCORING_AND_RANK_SUM_RCA_2026-10-25.md).
+
+## 1. Explicit owner decisions — not to reinterpret
+
+From conversation on 25 October 2026:
+1. Team Prizes A4 PDF **visually approved** after ₹ spacing, centered headings/numerics, colored group badges and cash/medal separation. The three earlier designs (Category Cards v6, Poster Grid, Arbiter Sheet) were approved separately. **Design approval does not authorize release.**
+2. Owner rejected **automatic Rank Sum** in deciding team winners, and says **remove Rank Sum completely**. Product interpretation: remove as a *live ranking criterion* and from visible ordinary outputs (organizer/public Team result grids, Team Prizes PDF and fourth team sheet in final XLSX) once scoring policy is finalized; do not erase previously published records, snapshots or database columns without confirmed historical dependency and recovery/rollback. Never infer authority for destructive changes from a request to remove a displayed metric.
+3. For equal verified team points, **published event-specific rules take precedence**. Without an applicable published rule, the tie must receive documented organizer/arbiter resolution, not hidden institution-name sorting or Rank Sum.
+4. The owner proposed more specific ordered criteria (below), but specifically asked **discuss, plan, then update**. That means the cascade, Buchholz import/schema, and playoff procedure are **NOT yet signed off for implementation**. Do not implement now.
+5. Owner requested a comprehensive continuity handoff and a copy-paste continuation prompt, because the current ChatGPT Project conversation is hitting its length limit.
+
+## 2. User's proposed ordered algorithm — exact intent, with needed clarifications
+
+Applies to *derived institution prizes* (Best School/Academy/Club/City/State), aggregating top **K selected individuals in one tournament**; NOT to a genuine team-vs-team event with match points. Respect existing configured gender minimums and roster eligibility; do not alter individual allocation engine.
+
+Proposed ranking within one prize group:
+- **Primary — Total selected player points, DESC:** \(P(T)=\sum_{i\in S_T}p_i\), where \(S_T\) is the validated, eligible selection of exactly K players and \(p_i\) is each person's true imported tournament points. If any required points missing/non-finite: **BLOCK automatic monetary allocation / publishing for that affected team group**, show actionable organizer diagnostic; do not coerce to zero or substitute Rank Sum.
+- **Tie-break 1 — Sorted selected-player score vector, lexicographic DESC:** sort the K **selected players' individual points** highest to lowest. Compare highest score; if equal compare second, third, etc. For 3+ teams, independently partition remaining ties at each comparison; do not omit tied teams or sort by player name/rank in the deciding vector. A=(7,5) and B=(6,6), both 12, yields **A first under this PROPOSED rule** (7>6). **This intentionally favors a standout performer over a balanced equal-total roster; it is an event-specific product rule, not a claimed FIDE/AICF mandate.** Selection of K itself currently uses rank ascending plus configured gender slots; confirm whether selection should remain rank-based or change to points-based before implementing.
+- **Tie-break 2 — sum of selected players' Buchholz Cut-1, DESC** (as supplied and validated from the imported Swiss-Manager XLS/XLSX): \(BC1(T)=\sum_{i\in S_T}BH\text{-}C1_i\). This is a **new team-level aggregate of individual Buchholz Cut-1 values**, not a standardized FIDE championship team tie-break. Do NOT sum only the K smallest/opponent values, and do NOT calculate an individual player's BH-C1 using team participants; accept a clearly mapped source value with provenance. Missing/ambiguous/non-final cells MUST block automatic resolution, not become 0.
+- **Tie-break 3 — sum of the selected players' 'second tie-break', DESC**, \(TB2(T)=\sum_{i\in S_T}tb2_i\), **ONLY after the user identifies which source column and definition is intended**. It might mean Swiss-Manager's configurable second listed tie-break, normal Buchholz (BH), Sonneborn-Berger (SB), or another field. These are NOT interchangeable and neither column ordinal nor numeric direction is universal. Resolve label, source-column mapping, ascending/descending meaning and event rules before treating this as a criterion. Use only a homogeneous tie-break measure for every participant in a group.
+- **Still equal:** mark involved places **TIE — RESOLUTION REQUIRED**; organizer/arbiter may offer a **play-off only if tournament regulations permit and define** the format (time control, pairings, color, schedule, which places, recording results), or use another pre-published method / allowed shared-place outcome. No silent automatic playoff scheduling or awarding the first-place monetary prize while unresolved.
+
+**Event-rule priority:** The above proposed ordered scheme is valid for a new event **only when its applicable tournament regulations define or authorize it**. If its published rules say something else, do not overwrite them with the platform default. If no rules establish this scheme, stop for authorized organizer/arbiter adjudication. Do not retroactively rerank already-finalized prizes.
+
+## 3. Mathematical example and scope of the fairness claim
+
+Team A selected (7 points / rank #1, 5 points / rank #5): total 12; old Rank Sum 6.
+Team B selected (6 points / rank #2, 6 points / rank #3): total 12; old Rank Sum 5.
+
+**Current main scorer ranks B** on old Rank Sum; **proposed score-vector tie-break ranks A** (7 > 6). Neither result is automatically the only chess-fair result. The valid method is the event's published rule. Eliminate `rank_sum` and `best_individual_rank` as automatic prize-deciding fallbacks if the new contract is approved; clarify whether best rank remains organizer-only contextual data.
+
+## 4. Confirmed source and ingestion gaps (main at 9800fdc8805d678d29e6023b6f47d9672db448df)
+
+- Scorer: `supabase/functions/_shared/teamPrizes.ts` selects by lowest individual `rank` within group (gender constraints), calculates `total_points=selected points sum`, `rank_sum=selected ranks sum`, `best_individual_rank`, orders total points DESC → Rank Sum ASC → best rank ASC → institution label. `allocateInstitutionPrizes/index.ts` can coerce missing points to zero.
+- `src/utils/teamTieDetection.ts` currently considers a tied prize boundary only when points **and** Rank Sum **and** best rank all agree. That would **miss** the owner's A/B example as a tie needing adjudication.
+- Import mapping: `src/utils/headerAliases.ts` handles `points` (Pts/Score) and `rank`, but **has no Buchholz, BH-C1, or generic Tie-Break-2 alias**. `src/utils/importPresets.ts` has no mapping for those metrics. Generated `src/integrations/supabase/types.ts` players table has no persisted per-player BH-C1/TB2 field. **Therefore source Excel columns are NOT currently available to the team scoring engine merely because a Swiss-Manager export can show them.** This is a new, separately reviewable import/metadata/data-path feature and a production-impacting schema/storage decision requiring verification and rollback.
+- Existing rank/points import, full access/owner checks, team version pinning, `team_allocations` historical snapshots, `publicTeamPrizes` and `generatePdf` paths must be reconciled before any computation changes. Do not infer production state from source.
+- Swiss-Manager FAQ says exported standing lists may display ONLY the first tie-break by default. To include more, choose **Print dialog → Define new List → Columns → Show = Y** for corresponding rows. Do not demand users find or upload current customer files when synthetic fixture tests and repo examination suffice at proposal stage.
+- Actual Swiss-Manager "TB2" is **configurable**. Never hardcode “2nd tie-break = Sonneborn-Berger” or “= Buchholz”. Verify exported column headers *and the tournament's ordered criteria*.
+- Current `TeamPrizeResultsPanel`, `TeamTieBreakDialog`, `src/utils/teamTieDetection.ts`, `src/utils/teamPrizeExport.ts` (draft #478), `supabase/functions/generatePdf`, `src/components/team-prizes/useTeamPrizeResults.ts`, `publicTeamPrizes`, and tests/docs refer to current scoring; synchronize all affected consumers in an authorized implementation cycle, **without mixing in individual allocation changes**.
+- Separate existing documentation drift: README and TECH_OVERVIEW reference rank-derived points while actual team scorer uses raw imported points. Correct separately without changing scoring to match stale prose.
+
+## 5. External standards checked — do not overclaim federation approval
+
+- [FIDE C.07 Play-off and Tie-Break Regulations, effective 1 Mar 2026](https://handbook.fide.com/chapter/TieBreakRegulations032026), articles **2.1–4.2**: tournament regulations should declare shared places or ordered tie-break methods; play-offs need predefined conditions, formats, timings; missing tie-breaks do not create an automatic playoff mandate. Article **8.1** defines individual Buchholz as opponents' scores sum, **14.1.1** defines Buchholz Cut-1 excluding the lowest relevant value (subject to **16** unplayed-round adjustments). Proposed SUM of individual BH-C1s is NOT specifically prescribed as the derived school-prize team tie-break.
+- [Swiss-Manager software FAQ](https://s3.chess-results.com/test/FAQ.aspx?id=5872&lan=7): to export more than the first tie-break, enable the corresponding Columns→Show entries. Do not mistake displayed TB order for a globally fixed meaning.
+- [Swiss-Manager official manual](https://swiss-manager.at/unload/swissmanagerhelp_eng.pdf): standings derive from selected tie-break ordering; Excel exports can be customized.
+- [AICF national team example](https://aicf.in/wp-content/uploads/2025/01/Nat.-team.pdf) applies to head-to-head national team chess; it is not a universal derived academy-prize rule. Prior [scoring RCA](TEAM_SCORING_AND_RANK_SUM_RCA_2026-10-25.md) contains further sources.
+
+**Standards recommendation:** Add a rules summary visible to organizer BEFORE allocation; show the declared primary/team tie-break scheme in outputs for transparency. Use deterministic calculations only from grounded, complete values. If it is not in event rules, do not silently decide money by ad hoc ranking.
+
+## 6. Engineering plan — for AFTER owner settles unresolved meaning (NOT APPROVED TO EXECUTE)
+
+1. **Reconcile and risk-check:** exact default HEAD, canonical docs, approved team design and draft PRs. Read runtime/deployment tables and affected publications only through safe connected tools; check archived team allocations, the last published allocation_version, privacy, owner lockout, recovery and rollback. If missing, label **BLOCKED**.
+2. **Lock one scoring-policy spec:** precise team selection criterion, point completeness, sorted score vector, BH-C1 and TB2 source mapping and definitions, event regulation authority, missing-field behavior, unresolved tie/eligible playoff choices, multi-team tie grouping and versioning. Owner approves SPEC/implementation, not deployment.
+3. **Import/storage change separately reviewable:** add validated XLS/XLSX map for BH-C1 and named second tie-break, evidence of column identity and raw semantics, handle Swiss-Manager aliases/duplicate headers and rounding. No CSV capability. Any schema/migration or production risky action requires explicit verified recovery/rollback.
+4. **Team scorer + tie-resolution implementation:** fixed K/slot selection, verified point arithmetic, lexicographic comparisons then summed BH-C1/TB2, no rank_sum automatic fallback, fail closed on absent/inconsistent metrics, unresolved prize places flagged; avoid changing individual allocation engine. Preserve versioned historical snapshots.
+5. **Outputs in a separate reviewed design stage:** remove Rank Sum from active Team Prize organizer/public tables, Team A4 PDF, fourth Team Prizes XLSX worksheet, server PDF and dialog as applicable; show Total Points, selected team players, tie-break status/method, and **Play-off pending** only as a true status. Retain owner-approved gold/teal/navy palette, centered headers/values, cash/award spacing. Legacy records stay interpretable.
+6. **Next product work:** beautify remaining individual-winner XLSX sheets, then Allocation Coverage XLSX, then RCA XLSX. After output work, address CSV guard/lint/full AGENTS lint, unit, relevant e2e and release gates, in their existing draft PRs. Never weaken safeguards to manufacture green checks.
+7. **Verify & sync:** synthetic A/B and multi-way fixtures, missing/partial point and BH-C1/TB2 cases, playoff pending state, eligible selection/gender, published snapshot invariants, access masking, full four-sheet XLSX parsing, A4 print parity, exact commit and environment. Update only affected canon/tracking files. **No merge, main push, deployment, publication, draft-to-ready or production mutation without separately explicit owner authorization.**
+
+## 7. ONE substantive unresolved question
+
+**What exactly is the '2nd tie-break' in the Swiss-Manager export: (a) Buchholz (BH), (b) Sonneborn-Berger (SB), or (c) whatever is configured/labelled second for each tournament (TB2)?** State the selection explicitly. If (c), the app must store the actual metric name and ranking direction per tournament; using an unlabeled number is unsafe. A secondary clarification for the final spec: should **the vector/BH-C1/TB2 sequence itself require published event approval, or be an organizer-selectable platform default for new events?** Until these are resolved, do not make a change that picks cash winners.
+
+## 8. Status/continuity snapshot
+
+| Output/item | Last owner decision | Source/verification | Release |
+| --- | --- | --- | --- |
+| Category Cards v6 | approved white A4 with whole pale gold/teal/navy prize-table rows | draft #461; synthetic browser QA 40111901060 | UNMERGED/UNDEPLOYED |
+| Poster Grid | approved subtle full-card colors; paper whitespace/large winner name | draft #467; QA 40111905967 | UNMERGED/UNDEPLOYED |
+| Arbiter Sheet/allocation PDF | approved whole colored group rows, ruled grid, large Place/Rank, signature | draft #471; QA 40088011470 | UNMERGED/UNDEPLOYED |
+| Team Prizes A4 | **visually approved** centered column headers/award values, colored metadata pills, ₹ and trophy/medal gaps | draft #478; 15/15 Vitest, 6/6 Chromium, 12/2 and 42/5 A4 synthetic [QA 40126745877](https://github.com/tushar1669/prize-manager/actions/runs/40126745877) | UNMERGED/UNDEPLOYED; **content/Rank Sum column now subject to upcoming scoring redesign**, not new visual approval |
+| Final Prize XLSX | owner chose fourth Team sheet containing filled team awards only, behind full access; three former sheets kept | drafted in #478, source-matched focused QA | **Styling of all four sheets still pending**, plus proposed Rank Sum deletion from fourth |
+| Allocation Coverage XLSX | beautification requested | existing source behavior preserved | PENDING |
+| Allocation RCA XLSX | beautification requested | existing source behavior preserved | PENDING |
+| Scoring policy | **no automatic Rank Sum / remove active Rank Sum**, event published rules or organizer/arbiter resolution; **new ordered cascade proposed, not approved** | source/FIDE RCA + this plan | BLOCKED on one metric-definition decision & dependency gate |
+| Full CI | after product outputs | #462 npm install verified, #463 CSV guard, #466 lint separately draft; AGENTS requirements | NOT GREEN |
+
+Other independent project state: existing B8b extraction IN_PROGRESS, D2 outstanding. Backlog P0/P1 inventory UNKNOWN (no BACKLOG.md). `SOURCE_OF_TRUTH.md` and `DOCUMENT_INDEX.md` also absent; old main `PROJECT_STATE.md` is historical. This handoff is synced on unmerged draft #468, so do not falsely claim main already contains it.
+
+## 9. Next exact action and no-op boundary
+
+**Next: ask owner to identify the actual Swiss-Manager 'second tie-break' definition (BH/SB/configured per-event TB2) and confirm whether the proposed cascade is the pre-announced event default or requires per-event approval.** Assistant should do all repo, standards, connector and fixture research; owner only chooses the rule. Until then, keep the implementation **BLOCKED**, do not touch source scorer, Team A4/Excel, database or published data. After decision, start **one separate draft scoring-policy item** with validation and risk gating, then revisit outputs.
