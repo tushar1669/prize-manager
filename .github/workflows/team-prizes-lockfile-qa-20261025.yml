@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - qa/team-prizes-lockfile-isolation-20261025
+  pull_request:
+    branches:
+      - feature/team-prizes-print-and-final-xlsx-20261024
 jobs:
   targeted:
     runs-on: ubuntu-latest
