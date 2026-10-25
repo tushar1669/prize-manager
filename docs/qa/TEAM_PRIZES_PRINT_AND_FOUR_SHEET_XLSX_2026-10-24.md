@@ -1,6 +1,6 @@
 # Team Prizes — A4 print and fourth Final Prize XLSX sheet (24 October 2026)
 
-**State:** owner-approved implementation scope **IMPLEMENTED**, targeted synthetic fixture QA **VERIFIED**, owner **visual review PENDING**, required full CI **BLOCKED** on separate existing guards. Draft [PR #478](https://github.com/tushar1669/prize-manager/pull/478); exact implementation source ref `41dafa599276c8bc556ff59adf7d5cf33a855aae` (subsequent documentation-only commit may advance the PR head). **No merge, deployment or draft-state transition authorization.**
+**CURRENT STATE (25 October 2026):** Team A4 **VISUAL DESIGN OWNER-APPROVED** (explicitly reconfirmed: “Approved design style”), scoped print implementation **IMPLEMENTED**, synthetic fixture QA **VERIFIED** (15 Vitest / 6 Chromium), **RELEASE NOT AUTHORIZED**, required full CI **NOT GREEN**. **SCORING POLICY HOLD:** current `Rank Sum` remains in source/PDF/fourth XLSX and is **not accepted for future active ranking/output semantics**; a separate approved and safely validated tie-break replacement is BLOCKED on the exact second metric and applicable published event rules. Historical headings below reflect earlier checkpoints; the latest decisions at the end override their “review pending” language. Draft [PR #478](https://github.com/tushar1669/prize-manager/pull/478); exact implementation source ref `41dafa599276c8bc556ff59adf7d5cf33a855aae` (subsequent documentation-only commit may advance the PR head). **No merge, deployment or draft-state transition authorization.**
 
 ## Owner decision
 
