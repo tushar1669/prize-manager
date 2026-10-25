@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   compareTeamRankingV2,
   defaultTeamRankingCriteria,
+  rankTeamCandidatesV2,
+  parseTeamRankingRuleConfig,
   type TeamRankingCandidate,
   type TeamRankingCriterion,
 } from '@/utils/teamRankingV2';
@@ -103,5 +105,69 @@ describe('Team Ranking v2 — pure, fail-closed comparison', () => {
     expect(list.map(x => x.kind === 'score_vector' ? 'vector' : `TB${x.ordinal}`))
       .toEqual(['vector', 'TB1', 'TB2', 'TB10']);
     expect(list.slice(1).every(x => x.kind === 'source_tb' && !x.verified && x.name === '')).toBe(true);
+  });
+});
+
+describe('safe ordered team prize partitions — no invented awards', () => {
+  const approved = (criteria: TeamRankingCriterion[] = [vector]) => ({
+    version: 2 as const, source_hash: 'fixture-import', published_reference: 'fixture regulations section 2',
+    organizer_confirmed: true, criteria,
+  });
+
+  it('orders three points-equal institutions by descending individual score vectors', () => {
+    const result = rankTeamCandidatesV2([
+      team('C', [6, 6]), team('A', [8, 4]), team('B', [7, 5]),
+    ], approved());
+    expect(result.map(p => p.teams.map(t => t.key))).toEqual([['A'], ['B'], ['C']]);
+    expect(result.every(p => p.status === 'resolved')).toBe(true);
+  });
+
+  it('withholds results when organizer has not confirmed the published team rules', () => {
+    const result = rankTeamCandidatesV2([team('A', [7, 5]), team('B', [6, 6])], null);
+    expect(result).toMatchObject([{ status: 'blocked', reason: 'unapproved_rules' }]);
+    expect(result[0].teams).toHaveLength(2);
+  });
+
+  it('only blocks the unresolved subset when an imported TB is missing', () => {
+    const top = team('Top', [8, 7]); // 15 > 12
+    const one = team('One', [6, 6], { 1: [null, 3] });
+    const two = team('Two', [6, 6], { 1: [2, 5] });
+    // Import provenance must match for valid TB comparison.
+    for (const t of [one, two]) t.selectedPlayers.forEach(player => { player.sourceHash = 'fixture-import'; });
+    const result = rankTeamCandidatesV2([one, top, two], approved([tb(1)]));
+    expect(result[0]).toMatchObject({ status: 'resolved', criterion: 'total_points' });
+    expect(result[0].teams.map(t => t.key)).toEqual(['Top']);
+    expect(result[1]).toMatchObject({ status: 'blocked', criterion: 'TB1', reason: 'missing_tb' });
+    expect(result[1].teams).toHaveLength(2);
+  });
+
+  it('uses only matching import provenance for TB monetary ranking', () => {
+    const one = team('One', [6, 6], { 1: [5, 6] });
+    const two = team('Two', [6, 6], { 1: [4, 4] });
+    one.selectedPlayers.forEach(player => { player.sourceHash = 'fixture-import'; });
+    two.selectedPlayers.forEach(player => { player.sourceHash = 'old-file'; });
+    expect(rankTeamCandidatesV2([one, two], approved([tb(1)]))).toMatchObject([
+      { status: 'blocked', reason: 'missing_tb', criterion: 'TB1' },
+    ]);
+    two.selectedPlayers.forEach(player => { player.sourceHash = 'fixture-import'; });
+    expect(rankTeamCandidatesV2([one, two], approved([tb(1)]))).toMatchObject([
+      { status: 'resolved', criterion: 'TB1' },
+      { status: 'resolved', criterion: 'TB1' },
+    ]);
+  });
+
+  it('preserves equal full ties without awarding distinct cash places', () => {
+    expect(rankTeamCandidatesV2([team('A', [6, 6]), team('B', [6, 6])], approved()))
+      .toMatchObject([{ status: 'tied', teams: [{ key: 'A' }, { key: 'B' }] }]);
+  });
+
+  it('rejects untrusted or duplicate JSON rule configurations', () => {
+    expect(parseTeamRankingRuleConfig(null)).toBeNull();
+    expect(parseTeamRankingRuleConfig({
+      ...approved(), criteria: [vector, vector],
+    })).toBeNull();
+    expect(parseTeamRankingRuleConfig(approved([vector, tb(1)]))).toMatchObject({
+      version: 2, organizer_confirmed: true, criteria: [{ kind: 'score_vector' }, { kind: 'source_tb', ordinal: 1 }],
+    });
   });
 });
