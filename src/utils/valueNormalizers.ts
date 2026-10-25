@@ -159,6 +159,17 @@ export function digitsOnly(raw: unknown): string | null {
  * - "PC" indicates Physically Challenged (backward compatibility)
  * Returns { disability, tags, group_label } tuple for merging into player record
  */
+/**
+ * True when one of the label's words is exactly "PC" (case-insensitive).
+ * Words are split at spaces, commas, ; | / and -.
+ */
+export function hasPcToken(label: unknown): boolean {
+  if (label == null) return false;
+  return String(label)
+    .split(/[\s,;|/\-]+/)
+    .some(token => token.trim().toUpperCase() === 'PC');
+}
+
 export function normalizeGrColumn(raw: unknown): { 
   disability: string | null; 
   tags: string[]; 
@@ -169,10 +180,8 @@ export function normalizeGrColumn(raw: unknown): {
   const trimmed = String(raw).trim();
   if (!trimmed) return { disability: null, tags: [], group_label: null };
   
-  const upper = trimmed.toUpperCase();
-  
-  // PC detection for backward compatibility (disability field)
-  if (upper === 'PC' || upper.includes('PC')) {
+  // PC detection: "PC" must be a whole word (e.g. "PC", "U12 PC", "PC-wheelchair"; not "NPC")
+  if (hasPcToken(trimmed)) {
     return { disability: 'PC', tags: ['PC'], group_label: trimmed };
   }
   

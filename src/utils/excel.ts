@@ -278,8 +278,8 @@ export function downloadPlayersTemplateXlsx() {
     ['State', 'No', 'State/province. Optional.'],
     ['City', 'No', 'City name. Optional.'],
     ['Club', 'No', 'Chess club or academy. Optional.'],
-    ['Type', 'No', 'Optional Swiss-Manager type/category label. Useful for PC, age-band, section, or special category tagging. Examples: PC, U15, S60, Section A.'],
-    ['Disability', 'No', 'Optional accessibility/disability marker. Examples: PC, PWD, PH. Leave blank if not applicable.'],
+    ['Type', 'No', 'Optional Swiss-Manager type/category label. Useful for PC, age-band, section, or special category tagging. Examples: PC, U15, S60, Section A. If a word in Type is exactly PC and Disability is blank, the player is also marked PC.'],
+    ['Disability', 'No', 'Optional accessibility/disability marker. Examples: PC, PWD, PH. Leave blank if not applicable. A value here is kept even if Type or Gr says PC.'],
     ['Ident', 'No', 'Optional Swiss-Manager Ident field. Can help preserve state/identity labels from exports.'],
     ['Gr', 'No', 'Optional group/section label. Useful for group-based category eligibility.'],
 

@@ -30,7 +30,7 @@ type_label text  -- Generic category label from Swiss-Manager Type column (PC, S
 3. **Payload**: `buildSupabasePlayerPayload()` populates `type_label`
 
 ### Key Difference from Gr Column
-- **Type is purely generic** - no special handling for "PC" or any other value
+- **Type is otherwise generic** - the only special case: if a word in Type is exactly "PC" and the Disability column is empty, `disability` is set to `PC` (same whole-word rule as Gr)
 - **Gr still has PC compatibility** - setting `disability='PC'` for backward compatibility
 - **Both can be used independently** or combined in the same category rules
 
@@ -111,7 +111,7 @@ Tests are located in `tests/allocation/allocation.spec.ts`:
 |---------|-------|---------------|------------------|
 | Group | `group_label` | Gr | PC → sets `disability='PC'` too |
 | Type | `type_label` | Type | None (purely generic) |
-| Disability | `disability` | Gr (if PC) | Legacy field |
+| Disability | `disability` | Disability column, else Gr/Type word "PC" | Legacy field |
 
 ## Migration Notes
 
