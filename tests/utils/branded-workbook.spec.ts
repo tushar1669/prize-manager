@@ -69,6 +69,52 @@ it('writes two complete synthetic XLSX files for actual OOXML and visual inspect
     StyledXLSX.write(final, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
   writeFileSync('artifacts/branded-xlsx/allocation-and-rca.xlsx',
     StyledXLSX.write(reports, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
+  const teamBook = buildBrandedReportWorkbook({
+    Winners: winners.map(({ Signature: _signature, ...fields }) => fields),
+    'Poster Grid': winners.map(({ Signature: _signature, ...fields }) => fields),
+    'Arbiter Sheet': winners,
+    'Team Prizes': teamRows,
+  });
+  writeFileSync('artifacts/branded-xlsx/four-sheet-with-team.xlsx',
+    StyledXLSX.write(teamBook, { bookType: 'xlsx', type: 'buffer', cellStyles: true }));
+});
+
+const teamRows = [
+  { 'Prize Group': 'Best School', Place: 1, 'Team / Institution': 'Synthetic School A', 'Team Players': 'A (#1), B (#2)', Points: 12, 'Cash Amount': 5000, Trophy: 'Yes', Medal: 'No' },
+  { 'Prize Group': 'Best Club', Place: 1, 'Team / Institution': 'Synthetic Club B', 'Team Players': 'C (#3), D (#4)', Points: 11, 'Cash Amount': 3000, Trophy: 'No', Medal: 'Yes' },
+];
+
+describe('XLSX visual spacing and prepared fourth Team Prizes sheet', () => {
+  it('centers compact flag/status cells after right-aligned amounts', () => {
+    const reports = buildBrandedReportWorkbook({ AllocationCoverage: coverage });
+    expect((reports.Sheets.AllocationCoverage['C2'] as { s?: { alignment?: { horizontal?: string } } }).s?.alignment?.horizontal).toBe('right');
+    expect((reports.Sheets.AllocationCoverage['D2'] as { s?: { alignment?: { horizontal?: string } } }).s?.alignment?.horizontal).toBe('center');
+    const wb = buildBrandedReportWorkbook({ Winners: winners });
+    expect((wb.Sheets.Winners['G2'] as { s?: { alignment?: { horizontal?: string } } }).s?.alignment?.horizontal).toBe('center');
+  });
+
+  it('styles exact four-sheet Team rows with grouped tints and typed rupee cash without changing rows', () => {
+    const base = winners.map(({ Signature: _signature, ...fields }) => fields);
+    const wb = buildBrandedReportWorkbook({
+      Winners: base, 'Poster Grid': base, 'Arbiter Sheet': winners, 'Team Prizes': teamRows,
+    });
+    expect(wb.SheetNames).toEqual(['Winners', 'Poster Grid', 'Arbiter Sheet', 'Team Prizes']);
+    expect(StyledXLSX.utils.sheet_to_json(wb.Sheets['Team Prizes'])).toEqual(teamRows);
+    const team = wb.Sheets['Team Prizes'];
+    const styled = (address: string) => team[address] as {
+      t: string; v: unknown; s?: { fill?: { fgColor?: { rgb?: string } }; alignment?: { horizontal?: string }; numFmt?: string };
+    };
+    expect(styled('A2').s?.fill?.fgColor?.rgb).toBe('FBF6E9');
+    expect(styled('A3').s?.fill?.fgColor?.rgb).toBe('ECF6F1');
+    expect(styled('F2').t).toBe('n');
+    expect(styled('F2').v).toBe(5000);
+    expect(styled('F2').s?.numFmt).toBe('"₹"#,##0');
+    expect(styled('G2').s?.alignment?.horizontal).toBe('center');
+    expect(styled('H2').s?.alignment?.horizontal).toBe('center');
+    const raw = StyledXLSX.write(wb, { bookType: 'xlsx', type: 'buffer', cellStyles: true });
+    const back = ReaderXLSX.read(raw, { type: 'buffer' });
+    expect(ReaderXLSX.utils.sheet_to_json(back.Sheets['Team Prizes'])).toEqual(teamRows);
+  });
 });
 
 describe('Prize report-only XLSX scope guard', () => {
