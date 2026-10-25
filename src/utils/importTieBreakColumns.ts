@@ -19,11 +19,13 @@ export type ImportedTieBreakColumn = {
 const TIE_BREAK_HEADER = /^t[\s._-]*b[\s._-]*0*(\d+)$/i;
 const STRICT_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
-function isFiniteNumericSample(value: unknown): boolean {
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (typeof value !== 'string') return false;
+export function parseImportedTieBreakNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
-  return STRICT_DECIMAL.test(normalized) && Number.isFinite(Number(normalized));
+  if (!STRICT_DECIMAL.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
@@ -56,7 +58,7 @@ export function detectImportedTieBreakColumns(
       const value = row[column.sourceHeader];
       if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
         sampleMissing += 1;
-      } else if (isFiniteNumericSample(value)) {
+      } else if (parseImportedTieBreakNumber(value) !== null) {
         samplePresent += 1;
       } else {
         sampleInvalid += 1;
@@ -70,4 +72,40 @@ export function detectImportedTieBreakColumns(
       duplicateOrdinal: (frequency.get(column.ordinal) ?? 0) > 1,
     };
   }).sort((a, b) => a.ordinal - b.ordinal || a.sourceColumn - b.sourceColumn);
+}
+
+/** Persisted with each imported player in the additive `individual_tiebreaks` field.
+ * A missing/invalid source value remains null and MUST fail closed if later used.
+ * Duplicate TB ordinals are ambiguous: no value is guessed for that ordinal.
+ */
+export type ImportedPlayerTieBreaks = {
+  version: 1;
+  source_hash: string | null;
+  source_columns: Array<{ ordinal: number; header: string; column: number }>;
+  values: Record<string, number | null>;
+};
+
+export function extractPlayerTieBreakValues(
+  columns: readonly ImportedTieBreakColumn[],
+  rawRow: Record<string, unknown>,
+  sourceHash: string | null,
+): ImportedPlayerTieBreaks | null {
+  if (columns.length === 0) return null;
+  const values: Record<string, number | null> = {};
+  for (const column of columns) {
+    const key = String(column.ordinal);
+    values[key] = column.duplicateOrdinal
+      ? null
+      : parseImportedTieBreakNumber(rawRow[column.sourceHeader]);
+  }
+  return {
+    version: 1,
+    source_hash: sourceHash,
+    source_columns: columns.map(column => ({
+      ordinal: column.ordinal,
+      header: column.sourceHeader.slice(0, 128),
+      column: column.sourceColumn,
+    })),
+    values,
+  };
 }
