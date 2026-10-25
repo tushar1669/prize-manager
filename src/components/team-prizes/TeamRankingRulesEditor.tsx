@@ -17,6 +17,49 @@ export type TeamRankingRuleConfig = {
 };
 
 type ImportColumn = { ordinal: number; header: string; duplicate: boolean; present: number; missing: number; invalid: number };
+
+export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const item = raw as Record<string, unknown>;
+  if (item.version !== 2 || !Array.isArray(item.criteria)) return null;
+  const criteria: TeamRankingCriterion[] = [];
+  const seen = new Set<string>();
+  for (const entry of item.criteria) {
+    if (!entry || typeof entry !== 'object') return null;
+    const rule = entry as Record<string, unknown>;
+    const identifier = rule.kind === 'score_vector'
+      ? 'score_vector'
+      : rule.kind === 'source_tb' && Number.isSafeInteger(rule.ordinal) && Number(rule.ordinal) >= 1
+        ? `TB${rule.ordinal}`
+        : null;
+    if (!identifier || seen.has(identifier)) return null;
+    seen.add(identifier);
+    if (rule.kind === 'score_vector') {
+      criteria.push({ kind: 'score_vector' });
+    } else {
+      if (rule.aggregation !== 'sum' ||
+          (rule.direction !== 'higher' && rule.direction !== 'lower') ||
+          typeof rule.name !== 'string' || typeof rule.verified !== 'boolean') return null;
+      criteria.push({
+        kind: 'source_tb',
+        ordinal: Number(rule.ordinal),
+        name: rule.name,
+        aggregation: 'sum',
+        direction: rule.direction,
+        verified: rule.verified,
+      });
+    }
+  }
+  if (!seen.has('score_vector')) return null;
+  return {
+    version: 2,
+    source_hash: typeof item.source_hash === 'string' ? item.source_hash : null,
+    published_reference: typeof item.published_reference === 'string' ? item.published_reference : '',
+    organizer_confirmed: item.organizer_confirmed === true,
+    criteria,
+  };
+}
+
 type Props = {
   tournamentId: string;
   open: boolean;
@@ -32,7 +75,7 @@ function sourceColumns(meta: unknown): ImportColumn[] {
     if (!item || typeof item !== 'object') return [];
     const raw = item as Record<string, unknown>;
     const ordinal = raw.ordinal;
-    if (!Number.isSafeInteger(ordinal) || Number(ordinal) < 1) return [];
+    if (typeof ordinal !== 'number' || !Number.isSafeInteger(ordinal) || ordinal < 1) return [];
     return [{
       ordinal: Number(ordinal),
       header: String(raw.header ?? ''),
@@ -88,13 +131,24 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
     }
   }, [open, imported, value, onChange, fileHash, defaultCriteria]);
 
+  useEffect(() => {
+    if (!open || !imported || !value) return;
+    const missing = defaultCriteria.filter(rule =>
+      rule.kind === 'source_tb' &&
+      !value.criteria.some(existing => existing.kind === 'source_tb' && existing.ordinal === rule.ordinal),
+    );
+    if (missing.length) {
+      onChange({ ...value, criteria: [...value.criteria, ...missing], organizer_confirmed: false });
+    }
+  }, [open, imported, value, defaultCriteria, onChange]);
+
   const update = (patch: Partial<TeamRankingRuleConfig>) => onChange({
     version: 2,
+    ...value,
     source_hash: fileHash,
-    published_reference: '',
+    published_reference: value?.published_reference ?? '',
     organizer_confirmed: false,
     criteria,
-    ...value,
     ...patch,
   });
 
