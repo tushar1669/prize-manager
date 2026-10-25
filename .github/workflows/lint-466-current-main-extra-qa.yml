@@ -21,6 +21,8 @@ jobs:
         run: npm ci --no-audit --fund=false
       - name: Typecheck application TypeScript project
         run: npx tsc -p tsconfig.app.json --noEmit
+      - name: Build application for Playwright preview webServer
+        run: npm run build
       - name: Test Swiss-Manager import E2E
         run: npm run test:swiss
       - name: Test allocator null-safety E2E
