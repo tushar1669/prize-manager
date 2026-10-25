@@ -1,5 +1,8 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
 
+**25 October 2026 — UPDATED TEAM TIE-BREAK POLICY (draft docs only; no implementation):** Owner clarified configurable ranking: total selected-player points DESC → descending selected-score vector → every *actually exported, validated and supported* individual TB1…TBn in declared order, with per-group organizer reordering inside existing Team Prizes → Edit Rules; no new route. Previous BH-C1/second-metric-only proposal is superseded. Remove Rank Sum from future ACTIVE ranking choices and Team organizer/public/print/fourth XLSX displays, preserve historical audit data. Some TB methods cannot safely be summed and exports may omit extra columns; current importer has no TB1…TBn mapping/persistence. Remaining gates: supported-metric/aggregation spec, published tournament authority, fixed primary vs alternate rule, missing-data behavior, production dependency/recovery, then separate approval before code/migration/deploy. Team #478 still uses old Rank Sum; visuals only approved. See [updated Team decision](docs/team-championship/TEAM_TIEBREAK_V2_DECISION_AND_HANDOFF_2026-10-25.md) and [continuation handoff](docs/handoffs/PRIZE_MANAGER_CONTINUATION_2026-10-25.md).
+
+
 ## 0. Continuity checkpoint — 24 October 2026 (draft documentation only)
 
 This is a bounded resume note. The 28 September body below is legacy history, not proof of current deployments; do not discard it or infer priorities from absent canonical files.
