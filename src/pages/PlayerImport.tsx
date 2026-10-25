@@ -77,6 +77,7 @@ import {
 } from '@/utils/valueNormalizers';
 import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
+import { detectImportedTieBreakColumns } from '@/utils/importTieBreakColumns';
 import {
   isFeatureEnabled,
   IMPORT_DEDUP_ENABLED,
@@ -593,6 +594,10 @@ export default function PlayerImport() {
   const nameHeaderCandidates = useMemo(() => {
     return getNameHeaderCandidates(headers);
   }, [headers]);
+  const previewTieBreakColumns = useMemo(
+    () => detectImportedTieBreakColumns(headers, (parsedData as Record<string, unknown>[]).slice(0, 20)),
+    [headers, parsedData],
+  );
 
   const persistImportLog = useCallback(async (payload: ImportLogInsert) => {
     if (!IMPORT_LOGS_ENABLED) {
@@ -2950,6 +2955,22 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
+            {previewTieBreakColumns.length > 0 && (
+              <div className="rounded-md border px-4 py-3 text-sm" role="status">
+                <p className="font-medium">
+                  Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col => `TB${col.ordinal}`).join(', ')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Preview only (up to 20 rows). These source TB columns are not yet saved or used
+                  for Team Prize rankings. The method, direction and team calculation need validation.
+                </p>
+                {previewTieBreakColumns.some(col => col.duplicateOrdinal || col.sampleInvalid > 0) && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Duplicate tie-break positions or invalid preview values detected. Review the file before using its tie-breaks.
+                  </p>
+                )}
+              </div>
+            )}
             {CONFLICT_REVIEW_ENABLED && conflicts.length > 0 && (
               <Card className="border-warning/30 bg-warning/10">
                 <CardHeader>
