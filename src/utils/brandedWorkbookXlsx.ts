@@ -14,6 +14,7 @@ const REPORT_ACCENT: Record<string, string> = {
   Winners: COLORS.gold,
   'Poster Grid': COLORS.navy,
   'Arbiter Sheet': COLORS.teal,
+  'Team Prizes': COLORS.gold,
   AllocationCoverage: COLORS.teal,
   RCA: '99571F',
 };
@@ -27,6 +28,8 @@ const WIDTHS: Record<string, number> = {
   Status: 15, 'Winner Rank': 16, 'Winner Rating': 18,
   Eligible: 14, Available: 14, 'Reason Label': 33, 'Root Cause': 34,
   Diagnosis: 44, 'Suggested Fix': 46, 'Fail Codes': 34,
+  'Prize Group': 25, 'Team / Institution': 34, 'Team Players': 46,
+  Points: 12, 'Cash Amount': 18, 'Best Rank': 14,
 };
 
 type ExportCell = { s?: Record<string, unknown> };
@@ -63,7 +66,7 @@ function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     const data = rows[rowIndex];
-    const groupName = String(data['Category Name'] ?? data.Category ?? '').trim();
+    const groupName = String(data['Prize Group'] ?? data['Category Name'] ?? data.Category ?? '').trim();
     if (!sectionMap.has(groupName)) sectionMap.set(groupName, nextSection++);
     const groupIndex = sectionMap.get(groupName) ?? 0;
     const isMain = data['Is Main'] === 'Yes' ||
@@ -77,7 +80,8 @@ function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>
       const emphasis = ['Place', 'Rank', 'Winner Rank'].includes(header);
       const isSignature = header === 'Signature';
       const isStatus = header === 'Status';
-      const isAmount = header === 'Amount';
+      const isAmount = header === 'Amount' || header === 'Cash Amount';
+      const centeredFlag = ['Trophy', 'Medal', 'Has Trophy', 'Has Medal', 'Has Gift'].includes(header);
       cell.s = {
         fill: { fgColor: { rgb: isSignature ? COLORS.white : baseFill } },
         font: {
@@ -87,7 +91,7 @@ function decorateSheet(sheet: XLSXStyle.WorkSheet, rows: Record<string, unknown>
         },
         alignment: {
           vertical: 'center',
-          horizontal: emphasis ? 'center' : (isAmount ? 'right' : 'left'),
+          horizontal: emphasis || centeredFlag || isStatus ? 'center' : (isAmount ? 'right' : 'left'),
           wrapText: !emphasis && !isAmount,
         },
         border: ruled,
