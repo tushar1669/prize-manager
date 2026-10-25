@@ -80,8 +80,8 @@ it('writes two complete synthetic XLSX files for actual OOXML and visual inspect
 });
 
 const teamRows = [
-  { 'Prize Group': 'Best School', Place: 1, 'Team / Institution': 'Synthetic School A', 'Team Players': 'A (#1), B (#2)', Points: 12, 'Cash Amount': 5000, Trophy: 'Yes', Medal: 'No' },
-  { 'Prize Group': 'Best Club', Place: 1, 'Team / Institution': 'Synthetic Club B', 'Team Players': 'C (#3), D (#4)', Points: 11, 'Cash Amount': 3000, Trophy: 'No', Medal: 'Yes' },
+  { 'Prize Group': 'Best School', Place: 1, 'Team / Institution': 'Synthetic School A', 'Team Players': 'Synthetic Player One (#1), Synthetic Player Two (#2)', Points: 12, 'Cash Amount': 5000, Trophy: 'Yes', Medal: 'No' },
+  { 'Prize Group': 'Best Club', Place: 1, 'Team / Institution': 'Synthetic Club B', 'Team Players': 'Synthetic Player Three (#3), Synthetic Player Four (#4)', Points: 11, 'Cash Amount': 3000, Trophy: 'No', Medal: 'Yes' },
 ];
 
 describe('XLSX visual spacing and prepared fourth Team Prizes sheet', () => {
@@ -100,6 +100,8 @@ describe('XLSX visual spacing and prepared fourth Team Prizes sheet', () => {
     });
     expect(wb.SheetNames).toEqual(['Winners', 'Poster Grid', 'Arbiter Sheet', 'Team Prizes']);
     expect(StyledXLSX.utils.sheet_to_json(wb.Sheets['Team Prizes'])).toEqual(teamRows);
+    expect(String(teamRows[0]['Team Players'])).toContain('Synthetic Player One (#1), Synthetic Player Two (#2)');
+    expect(String(teamRows[1]['Team Players'])).toContain('Synthetic Player Three (#3), Synthetic Player Four (#4)');
     const team = wb.Sheets['Team Prizes'];
     const styled = (address: string) => team[address] as {
       t: string; v: unknown; s?: { fill?: { fgColor?: { rgb?: string } }; alignment?: { horizontal?: string }; numFmt?: string };
