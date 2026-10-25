@@ -212,7 +212,7 @@ function GroupCard({
     diagnostics.players_without_points === selectedPoolSize;
 
   return (
-    <Card>
+    <Card className="pm-team-prize-group">
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
