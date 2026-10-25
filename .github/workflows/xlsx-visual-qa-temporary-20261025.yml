@@ -1,0 +1,36 @@
+name: Branded XLSX visual regression (temporary evidence)
+on:
+  push:
+    branches: [design/final-allocation-rca-xlsx-20261024]
+jobs:
+  xlsx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --fund=false
+      - name: Run branded and existing export tests
+        run: npx vitest run tests/utils/branded-workbook.spec.ts tests/utils/final-prize-export.spec.ts tests/utils/allocation-rca-export.spec.ts
+      - name: Lint changed Excel utilities and specs
+        run: npx eslint src/utils/excel.ts src/utils/brandedWorkbookXlsx.ts tests/utils/branded-workbook.spec.ts
+      - name: Build frontend
+        run: npm run build
+      - name: Inspect generated XLSX artifacts
+        run: |
+          test -s artifacts/branded-xlsx/final-winners.xlsx
+          test -s artifacts/branded-xlsx/allocation-and-rca.xlsx
+          test -s artifacts/branded-xlsx/four-sheet-with-team.xlsx
+          unzip -p artifacts/branded-xlsx/four-sheet-with-team.xlsx xl/styles.xml | grep -q 'B38A32'
+          unzip -p artifacts/branded-xlsx/four-sheet-with-team.xlsx xl/styles.xml | grep -q 'ECF6F1'
+      - name: Upload synthetic workbook files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-branded-excel-visual-v2
+          path: artifacts/branded-xlsx/
+          if-no-files-found: ignore
