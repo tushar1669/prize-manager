@@ -60,3 +60,16 @@ Shipped `compareInstitutions` first ties on 12 points, then chooses **B** becaus
 **Single decision requested:** When teams have the same verified total points, should **Rank Sum remain an explicitly disclosed tie-break ONLY IF published in the event rules** (with manual adjudication otherwise), or should all ties go **straight to organizer/arbiter review** as the default, with no automatic Rank Sum? **Recommended: manual review by default** for institution prizes, because no standard rank-sum tie-break was established for these derivative awards.
 
 Missing/invalid selected points should never silently masquerade as zero; this recommendation is held as a data-integrity requirement subject to current-runtime and recovery verification, not an authorization to change production logic.
+
+
+---
+
+## 25 October 2026 owner decision and newer proposal — authoritative continuation
+
+**OWNER DECIDED:** Remove **automatic Rank Sum** from active team-prize ranking and active display outputs. Tied verified points must honor applicable pre-published tournament rules; otherwise require authorized organizer/arbiter resolution. Do not silently choose a cash winner by Rank Sum or alphabetical fallback. This supersedes the earlier A/B choice posed in this RCA; it does **not** authorize destructive deletion of historic fields, production mutation, merge or deployment.
+
+**OWNER NEW CASCADE — PROPOSAL ONLY, discussion first:** (1) sum valid selected player points DESC; (2) compare selected individuals’ *points* from highest to lowest, lexicographically DESC; (3) sum the selected players’ per-player **Buchholz Cut-1** DESC; (4) sum the selected players’ **'second tie-break'** DESC, but the metric is not yet identified (BH? SB? event-configured TB2?); (5) if still tied, mark **pending resolution / optional playoff subject to tournament regulations**, not an automatically awarded rank. Example A (7,5; ranks 1,5) vs B (6,6; ranks 2,3) reverses the *old* Rank Sum result: proposed score-vector tier would favor A (7>6) where the published rules permit this approach. For 3+ tied teams handle each remaining tie subgroup consistently. Missing points or tie-break cells must fail closed rather than becoming 0.
+
+**VERIFIED IMPORT BLOCKER:** `src/utils/headerAliases.ts`, `src/utils/importPresets.ts` and `players` schema currently do **not** map or store individual BH-C1 or TB2; merely exporting them from Swiss-Manager does not make them available. They require separately validated import/storage/versioning work. Playoffs require explicit event rules and recorded results, not just a UI status.
+
+**Full proposed contract, source/standards links, execution gates and cross-chat status:** [Team Tie-break v2 — Decision and Handoff](TEAM_TIEBREAK_V2_DECISION_AND_HANDOFF_2026-10-25.md). Until specific TB2 identity, published-rule applicability and safe production recovery are verified, **BLOCKED**. No scoring, import, database, PDF or XLSX code changed by this note.
