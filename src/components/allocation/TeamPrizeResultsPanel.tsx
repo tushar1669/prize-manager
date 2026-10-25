@@ -175,6 +175,7 @@ function GroupCard({
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
+  const rankingIssues = group.ranking_issues ?? [];
 
   // TC1.6 masking — ORGANIZER preview surfaces only (callers wire hasFullAccess;
   // the public path never does, so it always renders unmasked). Inverse of the
@@ -245,6 +246,18 @@ function GroupCard({
 
         <CollapsibleContent>
           <CardContent className="pt-0 space-y-4">
+            {rankingIssues.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Team ranking requires review before finalization</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {rankingIssues.map((issue, index) => <li key={index}>{issue}</li>)}
+                  </ul>
+                  <p className="mt-2 text-xs">Unverified or exhausted tie-breaks cannot produce automatic cash winners.</p>
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Winners table */}
             {filledPrizes.length > 0 ? (
               <div className="rounded-md border">
@@ -254,8 +267,6 @@ function GroupCard({
                       <TableHead className="w-16">Place</TableHead>
                       <TableHead>Team</TableHead>
                       <TableHead className="text-right">Points</TableHead>
-                      <TableHead className="text-right">Rank Sum</TableHead>
-                      <TableHead className="text-right">Best Rank</TableHead>
                       <TableHead className="text-right">Prize</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -274,7 +285,7 @@ function GroupCard({
                                 {getPlaceOrdinal(prize.place)}
                               </div>
                             </TableCell>
-                            <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                            <TableCell colSpan={3} className="text-sm text-muted-foreground">
                               Locked — upgrade to Pro to reveal this placing
                             </TableCell>
                           </TableRow>
@@ -307,12 +318,6 @@ function GroupCard({
                             <TableCell className="text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}
                             </TableCell>
-                            <TableCell className="text-right font-mono text-muted-foreground">
-                              {winner.rank_sum}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-muted-foreground">
-                              #{winner.best_individual_rank}
-                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-1">
                                 {prize.cash_amount > 0 && (
@@ -330,7 +335,7 @@ function GroupCard({
                 </Table>
                 {pointsAbsent && (
                   <p className="px-3 py-2 text-xs text-muted-foreground border-t">
-                    Points were not imported for this tournament. Teams were ranked by rank sum.
+                    Points are missing for selected players. Team prizes require verified points before ranking.
                   </p>
                 )}
                 {hiddenFilledPrizes.length > 0 && (
@@ -344,7 +349,7 @@ function GroupCard({
             ) : (
               <Alert variant="default" className="border-warning/30 bg-warning/10">
                 <AlertCircle className="h-4 w-4 text-warning" />
-                <AlertTitle className="text-warning">No eligible teams found</AlertTitle>
+                <AlertTitle className="text-warning">{rankingIssues.length > 0 ? 'Team prizes need ranking review' : 'No eligible teams found'}</AlertTitle>
                 <AlertDescription className="text-warning mt-2">
                   <p className="mb-2">Common causes:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm">
@@ -368,7 +373,7 @@ function GroupCard({
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>{unfilledPrizes.length} unfilled prize{unfilledPrizes.length !== 1 ? 's' : ''}</AlertTitle>
                 <AlertDescription>
-                  Not enough eligible teams to fill all places.
+                  {rankingIssues.length > 0 ? 'One or more prize places are withheld pending verified ranking rules or an authorized ruling.' : 'Not enough eligible teams to fill all places.'}
                 </AlertDescription>
               </Alert>
             )}
@@ -386,7 +391,7 @@ function GroupCard({
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertTitle className="text-destructive">Tie detected at place {tieInfo.affectedPlaces[tieInfo.affectedPlaces.length - 1]}</AlertTitle>
                 <AlertDescription className="text-destructive/80">
-                  {tieInfo.tiedInstitutions.length} teams have identical scores ({tieInfo.tiedInstitutions[0]?.total_points} pts, rank sum {tieInfo.tiedInstitutions[0]?.rank_sum}).
+                  {tieInfo.tiedInstitutions.length} teams have an unresolved historical ranking tie.
                   <div className="mt-2">
                     <Button
                       size="sm"
