@@ -25,6 +25,10 @@ The targeted QA run and workbook ZIP artifact **do not prove visual opening in d
 
 The temporary GitHub Actions workflow `.github/workflows/xlsx-lock-generator-20261024.yml` was **deleted on draft-only commit `29efaa78bf3ecef843503948cfb8d2f744b701ae`** AFTER the successful tested commit, per PR's earlier cleanup gate. The deletion does not modify the tested TypeScript implementation; no new workflow-run success is claimed for cleanup commits.
 
+## Dependency advisory follow-up — separate security gate
+
+Current repo's **existing** npm `xlsx@0.18.5` reader is historically affected by the crafted-file **prototype pollution** [CVE-2023-30533](https://cdn.sheetjs.com/advisories/CVE-2023-30533) and **ReDoS** [CVE-2024-22363](https://advisories.gitlab.com/pkg/npm/xlsx/). The official SheetJS advisory explicitly says output-only workflows are not affected by the prototype-pollution reading pathway; this draft keeps `xlsx-js-style` on **writing only** and the existing import-reader code unchanged. `xlsx-js-style@1.2.0` is assessed [inactive by Snyk](https://security.snyk.io/package/npm/xlsx-js-style), despite no direct advisories in that database. **Do not assert the fork is patched or clear a security review based only on targeted tests.** The pre-existing import-reader risk merits separately authorized dependency assessment/remediation (out of this styling PR's scope); do not quietly swap import parsers or weaken validation here.
+
 ## Next exact action
 
 Review actual **synthetic XLSX fixture files** for worksheet visual legibility in a real spreadsheet application and verify maintained reporting dependency/security. Then (in a separate coherent task) integrate the distinct draft #478 Team fourth worksheet only after the verified ranking policy and historical version compatibility are ready. No merger, deployment or publish permission from this QA approval.
