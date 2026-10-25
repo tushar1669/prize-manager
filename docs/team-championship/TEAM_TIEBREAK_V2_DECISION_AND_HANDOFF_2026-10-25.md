@@ -7,6 +7,10 @@
 **Priority/backlog ID:** UNKNOWN, because BACKLOG.md absent from main.
 **Tracking:** record lives on existing unmerged documentation draft [#468](https://github.com/tushar1669/prize-manager/pull/468), beside [prior scoring RCA](TEAM_SCORING_AND_RANK_SUM_RCA_2026-10-25.md).
 
+## CONTRACT CHECKPOINT — owner approved scope, specification drafted (25 October 2026)
+
+The owner's subsequent **“I approve, go ahead”** authorizes the previously described **workflow step of completing the fixed-primary, organizer-reorderable Team TB specification**, **not** a merge/deployment or production change. The single authoritative implementation contract is [TEAM_RANKING_CONFIGURABLE_TB_CONTRACT_2026-10-25.md](TEAM_RANKING_CONFIGURABLE_TB_CONTRACT_2026-10-25.md) in this **draft PR #468**. It documents dynamic detected TB1…TBn, compatible named-method aggregations, fixed primary points, score-vector and TB reordering, complete validation/error behavior, role/version/publication invariants, output parity, test acceptance and rollback gates. The old “which one second TB?” question and “cascade not approved” headings below are **historical**, superseded by this approved policy direction; **code, schema, import support, tests and releases remain NOT IMPLEMENTED/NOT AUTHORIZED**. Next one action: targeted read-only production dependency/recovery check for import and team snapshots, followed by a separately reviewable implementation plan; no protected `finalize` or individual engine edits.
+
 ## REVISION 2026-10-25 — configurable imported-TB cascade (latest owner direction)
 
 **Decision status:** Owner has now clarified the intended **default rule ordering and organizer configurability**, superseding the previous open question about a single named "second tie-break". This is **policy/UI intent and documentation only**; implementation specification remains **BLOCKED pending rule validation and production-safe recovery evidence**, and is NOT authorization to change code, migrations, PR draft status, main, published allocations, or production. The external standards do not make this custom team aggregation a universal FIDE rule.
