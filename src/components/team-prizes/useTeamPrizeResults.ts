@@ -74,6 +74,13 @@ type TeamPrizeCacheEntry = {
 
 const teamPrizeResultCache = new Map<string, TeamPrizeCacheEntry>();
 
+/** Expire preview data after team-rule/prize edits, without rewriting snapshots. */
+export function invalidateTeamPrizeResultCache(tournamentId: string): void {
+  for (const key of teamPrizeResultCache.keys()) {
+    if (key.startsWith(`${tournamentId}:`)) teamPrizeResultCache.delete(key);
+  }
+}
+
 function getCacheKey(tournamentId: string, allocationVersion?: number | string) {
   const versionKey = allocationVersion ?? 'latest';
   return `${tournamentId}:${versionKey}`;
