@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 const mocks = vi.hoisted(() => ({
   allocations: [] as Array<Record<string, unknown>>,
@@ -60,5 +61,13 @@ describe('version-pinned team prize queries', () => {
     mocks.invoke.mockReset();
     await expect(fetchTeamPrizeResults('pin-invalid', 'NaN')).rejects.toThrow('Invalid team allocation version');
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('Final Prize Team tab uses the same allocation version as individual results', () => {
+  it('passes the selected saved version into Team Prizes, preserving draft preview for no version', () => {
+    const page = readFileSync('src/pages/FinalPrizeView.tsx', 'utf8');
+    expect(page).toContain('useFinalPrizeData(id)');
+    expect(page).toMatch(/<TeamPrizesTabView[^>]+allocationVersion=\\{data\\.version \\?\\? undefined\\}/);
   });
 });

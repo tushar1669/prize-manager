@@ -127,7 +127,7 @@ export default function FinalPrizeView() {
                   <ArbiterSheetView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />
                 </TabsContent>
                 <TabsContent value="v5" className={`m-0 ${normalized !== 'v5' ? 'print:hidden' : ''}`}>
-                  <TeamPrizesTabView tournamentId={id as string} hasFullAccess={hasFullAccess} />
+                  <TeamPrizesTabView tournamentId={id as string} allocationVersion={data.version ?? undefined} hasFullAccess={hasFullAccess} />
                 </TabsContent>
               </div>
             )}
