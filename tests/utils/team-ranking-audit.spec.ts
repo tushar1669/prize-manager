@@ -46,13 +46,16 @@ describe('versioned team-ranking audit saved per award', () => {
         { kind: 'score_vector' }, { kind: 'source_tb', ordinal: 2, direction: 'lower' },
       ] },
       decided_by_criterion: 'TB2', winner_key: 'A',
-      candidates: [{ key: 'A', selected_players: [
-        { player_id: 'a1', points: 6, source_hash: 'import-fixture', individual_tbs: { '1': 0, '2': 7 } },
-        { player_id: 'a2', points: 6 },
-      ] }],
-      partitions: [{ status: 'resolved', team_keys: ['A'], criterion: 'TB2' }],
     });
+    // Audit intentionally includes both competing teams; assert each member
+    // and both lengths rather than mistakenly expecting a single-item array.
+    expect(snapshot?.candidates[0]).toMatchObject({ key: 'A', selected_players: [
+      { player_id: 'a1', points: 6, source_hash: 'import-fixture', individual_tbs: { '1': 0, '2': 7 } },
+      { player_id: 'a2', points: 6 },
+    ] });
+    expect(snapshot?.partitions[0]).toMatchObject({ status: 'resolved', team_keys: ['A'], criterion: 'TB2' });
     expect(snapshot?.candidates).toHaveLength(2);
+    expect(snapshot?.partitions).toHaveLength(2);
     expect(JSON.stringify(snapshot)).not.toContain('Synthetic One');
   });
 
