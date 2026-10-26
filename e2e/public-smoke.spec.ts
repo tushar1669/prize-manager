@@ -137,7 +137,7 @@ test.describe('@smoke public navigation', () => {
     await expect(page.getByRole('heading', { name: SMOKE_TOURNAMENT.title })).toBeVisible();
 
     await page.getByRole('button', { name: /back/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/public');
   });
 
   test('results page back button returns to home @smoke', async ({ page }) => {
@@ -145,6 +145,6 @@ test.describe('@smoke public navigation', () => {
     await expect(page.getByRole('heading', { name: SMOKE_TOURNAMENT.title })).toBeVisible();
 
     await page.getByRole('button', { name: /back/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/public');
   });
 });
