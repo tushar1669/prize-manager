@@ -33,7 +33,7 @@ const knownInertBaselineHits = [
   ["docs/PRD_V2_1_CONTEXT_LOCKED.md", { lineNumber: 331, line: "- no CSV support" }],
   ["docs/PRD_V2_1_CONTEXT_LOCKED.md", { lineNumber: 419, line: "- whether CSV is supported" }],
   ["docs/extraction-engine/PHASE2_PRD.md", { lineNumber: 115, line: "- Bank statement upload → UTR matching → confirmed/missing/unmatched report with CSV export." }],
-  ["src/utils/excel.ts", { lineNumber: 475, line: "    ['Use only .xlsx or .xls files. CSV is not supported.']," }],
+  ["src/utils/excel.ts", { lineNumber: 476, line: "    ['Use only .xlsx or .xls files. CSV is not supported.']," }],
 ];
 
 const isKnownInertBaselineHit = (file, lineNumber, line) =>
