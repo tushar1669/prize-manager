@@ -1,8 +1,9 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 import { exportUpgradeHint, resolveFreePlayerThreshold } from '../_shared/tournamentAccess.ts';
+import { buildVersionedTeamPdfResults, type PinnedTeamGroup, type PinnedTeamPrize, type PinnedTeamAllocation } from '../_shared/teamPdfSnapshot.ts';
 
-const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const BUILD_VERSION = "2026-10-27-version-pinned-team-pdf";
 const FUNCTION_NAME = "generatePdf";
 const MISSING_ACCESS_RPC_MESSAGE = 'Database migrations not deployed (missing get_tournament_access_state)';
 
@@ -76,7 +77,7 @@ type CachedTeamPrizes = {
   expiresAt: number;
 };
 
-const TEAM_PRIZE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const TEAM_PRIZE_CACHE_TTL_MS = 5 * 60 * 1000;
 const teamPrizeCache = new Map<string, CachedTeamPrizes>();
 
 const GROUP_BY_LABELS: Record<string, string> = {
@@ -148,81 +149,59 @@ function getPlaceOrdinal(place: number): string {
 async function loadTeamPrizes(
   supabaseClient: SupabaseClient,
   tournamentId: string,
-  authHeader: string
-) {
-  const cacheKey = `${tournamentId}:latest`;
+  version: number,
+): Promise<CachedTeamPrizes> {
+  // A version-pinned PDF must never display another version's team ranking.
+  const cacheKey = `${tournamentId}:${version}`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > now) {
-    return cached;
-  }
+  if (cached && cached.expiresAt > now) return cached;
 
   let teamPrizeResults: TeamPrizeResults | null = null;
   let teamPrizeError: string | null = null;
 
   try {
-    const { count, error: countError } = await supabaseClient
-      .from('institution_prize_groups')
-      .select('*', { count: 'exact', head: true })
+    const { data: allocations, error: allocationError } = await supabaseClient
+      .from('team_allocations')
+      .select('group_id, prize_id, place, institution_key, total_points, player_snapshot')
       .eq('tournament_id', tournamentId)
-      .eq('is_active', true);
+      .eq('version', version);
+    if (allocationError) throw new Error('Team allocation version could not be loaded');
 
-    if (countError) {
-      console.error('[generatePdf] Error checking team prizes:', countError);
-      teamPrizeError = countError.message || 'Unknown error';
-    } else if ((count || 0) > 0) {
-      const { data: latestAlloc } = await supabaseClient
-        .from('team_allocations')
-        .select('version')
-        .eq('tournament_id', tournamentId)
-        .order('version', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: groups, error: groupsError } = await supabaseClient
+      .from('institution_prize_groups')
+      .select('id, name, group_by, team_size, female_slots, male_slots, scoring_mode')
+      .eq('tournament_id', tournamentId)
+      .eq('is_active', true)
+      .order('name');
+    if (groupsError) throw new Error('Team Prize group definitions could not be loaded');
 
-      if (latestAlloc?.version != null) {
-        const { data: persistedData, error: persistedError } = await supabaseClient.functions.invoke('publicTeamPrizes', {
-          body: { tournament_id: tournamentId }
-        });
-        if (!persistedError && persistedData?.groups?.length) {
-          teamPrizeResults = persistedData as TeamPrizeResults;
-        }
-      }
-
-      if (!teamPrizeResults) {
-        console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
-        const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
-          'allocateInstitutionPrizes',
-          {
-            body: { tournament_id: tournamentId },
-            headers: { Authorization: authHeader }
-          }
-        );
-
-        if (teamError) {
-          console.error('[generatePdf] Team prize allocation error:', teamError);
-          teamPrizeError = teamError.message || 'Unknown error';
-        } else {
-          teamPrizeResults = teamData as TeamPrizeResults;
-          console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
-        }
-      }
-    } else {
-      console.log('[generatePdf] No active team prize groups');
+    const groupRows = (groups ?? []) as PinnedTeamGroup[];
+    let prizeRows: PinnedTeamPrize[] = [];
+    if (groupRows.length > 0) {
+      const { data: prizes, error: prizesError } = await supabaseClient
+        .from('institution_prizes')
+        .select('id, group_id, place, cash_amount, has_trophy, has_medal')
+        .in('group_id', groupRows.map(group => group.id))
+        .eq('is_active', true)
+        .order('place');
+      if (prizesError) throw new Error('Team Prize definitions could not be loaded');
+      prizeRows = (prizes ?? []) as PinnedTeamPrize[];
     }
-  } catch (e: unknown) {
-    console.error('[generatePdf] Exception loading team prizes:', e);
-    teamPrizeError = e instanceof Error ? e.message : 'Unknown error';
+
+    // The only award source is team_allocations at precisely the requested version.
+    // Missing rows are unfilled places, not permission to recompute live rankings.
+    teamPrizeResults = buildVersionedTeamPdfResults(
+      groupRows, prizeRows, (allocations ?? []) as PinnedTeamAllocation[],
+    );
+  } catch {
+    // Never log player data, nor return a partial export on historical read failure.
+    teamPrizeError = 'Version-pinned Team Prize data could not be verified';
   }
 
-  const cacheEntry: CachedTeamPrizes = {
-    data: teamPrizeResults,
-    error: teamPrizeError,
-    expiresAt: now + TEAM_PRIZE_CACHE_TTL_MS,
-  };
-
-  teamPrizeCache.set(cacheKey, cacheEntry);
-  return cacheEntry;
+  const entry = { data: teamPrizeResults, error: teamPrizeError, expiresAt: now + TEAM_PRIZE_CACHE_TTL_MS };
+  if (!teamPrizeError) teamPrizeCache.set(cacheKey, entry);
+  return entry;
 }
 
 Deno.serve(async (req) => {
@@ -331,6 +310,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!Number.isSafeInteger(version) || version < 1) {
+      return new Response(
+        JSON.stringify({ error: 'invalid_allocation_version' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     console.log(`[generatePdf] Generating PDF for tournament ${tournamentId}, version ${version}`);
 
     // 1) Fetch tournament details
@@ -362,8 +348,9 @@ Deno.serve(async (req) => {
     const { data: teamPrizeResults, error: teamPrizeError } = await loadTeamPrizes(
       supabaseClient,
       tournamentId,
-      authHeader
+      version
     );
+    if (teamPrizeError) throw new Error('Version-pinned Team Prize export is unavailable');
 
     // 4) Generate HTML report
     const htmlContent = generateHtmlReport(tournament, allocations, version, teamPrizeResults, teamPrizeError);
