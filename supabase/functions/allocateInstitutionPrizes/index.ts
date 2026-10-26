@@ -8,6 +8,7 @@ import {
   type TeamWarning,
 } from "../_shared/teamPrizes.ts";
 import { rankTeamCandidatesV2, parseTeamRankingRuleConfig } from "../_shared/teamRankingV2.ts";
+import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
 // version number is not evidence of a deploy. It must therefore change whenever this
@@ -111,6 +112,7 @@ interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  ranking_snapshot?: NonNullable<ReturnType<typeof buildTeamRankingAwardAudit>>;
   tied_at_boundary?: boolean;
   /**
    * ARCHITECTURE §4 warn codes raised by the scorer for this institution. Present
@@ -479,6 +481,7 @@ Deno.serve(async (req: Request) => {
           const raw = rawPlayerById.get(selected.id);
           const sourceTbs = parsePlayerTbs(raw?.tags_json);
           return {
+            playerId: selected.id,
             points: typeof raw?.points === 'number' && Number.isFinite(raw.points) ? raw.points : null,
             sourceHash: sourceTbs?.sourceHash ?? null,
             individualTieBreaks: sourceTbs?.values ?? {},
@@ -518,6 +521,14 @@ Deno.serve(async (req: Request) => {
             rank_sum: winner.rank_sum,
             best_individual_rank: winner.best_individual_rank,
             players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+            ranking_snapshot: buildTeamRankingAwardAudit(
+              group.id,
+              { group_by: group.group_by, team_size: group.team_size, female_slots: group.female_slots,
+                male_slots: group.male_slots, scoring_mode: group.scoring_mode },
+              { id: prize.id, place: prize.place, cash_amount: prize.cash_amount,
+                has_trophy: prize.has_trophy, has_medal: prize.has_medal },
+              winner.key, config, selectedCandidates, partitions,
+            ) ?? undefined,
             tied_at_boundary: false,
             ...(winner.warnings ? { warnings: winner.warnings } : {}),
           } : null,

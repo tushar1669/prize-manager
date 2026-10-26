@@ -248,6 +248,14 @@ Deno.serve(async (req) => {
             total_points: prize.winner_institution!.total_points,
             player_ids: prize.winner_institution!.players.map((p) => p.player_id),
             player_snapshot: prize.winner_institution!.players,
+            // Written only to the new nullable additive column on a NEW version.
+            // Historical allocation rows remain untouched.
+            ranking_snapshot: {
+              ...prize.winner_institution!.ranking_snapshot,
+              allocation_version: nextVersion,
+              finalized_by: user.id,
+              finalized_at: new Date().toISOString(),
+            },
           }))
       );
 
