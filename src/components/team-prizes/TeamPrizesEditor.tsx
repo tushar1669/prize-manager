@@ -289,7 +289,9 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                         if (!rules) return null;
                         const ordered = rules.criteria.map(rule => rule.kind === 'score_vector'
                           ? 'Highest scorer'
-                          : `TB${rule.ordinal}`);
+                          : `TB${rule.ordinal}${rule.verified && rule.name.trim()
+                            ? ` (${rule.name.trim()})`
+                            : ' (needs definition)'}`);
                         return (
                           <Badge variant="outline" className="max-w-full whitespace-normal">
                             Ranking: Total points → {ordered.join(' → ')}

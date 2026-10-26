@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
+import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
 import type {
   TeamPrizeResultsResponse,
@@ -326,6 +327,11 @@ function GroupCard({
                                   </span>
                                 ))}
                               </div>
+                              {teamAppliedCriterionLabel(winner.ranking_snapshot) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Tie-break applied: {teamAppliedCriterionLabel(winner.ranking_snapshot)}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="pm-team-prize-stat text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}

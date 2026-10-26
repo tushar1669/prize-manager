@@ -18,6 +18,8 @@ export interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  /** Saved server v2 audit, absent on legacy awards. */
+  ranking_snapshot?: unknown;
 }
 
 export interface GroupConfig {
@@ -181,6 +183,7 @@ export async function fetchTeamPrizeResults(
                       rank_sum: rankSum,
                       best_individual_rank: bestRank,
                       players: snapshot,
+                      ranking_snapshot: winner.ranking_snapshot ?? null,
                     }
                   : null,
               };
