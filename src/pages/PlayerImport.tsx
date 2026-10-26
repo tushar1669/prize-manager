@@ -113,6 +113,7 @@ import { buildImportGenderSummary } from "@/utils/importGenderSummary";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { invalidateTeamPrizeResultCache } from '@/components/team-prizes/useTeamPrizeResults';
 import {
   buildSupabasePlayerPayload,
   type ParsedPlayer,
@@ -985,6 +986,10 @@ export default function PlayerImport() {
       return true;
     },
     onSuccess: () => {
+      if (id) {
+        invalidateTeamPrizeResultCache(id);
+        void queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] });
+      }
       toast.success('Cleared all players');
       setParsedData([]);
       setHeaders([]);
@@ -1462,6 +1467,8 @@ export default function PlayerImport() {
           await queryClient.invalidateQueries({ queryKey: ['players-list', id] }).catch(() => {});
           await queryClient.invalidateQueries({ queryKey: ['prizes', id] }).catch(() => {});
           await queryClient.invalidateQueries({ queryKey: ['prizes-list', id] }).catch(() => {});
+          invalidateTeamPrizeResultCache(id);
+          await queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] }).catch(() => {});
         }
         navigate(`/t/${id}/review`);
       } else {
