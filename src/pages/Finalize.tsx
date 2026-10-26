@@ -275,7 +275,8 @@ export default function Finalize() {
       title: finalPrizeData?.tournament?.title,
       winners: finalPrizeData?.winners ?? [],
       hasFullAccess,
-      teamAllocationVersion: allocationVersion,
+      // Before finalization the team output is a draft preview, not the future allocation version.
+      teamAllocationVersion: finalizeResult?.version,
     });
 
     if (result.ok) {
