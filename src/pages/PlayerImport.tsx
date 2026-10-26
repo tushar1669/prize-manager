@@ -1457,6 +1457,12 @@ export default function PlayerImport() {
 
       clearDraft(importDraftKey);
       resetDirty('import');
+      // A partial import may have modified players even when some rows fail.
+      // Never reuse a cached Team Prize ranking after any import write attempt.
+      if (id) {
+        invalidateTeamPrizeResultCache(id);
+        await queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] }).catch(() => {});
+      }
 
       if (results.failed.length === 0) {
         toast.success(
@@ -1467,8 +1473,6 @@ export default function PlayerImport() {
           await queryClient.invalidateQueries({ queryKey: ['players-list', id] }).catch(() => {});
           await queryClient.invalidateQueries({ queryKey: ['prizes', id] }).catch(() => {});
           await queryClient.invalidateQueries({ queryKey: ['prizes-list', id] }).catch(() => {});
-          invalidateTeamPrizeResultCache(id);
-          await queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] }).catch(() => {});
         }
         navigate(`/t/${id}/review`);
       } else {
