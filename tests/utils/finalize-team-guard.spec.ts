@@ -65,7 +65,7 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
 
   it('places preflight ahead of the first individual allocation INSERT in the actual Edge route', () => {
     const source = readFileSync(
-      new URL('../../supabase/functions/finalize/index.ts', import.meta.url), 'utf8',
+      'supabase/functions/finalize/index.ts', 'utf8',
     );
     const verified = source.indexOf('verifyTeamFinalizePreview(teamData');
     const inserted = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
