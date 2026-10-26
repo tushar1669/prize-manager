@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Settings, Trash2, Users, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import {
 import { formatTeamRuleClause } from '@/components/allocation/TeamPrizeResultsPanel';
 import TeamPrizeRulesSheet from './TeamPrizeRulesSheet';
 import { parseTeamRankingRuleConfig } from './TeamRankingRulesEditor';
+import { invalidateTeamPrizeResultCache } from './useTeamPrizeResults';
 import TeamGroupPrizesTable from './TeamGroupPrizesTable';
 import { useTournamentAccess } from '@/hooks/useTournamentAccess';
 import { teamPrizeGroupLimitHint } from '@/constants/tournamentAccess';
@@ -41,6 +43,11 @@ function formatLastSaved(date: Date): string {
 }
 
 export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
+  const queryClient = useQueryClient();
+  const refreshTeamResults = useCallback(() => {
+    invalidateTeamPrizeResultCache(tournamentId);
+    void queryClient.invalidateQueries({ queryKey: ['team-prize-results', tournamentId] });
+  }, [queryClient, tournamentId]);
   const [rulesSheet, setRulesSheet] = useState<{ open: boolean; group: Partial<InstitutionPrizeGroup> | null }>({ open: false, group: null });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; group?: InstitutionPrizeGroup }>({ open: false });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -94,6 +101,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
         setExpandedGroups(prev => new Set([...prev, newGroup.id]));
         toast.success('Team group created');
       }
+      refreshTeamResults();
       setRulesSheet({ open: false, group: null });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to save group';
@@ -105,6 +113,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
     if (!deleteDialog.group) return;
     try {
       await deleteGroup.mutateAsync({ id: deleteDialog.group.id, tournamentId });
+      refreshTeamResults();
       toast.success('Team group deleted');
       setDeleteDialog({ open: false });
     } catch (e: unknown) {
@@ -116,6 +125,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
   const handleToggleActive = async (group: InstitutionPrizeGroup) => {
     try {
       await updateGroup.mutateAsync({ id: group.id, is_active: !group.is_active });
+      refreshTeamResults();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to toggle group';
       toast.error(message);
@@ -124,6 +134,7 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
 
   const handleSavePrizes = async (groupId: string, delta: InstitutionPrizeDelta) => {
     await savePrizes.mutateAsync({ groupId, tournamentId, delta });
+    refreshTeamResults();
   };
 
   const handlePrizeSaveSuccess = useCallback((groupId: string) => {
