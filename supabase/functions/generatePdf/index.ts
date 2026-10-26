@@ -496,10 +496,10 @@ function generateHtmlReport(
               </tbody>
             </table>
             ${pointsAbsent ? `
-              <p class="meta">Points were not imported for this tournament. Teams were ranked by rank sum.</p>
+              <p class="meta">Selected player points are unavailable. Verify the published team-prize rules and historical allocation record before relying on these rankings.</p>
             ` : ''}
           ` : `
-            <p class="meta">No eligible institutions for this group.</p>
+            <p class="meta">No filled Team Prizes for this group. Check team eligibility and unresolved ranking rules.</p>
           `}
         `;
       }).join('')}
