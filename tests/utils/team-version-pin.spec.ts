@@ -68,6 +68,6 @@ describe('Final Prize Team tab uses the same allocation version as individual re
   it('passes the selected saved version into Team Prizes, preserving draft preview for no version', () => {
     const page = readFileSync('src/pages/FinalPrizeView.tsx', 'utf8');
     expect(page).toContain('useFinalPrizeData(id)');
-    expect(page).toMatch(/<TeamPrizesTabView[^>]+allocationVersion=\\{data\\.version \\?\\? undefined\\}/);
+    expect(page).toContain('allocationVersion={data.version ?? undefined}');
   });
 });
