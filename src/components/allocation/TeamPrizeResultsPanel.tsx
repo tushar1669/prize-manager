@@ -154,13 +154,25 @@ function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
+/** Keep the rupee glyph and numeric value distinct in narrow printed prize cells. */
+function TeamCash({ amount }: { amount: number }) {
+  return (
+    <span className="pm-team-cash" aria-label={formatCurrency(amount)}>
+      <span aria-hidden="true" className="pm-team-cash-symbol">₹</span>
+      <span aria-hidden="true" className="pm-team-cash-digits">{amount.toLocaleString('en-IN')}</span>
+    </span>
+  );
+}
+
 function GroupCard({
   group,
+  groupIndex,
   onTieResolutionRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
+  groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
@@ -173,9 +185,9 @@ function GroupCard({
     [group.prizes]
   );
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
+  const rankingIssues = group.ranking_issues ?? [];
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
-  const rankingIssues = group.ranking_issues ?? [];
 
   // TC1.6 masking — ORGANIZER preview surfaces only (callers wire hasFullAccess;
   // the public path never does, so it always renders unmasked). Inverse of the
@@ -213,9 +225,9 @@ function GroupCard({
     diagnostics.players_without_points === selectedPoolSize;
 
   return (
-    <Card>
+    <Card className="pm-team-prize-group" data-team-tone={['gold', 'teal', 'navy'][groupIndex % 3]}>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3" data-team-group-header>
           <div className="flex items-center justify-between">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
@@ -229,25 +241,25 @@ function GroupCard({
           </div>
 
           {/* Config badges */}
-          <div className="flex flex-wrap gap-2 mt-2">
-            <Badge variant="secondary">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
-            <Badge variant="outline">Top {group.config.team_size} players</Badge>
-            {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
-            <Badge variant="secondary">
+          <div className="pm-team-prize-meta-row flex flex-wrap gap-2 mt-2">
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
+            <Badge variant="outline" className="pm-team-prize-meta-badge">Top {group.config.team_size} players</Badge>
+            {ruleClause && <Badge variant="outline" className="pm-team-prize-meta-badge">Rule: {ruleClause}</Badge>}
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">
               {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
             {filledPrizes.length > 0 && (
-              <Badge className="bg-primary/10 text-primary border-primary/20">
-                {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
+              <Badge className="pm-team-prize-meta-badge">
+                {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • <TeamCash amount={totalCash} />
               </Badge>
             )}
           </div>
         </CardHeader>
 
-        <CollapsibleContent>
+        <CollapsibleContent forceMount>
           <CardContent className="pt-0 space-y-4">
             {rankingIssues.length > 0 && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" data-team-print-hide>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Team ranking requires review before finalization</AlertTitle>
                 <AlertDescription>
@@ -315,16 +327,18 @@ function GroupCard({
                                 ))}
                               </div>
                             </TableCell>
-                            <TableCell className="text-right font-mono">
+                            <TableCell className="pm-team-prize-stat text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}
                             </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {prize.cash_amount > 0 && (
-                                  <span className="font-medium">{formatCurrency(prize.cash_amount)}</span>
+                            <TableCell className="pm-team-prize-amount text-right">
+                              <div className="pm-team-prize-value flex items-center justify-end gap-1">
+                                {prize.cash_amount > 0 && <TeamCash amount={prize.cash_amount} />}
+                                {(prize.has_trophy || prize.has_medal) && (
+                                  <span className="pm-team-prize-awards">
+                                    {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-accent" />}
+                                    {prize.has_medal && <Medal className="h-3.5 w-3.5 text-success" />}
+                                  </span>
                                 )}
-                                {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-accent" />}
-                                {prize.has_medal && <Medal className="h-3.5 w-3.5 text-success" />}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -432,7 +446,7 @@ function GroupCard({
                 persisted and public paths until TC1.6, and the empty array renders
                 nothing rather than an empty collapsible. */}
             {showDiagnostics && ineligibleDetails.length > 0 && (
-              <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>
+              <Collapsible data-team-print-hide open={showIneligible} onOpenChange={setShowIneligible}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     {showIneligible ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
@@ -495,16 +509,16 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="pm-team-prizes-overview flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Users className="h-5 w-5" />
           Team Prizes
         </h2>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
+          <Badge variant="secondary" className="pm-team-prizes-overview-badge">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
           {totalWinners > 0 && (
-            <Badge className="bg-primary/10 text-primary border-primary/20">
-              {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
+            <Badge className="pm-team-prizes-overview-badge">
+              {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • <TeamCash amount={totalCash} />
             </Badge>
           )}
         </div>
@@ -518,10 +532,11 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
       </Alert>
 
       <div className="space-y-4">
-        {data.groups.map((group) => (
+        {data.groups.map((group, groupIndex) => (
           <GroupCard
             key={group.group_id}
             group={group}
+            groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
