@@ -81,7 +81,10 @@ export function buildVersionedTeamPdfResults(
           male_slots: group.male_slots,
           scoring_mode: group.scoring_mode,
         },
-        eligible_institutions: allocations.filter(row => row.group_id === group.id).length,
+        // Historical eligibility counts are not stored; this is the count of
+        // persisted awarded snapshots, not a recomputed eligibility verdict.
+        snapshot_award_count: allocations.filter(row => row.group_id === group.id).length,
+        eligible_institutions: 0,
         ineligible_institutions: 0,
         ineligible_reasons: [] as string[],
         prizes: groupPrizes.map(prize => {

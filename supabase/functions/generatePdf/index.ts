@@ -63,6 +63,8 @@ interface GroupResponse {
    * snapshot until TC1.6. When absent the Points column behaves exactly as before.
    */
   players_without_points?: number;
+  /** Historical awards count; eligibility cannot be recovered from winners alone. */
+  snapshot_award_count?: number;
 }
 
 interface TeamPrizeResults {
@@ -445,7 +447,9 @@ function generateHtmlReport(
           <h3>${escapeHtml(group.name)}</h3>
           <p class="meta">
             ${escapeHtml(groupByLabel)} • Teams of ${group.config.team_size}${escapeHtml(genderReq)}
-            • ${group.eligible_institutions} eligible institution${group.eligible_institutions !== 1 ? 's' : ''}
+            • ${typeof group.snapshot_award_count === 'number'
+              ? `${group.snapshot_award_count} recorded team award${group.snapshot_award_count !== 1 ? 's' : ''}`
+              : `${group.eligible_institutions} eligible institution${group.eligible_institutions !== 1 ? 's' : ''}`}
           </p>
           ${filledPrizes.length > 0 ? `
             <table>

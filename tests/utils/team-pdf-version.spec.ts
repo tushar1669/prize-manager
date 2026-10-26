@@ -34,7 +34,8 @@ describe('generatePdf exact-version team award reconstruction', () => {
     });
     expect(awards[1].winner_institution).toBeNull();
     expect(awards[0].cash_amount).toBe(5000);
-    expect(result.groups[0].eligible_institutions).toBe(1);
+    expect(result.groups[0].snapshot_award_count).toBe(1);
+    expect(result.groups[0].eligible_institutions).toBe(0);
   });
 
   it('shows unfilled awards when the requested version has no team snapshot', () => {
