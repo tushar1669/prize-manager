@@ -1,4 +1,5 @@
 import type { TeamPrizeResultsResponse } from '@/components/team-prizes/useTeamPrizeResults';
+import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
 /** One row per FILLED team award, matching the Team Prizes winners table. */
 export function buildTeamPrizeExportRows(data: TeamPrizeResultsResponse | null, hasFullAccess: boolean) {
@@ -22,6 +23,7 @@ export function buildTeamPrizeExportRows(data: TeamPrizeResultsResponse | null, 
         'Team / Institution': winner.label,
         'Team Players': winner.players.map(player => `${player.name} (#${player.rank})`).join(', '),
         Points: allPointsMissing ? '' : winner.total_points,
+        'Tie-break applied': winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot) ?? '',
         'Cash Amount': prize.cash_amount,
         Trophy: prize.has_trophy ? 'Yes' : 'No',
         Medal: prize.has_medal ? 'Yes' : 'No',

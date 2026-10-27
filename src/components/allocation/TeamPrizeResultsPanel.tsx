@@ -327,9 +327,9 @@ function GroupCard({
                                   </span>
                                 ))}
                               </div>
-                              {teamAppliedCriterionLabel(winner.ranking_snapshot) && (
+                              {(winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)) && (
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  Tie-break applied: {teamAppliedCriterionLabel(winner.ranking_snapshot)}
+                                  Tie-break applied: {winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)}
                                 </div>
                               )}
                             </TableCell>

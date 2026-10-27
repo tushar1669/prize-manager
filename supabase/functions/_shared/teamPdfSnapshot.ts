@@ -5,6 +5,8 @@
  * Group and prize metadata are current relational definitions, not historical
  * snapshots. If an awarded historical ID is absent from them, fail closed.
  */
+import { teamAppliedCriterionLabel } from './teamAppliedCriterion.ts';
+
 export interface PinnedTeamGroup {
   id: string;
   name: string;
@@ -39,6 +41,7 @@ export interface PinnedTeamAllocation {
   institution_key: string;
   total_points: number;
   player_snapshot: PinnedPlayer[];
+  ranking_snapshot?: unknown;
 }
 
 export function buildVersionedTeamPdfResults(
@@ -106,6 +109,7 @@ export function buildVersionedTeamPdfResults(
                   rank_sum: players.reduce((sum, player) => sum + player.rank, 0),
                   best_individual_rank: Math.min(...players.map(player => player.rank)),
                   players,
+                  applied_rule_label: teamAppliedCriterionLabel(allocation.ranking_snapshot),
                 }
               : null,
           };

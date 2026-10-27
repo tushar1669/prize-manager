@@ -20,6 +20,8 @@ export interface WinnerInstitution {
   players: TeamPlayerInfo[];
   /** Saved server v2 audit, absent on legacy awards. */
   ranking_snapshot?: unknown;
+  /** Public API exposes only the safe named criterion, never the full audit. */
+  applied_rule_label?: string | null;
 }
 
 export interface GroupConfig {

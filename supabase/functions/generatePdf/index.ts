@@ -30,6 +30,7 @@ interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  applied_rule_label?: string | null;
 }
 
 interface GroupConfig {
@@ -165,7 +166,7 @@ async function loadTeamPrizes(
   try {
     const { data: allocations, error: allocationError } = await supabaseClient
       .from('team_allocations')
-      .select('group_id, prize_id, place, institution_key, total_points, player_snapshot')
+      .select('*')
       .eq('tournament_id', tournamentId)
       .eq('version', version);
     if (allocationError) throw new Error('Team allocation version could not be loaded');
@@ -478,6 +479,7 @@ function generateHtmlReport(
                         <div style="font-size: 11px; color: #666;">
                           ${winner.players.map(p => `${escapeHtml(p.name)} (#${p.rank})`).join(', ')}
                         </div>
+                        ${winner.applied_rule_label ? `<div style="font-size: 11px; color: #666;">Tie-break applied: ${escapeHtml(winner.applied_rule_label)}</div>` : ''}
                       </td>
                       <td>${pointsAbsent ? '&mdash;' : winner.total_points}</td>
                       <td>${escapeHtml(prizeText)}</td>
