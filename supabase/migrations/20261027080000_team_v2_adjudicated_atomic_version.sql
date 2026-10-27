@@ -83,9 +83,19 @@ BEGIN
       LEFT JOIN public.players pl ON pl.id = j.player_id
       WHERE j.prize_id IS NULL OR j.player_id IS NULL OR
         cat.tournament_id IS DISTINCT FROM p_tournament_id OR
+        cat.is_active IS DISTINCT FROM true OR
+        pz.is_active IS DISTINCT FROM true OR
         pl.tournament_id IS DISTINCT FROM p_tournament_id
     ) THEN
       RAISE EXCEPTION 'team_v2_invalid_initial_individuals';
+    END IF;
+    -- Prevent duplicate first-version prizes. The caller must still use
+    -- independently verified individual-engine winners (not user awards).
+    IF EXISTS (
+      SELECT 1 FROM jsonb_to_recordset(p_individual_rows) AS j(prize_id uuid)
+      GROUP BY j.prize_id HAVING COUNT(*) > 1
+    ) THEN
+      RAISE EXCEPTION 'team_v2_duplicate_initial_prize';
     END IF;
     INSERT INTO public.allocations (
       tournament_id, version, prize_id, player_id, reason_codes,
@@ -136,6 +146,16 @@ BEGIN
       j.ranking_snapshot ->> 'group_id' IS DISTINCT FROM j.group_id::text OR
       j.ranking_snapshot ->> 'winner_key' IS DISTINCT FROM j.institution_key OR
       j.ranking_snapshot -> 'award' ->> 'id' IS DISTINCT FROM j.prize_id::text OR
+      j.ranking_snapshot ->> 'allocation_version' IS DISTINCT FROM v_new::text OR
+      j.ranking_snapshot ->> 'finalized_by' IS DISTINCT FROM p_actor_id::text OR
+      j.ranking_snapshot -> 'declared_rules' IS DISTINCT FROM g.ranking_rules OR
+      j.ranking_snapshot -> 'declared_rules' ->> 'organizer_confirmed' IS DISTINCT FROM 'true' OR
+      NULLIF(btrim(j.ranking_snapshot -> 'declared_rules' ->> 'published_reference'), '') IS NULL OR
+      j.ranking_snapshot -> 'group_rule' IS DISTINCT FROM jsonb_build_object(
+        'group_by', g.group_by, 'team_size', g.team_size,
+        'female_slots', g.female_slots, 'male_slots', g.male_slots,
+        'scoring_mode', g.scoring_mode
+      ) OR
       g.tournament_id IS DISTINCT FROM p_tournament_id OR
       g.is_active IS DISTINCT FROM true OR
       p.group_id IS DISTINCT FROM g.id OR
@@ -146,6 +166,59 @@ BEGIN
       (j.ranking_snapshot -> 'award' ->> 'has_medal')::boolean IS DISTINCT FROM p.has_medal
   ) THEN
     RAISE EXCEPTION 'team_v2_invalid_team_rows';
+  END IF;
+
+  -- Check submitted K-player roster against current player records. These
+  -- checks do NOT replicate the trusted rank/slot picker, provenance-aware TB
+  -- scorer, or completeness of the fresh server-derived award plan.
+  IF EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_team_rows) AS j(prize_id uuid)
+    GROUP BY j.prize_id HAVING COUNT(*) > 1
+  ) OR EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_team_rows) AS j(group_id uuid, place integer)
+    GROUP BY j.group_id, j.place HAVING COUNT(*) > 1
+  ) OR EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_team_rows) AS j(group_id uuid, institution_key text)
+    GROUP BY j.group_id, j.institution_key HAVING COUNT(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'team_v2_duplicate_team_award';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_team_rows)
+      AS j(group_id uuid, institution_key text, total_points numeric,
+           player_ids uuid[], player_snapshot jsonb)
+    JOIN public.institution_prize_groups g ON g.id = j.group_id
+    WHERE g.group_by NOT IN ('team','club','city','state','group_label','type_label')
+      OR cardinality(j.player_ids) IS DISTINCT FROM g.team_size
+      OR (SELECT COUNT(DISTINCT selected.id)
+          FROM unnest(j.player_ids) AS selected(id)) <> g.team_size
+      OR (SELECT COUNT(DISTINCT snap.value ->> 'player_id')
+          FROM jsonb_array_elements(j.player_snapshot) AS snap(value)) <> g.team_size
+      OR EXISTS (
+        SELECT 1 FROM unnest(j.player_ids) AS selected(id)
+        LEFT JOIN public.players pl ON pl.id = selected.id
+        WHERE pl.tournament_id IS DISTINCT FROM p_tournament_id
+          OR pl.points IS NULL
+          OR btrim(CASE g.group_by
+            WHEN 'team' THEN pl.team
+            WHEN 'club' THEN pl.club
+            WHEN 'city' THEN pl.city
+            WHEN 'state' THEN pl.state
+            WHEN 'group_label' THEN pl.group_label
+            WHEN 'type_label' THEN pl.type_label
+          END) IS DISTINCT FROM j.institution_key
+          OR NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(j.player_snapshot) AS snap(value)
+            WHERE snap.value ->> 'player_id' = selected.id::text
+              AND (snap.value ->> 'points')::numeric IS NOT DISTINCT FROM pl.points
+          )
+      )
+      OR j.total_points IS DISTINCT FROM (
+        SELECT SUM(pl.points) FROM public.players pl WHERE pl.id = ANY(j.player_ids)
+      )
+  ) THEN
+    RAISE EXCEPTION 'team_v2_invalid_team_roster_or_scores';
   END IF;
 
   -- Preserve previously recorded team winners when amending a version. A
@@ -191,8 +264,32 @@ BEGIN
        NULLIF(btrim(v_ruling ->> 'arbiter_decision_reference'), '') IS NULL OR
        NULLIF(btrim(v_ruling ->> 'explanation'), '') IS NULL OR
        jsonb_typeof(v_ruling -> 'award_instructions') IS DISTINCT FROM 'array' OR
-       jsonb_array_length(v_ruling -> 'award_instructions') = 0 THEN
+       jsonb_array_length(v_ruling -> 'award_instructions') = 0 OR
+       jsonb_typeof(v_ruling -> 'affected_places') IS DISTINCT FROM 'array' OR
+       jsonb_array_length(v_ruling -> 'affected_places') IS DISTINCT FROM
+         jsonb_array_length(v_ruling -> 'award_instructions') OR
+       NOT EXISTS (
+         SELECT 1 FROM public.institution_prize_groups g
+         WHERE g.id = (v_ruling ->> 'group_id')::uuid
+           AND g.tournament_id = p_tournament_id
+           AND g.is_active = true
+           AND g.ranking_rules ->> 'published_reference' =
+             v_ruling ->> 'regulation_reference'
+           AND g.ranking_rules ->> 'organizer_confirmed' = 'true'
+       ) THEN
       RAISE EXCEPTION 'team_v2_invalid_ruling';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_ruling -> 'award_instructions') AS a(value)
+      GROUP BY a.value ->> 'place' HAVING COUNT(*) > 1
+    ) OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_ruling -> 'award_instructions') AS a(value)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(v_ruling -> 'affected_places') AS ap(value)
+        WHERE ap.value = a.value -> 'place'
+      )
+    ) THEN
+      RAISE EXCEPTION 'team_v2_invalid_ruling_places';
     END IF;
     FOR v_award IN SELECT value
       FROM jsonb_array_elements(v_ruling -> 'award_instructions') LOOP

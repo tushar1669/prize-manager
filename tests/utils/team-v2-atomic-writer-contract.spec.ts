@@ -70,6 +70,51 @@ describe('Team Ranking v2 draft atomic new-version DB writer', () => {
     expect(live).not.toMatch(/\bROLLBACK\s*;/i);
   });
 
+
+  it('rejects inactive or duplicate initial individual prize submissions', () => {
+    expect(live).toContain('team_v2_duplicate_initial_prize');
+    expect(live).toContain('GROUP BY j.prize_id HAVING COUNT(*) > 1');
+    expect(live).toContain('cat.is_active IS DISTINCT FROM true');
+    expect(live).toContain('pz.is_active IS DISTINCT FROM true');
+  });
+
+  it('guards current team rules, distinct selected K, membership, snapshot and points', () => {
+    for (const clause of [
+      "j.ranking_snapshot -> 'declared_rules' IS DISTINCT FROM g.ranking_rules",
+      "j.ranking_snapshot -> 'group_rule' IS DISTINCT FROM jsonb_build_object(",
+      "j.ranking_snapshot ->> 'allocation_version' IS DISTINCT FROM v_new::text",
+      'cardinality(j.player_ids) IS DISTINCT FROM g.team_size',
+      "COUNT(DISTINCT snap.value ->> 'player_id')",
+      'pl.tournament_id IS DISTINCT FROM p_tournament_id',
+      "WHEN 'group_label' THEN pl.group_label",
+      "snap.value ->> 'player_id' = selected.id::text",
+      "(snap.value ->> 'points')::numeric IS NOT DISTINCT FROM pl.points",
+      'SELECT SUM(pl.points) FROM public.players pl',
+      'team_v2_invalid_team_roster_or_scores',
+    ]) expect(live).toContain(clause);
+  });
+
+  it('rejects duplicate team awards and ruling places outside the cited affected places', () => {
+    expect(live).toContain('team_v2_duplicate_team_award');
+    expect(live).toContain('GROUP BY j.group_id, j.place HAVING COUNT(*) > 1');
+    expect(live).toContain('GROUP BY j.group_id, j.institution_key HAVING COUNT(*) > 1');
+    expect(live).toContain("g.ranking_rules ->> 'published_reference'");
+    expect(live).toContain('team_v2_invalid_ruling_places');
+    expect(live).toContain("ap.value = a.value -> 'place'");
+  });
+
+  it('detects a removed critical static guard (negative-control only)', () => {
+    for (const clause of [
+      "j.ranking_snapshot -> 'declared_rules' IS DISTINCT FROM g.ranking_rules",
+      'cardinality(j.player_ids) IS DISTINCT FROM g.team_size',
+      'team_v2_invalid_team_roster_or_scores',
+    ]) {
+      expect(live.includes(clause)).toBe(true);
+      expect(live.replace(clause, '').includes(clause)).toBe(false);
+    }
+    // This is not an isolated PostgreSQL transaction or privilege test.
+  });
+
   it('is not yet wired to any old in-place legacy RPC or protected finalization writer', () => {
     const finalize = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const dialog = readFileSync('src/components/allocation/TeamTieBreakDialog.tsx', 'utf8');
