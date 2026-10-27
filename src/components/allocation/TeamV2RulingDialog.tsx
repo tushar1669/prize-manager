@@ -119,7 +119,7 @@ export function TeamV2RulingDialog({ open, onOpenChange, tournamentId, group }: 
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-amber-500/30 bg-amber-500/5">
+        <Alert className="border-warning/30 bg-warning/10">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             <strong>Not saved.</strong> This is a read-only, server-validated ruling
