@@ -35,6 +35,7 @@ interface TeamPrizeResultsPanelProps {
   allocationVersion?: number;
   tournamentId?: string;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  onV2RulingRequest?: (group: GroupResponse) => void;
   /**
    * Organizer-only diagnostics: the list of institutions that did not qualify.
    *
@@ -169,12 +170,14 @@ function GroupCard({
   group,
   groupIndex,
   onTieResolutionRequest,
+  onV2RulingRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
   groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  onV2RulingRequest?: (group: GroupResponse) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
 }) {
@@ -268,6 +271,16 @@ function GroupCard({
                     {rankingIssues.map((issue, index) => <li key={index}>{issue}</li>)}
                   </ul>
                   <p className="mt-2 text-xs">Unverified or exhausted tie-breaks cannot produce automatic cash winners.</p>
+                  {showDiagnostics && hasFullAccess && onV2RulingRequest &&
+                    (group.adjudication_ties?.length ?? 0) > 0 && (
+                    <div className="mt-3 print:hidden" data-team-print-hide>
+                      <Button size="sm" variant="outline" type="button"
+                        onClick={() => onV2RulingRequest(group)}>
+                        Review official tie ruling
+                      </Button>
+                      <p className="mt-1 text-xs">Only for genuine ties. Reviewing does not save or award a prize.</p>
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
@@ -478,7 +491,7 @@ function GroupCard({
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, onV2RulingRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -544,6 +557,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
             group={group}
             groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
+            onV2RulingRequest={onV2RulingRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
           />

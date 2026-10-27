@@ -54,6 +54,15 @@ export interface GroupResponse {
   scored_institutions?: WinnerInstitution[];
   /** Preview-only v2 award holds; never treat null winners as arbitrary ranking. */
   ranking_issues?: string[];
+  /** Owner-only preview, created from actual v2 scorer partitions (never public). */
+  adjudication_partitions?: Array<{
+    status: 'resolved' | 'tied' | 'blocked';
+    criterion?: string;
+    reason?: string;
+    teams: Array<{ key: string; selectedPlayers: Array<{ points: number | null }> }>;
+  }>;
+  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
+  adjudication_rules_reference?: string;
 }
 
 export interface TeamPrizeResultsResponse {

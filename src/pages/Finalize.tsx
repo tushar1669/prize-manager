@@ -677,7 +677,9 @@ export default function Finalize() {
                     <TabsContent value="v5" className="m-0">
                       <TeamPrizesTabView
                         tournamentId={id as string}
-                        allocationVersion={allocationVersion}
+                        // Until a finalized version exists, review current scorer
+                        // results rather than fetching a nonexistent next version.
+                        allocationVersion={finalizeResult?.version}
                         showDiagnostics
                         hasFullAccess={hasFullAccess}
                       />

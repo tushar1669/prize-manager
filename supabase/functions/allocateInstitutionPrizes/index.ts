@@ -172,6 +172,15 @@ interface GroupResponse {
   scored_institutions?: WinnerInstitution[];
   /** A withheld placing requires organizer / arbiter review, not auto Rank Sum. */
   ranking_issues?: string[];
+  /** Owner-only preview, created from actual v2 scorer partitions (never public). */
+  adjudication_partitions?: Array<{
+    status: 'resolved' | 'tied' | 'blocked';
+    criterion?: string;
+    reason?: string;
+    teams: Array<{ key: string; selectedPlayers: Array<{ points: number | null }> }>;
+  }>;
+  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
+  adjudication_rules_reference?: string;
 }
 
 interface AllocateInstitutionPrizesResponse {
@@ -493,6 +502,30 @@ Deno.serve(async (req: Request) => {
       const rankedSlots = partitions.flatMap(partition =>
         partition.teams.map(team => ({ partition, institution: scoredByKey.get(team.key) })),
       );
+      // Fresh, authenticated owner/master-only ranking context used by the
+      // separate read-only official-ruling review flow. A blocked source TB is
+      // NOT a tied partition and must never become a manual cash award.
+      let precedingTeams = 0;
+      const adjudicationTies = partitions.flatMap(partition => {
+        const start = precedingTeams;
+        precedingTeams += partition.teams.length;
+        if (partition.status !== 'tied') return [];
+        const affectedPlaces = groupPrizes
+          .filter(prize => prize.place > start && prize.place <= precedingTeams)
+          .map(prize => prize.place).sort((a, b) => a - b);
+        return affectedPlaces.length
+          ? [{ team_keys: partition.teams.map(team => team.key), affected_places: affectedPlaces }]
+          : [];
+      });
+      const adjudicationPartitions = partitions.map(partition => ({
+        status: partition.status,
+        criterion: partition.criterion,
+        reason: partition.reason,
+        teams: partition.teams.map(team => ({
+          key: team.key,
+          selectedPlayers: team.selectedPlayers.map(player => ({ points: player.points })),
+        })),
+      }));
       const rankingIssues = groupPrizes.flatMap(prize => {
         const slot = rankedSlots[prize.place - 1];
         if (!slot || slot.partition.status === 'resolved') return [];
@@ -567,6 +600,9 @@ Deno.serve(async (req: Request) => {
         players_without_group_field: droppedPlayersWithoutKey,
         players_without_points: playersWithoutPoints,
         ranking_issues: rankingIssues,
+        adjudication_partitions: adjudicationPartitions,
+        adjudication_ties: adjudicationTies,
+        adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
         scored_institutions: scoredForResponse,
       });
     }
