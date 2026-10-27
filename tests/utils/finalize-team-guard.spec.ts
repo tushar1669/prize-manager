@@ -86,7 +86,7 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
     const missingRules = source.indexOf('activeTeamRulesError || !activeTeamRules');
     const v2Fence = source.indexOf('activeTeamRules.some(group => group.ranking_rules !== null)');
     const denied = source.indexOf("error: 'team_v2_atomic_writer_required'");
-    const write = source.indexOf(".from('allocations')\\n      .insert(allocationsToInsert)");
+    const write = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
     expect(ownerGate).toBeGreaterThan(-1);
     expect(rulesRead).toBeGreaterThan(ownerGate);
     expect(missingRules).toBeGreaterThan(rulesRead);
