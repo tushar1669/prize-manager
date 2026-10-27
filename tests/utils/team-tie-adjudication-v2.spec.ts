@@ -123,7 +123,8 @@ describe('Team Ranking v2 authorized adjudication pre-write contract', () => {
 
   it('keeps the legacy UI out of the v2 resolution pathway', () => {
     const detector = readFileSync('src/utils/teamTieDetection.ts', 'utf8');
-    expect(detector).toContain('if (Array.isArray(group.ranking_issues)) return null;');
+    expect(detector).toContain('Array.isArray(group.ranking_issues)');
+    expect(detector).toContain('group.prizes.some(prize => prize.winner_institution?.ranking_snapshot != null)');
     const dialog = readFileSync('src/components/allocation/TeamTieBreakDialog.tsx', 'utf8');
     expect(dialog).toContain("supabase.rpc('resolve_team_tie'");
     // There must be no new v2 route wired to the legacy in-place write.
