@@ -187,6 +187,38 @@ Deno.serve(async (req) => {
 
     let teamGroups: FinalizeTeamGroup[] = [];
     if ((teamGroupCount ?? 0) > 0) {
+      // DD1 / Team v2 isolation: this legacy finalize route writes allocations
+      // in separate HTTP transactions using MAX+1. It cannot hold the
+      // tournament row lock used by the proposed atomic Team v2 SQL writer.
+      // Refuse every configured v2 team group BEFORE any allocation write;
+      // never treat a missing/malformed rules value as a legacy green light.
+      // This is a fail-closed ROUTING FENCE, not a database transaction lock.
+      const { data: activeTeamRules, error: activeTeamRulesError } = await supabaseClient
+        .from('institution_prize_groups')
+        .select('id, ranking_rules')
+        .eq('tournament_id', tournamentId)
+        .eq('is_active', true);
+
+      if (activeTeamRulesError || !activeTeamRules ||
+          activeTeamRules.length !== teamGroupCount) {
+        return new Response(
+          JSON.stringify({
+            error: 'team_v2_writer_route_unavailable',
+            hint: 'Team ranking rules could not be verified. No allocations were saved.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (activeTeamRules.some(group => group.ranking_rules !== null)) {
+        return new Response(
+          JSON.stringify({
+            error: 'team_v2_atomic_writer_required',
+            hint: 'Team Ranking v2 allocations cannot use the legacy finalization route. No allocations were saved.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { data: teamData, error: teamError } = await supabaseClient.functions.invoke('allocateInstitutionPrizes', {
         body: { tournament_id: tournamentId },
         headers: { Authorization: `Bearer ${authHeader.replace('Bearer ', '')}` },

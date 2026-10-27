@@ -78,6 +78,40 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
     });
   });
 
+
+  it('fences configured Team Ranking v2 from the competing MAX+1 legacy finalize writer', () => {
+    const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
+    const ownerGate = source.indexOf('tournamentAccess.owner_id !== user.id && !isMaster');
+    const rulesRead = source.indexOf(".select('id, ranking_rules')");
+    const missingRules = source.indexOf('activeTeamRulesError || !activeTeamRules');
+    const v2Fence = source.indexOf('activeTeamRules.some(group => group.ranking_rules !== null)');
+    const denied = source.indexOf("error: 'team_v2_atomic_writer_required'");
+    const write = source.indexOf(".from('allocations')\\n      .insert(allocationsToInsert)");
+    expect(ownerGate).toBeGreaterThan(-1);
+    expect(rulesRead).toBeGreaterThan(ownerGate);
+    expect(missingRules).toBeGreaterThan(rulesRead);
+    expect(v2Fence).toBeGreaterThan(missingRules);
+    expect(denied).toBeGreaterThan(v2Fence);
+    expect(write).toBeGreaterThan(denied);
+    expect(source).not.toContain(".rpc('commit_team_v2_adjudicated_version'");
+  });
+
+  it('fails closed on missing/stale rule reads rather than treating unknown as legacy', () => {
+    const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
+    const clauses = [
+      'activeTeamRulesError || !activeTeamRules',
+      'activeTeamRules.length !== teamGroupCount',
+      'group.ranking_rules !== null',
+      "error: 'team_v2_writer_route_unavailable'",
+      "error: 'team_v2_atomic_writer_required'",
+    ];
+    for (const clause of clauses) {
+      expect(source).toContain(clause);
+      // Negative control: deleting each critical clause must invalidate its check.
+      expect(source.replace(clause, '')).not.toContain(clause);
+    }
+  });
+
   it('places preflight ahead of the first individual allocation INSERT in the actual Edge route', () => {
     const source = readFileSync(
       'supabase/functions/finalize/index.ts', 'utf8',
