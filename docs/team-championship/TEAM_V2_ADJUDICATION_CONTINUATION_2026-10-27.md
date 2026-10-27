@@ -2,6 +2,20 @@
 
 **Date:** 27 October 2026. **Repo:** `tushar1669/prize-manager`. **Status:** in draft PR [#483](https://github.com/tushar1669/prize-manager/pull/483), not merged, not deployed, not operational. **Canonical priority/ID:** UNKNOWN — `BACKLOG.md` is missing on main. This is a handoff and evidence index, not an owner authorization to deploy.
 
+## Latest authorized source-only atomic finalization RPC draft — 27 October 2026
+
+**Owner authorization:** Draft SQL RPC design and directly related tests only in existing draft PR #483. **No SQL execution, QA environment creation, operational Save, deploy, merge or release.** Owner's earlier DD1 fence remains unchanged; it is NOT a shared transaction.
+
+**Source implementation:** [`ebbf2ecc0e23dc43f5519683e541ddea9c661931`](https://github.com/tushar1669/prize-manager/commit/ebbf2ecc0e23dc43f5519683e541ddea9c661931) adds exactly:
+- `supabase/migrations/20261027100000_finalize_atomic_version_candidate.sql` — uncalled `public.commit_finalize_version_atomic(uuid,integer,uuid,jsonb,jsonb)`, for non-v2/NULL-rule finalization, with service-role invocation, actor owner/master check, same `tournaments ... FOR UPDATE` lock as dormant `commit_team_v2_adjudicated_version`, stale version check against **both** individual and team allocation tables, and append-only new-version individual/team inserts. A single function body also updates tournament finalization state (preserving published status) and resolves open conflicts; **no** historical allocation or `publications.allocation_version` update. Configured Team Ranking v2 groups are explicitly rejected and remain reserved for the separate adjudication writer.
+- `tests/utils/atomic-finalize-rpc-contract.spec.ts` — six static source-contract checks (roles, shared lock/version order, no v2 routing, ownership/roster metadata, append-only semantics and negative source-control). They **do not execute SQL**.
+
+**Exact commit verification:** [CI 40450224729](https://github.com/tushar1669/prize-manager/actions/runs/40450224729): build, lint, disallowed-format guard and negative controls, and public Playwright smoke **PASS**; **81 unit files / 685 tests PASS**. **Overall CI FAILURE** at existing isolated authenticated QA preflight, with downstream authenticated suites skipped. [Migration Guard 40450224719](https://github.com/tushar1669/prize-manager/actions/runs/40450224719) **PASS**. Static tests prove file-contract presence, not validity in PostgreSQL or concurrency/rollback.
+
+**Remaining blockers:** There is no server route calling this new function. The existing finalize multi-statement MAX+1 path and legacy `resolve_team_tie` are not DB-serialized with it. Client/server submitted award arrays require independently verified individual-engine output and complete fresh team scorer proof before any call; this SQL cannot certify either. The `ranking_rules` and `ranking_snapshot` columns are absent in production, so rollout would depend on prior **unapplied** 20261025193000 additive migration, as well as separately reviewed 20261027080000 draft writer. No applied migration, transaction proof, published-pin integration, tested rollback or authenticated QA environment exists under this approval. Production recovery and safe rollout remain unverified. No SQL was executed, including on QA.
+
+**Next exact action (not started):** isolated, specifically authorized PostgreSQL transaction/privilege/staleness/concurrency negative-control verification on the exact proposed SQL version. Existing isolated QA access remains unavailable; do not invent credentials, create a new project or use production. Until the blocker is cleared, remain SOURCE IMPLEMENTED / STATIC-UNIT VERIFIED, operational Team Ranking v2 Save **BLOCKED**. Backlog ID/priority and P0/P1 inventory remain UNKNOWN (`BACKLOG.md` missing on main).
+
 ## DD1 finalize source-only fence: owner-authorized, not runtime-certified (27 October 2026)
 
 - **Authorization:** Owner explicitly permitted a separate **source-only** change to protected `supabase/functions/finalize/index.ts` exclusively to coordinate allocation-version safety with the proposed Team v2 writer. No SQL execution, production, Save, merge or deployment permission.
@@ -77,7 +91,7 @@ Read-only live schema still lacks `institution_prize_groups.ranking_rules` and `
 
 ## One next exact action
 
-**Separate owner decision needed before another implementation cycle:** authorize a narrowly scoped **source-only transactional finalize RPC design** (a separately reviewed SQL migration source and tests, never execution) to replace the remaining multi-request MAX+1 finalization on the coordinated Team v2 path. This DD1-approved guard is deliberately NOT sufficient to claim a shared transaction. No new QA project, production change, Save, migration run, merger or publication can be inferred. Isolated non-production database proof and separate deployment/release approvals remain later gates.
+Perform **isolated PostgreSQL negative-control integration verification** of the two dormant same-lock RPCs after an explicitly authorized non-production environment is available. Until then this item is **BLOCKED**. Do not route any Save call, apply SQL, create a QA project, change production, publish, merge or release under the present permission.
 
 ## Archived optional fresh-chat continuation prompt (historical scope; superseded by DD1 fence above)
 
