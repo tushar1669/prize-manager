@@ -132,3 +132,53 @@ export function planTeamV2AwardPlaces(
   }
   return { ok: true, awards: planned };
 }
+
+/**
+ * Complete prize placement for ALL active prize-bearing groups. Callers must
+ * independently fetch the active prizes from DB and re-score ranked groups on
+ * the server. This pure helper is not a proof of their provenance or a DB write.
+ */
+export type V2ActivePrizeGroup = { group_id: string; prizes: readonly V2PrizePlace[] };
+export type V2RankedGroup = { group_id: string; partitions: readonly TeamRankingPartition[] };
+
+export function planCompleteTeamV2Awards(
+  activeGroups: readonly V2ActivePrizeGroup[],
+  rankedGroups: readonly V2RankedGroup[],
+  rulings: readonly TeamRulingRecord[],
+  newVersion: number,
+): V2CommitPlanResult {
+  if (!positive(newVersion) || !Array.isArray(activeGroups) ||
+      !Array.isArray(rankedGroups) || !Array.isArray(rulings) ||
+      activeGroups.some(g => !g?.group_id || !Array.isArray(g.prizes)) ||
+      rankedGroups.some(g => !g?.group_id || !Array.isArray(g.partitions))) {
+    return { ok: false, reason: 'invalid_inputs' };
+  }
+  const ids = activeGroups.map(g => g.group_id);
+  const active = activeGroups.filter(g => g.prizes.length > 0);
+  const required = active.map(g => g.group_id);
+  const scored = rankedGroups.map(g => g.group_id);
+  if (new Set(ids).size !== ids.length ||
+      !sameSet(required, scored) ||
+      rulings.some(r => !r || !required.includes(r.group_id))) {
+    return { ok: false, reason: 'invalid_inputs' };
+  }
+  const prizeIds = active.flatMap(g => g.prizes.map(p => p.id));
+  if (new Set(prizeIds).size !== prizeIds.length) {
+    return { ok: false, reason: 'duplicate_award' };
+  }
+  const awards: V2PlannedAward[] = [];
+  for (const group of active) {
+    const ranking = rankedGroups.find(g => g.group_id === group.group_id);
+    if (!ranking) return { ok: false, reason: 'invalid_inputs' };
+    const result = planTeamV2AwardPlaces(
+      group.group_id, ranking.partitions, group.prizes,
+      rulings.filter(r => r.group_id === group.group_id), newVersion,
+    );
+    if (!result.ok) return result;
+    awards.push(...result.awards);
+  }
+  if (new Set(awards.map(a => a.prize_id)).size !== awards.length) {
+    return { ok: false, reason: 'duplicate_award' };
+  }
+  return { ok: true, awards };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planTeamV2AwardPlaces } from '../../supabase/functions/_shared/teamV2CommitPlan';
+import { planTeamV2AwardPlaces, planCompleteTeamV2Awards } from '../../supabase/functions/_shared/teamV2CommitPlan';
 import type { TeamRulingRecord } from '../../supabase/functions/_shared/teamTieAdjudicationV2';
 import type { TeamRankingPartition } from '../../supabase/functions/_shared/teamRankingV2';
 
@@ -104,5 +104,77 @@ describe('server-owned Team Ranking v2 new-version award planning', () => {
     const result = planTeamV2AwardPlaces('group', partitions, all, [ruling], 8);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.awards.some(a => a.place === 5)).toBe(false);
+  });
+});
+
+describe('complete active Team v2 prize-group planning', () => {
+  const active = [
+    { group_id: 'group', prizes },
+    { group_id: 'city', prizes: [{ id: 'city-gold', place: 1 }] },
+  ];
+  const scored = [
+    { group_id: 'group', partitions },
+    { group_id: 'city', partitions: [
+      { status: 'resolved' as const, criterion: 'total_points', teams: [team('City A')] },
+    ] },
+  ];
+
+  it('plans all eligible active prizes in both groups', () => {
+    const result = planCompleteTeamV2Awards(active, scored, [ruling], 8);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.awards.map(a => a.prize_id))
+        .toEqual(['gold', 'silver', 'bronze', 'city-gold']);
+    }
+  });
+
+  it('rejects a missing, duplicate, or unexpected group in scorer output', () => {
+    for (const bad of [
+      scored.slice(0, 1),
+      [...scored, scored[0]],
+      [...scored, { group_id: 'unexpected', partitions }],
+    ]) {
+      expect(planCompleteTeamV2Awards(active, bad, [ruling], 8))
+        .toEqual({ ok: false, reason: 'invalid_inputs' });
+    }
+  });
+
+  it('rejects a missing active group and duplicate prize identifiers', () => {
+    expect(planCompleteTeamV2Awards(active.slice(0, 1), scored, [ruling], 8))
+      .toEqual({ ok: false, reason: 'invalid_inputs' });
+    expect(planCompleteTeamV2Awards([
+      active[0], { group_id: 'city', prizes: [{ id: 'gold', place: 1 }] },
+    ], scored, [ruling], 8)).toEqual({ ok: false, reason: 'duplicate_award' });
+  });
+
+  it('rejects missing official ruling, blocked TB and orphan ruling', () => {
+    expect(planCompleteTeamV2Awards(active, scored, [], 8))
+      .toEqual({ ok: false, reason: 'missing_ruling' });
+    const blocked = [
+      { group_id: 'group', partitions: [
+        partitions[0], { status: 'blocked' as const, reason: 'missing_tb', teams: partitions[1].teams },
+      ] }, scored[1],
+    ];
+    expect(planCompleteTeamV2Awards(active, blocked, [], 8))
+      .toEqual({ ok: false, reason: 'blocked_ranking' });
+    expect(planCompleteTeamV2Awards(active, scored, [
+      ruling, { ...ruling, group_id: 'absent' },
+    ], 8)).toEqual({ ok: false, reason: 'invalid_inputs' });
+  });
+
+  it('does not fabricate a recipient for a prize beyond the eligible teams', () => {
+    const augmented = [
+      { group_id: 'group', prizes: [...prizes, { id: 'fifth', place: 5 }] },
+      active[1],
+    ];
+    const result = planCompleteTeamV2Awards(augmented, scored, [ruling], 8);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.awards.some(a => a.prize_id === 'fifth')).toBe(false);
+  });
+
+  it('allows an active group with zero active prizes to have no scorer record', () => {
+    expect(planCompleteTeamV2Awards([
+      ...active, { group_id: 'no-awards', prizes: [] },
+    ], scored, [ruling], 8).ok).toBe(true);
   });
 });
