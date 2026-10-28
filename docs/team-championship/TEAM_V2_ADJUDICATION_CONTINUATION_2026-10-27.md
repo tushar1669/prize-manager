@@ -2,6 +2,12 @@
 
 **Date:** 27 October 2026. **Repo:** `tushar1669/prize-manager`. **Status:** in draft PR [#483](https://github.com/tushar1669/prize-manager/pull/483), not merged, not deployed, not operational. **Canonical priority/ID:** UNKNOWN — `BACKLOG.md` is missing on main. This is a handoff and evidence index, not an owner authorization to deploy.
 
+## 28 October — server-authoritative review preview inventory fence
+
+Commit [`117315e2f8755906433c946d3f9ccff9e7e29aab`](https://github.com/tushar1669/prize-manager/commit/117315e2f8755906433c946d3f9ccff9e7e29aab) edits only `supabase/functions/prepareTeamRulingV2/index.ts` and `tests/utils/team-v2-ruling-organizer-flow.spec.ts`. Following authenticated owner/master authorization and a fresh server-scored preview, the **read-only** ruling preparation flow separately queries active tournament team groups and active prize IDs (restricted to those groups). It rejects missing, duplicate or unexpected scorer groups, or mismatched prize IDs/duplicate prizes; invalid preview cannot be treated as a valid official ruling review. One source-contract guard covers query order, tournament/active filters and negative cases. This is a review-boundary hardening, NOT independently verified winner input for a future Save transaction.
+
+[Source Migration Guard `40699700238`](https://github.com/tushar1669/prize-manager/actions/runs/40699700238) PASS. [Source CI `40699700249`](https://github.com/tushar1669/prize-manager/actions/runs/40699700249) in progress at initial handoff; review the final result separately. Synthetic visual acceptance remains complete but is NOT runtime proof. Excel/PDF v2 integration in draft has no release authorization or complete authenticated runtime QA. Draft SQL writers unapplied, manual Save unavailable, no schema/data/production/migration changes. All old allocations and publication pins unchanged. Do not mark any PR ready, merge or deploy without separate owner authorization and remaining release gates.
+
 ## 28 October — complete active prize-bearing group placement source
 
 **Reconciliation and requested PR inventory:** 17 open PRs were already pushed to GitHub. All 17 remain draft, including QA-only/do-not-merge and unreleased Team v2 work. No pending PR needed uploading. Merging all drafts to `main` would risk unintended deployment and bypass release/QA decisions; no merges, ready-for-review changes, or deployments performed.
