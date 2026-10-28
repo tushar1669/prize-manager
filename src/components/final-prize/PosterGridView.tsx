@@ -8,6 +8,7 @@ import { getAwardDisplayClasses, getAwardFlagsForPrizeRow } from '@/utils/prizeA
 import { formatGiftItems } from '@/utils/giftItems';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { printViewUpgradeCopy, resolveFreePlayerThreshold } from '@/constants/tournamentAccess';
+import './PosterGridView.css';
 
 interface PosterGridViewProps {
   winners: FinalPrizeWinnerRow[];
@@ -70,10 +71,11 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
       className="poster-grid pm-poster-grid mx-auto mt-8 max-w-7xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4"
       data-print-mode={printMode}
     >
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 print:mb-3 print:hidden">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold text-foreground">Champions Board</h2>
-          <p className="text-sm text-muted-foreground">Display near the venue entrance or results desk.</p>
+      <div className="pm-poster-header mb-6 flex flex-wrap items-center justify-between gap-4 print:mb-3 print:hidden">
+        <div className="pm-poster-heading">
+          <span className="pm-poster-eyebrow">Tournament honours · Prize Manager</span>
+          <h2 className="pm-poster-title text-2xl font-bold text-foreground">Champions Board</h2>
+          <p className="pm-poster-subtitle text-sm text-muted-foreground">Display near the venue entrance or results desk.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="hidden text-sm font-medium text-muted-foreground print:inline">Set printer to borderless if available.</div>
@@ -101,9 +103,12 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
           </div>
         </div>
       </div>
-      <div className={`poster-grid-cards grid gap-4 ${gridLayout} print:gap-3`}>
-        {groupedWinners.map(categoryGroup => (
-          <div key={categoryGroup.id} className="poster-category-section">
+      <div className={`poster-grid-cards pm-poster-board grid gap-4 ${gridLayout} print:gap-3`}>
+        {groupedWinners.map((categoryGroup, categoryIndex) => (
+          <div
+            key={categoryGroup.id}
+            className={`poster-category-section pm-poster-group pm-poster-group--${categoryGroup.winners[0]?.isMain ? 'main' : categoryIndex % 2 === 0 ? 'navy' : 'green'}`}
+          >
             {categoryGroup.winners.map(winner => {
               const awardFlags = getAwardFlagsForPrizeRow(winner);
               const trophyDisplay = getAwardDisplayClasses('trophy');
@@ -113,34 +118,40 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
               return (
                 <div
                   key={winner.prizeId}
-                  className="poster-grid-card pm-print-avoid-break flex flex-col rounded-xl border border-border bg-card p-6 shadow-lg print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
+                  className="poster-grid-card pm-poster-card pm-print-avoid-break flex flex-col rounded-xl border border-border bg-card p-6 shadow-lg print:rounded-lg print:border-black/30 print:bg-white print:p-4 print:shadow-none"
                 >
-                  <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4 print:border-black/30 print:pb-2">
-                    <Badge className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
+                  <div className="pm-poster-card-top flex items-center justify-between gap-3 border-b border-border/60 pb-4 print:border-black/30 print:pb-2">
+                    <Badge className="pm-poster-category rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground print:border print:border-black print:bg-white print:px-2 print:py-0.5 print:text-xs print:text-black">
                       {winner.categoryName}
                     </Badge>
-                    <span className="rounded-full bg-success/15 px-4 py-1.5 text-base font-bold text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
+                    <span className="pm-poster-place rounded-full bg-success/15 px-4 py-1.5 text-base font-bold text-success print:border print:border-black/40 print:bg-white print:px-2 print:py-0.5 print:text-sm print:text-black">
                       #{winner.place}
                     </span>
                   </div>
 
-                  <div className="poster-grid-name border-b border-border/60 py-4 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:border-black/30 print:py-2 print:text-xl print:text-black">
-                    {winner.playerName}
+                  <div className="pm-poster-winner border-b border-border/60 py-4 print:border-black/30 print:py-2">
+                    <span className="pm-poster-winner-label">Awarded to</span>
+                    <div className="poster-grid-name pm-poster-name text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl print:text-xl print:text-black">
+                      {winner.playerName}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-4 print:pt-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
-                        {formatCurrencyINR(winner.amount)}
-                      </span>
+                  <div className="pm-poster-bottom flex flex-wrap items-center justify-between gap-3 pt-4 print:pt-2">
+                    <div className="pm-poster-prizes flex flex-wrap items-center gap-2">
+                      <div className="pm-poster-cash">
+                        <span className="pm-poster-cash-label">Cash prize</span>
+                        <span className="pm-poster-amount rounded-full bg-primary/10 px-5 py-1.5 text-lg font-bold text-primary print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-sm print:text-black">
+                          {formatCurrencyINR(winner.amount)}
+                        </span>
+                      </div>
                       {giftText && (
-                        <span className="rounded-full bg-success/10 px-4 py-1.5 text-sm font-semibold text-success print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-xs print:text-black">
+                        <span className="pm-poster-gift rounded-full bg-success/10 px-4 py-1.5 text-sm font-semibold text-success print:border print:border-black/40 print:bg-white print:px-3 print:py-1 print:text-xs print:text-black">
                           Gift: {giftText}
                         </span>
                       )}
                     </div>
                     {(awardFlags.hasTrophy || awardFlags.hasMedal) && (
-                      <span className="inline-flex items-center gap-2 print:text-black">
+                      <span className="pm-poster-awards inline-flex items-center gap-2 print:text-black">
                         {awardFlags.hasTrophy && (
                           <span className={`inline-flex items-center ${trophyDisplay.iconClass}`}>
                             <Trophy className="h-6 w-6" aria-hidden />

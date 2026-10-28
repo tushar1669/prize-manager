@@ -3,6 +3,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { ALIASES } from './headerAliases';
 import { normalizeGrColumn, normalizeTypeColumn, hasPcToken } from './valueNormalizers';
 import { extractStateFromIdent } from './stateExtract';
+import type { ImportedPlayerTieBreaks } from './importTieBreakColumns';
 
 export type SupabasePlayerPayload = {
   rank: number;
@@ -50,6 +51,7 @@ export interface ParsedPlayer extends PlayerImportRow {
   tags_json?: Json;
   warnings_json?: Json;
   _genderWarnings?: string[];
+  _individualTieBreaks?: ImportedPlayerTieBreaks | null;
   [key: string]: unknown;
 }
 
@@ -144,6 +146,12 @@ export function buildSupabasePlayerPayload(
   // Merge tags_json.special_group when disability=PC detected from Gr column
   const baseTags = typeof player.tags_json === 'object' && player.tags_json !== null ? player.tags_json : {};
   const tags = { ...(baseTags as Record<string, unknown>) };
+  // Never carry stale TB values from a prior import. Only the current parsed
+  // source workbook can populate this reserved, team-only namespace.
+  delete tags.team_tiebreak_v2;
+  if (player._individualTieBreaks?.version === 1) {
+    tags.team_tiebreak_v2 = player._individualTieBreaks;
+  }
   const specialGroup = tags.special_group;
   const existingGroups = Array.isArray(specialGroup) ? specialGroup : [];
   const mergedGroups = new Set<string>(

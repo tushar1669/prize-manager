@@ -1,3 +1,5 @@
+import type { Json } from '@/integrations/supabase/types';
+
 // Types for Institution/Team Prizes feature
 
 export interface InstitutionPrizeGroup {
@@ -9,6 +11,8 @@ export interface InstitutionPrizeGroup {
   female_slots: number;
   male_slots: number;
   scoring_mode: string;
+  /** Null for historic/default groups; v2 rule order is owner-scoped. */
+  ranking_rules?: Json | null;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;

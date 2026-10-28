@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, RotateCcw } from "lucide-react";
 import { GenderDetectionChip } from "@/components/import/GenderDetectionChip";
 import { analyzeGenderColumns, type GenderSource } from "@/utils/genderInference";
+import { detectImportedTieBreakColumns } from "@/utils/importTieBreakColumns";
 
 interface ColumnMappingDialogProps {
   open: boolean;
@@ -92,6 +93,10 @@ export function ColumnMappingDialog({
   }, [detectedColumns, sampleRows]);
 
   const columnOptions = columnOptionsWithSamples;
+  const sourceTieBreakColumns = useMemo(
+    () => detectImportedTieBreakColumns(detectedColumns, sampleRows),
+    [detectedColumns, sampleRows],
+  );
 
   // Auto-mapping logic extracted as useCallback
   const performAutoMapping = useCallback(() => {
@@ -252,6 +257,33 @@ export function ColumnMappingDialog({
             </Alert>
           )}
           
+          {sourceTieBreakColumns.length > 0 && (
+            <details className="rounded-md border px-3 py-2 text-sm">
+              <summary className="cursor-pointer font-medium">
+                Individual tie-breaks detected: {sourceTieBreakColumns.length} source column(s)
+              </summary>
+              <p className="mt-2 text-xs text-muted-foreground">
+                TB1, TB2, etc. identify columns in the imported Excel, not fixed methods like Buchholz.
+                Counts below cover the preview rows only. These values are not yet saved or used
+                to decide Team Prizes; their calculation and source must be verified first.
+              </p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {sourceTieBreakColumns.map((column) => (
+                  <li key={column.sourceColumn} className="flex flex-wrap gap-x-2">
+                    <span className="font-medium">TB{column.ordinal}</span>
+                    <span>Excel column {column.sourceColumn} ({column.sourceHeader})</span>
+                    <span className="text-muted-foreground">
+                      Preview: {column.samplePresent} numeric, {column.sampleMissing} blank,
+                      {' '}{column.sampleInvalid} invalid
+                    </span>
+                    {column.duplicateOrdinal && (
+                      <span className="text-destructive">Duplicate TB ordinal — needs review</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {/* Required Fields */}
           <div>
             <h3 className="text-sm font-semibold mb-3">Required Fields</h3>
