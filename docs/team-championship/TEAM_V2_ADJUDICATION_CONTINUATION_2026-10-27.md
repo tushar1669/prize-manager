@@ -2,6 +2,13 @@
 
 **Date:** 27 October 2026. **Repo:** `tushar1669/prize-manager`. **Status:** in draft PR [#483](https://github.com/tushar1669/prize-manager/pull/483), not merged, not deployed, not operational. **Canonical priority/ID:** UNKNOWN — `BACKLOG.md` is missing on main. This is a handoff and evidence index, not an owner authorization to deploy.
 
+## 28 October — one core source-safety cycle, no Supabase work
+
+- **Reconciled:** main `9800fdc8805d678d29e6023b6f47d9672db448df`; #483 prior draft `b8234285bd331906c916b1cdd2adcd3088d85c7e`. No intervening source changes. The six canonical files remain absent on main; backlog ID, priority and P0/P1/P2 inventory UNKNOWN.
+- **Implemented:** [`29330ad579e9eb5d6010b1612dff721d11026984`](https://github.com/tushar1669/prize-manager/commit/29330ad579e9eb5d6010b1612dff721d11026984), exactly `supabase/functions/_shared/teamV2CommitPlan.ts` and `tests/utils/team-v2-commit-plan.spec.ts`. The pure non-writing placer now fails closed on unknown scorer partition status and requires matching ruling schema, superseded allocation version, recorded actor and nonblank published-regulation/arbiter/explanation proof. Added direct negative-control unit cases; no browser winners, Save API, DML, protected finalize changes or new DB infrastructure.
+- **Verification:** [Migration Guard 40690831732](https://github.com/tushar1669/prize-manager/actions/runs/40690831732) PASS; [CI 40690831885](https://github.com/tushar1669/prize-manager/actions/runs/40690831885) in progress at initial sync. Classify exact suite and overall status by final CI run, never infer. Existing authenticated QA environment remains unavailable.
+- **Existing release gates unchanged:** The SQL writers remain DORMANT/unapplied; the original multi-request `finalize` route is uncoordinated for legacy groups; no official Save/publish/release authorization. Owner expressly declined additional Supabase; do not request a branch/project/upgrade. Actual isolated PostgreSQL transaction/privilege/rollback/race proof remains UNKNOWN until a suitable *already-authorized* local/isolated environment is available; do not treat source tests as DB proof.
+
 ## Latest authorized source-only atomic finalization RPC draft — 27 October 2026
 
 **Owner authorization:** Draft SQL RPC design and directly related tests only in existing draft PR #483. **No SQL execution, QA environment creation, operational Save, deploy, merge or release.** Owner's earlier DD1 fence remains unchanged; it is NOT a shared transaction.
