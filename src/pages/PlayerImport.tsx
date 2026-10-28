@@ -77,6 +77,7 @@ import {
 } from '@/utils/valueNormalizers';
 import { extractStateFromIdent } from '@/utils/stateExtract';
 import { selectPresetBySource } from '@/utils/importPresets';
+import { detectImportedTieBreakColumns, extractPlayerTieBreakValues } from '@/utils/importTieBreakColumns';
 import {
   isFeatureEnabled,
   IMPORT_DEDUP_ENABLED,
@@ -112,6 +113,7 @@ import { buildImportGenderSummary } from "@/utils/importGenderSummary";
 import type { Database } from "@/integrations/supabase/types";
 import { maskDobForPublic } from "@/utils/print";
 import { safeSelectPlayersByTournament } from "@/utils/safeSelectPlayers";
+import { invalidateTeamPrizeResultCache } from '@/components/team-prizes/useTeamPrizeResults';
 import {
   buildSupabasePlayerPayload,
   type ParsedPlayer,
@@ -593,6 +595,10 @@ export default function PlayerImport() {
   const nameHeaderCandidates = useMemo(() => {
     return getNameHeaderCandidates(headers);
   }, [headers]);
+  const previewTieBreakColumns = useMemo(
+    () => detectImportedTieBreakColumns(headers, (parsedData as Record<string, unknown>[]).slice(0, 20)),
+    [headers, parsedData],
+  );
 
   const persistImportLog = useCallback(async (payload: ImportLogInsert) => {
     if (!IMPORT_LOGS_ENABLED) {
@@ -980,6 +986,10 @@ export default function PlayerImport() {
       return true;
     },
     onSuccess: () => {
+      if (id) {
+        invalidateTeamPrizeResultCache(id);
+        void queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] });
+      }
       toast.success('Cleared all players');
       setParsedData([]);
       setHeaders([]);
@@ -1394,6 +1404,19 @@ export default function PlayerImport() {
             dedupe_summary: dedupeMeta,
             import_success: results.failed.length === 0,
             import_summary: importSummary,
+            // Source column identities only (no player names/values). Team
+            // rules remain unverified until an organizer defines each method.
+            individual_tb_columns: detectImportedTieBreakColumns(
+              headers, parsedData as Record<string, unknown>[],
+            ).map(column => ({
+              ordinal: column.ordinal,
+              header: column.sourceHeader.slice(0, 128),
+              column: column.sourceColumn,
+              duplicate: column.duplicateOrdinal,
+              present: column.samplePresent,
+              missing: column.sampleMissing,
+              invalid: column.sampleInvalid,
+            })),
             gender_summary: buildImportGenderSummary(players as Array<{ gender?: unknown; gender_source?: unknown }>, {
               femaleFromLabels: femaleCountSummary?.femaleFromFmg ?? 0,
               sources: femaleCountSummary?.genderSources ?? [],
@@ -1434,6 +1457,12 @@ export default function PlayerImport() {
 
       clearDraft(importDraftKey);
       resetDirty('import');
+      // A partial import may have modified players even when some rows fail.
+      // Never reuse a cached Team Prize ranking after any import write attempt.
+      if (id) {
+        invalidateTeamPrizeResultCache(id);
+        await queryClient.invalidateQueries({ queryKey: ['team-prize-results', id] }).catch(() => {});
+      }
 
       if (results.failed.length === 0) {
         toast.success(
@@ -2036,6 +2065,12 @@ export default function PlayerImport() {
 
     const preset = selectPresetBySource(importSource as 'organizer-template' | 'swiss-manager' | 'unknown');
     
+    // Tie-break columns belong to the source Excel, not the individual
+    // allocator. Capture each player's actual values for future verified
+    // team-only rules; missing/invalid values remain null, not zero.
+    const sourceTieBreaks = detectImportedTieBreakColumns(headers, parsedData as Record<string, unknown>[]);
+    const sourceHash = lastFileInfoRef.current.hash;
+
     // Track zero ratings before coercion
     let zeroRatingCount = 0;
     const primaryNameHeader = nameHeaderCandidates[0] ?? null;
@@ -2050,6 +2085,9 @@ export default function PlayerImport() {
     // Map data with Phase 6 value normalization
     const mapped: ParsedPlayer[] = parsedData.map((row, idx) => {
       const player: Record<string, unknown> = { _originalIndex: idx + 1 };
+      player._individualTieBreaks = extractPlayerTieBreakValues(
+        sourceTieBreaks, row as Record<string, unknown>, sourceHash,
+      );
 
       Object.keys(mapping).forEach((fieldKey) => {
         const col = mapping[fieldKey];
@@ -2950,6 +2988,22 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
+            {previewTieBreakColumns.length > 0 && (
+              <div className="rounded-md border px-4 py-3 text-sm" role="status">
+                <p className="font-medium">
+                  Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col => `TB${col.ordinal}`).join(', ')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Preview only (up to 20 rows). These source TB columns are not yet saved or used
+                  for Team Prize rankings. The method, direction and team calculation need validation.
+                </p>
+                {previewTieBreakColumns.some(col => col.duplicateOrdinal || col.sampleInvalid > 0) && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Duplicate tie-break positions or invalid preview values detected. Review the file before using its tie-breaks.
+                  </p>
+                )}
+              </div>
+            )}
             {CONFLICT_REVIEW_ENABLED && conflicts.length > 0 && (
               <Card className="border-warning/30 bg-warning/10">
                 <CardHeader>

@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
+import { verifyTeamFinalizePreview, type FinalizeTeamGroup } from "../_shared/teamFinalizeGuard.ts";
 
 const BUILD_VERSION = "2025-12-20T20:00:00Z";
 const FUNCTION_NAME = "finalize";
@@ -171,6 +172,77 @@ Deno.serve(async (req) => {
 
     console.log(`[finalize] start tId=${tournamentId} winners=${winners.length} version=${nextVersion}`);
 
+    // Validate all active team prize groups BEFORE any allocation write.
+    // A preview with unadjudicated award ties must not silently finalize
+    // the individual prizes and omit the unresolved monetary team prizes.
+    const { count: teamGroupCount, error: teamGroupCountError } = await supabaseClient
+      .from('institution_prize_groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .eq('is_active', true);
+
+    if (teamGroupCountError) {
+      throw new Error(`Failed to check team groups: ${teamGroupCountError.message}`);
+    }
+
+    let teamGroups: FinalizeTeamGroup[] = [];
+    if ((teamGroupCount ?? 0) > 0) {
+      // DD1 / Team v2 isolation: this legacy finalize route writes allocations
+      // in separate HTTP transactions using MAX+1. It cannot hold the
+      // tournament row lock used by the proposed atomic Team v2 SQL writer.
+      // Refuse every configured v2 team group BEFORE any allocation write;
+      // never treat a missing/malformed rules value as a legacy green light.
+      // This is a fail-closed ROUTING FENCE, not a database transaction lock.
+      const { data: activeTeamRules, error: activeTeamRulesError } = await supabaseClient
+        .from('institution_prize_groups')
+        .select('id, ranking_rules')
+        .eq('tournament_id', tournamentId)
+        .eq('is_active', true);
+
+      if (activeTeamRulesError || !activeTeamRules ||
+          activeTeamRules.length !== teamGroupCount) {
+        return new Response(
+          JSON.stringify({
+            error: 'team_v2_writer_route_unavailable',
+            hint: 'Team ranking rules could not be verified. No allocations were saved.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (activeTeamRules.some(group => group.ranking_rules !== null)) {
+        return new Response(
+          JSON.stringify({
+            error: 'team_v2_atomic_writer_required',
+            hint: 'Team Ranking v2 allocations cannot use the legacy finalization route. No allocations were saved.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: teamData, error: teamError } = await supabaseClient.functions.invoke('allocateInstitutionPrizes', {
+        body: { tournament_id: tournamentId },
+        headers: { Authorization: `Bearer ${authHeader.replace('Bearer ', '')}` },
+      });
+
+      if (teamError) {
+        throw new Error(`Failed to compute team allocations: ${teamError.message}`);
+      }
+
+      const checked = verifyTeamFinalizePreview(teamData, teamGroupCount!);
+      if (!checked.ok) {
+        // The reason is a fixed code, never raw player, tournament or tie-break data.
+        console.warn(`[finalize] team prize preflight rejected: ${checked.reason}`);
+        return new Response(
+          JSON.stringify({
+            error: 'team_prizes_not_ready',
+            hint: 'Review and resolve team prize ranking issues before finalizing.',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      teamGroups = checked.groups;
+    }
+
     // Insert new allocations
     const allocationsToInsert = winners.map(w => ({
       tournament_id: tournamentId,
@@ -192,29 +264,8 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to insert allocations: ${insertError.message}`);
     }
 
-    // Persist team allocations snapshot for this version (if team groups exist)
-    const { count: teamGroupCount, error: teamGroupCountError } = await supabaseClient
-      .from('institution_prize_groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('tournament_id', tournamentId)
-      .eq('is_active', true);
-
-    if (teamGroupCountError) {
-      throw new Error(`Failed to check team groups: ${teamGroupCountError.message}`);
-    }
-
-    if ((teamGroupCount ?? 0) > 0) {
-      const { data: teamData, error: teamError } = await supabaseClient.functions.invoke('allocateInstitutionPrizes', {
-        body: { tournament_id: tournamentId },
-        headers: { Authorization: `Bearer ${authHeader.replace('Bearer ', '')}` },
-      });
-
-      if (teamError) {
-        throw new Error(`Failed to compute team allocations: ${teamError.message}`);
-      }
-
-      const teamGroups = (teamData as { groups?: Array<{ group_id: string; prizes: Array<{ id: string; place: number; winner_institution: { key: string; total_points: number; players: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }> } | null }> }> })?.groups ?? [];
-
+    // Persist only the preflight-validated team snapshot for this version.
+    if (teamGroups.length > 0) {
       // Build player_ids from the player list and store full players array as player_snapshot
       const rows = teamGroups.flatMap((group) =>
         group.prizes
@@ -229,6 +280,14 @@ Deno.serve(async (req) => {
             total_points: prize.winner_institution!.total_points,
             player_ids: prize.winner_institution!.players.map((p) => p.player_id),
             player_snapshot: prize.winner_institution!.players,
+            // Written only to the new nullable additive column on a NEW version.
+            // Historical allocation rows remain untouched.
+            ranking_snapshot: {
+              ...prize.winner_institution!.ranking_snapshot,
+              allocation_version: nextVersion,
+              finalized_by: user.id,
+              finalized_at: new Date().toISOString(),
+            },
           }))
       );
 

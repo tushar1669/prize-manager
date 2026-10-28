@@ -30,6 +30,14 @@ function scoresEqual(a: WinnerInstitution, b: WinnerInstitution): boolean {
  * also detect ties with the first runner-up beyond the last prize.
  */
 export function detectTeamTiesAtBoundary(group: GroupResponse): TieInfo | null {
+  // v2 previews carry ranking_issues, but persisted v2 allocations carry
+  // ranking_snapshot on awarded winners instead. Neither may enter the legacy
+  // Rank Sum dialog: its RPC overwrites awards at an existing version.
+  // Historical pre-v2 snapshots without either marker retain their legacy path.
+  if (Array.isArray(group.ranking_issues) ||
+      group.prizes.some(prize => prize.winner_institution?.ranking_snapshot != null)) {
+    return null;
+  }
   const filledPrizes = group.prizes.filter((p) => p.winner_institution !== null);
   if (filledPrizes.length === 0) return null;
 
@@ -87,6 +95,7 @@ export function detectTeamTiesAtBoundary(group: GroupResponse): TieInfo | null {
  */
 export function hasUnresolvedTeamTies(groups: GroupResponse[]): boolean {
   return groups.some((g) => {
+    if (g.ranking_issues?.length) return true;
     const tie = detectTeamTiesAtBoundary(g);
     return tie !== null && !tie.hasNote;
   });

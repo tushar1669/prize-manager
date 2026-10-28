@@ -1,0 +1,207 @@
+/* Poster Grid — design-only visual refresh, scoped away from legacy/other print views.
+   Brand palette follows approved Category Cards: main gold, alternate teal/navy. */
+
+.pm-poster-grid .pm-poster-header {
+  padding: 18px 20px;
+  border: 1px solid hsl(var(--border));
+  border-left: 4px solid hsl(var(--accent));
+  border-radius: 10px;
+  background: hsl(var(--card));
+}
+.pm-poster-grid .pm-poster-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: hsl(var(--accent));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.pm-poster-grid .pm-poster-title {
+  margin: 0;
+  line-height: 1.15;
+  font-weight: 850;
+  letter-spacing: -.025em;
+}
+.pm-poster-grid .pm-poster-subtitle { margin-top: 6px; }
+.pm-poster-grid .pm-poster-group { --pm-poster-accent: hsl(var(--secondary)); }
+.pm-poster-grid .pm-poster-group--main { --pm-poster-accent: hsl(var(--accent)); }
+.pm-poster-grid .pm-poster-group--green { --pm-poster-accent: hsl(var(--primary)); }
+.pm-poster-grid .pm-poster-group--navy { --pm-poster-accent: hsl(var(--secondary)); }
+.pm-poster-grid .pm-poster-card {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  gap: 0;
+  border-top: 5px solid var(--pm-poster-accent);
+  border-radius: 9px;
+  background: hsl(var(--card));
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+.pm-poster-grid .pm-poster-card-top { align-items: flex-start; }
+.pm-poster-grid .pm-poster-category {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--pm-poster-accent) 15%, transparent);
+  border: 1px solid var(--pm-poster-accent);
+  border-radius: 5px;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: .035em;
+  text-align: left;
+}
+.pm-poster-grid .pm-poster-place {
+  flex: none;
+  border: 1px solid var(--pm-poster-accent);
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.pm-poster-grid .pm-poster-winner {
+  min-width: 0;
+  flex: 1;
+}
+.pm-poster-grid .pm-poster-winner-label,
+.pm-poster-grid .pm-poster-cash-label {
+  display: block;
+  margin-bottom: 7px;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.pm-poster-grid .pm-poster-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  color: hsl(var(--foreground));
+  line-height: 1.13;
+  letter-spacing: -.02em;
+}
+.pm-poster-grid .pm-poster-bottom { align-items: flex-end; }
+.pm-poster-grid .pm-poster-prizes { min-width: 0; flex: 1; align-items: flex-end; }
+.pm-poster-grid .pm-poster-cash { display: flex; flex-direction: column; align-items: flex-start; }
+.pm-poster-grid .pm-poster-cash-label { margin-bottom: 4px; }
+.pm-poster-grid .pm-poster-amount {
+  border: 1px solid color-mix(in srgb, var(--pm-poster-accent) 70%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--pm-poster-accent) 12%, transparent);
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.pm-poster-grid .pm-poster-gift {
+  max-width: 100%;
+  line-height: 1.4;
+  border-left: 2px solid var(--pm-poster-accent);
+  background: color-mix(in srgb, var(--pm-poster-accent) 12%, transparent);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  border-radius: 5px;
+  color: hsl(var(--foreground));
+}
+.pm-poster-grid .pm-poster-awards { flex: none; color: var(--pm-poster-accent); }
+/* The shared award helper uses text-primary; inside posters, award marks are
+   category identity rather than success/status green. Scope its override here. */
+.pm-poster-grid .pm-poster-awards > span {
+  /* Lighten brand navy/teal so small symbols stay legible on charcoal cards. */
+  color: color-mix(in srgb, var(--pm-poster-accent) 65%, white);
+}
+
+@media print {
+  /* Preserve existing compact (3-up) and one-category-per-page logic and @page.
+     Override visual paint only; never change which winner rows print. */
+  .pm-poster-grid .poster-grid-card.pm-poster-card {
+    border: 1px solid #b9c7d3 !important;
+    border-top: 2.3mm solid var(--pm-poster-accent) !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border-radius: 2mm !important;
+    overflow: hidden;
+    max-height: none !important; /* Long names/gifts must grow instead of being clipped. */
+  }
+  .pm-poster-grid .pm-poster-group--main { --pm-poster-accent: #b38a32; }
+  .pm-poster-grid .pm-poster-group--green { --pm-poster-accent: #1f6e5b; }
+  .pm-poster-grid .pm-poster-group--navy { --pm-poster-accent: #0b3d91; }
+  .pm-poster-grid .pm-poster-card-top { padding-bottom: 3mm !important; }
+  .pm-poster-grid .pm-poster-category {
+    padding: 1mm 1.4mm !important;
+    background: #fff !important;
+    color: #243246 !important;
+    border-color: var(--pm-poster-accent) !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+  .pm-poster-grid .pm-poster-place {
+    padding: 1mm 1.4mm !important;
+    background: #fff !important;
+    color: #243246 !important;
+    border-color: #a7b5c5 !important;
+    font-size: 9pt !important;
+  }
+  .pm-poster-grid .pm-poster-winner { padding: 3mm 0 !important; }
+  .pm-poster-grid .pm-poster-winner-label,
+  .pm-poster-grid .pm-poster-cash-label {
+    margin-bottom: 1mm;
+    color: #516274 !important;
+    font-size: 7.5pt;
+    letter-spacing: .06em;
+  }
+  .pm-poster-grid .poster-grid-name.pm-poster-name {
+    font-size: 12pt !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    color: #182c43 !important;
+    overflow-wrap: anywhere;
+  }
+  .pm-poster-grid .pm-poster-bottom { padding-top: 3mm !important; }
+  .pm-poster-grid .pm-poster-prizes { gap: 2mm !important; align-items: flex-start !important; }
+  .pm-poster-grid .pm-poster-amount {
+    background: #fff !important;
+    color: #182c43 !important;
+    border-color: #b8c5d2 !important;
+    padding: 1mm 1.4mm !important;
+    font-size: 9pt !important;
+  }
+  .pm-poster-grid .pm-poster-gift {
+    background: #fff !important;
+    color: #25394b !important;
+    border-color: #bcc9d6 !important;
+    border-left-color: var(--pm-poster-accent) !important;
+    padding: 1mm 1.5mm !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+  .pm-poster-grid .pm-poster-awards { color: var(--pm-poster-accent) !important; gap: 1mm !important; }
+  .pm-poster-grid .pm-poster-awards > span { color: var(--pm-poster-accent) !important; }
+  .pm-poster-grid .pm-poster-awards svg { width: 13px; height: 13px; }
+}
+
+
+/* Category-wide coloring is lighter on individual poster cards than in a table:
+   preserve winner-name contrast and the generous white-space hierarchy. */
+.pm-poster-grid .pm-poster-group--main { --pm-poster-paper-fill: #fcf9f1; }
+.pm-poster-grid .pm-poster-group--green { --pm-poster-paper-fill: #f3f9f6; }
+.pm-poster-grid .pm-poster-group--navy { --pm-poster-paper-fill: #f2f6fc; }
+.pm-poster-grid .pm-poster-card {
+  background: color-mix(in srgb, var(--pm-poster-accent) 5%, hsl(var(--card)));
+}
+@media print {
+  /* Tints the WHOLE card, but never turns poster cards into data-grid rows. */
+  .pm-poster-grid .poster-grid-card.pm-poster-card {
+    background: var(--pm-poster-paper-fill) !important;
+  }
+  /* Keep amount/category/gift surfaces crisp against the light card interior. */
+  .pm-poster-grid .pm-poster-category,
+  .pm-poster-grid .pm-poster-place,
+  .pm-poster-grid .pm-poster-amount,
+  .pm-poster-grid .pm-poster-gift {
+    background: #fff !important;
+  }
+}

@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { makeXlsxTmp } from './utils/xlsx';
+import { assertIsolatedQaBackend } from './utils/qaEnvironment';
 
-// Test account credentials (used for auto-creating QA tournament)
-const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL || 'test@example.com';
-const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD || 'testpassword123';
+// An isolated QA backend and dedicated credentials are required by the preflight.
+const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL!;
+const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD!;
 
 const SWISS_HEADERS = [
   'Rank',
@@ -138,63 +139,24 @@ test.describe('@swiss Swiss-Manager staging suite', () => {
   let tournamentId: string;
 
   test.beforeAll(async ({ browser }) => {
+    // CI previously hit the LIVE Supabase Auth endpoint using placeholder credentials.
+    // Never start an authenticated flow until this confirms a separate QA project.
+    assertIsolatedQaBackend();
     const page = await browser.newPage();
-    const timestamp = Date.now();
-    const tournamentTitle = `QA – Swiss Imports (${timestamp})`;
-
     try {
-      // Navigate to auth page
       await page.goto('/auth');
-      
-      // Try to sign in (assume account exists, or sign up flow will handle it)
-      const emailInput = page.locator('input[type="email"]').first();
-      const passwordInput = page.locator('input[type="password"]').first();
-      
-      await emailInput.fill(TEST_EMAIL);
-      await passwordInput.fill(TEST_PASSWORD);
-      
-      // Try sign in first
-      const signInButton = page.getByRole('button', { name: /sign in/i });
-      if (await signInButton.isVisible()) {
-        await signInButton.click();
-        await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 }).catch(async () => {
-          // If sign in fails, try sign up
-          const signUpButton = page.getByRole('button', { name: /sign up/i });
-          if (await signUpButton.isVisible()) {
-            await signUpButton.click();
-            await page.getByRole('button', { name: /create account/i }).click();
-            await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
-          }
-        });
-      }
+      await page.locator('input[type="email"]').first().fill(TEST_EMAIL);
+      await page.locator('input[type="password"]').first().fill(TEST_PASSWORD);
+      await page.getByRole('button', { name: /sign in/i }).click();
+      // Do not auto-sign-up on failed authentication; the QA account must pre-exist.
+      await page.waitForURL(/\/dashboard(?:[/?#]|$)/, { timeout: 15000 });
 
-      // Wait for dashboard to load
-      await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
-
-      // Navigate to tournament setup
-      await page.goto('/tournament-setup');
-      await page.waitForLoadState('networkidle');
-
-      // Fill tournament form
-      await page.fill('input[name="title"]', tournamentTitle);
-      await page.fill('input[name="startDate"]', '2025-01-15');
-      await page.fill('input[name="endDate"]', '2025-01-16');
-
-      // Submit and capture tournament ID from URL
-      await page.getByRole('button', { name: /create|save/i }).click();
-      await page.waitForURL(/\/t\/[a-f0-9-]+/, { timeout: 10000 });
-
-      const url = page.url();
-      const match = url.match(/\/t\/([a-f0-9-]+)/);
-      if (!match) {
-        throw new Error(`Could not extract tournament ID from URL: ${url}`);
-      }
-
+      // Dashboard creates the tournament directly (there is no /tournament-setup route).
+      await page.getByRole('button', { name: /create tournament/i }).click();
+      await page.waitForURL(/\/t\/[a-f0-9-]+\/setup(?:\?|$)/, { timeout: 15000 });
+      const match = page.url().match(/\/t\/([a-f0-9-]+)\/setup/);
+      if (!match) throw new Error('QA tournament was not created on the isolated backend');
       tournamentId = match[1];
-      console.log(`[QA] Created tournament: ${tournamentTitle} (ID: ${tournamentId})`);
-    } catch (error) {
-      console.error('[QA] Failed to create tournament:', error);
-      throw error;
     } finally {
       await page.close();
     }

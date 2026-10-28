@@ -10,11 +10,14 @@ export function PublicBackButton({ className }: PublicBackButtonProps) {
   const navigate = useNavigate();
 
   const handleBack = () => {
-    if (window.history.length > 1) {
+    // Browser history can include about:blank/external entries on a direct link.
+    // React Router's history index only counts in-app navigation entries.
+    const inAppHistoryIndex = window.history.state?.idx;
+    if (typeof inAppHistoryIndex === "number" && inAppHistoryIndex > 0) {
       navigate(-1);
-      return;
+    } else {
+      navigate("/");
     }
-    navigate("/");
   };
 
   return (

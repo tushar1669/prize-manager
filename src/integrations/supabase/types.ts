@@ -697,6 +697,7 @@ export type Database = {
           is_active: boolean
           male_slots: number
           name: string
+          ranking_rules: Json | null
           scoring_mode: string
           team_size: number
           tournament_id: string
@@ -710,6 +711,7 @@ export type Database = {
           is_active?: boolean
           male_slots?: number
           name: string
+          ranking_rules?: Json | null
           scoring_mode?: string
           team_size: number
           tournament_id: string
@@ -723,6 +725,7 @@ export type Database = {
           is_active?: boolean
           male_slots?: number
           name?: string
+          ranking_rules?: Json | null
           scoring_mode?: string
           team_size?: number
           tournament_id?: string
@@ -1463,6 +1466,7 @@ export type Database = {
           player_ids: string[]
           player_snapshot: Json
           prize_id: string
+          ranking_snapshot: Json | null
           total_points: number
           tournament_id: string
           version: number
@@ -1476,6 +1480,7 @@ export type Database = {
           player_ids?: string[]
           player_snapshot?: Json
           prize_id: string
+          ranking_snapshot?: Json | null
           total_points?: number
           tournament_id: string
           version: number
@@ -1489,6 +1494,7 @@ export type Database = {
           player_ids?: string[]
           player_snapshot?: Json
           prize_id?: string
+          ranking_snapshot?: Json | null
           total_points?: number
           tournament_id?: string
           version?: number

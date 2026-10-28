@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
+import './TeamPrizesTabView.css';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { TeamPrizeResultsPanel } from '@/components/allocation/TeamPrizeResultsPanel';
 import { TeamTieBreakDialog } from '@/components/allocation/TeamTieBreakDialog';
+import { TeamV2RulingDialog } from '@/components/allocation/TeamV2RulingDialog';
 import { useTeamPrizeResults } from '@/components/team-prizes/useTeamPrizeResults';
 import type { GroupResponse } from '@/components/team-prizes/useTeamPrizeResults';
 import type { TieInfo } from '@/utils/teamTieDetection';
@@ -46,6 +48,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<GroupResponse | null>(null);
   const [selectedTieInfo, setSelectedTieInfo] = useState<TieInfo | null>(null);
+  const [selectedV2Group, setSelectedV2Group] = useState<GroupResponse | null>(null);
 
   const hasPending = useMemo(
     () => data ? hasUnresolvedTeamTies(data.groups) : false,
@@ -114,7 +117,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
 
   // Render team prize results
   return (
-    <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
+    <div className="pm-team-prizes-print mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
       <TeamPrizeResultsPanel
         data={data}
         isLoading={false}
@@ -123,8 +126,19 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
         hasFullAccess={hasFullAccess}
         tournamentId={tournamentId}
         allocationVersion={allocationVersion}
-        onTieResolutionRequest={handleTieResolutionRequest}
+        onTieResolutionRequest={showDiagnostics && hasFullAccess ? handleTieResolutionRequest : undefined}
+        onV2RulingRequest={showDiagnostics && hasFullAccess && allocationVersion === undefined
+          ? setSelectedV2Group : undefined}
       />
+
+      {selectedV2Group && (
+        <TeamV2RulingDialog
+          open={!!selectedV2Group}
+          onOpenChange={(open) => { if (!open) setSelectedV2Group(null); }}
+          tournamentId={tournamentId}
+          group={selectedV2Group}
+        />
+      )}
 
       {selectedGroup && selectedTieInfo && (
         <TeamTieBreakDialog
