@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS } from "../_shared/health.ts";
 import { parseTeamRankingRuleConfig, type TeamRankingPartition } from "../_shared/teamRankingV2.ts";
 import { validateTeamRulingV2 } from "../_shared/teamTieAdjudicationV2.ts";
+import { verifyTeamV2ReviewPrizeInventory } from "../_shared/teamV2ReviewPrizeInventory.ts";
 
 /**
  * Authenticated, read-only Team Ranking v2 official-ruling REVIEW.
@@ -92,29 +93,13 @@ Deno.serve(async (req: Request) => {
     }
     const activeIds = activeGroups.map(g => g.id);
     const { data: activePrizes, error: prizeError } = await supabase
-      .from('institution_prizes').select('id,group_id')
+      .from('institution_prizes').select('id,group_id,place,cash_amount,has_trophy,has_medal')
       .in('group_id', activeIds).eq('is_active', true);
     if (prizeError || !activePrizes) return json({ error: 'ranking_unavailable' }, 409);
 
-    const expected = new Map(activeIds.map(id => [id, [] as string[]]));
-    for (const prize of activePrizes) expected.get(prize.group_id)?.push(prize.id);
-    const actualIds = preview.groups.map((g: unknown) =>
-      record(g) && typeof g.group_id === 'string' ? g.group_id : null);
-    if (actualIds.length !== activeIds.length ||
-        new Set(actualIds).size !== activeIds.length ||
-        actualIds.some((id: unknown) => typeof id !== 'string' ||
-          !expected.has(id as string)) ||
-        preview.groups.some((g: unknown) => {
-          if (!record(g) || !Array.isArray(g.prizes)) return true;
-          const allowed = expected.get(g.group_id as string);
-          if (!allowed) return true;
-          const ids = g.prizes.map((p: unknown) =>
-            record(p) && typeof p.id === 'string' ? p.id : null);
-          return ids.length !== allowed.length ||
-            new Set(ids).size !== allowed.length ||
-            ids.some((id: unknown) => typeof id !== 'string' ||
-              !allowed.includes(id as string));
-        })) return json({ error: 'ranking_unavailable' }, 409);
+    if (!verifyTeamV2ReviewPrizeInventory(activeGroups, activePrizes, preview.groups)) {
+      return json({ error: 'ranking_unavailable' }, 409);
+    }
 
     const group = preview.groups.find((g: unknown) =>
       record(g) && g.group_id === groupId);

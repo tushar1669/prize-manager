@@ -59,18 +59,14 @@ describe('owner-only v2 ruling review flow — source-only, no payout writer', (
 
   it('cross-checks all active tournament groups and prizes before trusting a partial scorer preview', () => {
     const groupRead = server.indexOf(".from('institution_prize_groups').select('id')");
-    const prizeRead = server.indexOf(".from('institution_prizes').select('id,group_id')");
+    const prizeRead = server.indexOf(".from('institution_prizes').select('id,group_id,place,cash_amount,has_trophy,has_medal')");
     const previewMatch = server.indexOf('const group = preview.groups.find(');
     expect(groupRead).toBeGreaterThan(server.indexOf("'allocateInstitutionPrizes'"));
     expect(prizeRead).toBeGreaterThan(groupRead);
     expect(previewMatch).toBeGreaterThan(prizeRead);
     expect(server).toContain(".eq('tournament_id', tournamentId).eq('is_active', true)");
     expect(server).toContain(".in('group_id', activeIds).eq('is_active', true)");
-    expect(server).toContain('actualIds.length !== activeIds.length');
-    expect(server).toContain('new Set(actualIds).size !== activeIds.length');
-    expect(server).toContain('ids.length !== allowed.length');
-    expect(server).toContain('new Set(ids).size !== allowed.length');
-    expect(server).toContain('!allowed.includes(id as string)');
+    expect(server).toContain('verifyTeamV2ReviewPrizeInventory(activeGroups, activePrizes, preview.groups)');
     expect(server).not.toContain('planCompleteTeamV2Awards(');
   });
 
