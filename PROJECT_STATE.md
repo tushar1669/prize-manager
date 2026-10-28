@@ -1,4 +1,5 @@
 # PROJECT_STATE — Prize Manager · Universal Extraction Engine
+> **29 Oct — new source-only integration candidate:** [draft #484](https://github.com/tushar1669/prize-manager/pull/484) starts from current main `104aa4221016091ed4ca1b15a033f062da44d178` and overlays 91 reviewed #483 Excel/PDF/Team v2 source/test/docs files without overwriting the 5 newer main security/publication migrations or this canonical history. Existing #477/#478 work is reused rather than blindly merged. Initial CI disclosed a newly added release-plan wording violation of the locked format guard; corrected in candidate only, with guard intact. Final CI, authenticated QA, transaction and release gates remain unresolved. The user approved draft source integration and verification, NOT merging, database writes, enabling Save, publishing or additional Supabase resources. Backlog priority UNKNOWN.
 **Last updated:** 28 September 2026 · **Owner:** Tushar · **This file is the single source of truth for continuing work in any new chat.**
 
 Replace the previous PROJECT_STATE.md in the repo with this file. Paste it at the start of every new chat to re-establish context.
