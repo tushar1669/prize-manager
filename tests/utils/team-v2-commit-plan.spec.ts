@@ -52,6 +52,31 @@ describe('server-owned Team Ranking v2 new-version award planning', () => {
     }
     expect(planTeamV2AwardPlaces('group', partitions, prizes, [ruling, ruling], 8).ok).toBe(false);
   });
+  it('fails closed on a scorer partition with an unknown status instead of awarding it', () => {
+    const corrupted = [
+      partitions[0],
+      { ...partitions[1], status: 'unknown' } as unknown as TeamRankingPartition,
+      partitions[2],
+    ];
+    expect(planTeamV2AwardPlaces('group', corrupted, prizes, [ruling], 8))
+      .toEqual({ ok: false, reason: 'invalid_inputs' });
+  });
+
+  it('rejects rulings with a stale base version or missing official decision proof', () => {
+    const unverified: TeamRulingRecord[] = [
+      { ...ruling, supersedes_allocation_version: 5 },
+      { ...ruling, schema_version: 1 as 2 },
+      { ...ruling, actor_id: ' ' },
+      { ...ruling, regulation_reference: ' ' },
+      { ...ruling, arbiter_decision_reference: ' ' },
+      { ...ruling, explanation: ' ' },
+    ];
+    for (const bad of unverified) {
+      expect(planTeamV2AwardPlaces('group', partitions, prizes, [bad], 8).ok)
+        .toBe(false);
+    }
+  });
+
   it('does not decide a money prize with missing/unverified tie-break evidence', () => {
     const blocked: TeamRankingPartition[] = [
       partitions[0], { status: 'blocked', reason: 'missing_tb', teams: partitions[1].teams },

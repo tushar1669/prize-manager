@@ -54,7 +54,9 @@ export function planTeamV2AwardPlaces(
   const allKeys = partitions.flatMap(partition => partition.teams.map(team => team.key));
   if (!allKeys.length || new Set(allKeys).size !== allKeys.length ||
       allKeys.some(key => !key || typeof key !== 'string') ||
-      partitions.some(partition => partition.status === 'resolved' && partition.teams.length !== 1 ||
+      partitions.some(partition =>
+        !['resolved', 'tied', 'blocked'].includes(partition.status) ||
+        partition.status === 'resolved' && partition.teams.length !== 1 ||
         partition.status === 'tied' && partition.teams.length < 2 ||
         partition.teams.length === 0)) return { ok: false, reason: 'invalid_inputs' };
 
@@ -78,6 +80,12 @@ export function planTeamV2AwardPlaces(
       const matching = authorizedRulings.filter(ruling =>
         ruling.group_id === groupId &&
         ruling.allocation_version === newVersion &&
+        ruling.schema_version === 2 &&
+        ruling.supersedes_allocation_version === newVersion - 1 &&
+        typeof ruling.actor_id === 'string' && !!ruling.actor_id.trim() &&
+        typeof ruling.regulation_reference === 'string' && !!ruling.regulation_reference.trim() &&
+        typeof ruling.arbiter_decision_reference === 'string' && !!ruling.arbiter_decision_reference.trim() &&
+        typeof ruling.explanation === 'string' && !!ruling.explanation.trim() &&
         sameSet(ruling.tied_team_keys, ordered) &&
         ruling.affected_places.length === targeted.length &&
         ruling.affected_places.every((place, i) => place === targeted[i].place));
