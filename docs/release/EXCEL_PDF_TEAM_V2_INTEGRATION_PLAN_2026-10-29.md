@@ -30,7 +30,7 @@
 | Gate | Required proof | Current state |
 | --- | --- | --- |
 | A. One integrated candidate | Based on latest main; code/lockfile/approved outputs reconciled; no lost main security changes; source reviewed | **DRAFT #484 CREATED; source CI / review pending** |
-| B. Build and static policy | `npm ci`, `npm run lint`, `npm run test:unit`, build, strict no-CSV guard and negative controls; report *overall* CI outcome | **NOT PASSED on integrated candidate** |
+| B. Build and static policy | `npm ci`, `npm run lint`, `npm run test:unit`, build, strict disallowed-format guard and negative controls; report *overall* CI outcome | **NOT PASSED on integrated candidate** |
 | C. Excel reports | Real synthetic four-sheet files, unchanged individual rows, group/amount/format/metadata checks, Coverage/RCA checks, external spreadsheet reader/visual QA, dependency security disposition | #477 targeted synthetic QA only; integrated **UNKNOWN** |
 | D. PDFs / A4 | Synthetic short/long actual A4 PDFs + print images; original/updated cards, Poster Grid, Arbiter Sheet, team roster/winner/published pin; Edge-generated PDF independently inspected | #478 synthetic visual QA only; integrated **UNKNOWN** |
 | E. Team v2 decision | Named verified Swiss source TB1…TBn, no guessed missing TB, genuine ties requiring authorized official reference; no Rank Sum in active payout path | source tests only; **runtime UNKNOWN** |
