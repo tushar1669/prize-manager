@@ -78,6 +78,12 @@ Key settings include:
   - **Cash Distributed** = sum of winners’ allocated prize cash.
 - **Allocation Summary counts:** Winners Allocated and Unfilled Prizes are shown alongside main/category/trophy/medal counts.
 
+## Final Prizes Excel and print outputs
+- **Export XLSX** on Finalize or the Final Prize view downloads **one four-sheet workbook**: `Winners`, `Poster Grid`, `Arbiter Sheet` (blank Signature field) and **`Team Prizes`**. The first three remain individual-winner data sheets, not replicas of the printable visual layouts.
+- **Team Prizes sheet** contains **filled institutional/team awards only**: prize group, place, institution, selected team players/ranks, points/rank-sum/best rank, cash amount, trophy and medal. Ineligible institutions and unfilled prize rows are excluded. It remains present but empty when no team groups exist. If team data cannot be loaded, the export stops rather than silently omitting awards.
+- **Access:** XLSX requires full tournament access. Team-only results can be exported even when there are no individual prize winners. On Finalize, the team sheet uses that screen's team-allocation version selector; the Final Prize view uses its existing latest team-result selector.
+- **PDF:** Each **Print** action uses the browser's **Save as PDF** option. The Team Prizes view has a separate A4 handout style; it keeps the existing team result fields and hides organizer-only ineligible-institution diagnostics from printing.
+
 ## Print outputs
 - **`/t/:id/final/v1` (Card view):** Category cards flow dynamically; the layout no longer forces one-category-per-page, while still avoiding mid-card splits.
 - **`/t/:id/final/v3` (Poster grid):** A toolbar toggle lets you switch **Compact** vs **One per page**; the toggle itself is hidden in print output. (`src/components/final-prize/FinalPrizeSummaryHeader.tsx`)

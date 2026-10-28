@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import './TeamPrizesTabView.css';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { TeamPrizeResultsPanel } from '@/components/allocation/TeamPrizeResultsPanel';
@@ -114,7 +115,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
 
   // Render team prize results
   return (
-    <div className="mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
+    <div className="pm-team-prizes-print mx-auto mt-8 max-w-6xl px-6 pb-12 print:mt-3 print:px-0 print:pb-4">
       <TeamPrizeResultsPanel
         data={data}
         isLoading={false}
