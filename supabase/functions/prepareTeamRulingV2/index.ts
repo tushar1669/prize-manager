@@ -81,6 +81,41 @@ Deno.serve(async (req: Request) => {
     if (scorerError || !record(preview) || !Array.isArray(preview.groups)) {
       return json({ error: 'ranking_unavailable' }, 409);
     }
+    // A fresh scorer response can still be incomplete. Cross-check its
+    // group/prize inventory against separately queried, active DB records.
+    // This is a read-only review fence, NOT an atomic Save trust boundary.
+    const { data: activeGroups, error: activeError } = await supabase
+      .from('institution_prize_groups').select('id')
+      .eq('tournament_id', tournamentId).eq('is_active', true);
+    if (activeError || !activeGroups || activeGroups.length === 0) {
+      return json({ error: 'ranking_unavailable' }, 409);
+    }
+    const activeIds = activeGroups.map(g => g.id);
+    const { data: activePrizes, error: prizeError } = await supabase
+      .from('institution_prizes').select('id,group_id')
+      .in('group_id', activeIds).eq('is_active', true);
+    if (prizeError || !activePrizes) return json({ error: 'ranking_unavailable' }, 409);
+
+    const expected = new Map(activeIds.map(id => [id, [] as string[]]));
+    for (const prize of activePrizes) expected.get(prize.group_id)?.push(prize.id);
+    const actualIds = preview.groups.map((g: unknown) =>
+      record(g) && typeof g.group_id === 'string' ? g.group_id : null);
+    if (actualIds.length !== activeIds.length ||
+        new Set(actualIds).size !== activeIds.length ||
+        actualIds.some((id: unknown) => typeof id !== 'string' ||
+          !expected.has(id as string)) ||
+        preview.groups.some((g: unknown) => {
+          if (!record(g) || !Array.isArray(g.prizes)) return true;
+          const allowed = expected.get(g.group_id as string);
+          if (!allowed) return true;
+          const ids = g.prizes.map((p: unknown) =>
+            record(p) && typeof p.id === 'string' ? p.id : null);
+          return ids.length !== allowed.length ||
+            new Set(ids).size !== allowed.length ||
+            ids.some((id: unknown) => typeof id !== 'string' ||
+              !allowed.includes(id as string));
+        })) return json({ error: 'ranking_unavailable' }, 409);
+
     const group = preview.groups.find((g: unknown) =>
       record(g) && g.group_id === groupId);
     if (!record(group) ||
