@@ -2,6 +2,16 @@
 
 **Date:** 27 October 2026. **Repo:** `tushar1669/prize-manager`. **Status:** in draft PR [#483](https://github.com/tushar1669/prize-manager/pull/483), not merged, not deployed, not operational. **Canonical priority/ID:** UNKNOWN — `BACKLOG.md` is missing on main. This is a handoff and evidence index, not an owner authorization to deploy.
 
+## 28 October — complete active prize-bearing group placement source
+
+**Reconciliation and requested PR inventory:** 17 open PRs were already pushed to GitHub. All 17 remain draft, including QA-only/do-not-merge and unreleased Team v2 work. No pending PR needed uploading. Merging all drafts to `main` would risk unintended deployment and bypass release/QA decisions; no merges, ready-for-review changes, or deployments performed.
+
+**One item implemented:** [`b22e7eff3fe083bae08de07053ddb3920e79d7ff`](https://github.com/tushar1669/prize-manager/commit/b22e7eff3fe083bae08de07053ddb3920e79d7ff) changes only `supabase/functions/_shared/teamV2CommitPlan.ts` and `tests/utils/team-v2-commit-plan.spec.ts`. Added `planCompleteTeamV2Awards`: caller must supply independently database-fetched active groups/prizes and fresh server-scored group results. The pure function rejects missing/extra/duplicate groups, duplicate cross-group prize IDs and orphaned rulings; each prize-bearing group must yield a complete valid single-group plan. An unfilled prize beyond eligible candidates still remains unawarded. Six positive/negative tests added. This neither awards money nor proves trust in caller input, and is NOT wired to Save.
+
+**Evidence at source commit:** [Migration Guard 40697331447](https://github.com/tushar1669/prize-manager/actions/runs/40697331447) **PASS**. [CI 40697332073](https://github.com/tushar1669/prize-manager/actions/runs/40697332073) was pending at initial documentation sync; record final status in PR discussion, distinguishing any individual steps from overall CI.
+
+**Still blocked:** no authenticated or transactional database verification, no connected Team v2 Save, uncoordinated legacy `finalize` MAX+1 path. Team v2 SQL writers remain dormant and unapplied. User declined more Supabase resources. Historical allocations/publication pins and current production were not changed. Backlog and priority remain UNKNOWN because canonical backlog absent.
+
 ## 28 October — one core source-safety cycle, no Supabase work
 
 - **Reconciled:** main `9800fdc8805d678d29e6023b6f47d9672db448df`; #483 prior draft `b8234285bd331906c916b1cdd2adcd3088d85c7e`. No intervening source changes. The six canonical files remain absent on main; backlog ID, priority and P0/P1/P2 inventory UNKNOWN.
