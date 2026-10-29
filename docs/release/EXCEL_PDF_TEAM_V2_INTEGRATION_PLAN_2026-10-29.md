@@ -1,5 +1,8 @@
 # Prize Manager — Excel, PDF and Team Ranking v2 integration and release-gate plan
 
+**29 Oct scoped integrated export QA:** [evidence](../qa/PR484_REPORT_PARITY_QA_2026-10-29.md) at source `cd6cd902abd9eb957337319009c60843be45a7e2`: 27 focused unit tests, 6/6 Chromium A4 tests, real synthetic four-sheet workbooks and printable A4 PASS. **Separate Edge `generatePdf` returns HTML not PDF bytes and has different styling; unverified parity is a release gate.** Overall CI red at isolated authenticated QA preflight, no deployment.
+
+
 **Update 29 October — integration candidate:** [draft PR #484](https://github.com/tushar1669/prize-manager/pull/484) was created directly from main `104aa4221016091ed4ca1b15a033f062da44d178`, with 91 selected #483 integration files and all five newer main security/publication migration files preserved unchanged. **Source CI and release QA are NOT VERIFIED**. This document describes future requirements, not release authorization. 
 
 
@@ -31,8 +34,8 @@
 | --- | --- | --- |
 | A. One integrated candidate | Based on latest main; code/lockfile/approved outputs reconciled; no lost main security changes; source reviewed | **DRAFT #484 CREATED; source CI / review pending** |
 | B. Build and static policy | `npm ci`, `npm run lint`, `npm run test:unit`, build, strict disallowed-format guard and negative controls; report *overall* CI outcome | **NOT PASSED on integrated candidate** |
-| C. Excel reports | Real synthetic four-sheet files, unchanged individual rows, group/amount/format/metadata checks, Coverage/RCA checks, external spreadsheet reader/visual QA, dependency security disposition | #477 targeted synthetic QA only; integrated **UNKNOWN** |
-| D. PDFs / A4 | Synthetic short/long actual A4 PDFs + print images; original/updated cards, Poster Grid, Arbiter Sheet, team roster/winner/published pin; Edge-generated PDF independently inspected | #478 synthetic visual QA only; integrated **UNKNOWN** |
+| C. Excel reports | Four-sheet and Coverage/RCA source-produced workbook artifacts, award/data/typed cash checks, external spreadsheet inspection, dependency security | **Integrated synthetic PASS**; authenticated/real download and dependency disposition OPEN |
+| D. PDFs / A4 | Actual browser A4 print and independent server report | **Integrated React A4 synthetic PASS 6/6**; server HTML different and PARITY NOT VERIFIED, authenticated runtime blocked |
 | E. Team v2 decision | Named verified Swiss source TB1…TBn, no guessed missing TB, genuine ties requiring authorized official reference; no Rank Sum in active payout path | source tests only; **runtime UNKNOWN** |
 | F. Authorized atomic Save | Auth/role negative tests, stale concurrent writes, complete individual/team recomputation, transaction rollback, exact published/version pin, old-writer fence and recovery | **BLOCKED — not implemented/verified end-to-end** |
 | G. Authenticated integration QA | Dedicated safe backend, owner/master/unauthorized flows, export/download, version restore, data boundaries; no production writes | **BLOCKED — CI preflight requires non-production QA credentials/backend** |
