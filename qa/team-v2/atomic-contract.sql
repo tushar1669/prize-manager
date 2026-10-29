@@ -56,7 +56,7 @@ END $$;
 SELECT qa.submit_version(
   0, '00000000-0000-4000-8000-000000000010', 9, false
 ) AS uncontested_version;
-DO $
+DO $no_tie_check$
 BEGIN
   IF (SELECT count(*) FROM public.allocations WHERE version=1) <> 1 OR
      (SELECT count(*) FROM public.team_allocations WHERE version=1) <> 1 OR
@@ -65,7 +65,7 @@ BEGIN
      (SELECT count(*) FROM public.publications
         WHERE allocation_version=0) <> 1
   THEN RAISE EXCEPTION 'FAIL no-ruling resolved award or publication pin'; END IF;
-END $;
+END $no_tie_check$;
 TRUNCATE public.allocations, public.team_allocations;
 
 -- A submitted ruling must still match the prize-specific saved award.
