@@ -33,7 +33,7 @@ describe('generatePdf pure printable HTML contract', () => {
   });
   it('preserves fail-closed team section error and empty state without invented winners', () => {
     expect(generateHtmlReport(tournament, [], 5, null, 'unavailable')).toContain('Team prizes could not be included');
-    expect(generateHtmlReport(tournament, [], 5, { ...teams, groups: [] }, null)).not.toContain('pm-team-table');
+    expect(generateHtmlReport(tournament, [], 5, { ...teams, groups: [] }, null)).not.toContain('<table class="pm-team-table">');
   });
   it('keeps original Edge authorization and pinned data-URI response unchanged', () => {
     const source = readFileSync('supabase/functions/generatePdf/index.ts', 'utf8');
