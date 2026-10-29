@@ -40,8 +40,10 @@ BEGIN
      p_expected_version IS NULL OR p_expected_version < 0 OR
      p_expected_version >= 2147483647 OR
      jsonb_typeof(p_team_rows) IS DISTINCT FROM 'array' OR
+     -- An uncontested, fully resolved rank has no official tie ruling.
+     -- Nonempty entries are individually validated below, and no award may
+     -- reference an unsubmitted ruling.
      jsonb_typeof(p_rulings) IS DISTINCT FROM 'array' OR
-     jsonb_array_length(p_rulings) = 0 OR
      jsonb_typeof(p_individual_rows) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'team_v2_invalid_request';
   END IF;

@@ -51,6 +51,24 @@ BEGIN
      (SELECT count(*) FROM public.team_allocations) <> 0
   THEN RAISE EXCEPTION 'FAIL invalid team write partially created individual awards'; END IF;
 END $$;
+-- A fully resolved ranking requires NO invented arbiter ruling.
+-- It must still commit atomically, and the old publication pin must survive.
+SELECT qa.submit_version(
+  0, '00000000-0000-4000-8000-000000000010', 9, false
+) AS uncontested_version;
+DO $
+BEGIN
+  IF (SELECT count(*) FROM public.allocations WHERE version=1) <> 1 OR
+     (SELECT count(*) FROM public.team_allocations WHERE version=1) <> 1 OR
+     (SELECT count(*) FROM public.team_allocations
+        WHERE ranking_snapshot ? 'ruling') <> 0 OR
+     (SELECT count(*) FROM public.publications
+        WHERE allocation_version=0) <> 1
+  THEN RAISE EXCEPTION 'FAIL no-ruling resolved award or publication pin'; END IF;
+END $;
+TRUNCATE public.allocations, public.team_allocations;
+
+-- A submitted ruling must still match the prize-specific saved award.
 SELECT qa.submit_version(0) AS version_created;
 DO $$
 BEGIN

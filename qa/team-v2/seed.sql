@@ -21,7 +21,7 @@ INSERT INTO public.publications VALUES('00000000-0000-4000-8000-000000000001',0,
 
 CREATE FUNCTION qa.submit_version(
   expected integer, actor uuid DEFAULT '00000000-0000-4000-8000-000000000010',
-  points numeric DEFAULT 9
+  points numeric DEFAULT 9, with_ruling boolean DEFAULT true
 ) RETURNS integer LANGUAGE sql SECURITY INVOKER SET search_path = '' AS $$
   WITH ruling AS (
     SELECT jsonb_build_object(
@@ -54,9 +54,10 @@ CREATE FUNCTION qa.submit_version(
                                         'scoring_mode','by_top_k_score'),
          'award',jsonb_build_object(
            'id','00000000-0000-4000-8000-000000000007',
-           'cash_amount',100,'has_trophy',true,'has_medal',false),
-         'ruling',r.entry
-      )
+           'cash_amount',100,'has_trophy',true,'has_medal',false)
+      ) || CASE WHEN with_ruling
+        THEN jsonb_build_object('ruling',r.entry)
+        ELSE '{}'::jsonb END
     ) AS entry FROM ruling r CROSS JOIN public.institution_prize_groups g
     WHERE g.id='00000000-0000-4000-8000-000000000006'
   )
@@ -66,7 +67,9 @@ CREATE FUNCTION qa.submit_version(
        "player_id":"00000000-0000-4000-8000-000000000004",
        "reason_codes":["synthetic"],"is_manual":false}]'::jsonb,
     (SELECT jsonb_build_array(entry) FROM award),
-    (SELECT jsonb_build_array(entry) FROM ruling)
+    CASE WHEN with_ruling
+      THEN (SELECT jsonb_build_array(entry) FROM ruling)
+      ELSE '[]'::jsonb END
   );
 $$;
-GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric,boolean) TO service_role, authenticated;
