@@ -305,6 +305,7 @@ export function generateHtmlReport(
     <p><strong>Date:</strong> ${escapeHtml(tournament.start_date)} to ${escapeHtml(tournament.end_date)}</p>
     <p><strong>Venue:</strong> ${escapeHtml(tournament.venue || 'N/A')}</p>
     <p><strong>Version:</strong> ${version}</p>
+    <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()}</p>
   </div>
 
   <h2>Individual Prize Allocations</h2>
@@ -337,7 +338,6 @@ export function generateHtmlReport(
 
   ${teamPrizesHtml}
 
-  <p class="meta">Generated on ${new Date().toLocaleDateString()}</p>
 </body>
 </html>
   `;
