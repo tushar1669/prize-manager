@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 import { buildVersionedTeamPdfResults } from '../../supabase/functions/_shared/teamPdfSnapshot';
+import { generateHtmlReport } from '../../supabase/functions/_shared/prizePrintableHtml';
 import { buildTeamPrizeExportRows } from '@/utils/teamPrizeExport';
 import type { TeamPrizeResultsResponse } from '@/components/team-prizes/useTeamPrizeResults';
 
@@ -40,9 +41,15 @@ describe('Team Prize v2 criterion parity without rewriting historical awards', (
       .groups[0].prizes[0].winner_institution?.applied_rule_label).toBe('TB2 · Verified Rule');
     expect(buildVersionedTeamPdfResults(groups, prizes, [row])
       .groups[0].prizes[0].winner_institution?.applied_rule_label).toBeNull();
-    const html = readFileSync('supabase/functions/generatePdf/index.ts', 'utf8');
-    expect(html).toContain('Tie-break applied:');
-    expect(html).toContain('escapeHtml(winner.applied_rule_label)');
+    const tournament = { title: 'Synthetic', start_date: '2026-10-03',
+      end_date: '2026-10-04', venue: 'Fixture Hall' };
+    const awarded = buildVersionedTeamPdfResults(groups, prizes, [{ ...row, ranking_snapshot: audit }]);
+    const legacy = buildVersionedTeamPdfResults(groups, prizes, [row]);
+    const printed = generateHtmlReport(tournament, [], 5, awarded, null);
+    expect(printed).toContain('Tie-break applied: TB2 · Verified Rule');
+    expect(printed).not.toContain('private-candidate');
+    expect(printed).not.toContain('private-id');
+    expect(generateHtmlReport(tournament, [], 5, legacy, null)).not.toContain('Tie-break applied:');
   });
 
   it('prints matching tie-break in Excel without touching winners or exposing unpaid prizes', () => {
