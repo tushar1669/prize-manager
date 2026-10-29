@@ -56,7 +56,9 @@ test('printed Team Prizes headings and all metadata blocks use centered, group-s
     const group = groups.nth(index);
     const headers = await group.locator('thead th').evaluateAll(nodes =>
       nodes.map(node => getComputedStyle(node).textAlign));
-    expect(headers).toHaveLength(6);
+    // Active Team v2 intentionally removes the former Rank Sum and Best Rank columns.
+    expect(headers).toHaveLength(4);
+    await expect(group.locator('thead th')).toHaveText(['Place', 'Team', 'Points', 'Prize']);
     expect(headers.every(value => value === 'center')).toBe(true);
 
     const title = group.locator('[data-team-group-header] h3');
@@ -97,7 +99,7 @@ test('printed rupee and numerals do not collide; centered prize stats and awards
   const firstRow = group.locator('tbody tr').first();
   const centers = await firstRow.locator('td.pm-team-prize-stat, td.pm-team-prize-amount')
     .evaluateAll(nodes => nodes.map(node => getComputedStyle(node).textAlign));
-  expect(centers).toEqual(['center', 'center', 'center', 'center']);
+  expect(centers).toEqual(['center', 'center']);
   expect(await firstRow.locator('.pm-team-prize-value').evaluate(node => getComputedStyle(node).justifyContent)).toBe('center');
 
   const layout = await firstRow.evaluate(row => {
