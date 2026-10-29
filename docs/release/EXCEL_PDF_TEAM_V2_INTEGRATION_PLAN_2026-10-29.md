@@ -1,5 +1,8 @@
 # Prize Manager — Excel, PDF and Team Ranking v2 integration and release-gate plan
 
+**29 October latest server HTML print evidence:** [updated scoped report](../qa/PR484_REPORT_PARITY_QA_2026-10-29.md) at `6a1d37deec573aee555321050dcfe18951aa38fb`: 30 focused tests, 6 React A4 and 3 server HTML Chromium print tests PASS; exact synthetic report renders 2/4 A4 pages with 12/42 team rows, no orphan page, gold/teal/navy group styles. Server still returns printable HTML through the unchanged response contract (not PDF bytes). **Runtime authenticated Edge execution, Team v2 atomic Save, isolated backend QA and production rollback/owner release authorization remain blocked.** Overall CI RED at authenticated QA preflight despite 706 passing unit tests.
+
+
 **29 Oct scoped integrated export QA:** [evidence](../qa/PR484_REPORT_PARITY_QA_2026-10-29.md) at source `cd6cd902abd9eb957337319009c60843be45a7e2`: 27 focused unit tests, 6/6 Chromium A4 tests, real synthetic four-sheet workbooks and printable A4 PASS. **Separate Edge `generatePdf` returns HTML not PDF bytes and has different styling; unverified parity is a release gate.** Overall CI red at isolated authenticated QA preflight, no deployment.
 
 
@@ -35,7 +38,7 @@
 | A. One integrated candidate | Based on latest main; code/lockfile/approved outputs reconciled; no lost main security changes; source reviewed | **DRAFT #484 CREATED; source CI / review pending** |
 | B. Build and static policy | `npm ci`, `npm run lint`, `npm run test:unit`, build, strict disallowed-format guard and negative controls; report *overall* CI outcome | **NOT PASSED on integrated candidate** |
 | C. Excel reports | Four-sheet and Coverage/RCA source-produced workbook artifacts, award/data/typed cash checks, external spreadsheet inspection, dependency security | **Integrated synthetic PASS**; authenticated/real download and dependency disposition OPEN |
-| D. PDFs / A4 | Actual browser A4 print and independent server report | **Integrated React A4 synthetic PASS 6/6**; server HTML different and PARITY NOT VERIFIED, authenticated runtime blocked |
+| D. PDFs / A4 | Actual browser A4 print and independent server report | **Integrated React A4 synthetic PASS 6/6 and server pure HTML A4 synthetic PASS 3/3**; authenticated Edge runtime output NOT VERIFIED; existing HTML response contract retained |
 | E. Team v2 decision | Named verified Swiss source TB1…TBn, no guessed missing TB, genuine ties requiring authorized official reference; no Rank Sum in active payout path | source tests only; **runtime UNKNOWN** |
 | F. Authorized atomic Save | Auth/role negative tests, stale concurrent writes, complete individual/team recomputation, transaction rollback, exact published/version pin, old-writer fence and recovery | **BLOCKED — not implemented/verified end-to-end** |
 | G. Authenticated integration QA | Dedicated safe backend, owner/master/unauthorized flows, export/download, version restore, data boundaries; no production writes | **BLOCKED — CI preflight requires non-production QA credentials/backend** |
