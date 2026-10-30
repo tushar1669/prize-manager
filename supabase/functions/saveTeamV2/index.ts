@@ -4,12 +4,13 @@ import { parseTeamRankingRuleConfig } from '../_shared/teamRankingV2.ts';
 import { prepareInitialUncontestedTeamV2Rows } from '../_shared/teamV2InitialSaveRows.ts';
 
 /**
- * DRAFT, DISABLED BY DEFAULT. Strict first-version, uncontested Team v2 Save.
+ * DRAFT, DISABLED BY DEFAULT. Version-locked, uncontested Team v2 Save.
  *
- * The caller may supply only a tournament ID and expected version zero.
+ * The caller may supply only a tournament ID and exact expected version.
  * Independently sourced individual/team scorer responses, not browser awards,
- * are persisted together via a version-locked private RPC. Later amendments
- * and official ties remain fail-closed pending the separate adjudication path.
+ * are persisted together via a version-locked private RPC. Unchanged Team
+ * winners can be saved as a later version while preserving existing individual
+ * award history. Changed winners and official ties remain fail-closed.
  * This Edge route is NOT a production release or an authenticated QA pass.
  */
 const json = (payload: unknown, status = 200) =>
@@ -41,10 +42,16 @@ Deno.serve(async (request: Request) => {
     const requestBody: unknown = await request.json();
     if (!record(requestBody) ||
         Object.keys(requestBody).some(key => !['tournament_id', 'expected_version'].includes(key)) ||
-        !positiveId(requestBody.tournament_id) || requestBody.expected_version !== 0) {
-      return json({ error: 'first_version_only', saved: false }, 400);
+        !positiveId(requestBody.tournament_id) ||
+        typeof requestBody.expected_version !== 'number' ||
+        !Number.isSafeInteger(requestBody.expected_version) ||
+        requestBody.expected_version < 0 ||
+        requestBody.expected_version >= 2147483647) {
+      return json({ error: 'invalid_expected_version', saved: false }, 400);
     }
     const tournamentId = requestBody.tournament_id;
+    const expectedVersion = requestBody.expected_version;
+    const nextVersion = expectedVersion + 1;
     const { data: identity, error: identityError } =
       await db.auth.getUser(auth.slice('Bearer '.length));
     if (identityError || !identity.user) return json({ error: 'unauthorized', saved: false }, 401);
@@ -73,7 +80,8 @@ Deno.serve(async (request: Request) => {
       if (i.error || t.error) return null;
       return Math.max(Number(i.data?.[0]?.version ?? 0), Number(t.data?.[0]?.version ?? 0));
     };
-    if (await version() !== 0) return json({ error: 'existing_version_requires_review', saved: false }, 409);
+    if (await version() !== expectedVersion)
+      return json({ error: 'stale_version', saved: false }, 409);
 
     // All individual + Team scorer input tables are covered; failures block Save.
     const sourceDigest = async (): Promise<string | null> => {
@@ -127,30 +135,33 @@ Deno.serve(async (request: Request) => {
     if (individual.error || team.error) return json({ error: 'scorer_unavailable', saved: false }, 409);
     const proposal = prepareInitialUncontestedTeamV2Rows(
       individualPrizes.data.map(prize => prize.id),
-      individual.data, groups.data, teamPrizes.data, team.data, actorId,
+      individual.data, groups.data, teamPrizes.data, team.data, actorId, nextVersion,
     );
     if (!proposal.ok) return json({ error: proposal.reason, saved: false }, 409);
 
     // Independent version recheck; DB RPC checks it again under row lock.
     // A full source-revision lock remains a mandatory gate before enabling
     // this draft route in any runtime.
-    if (await version() !== 0) return json({ error: 'stale_version', saved: false }, 409);
+    if (await version() !== expectedVersion)
+      return json({ error: 'stale_version', saved: false }, 409);
     const after = await sourceDigest();
     if (!after || after !== before)
       return json({ error: 'source_changed', saved: false }, 409);
 
     const { data: newVersion, error: commitError } = await db.rpc(
       'commit_team_v2_adjudicated_version', {
-        p_tournament_id: tournamentId, p_expected_version: 0,
+        p_tournament_id: tournamentId, p_expected_version: expectedVersion,
         p_actor_id: actorId,
-        p_individual_rows: proposal.rows.individual_rows,
+        // Every subsequent version COPIES original individual awards inside
+        // the SQL transaction; never recalculate or replace paid winners.
+        p_individual_rows: expectedVersion === 0 ? proposal.rows.individual_rows : [],
         p_team_rows: proposal.rows.team_rows, p_rulings: [],
         p_expected_source_fingerprint: before,
       },
     );
-    if (commitError || newVersion !== 1)
+    if (commitError || newVersion !== nextVersion)
       return json({ error: 'atomic_save_unavailable_or_rejected', saved: false }, 409);
-    return json({ saved: true, allocation_version: 1 });
+    return json({ saved: true, allocation_version: nextVersion });
   } catch {
     // No tokens, player names, personal data, scorer payloads or raw errors in logs.
     return json({ error: 'team_v2_save_failed', saved: false }, 500);
