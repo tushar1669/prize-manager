@@ -2,15 +2,17 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CORS_HEADERS } from '../_shared/health.ts';
 import { parseTeamRankingRuleConfig } from '../_shared/teamRankingV2.ts';
 import { prepareInitialUncontestedTeamV2Rows } from '../_shared/teamV2InitialSaveRows.ts';
+import { prepareAdjudicatedTeamV2Rows } from '../_shared/teamV2AdjudicatedSaveRows.ts';
 
 /**
- * DRAFT, DISABLED BY DEFAULT. Version-locked, uncontested Team v2 Save.
+ * DRAFT, DISABLED BY DEFAULT. Version-locked, master-only Team v2 Save.
  *
  * The caller may supply only a tournament ID and exact expected version.
  * Independently sourced individual/team scorer responses, not browser awards,
  * are persisted together via a version-locked private RPC. Unchanged Team
  * winners can be saved as a later version while preserving existing individual
- * award history. Changed winners and official ties remain fail-closed.
+ * award history. Official tied-place corrections require a documented ruling,
+ * independently revalidated against a fresh owner-only scorer result.
  * This Edge route is NOT a production release or an authenticated QA pass.
  */
 const json = (payload: unknown, status = 200) =>
@@ -41,7 +43,11 @@ Deno.serve(async (request: Request) => {
   try {
     const requestBody: unknown = await request.json();
     if (!record(requestBody) ||
-        Object.keys(requestBody).some(key => !['tournament_id', 'expected_version'].includes(key)) ||
+        Object.keys(requestBody).some(key =>
+          !['tournament_id', 'expected_version', 'official_rulings'].includes(key)) ||
+        (requestBody.official_rulings !== undefined &&
+          (!Array.isArray(requestBody.official_rulings) ||
+           requestBody.official_rulings.length > 20)) ||
         !positiveId(requestBody.tournament_id) ||
         typeof requestBody.expected_version !== 'number' ||
         !Number.isSafeInteger(requestBody.expected_version) ||
@@ -138,10 +144,26 @@ Deno.serve(async (request: Request) => {
       }),
     ]);
     if (individual.error || team.error) return json({ error: 'scorer_unavailable', saved: false }, 409);
-    const proposal = prepareInitialUncontestedTeamV2Rows(
-      individualPrizes.data.map(prize => prize.id),
-      individual.data, groups.data, teamPrizes.data, team.data, actorId, nextVersion,
-    );
+    // A browser may submit only official order/reference PROPOSALS; its team
+    // keys and award instructions are revalidated against the fresh private
+    // scorer, never persisted as client-provided winner rows. No official
+    // proposal is needed for a fully resolved tournament.
+    const officialRulings = requestBody.official_rulings ?? [];
+    const proposal = Array.isArray(officialRulings) && officialRulings.length
+      ? prepareAdjudicatedTeamV2Rows(
+        individualPrizes.data.map(prize => prize.id),
+        individual.data, groups.data, teamPrizes.data, team.data,
+        officialRulings, {
+          currentAllocationVersion: expectedVersion, actorId,
+          actorIsOwnerOrMaster: master === true,
+          recordedAt: new Date().toISOString(),
+        },
+      )
+      : prepareInitialUncontestedTeamV2Rows(
+        individualPrizes.data.map(prize => prize.id),
+        individual.data, groups.data, teamPrizes.data, team.data,
+        actorId, nextVersion,
+      );
     if (!proposal.ok) return json({ error: proposal.reason, saved: false }, 409);
 
     // Independent version recheck; DB RPC checks it again under row lock.
@@ -160,7 +182,7 @@ Deno.serve(async (request: Request) => {
         // Every subsequent version COPIES original individual awards inside
         // the SQL transaction; never recalculate or replace paid winners.
         p_individual_rows: expectedVersion === 0 ? proposal.rows.individual_rows : [],
-        p_team_rows: proposal.rows.team_rows, p_rulings: [],
+        p_team_rows: proposal.rows.team_rows, p_rulings: proposal.rows.rulings,
         p_expected_source_fingerprint: before,
       },
     );
