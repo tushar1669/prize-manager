@@ -14,6 +14,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   tournamentId: string;
   group: GroupResponse;
+  onReviewed?: (groupId: string, proposal: Record<string, unknown>) => void;
 }
 
 const ERRORS: Record<string, string> = {
@@ -36,7 +37,7 @@ function move(keys: string[], from: number, to: number): string[] {
 }
 
 /** Organizer/admin-only official tie REVIEW; never a saved award or legacy RPC. */
-export function TeamV2RulingDialog({ open, onOpenChange, tournamentId, group }: Props) {
+export function TeamV2RulingDialog({ open, onOpenChange, tournamentId, group, onReviewed }: Props) {
   const ties = group.adjudication_ties ?? [];
   const [tieIndex, setTieIndex] = useState(0);
   const tie = ties[tieIndex];
@@ -94,6 +95,20 @@ export function TeamV2RulingDialog({ open, onOpenChange, tournamentId, group }: 
       if (functionError || data?.ok !== true || data?.saved !== false) {
         throw new Error(code ?? 'ranking_unavailable');
       }
+      if (!data?.review || !Number.isSafeInteger(data.review.proposed_new_version)) {
+        throw new Error('stale_version');
+      }
+      onReviewed?.(group.group_id, {
+        group_id: group.group_id,
+        tied_team_keys: tie.team_keys,
+        ordered_team_keys: order,
+        affected_places: tie.affected_places,
+        method: 'documented_arbiter_ruling',
+        regulation_reference: group.adjudication_rules_reference ?? '',
+        arbiter_decision_reference: decisionReference.trim(),
+        explanation: explanation.trim(),
+        next_allocation_version: data.review.proposed_new_version,
+      });
       setReviewed(true);
     } catch (caught) {
       const code = caught instanceof Error ? caught.message : 'ranking_unavailable';
