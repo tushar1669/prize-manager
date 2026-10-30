@@ -74,7 +74,13 @@ describe('owner-only v2 ruling review flow — source-only, no payout writer', (
     expect(allocator).toContain("if (partition.status !== 'tied') return []");
     expect(allocator).toContain('adjudication_partitions: adjudicationPartitions');
     expect(allocator).toContain('adjudication_ties: adjudicationTies');
-    expect(allocator).toContain('selectedPlayers: team.selectedPlayers.map(player => ({ points: player.points }))');
+    // Official Save needs source-scored player IDs and complete candidate roster,
+    // not only points. Missing identities must never be guessed by the browser.
+    expect(allocator).toContain('playerId: player.playerId');
+    expect(allocator).toContain('sourceHash: player.sourceHash');
+    expect(allocator).toContain('individualTieBreaks: player.individualTieBreaks');
+    expect(allocator).toContain('adjudication_partitions: adjudicationPartitions');
+    expect(allocator).toContain('members: inst?.team.map');
     expect(server).toContain('request.proposal.regulation_reference !== rules.published_reference');
   });
 
