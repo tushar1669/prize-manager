@@ -39,9 +39,12 @@ if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
   exit 1
 fi
 
+# Edit two scorer tables in one real transaction, in the opposite order
+# to the database Save's table locks. A blocking SHARE lock deadlocks here.
 psql -v ON_ERROR_STOP=1 -c "BEGIN;
   UPDATE public.players SET points=6 WHERE id='$player_id'::uuid;
   SELECT pg_sleep(4);
+  UPDATE public.tournaments SET owner_id=owner_id WHERE id='$source_id'::uuid;
   COMMIT;" > /tmp/team-v2-source-mutator.log 2>&1 &
 mutator=$!
 
@@ -75,16 +78,30 @@ if [[ "$mutator_rc" != 0 || "$save_rc" == 0 || "$save_rc" == 124 ]]; then
   cat /tmp/team-v2-source-mutator.log
   exit 1
 fi
-grep -q 'team_v2_source_changed' /tmp/team-v2-source-save.log || {
-  echo "FAIL concurrent source update rejected for the wrong reason"
+# Contended NOWAIT lock is the expected first rejection. After the writer
+# commits, re-check with the ORIGINAL pre-edit digest to prove the stale
+# score cannot be committed on an immediately retried request either.
+grep -q 'could not obtain lock on relation' /tmp/team-v2-source-save.log || {
+  echo "FAIL source Save did not fail closed on contended input tables"
   cat /tmp/team-v2-source-save.log
   exit 1
 }
+set +e
+timeout 15s psql -v ON_ERROR_STOP=1 -c "SET ROLE service_role;
+  SELECT qa.submit_version(0,'$actor_id'::uuid,9,false,'$digest');" > /tmp/team-v2-after-edit-save.log 2>&1
+retry_rc=$?
+set -e
+if [[ "$retry_rc" == 0 || "$retry_rc" == 124 ]] ||
+   ! grep -q 'team_v2_source_changed' /tmp/team-v2-after-edit-save.log; then
+  echo "FAIL old source digest was accepted after editor committed"
+  cat /tmp/team-v2-after-edit-save.log
+  exit 1
+fi
 if [[ "$(psql -At -c "SELECT count(*) FROM public.allocations")" != 0 ||
       "$(psql -At -c "SELECT count(*) FROM public.team_allocations")" != 0 ||
       "$(psql -At -c "SELECT count(*) FROM public.publications WHERE allocation_version=0")" != 1 ]]; then
   echo "FAIL concurrent source rejection wrote awards or changed publication"
   exit 1
 fi
-echo "PASS source editor overlapping atomic Save: changed digest rejected, no partial award, pin preserved"
+echo "PASS two-table source editor vs Save: no deadlock, NOWAIT conflict, then stale digest rejected; no partial award, pin preserved"
 
