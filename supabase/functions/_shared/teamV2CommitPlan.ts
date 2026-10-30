@@ -1,5 +1,5 @@
 import type { TeamRankingPartition } from './teamRankingV2.ts';
-import type { TeamRulingRecord } from './teamTieAdjudicationV2.ts';
+import { validateTeamRulingV2, type TeamRulingRecord } from './teamTieAdjudicationV2.ts';
 
 /**
  * Build an award PLACEMENT PLAN from fresh server-ranked partitions.
@@ -181,4 +181,90 @@ export function planCompleteTeamV2Awards(
     return { ok: false, reason: 'duplicate_award' };
   }
   return { ok: true, awards };
+}
+
+
+/**
+ * Owner/master-checked, source-owned OFFICIAL RULING PLAN. The caller must
+ * construct groups and rank partitions from current database records and
+ * the trusted authenticated scorer, never from browser-supplied winners.
+ *
+ * This is a pure validation/placement seam, NOT a database writer. A separate
+ * atomic commit must prove unchanged source revision and expected version.
+ * It reuses (rather than re-implements) the existing official-ruling validator
+ * and complete-prize placement planner.
+ */
+export type V2AuthorizedServerGroup = V2ActivePrizeGroup & V2RankedGroup & {
+  published_reference: string;
+  organizer_confirmed: boolean;
+};
+export type V2AuthorizedRulingProposal = { group_id: string; proposal: unknown };
+export type V2AuthorizedActor = {
+  currentAllocationVersion: number;
+  actorId: string;
+  actorIsOwnerOrMaster: boolean;
+  recordedAt: string;
+};
+export type V2AuthorizedPlanResult =
+  | { ok: true; awards: V2PlannedAward[]; rulings: TeamRulingRecord[] }
+  | { ok: false; reason: string };
+
+export function planAuthorizedTeamV2Awards(
+  serverGroups: readonly V2AuthorizedServerGroup[],
+  proposedRulings: readonly V2AuthorizedRulingProposal[],
+  actor: V2AuthorizedActor,
+): V2AuthorizedPlanResult {
+  if (!actor?.actorIsOwnerOrMaster || !actor.actorId?.trim()) {
+    return { ok: false, reason: 'unauthorized' };
+  }
+  if (!Number.isSafeInteger(actor.currentAllocationVersion) ||
+      actor.currentAllocationVersion < 0 ||
+      actor.currentAllocationVersion >= 2147483647 ||
+      !Number.isFinite(Date.parse(actor.recordedAt)) ||
+      !Array.isArray(serverGroups) || !serverGroups.length ||
+      !Array.isArray(proposedRulings) ||
+      serverGroups.some(group =>
+        !group?.group_id || !group.organizer_confirmed ||
+        !group.published_reference?.trim() ||
+        !Array.isArray(group.prizes) || !Array.isArray(group.partitions)
+      ) ||
+      new Set(serverGroups.map(group => group.group_id)).size !== serverGroups.length) {
+    return { ok: false, reason: 'invalid_inputs' };
+  }
+  const newVersion = actor.currentAllocationVersion + 1;
+  const validatedRulings: TeamRulingRecord[] = [];
+  const usedGroups = new Set<string>();
+  for (const submitted of proposedRulings) {
+    if (!submitted || typeof submitted.group_id !== 'string' ||
+        usedGroups.has(submitted.group_id)) {
+      return { ok: false, reason: 'invalid_ruling' };
+    }
+    usedGroups.add(submitted.group_id);
+    const source = serverGroups.find(group => group.group_id === submitted.group_id);
+    if (!source) return { ok: false, reason: 'invalid_ruling' };
+
+    const review = validateTeamRulingV2(submitted.proposal, {
+      groupId: source.group_id,
+      currentAllocationVersion: actor.currentAllocationVersion,
+      nextAllocationVersion: newVersion,
+      actorId: actor.actorId,
+      actorIsOwnerOrMaster: true,
+      regulationsAttested: source.organizer_confirmed,
+      recordedAt: actor.recordedAt,
+      partitions: source.partitions,
+      prizePlaces: source.prizes.map(prize => prize.place),
+    });
+    if (!review.ok) return { ok: false, reason: review.reason };
+    if (review.record.regulation_reference !== source.published_reference) {
+      return { ok: false, reason: 'invalid_ruling' };
+    }
+    validatedRulings.push(review.record);
+  }
+  const planned = planCompleteTeamV2Awards(
+    serverGroups.map(group => ({ group_id: group.group_id, prizes: group.prizes })),
+    serverGroups.map(group => ({ group_id: group.group_id, partitions: group.partitions })),
+    validatedRulings, newVersion,
+  );
+  if (!planned.ok) return planned;
+  return { ok: true, awards: planned.awards, rulings: validatedRulings };
 }
