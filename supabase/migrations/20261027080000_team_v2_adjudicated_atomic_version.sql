@@ -329,6 +329,31 @@ BEGIN
         WHERE j.prize_id = old.prize_id AND j.place = old.place
           AND j.institution_key = old.institution_key
       )
+      -- A changed cash winner is permitted ONLY in a NEW version and ONLY
+      -- for an exactly prize-matched documented official ruling. The
+      -- authenticated Edge caller must independently validate this ruling
+      -- against fresh scorer partitions and published regulations.
+      AND NOT EXISTS (
+        SELECT 1 FROM jsonb_to_recordset(p_team_rows)
+          AS j(prize_id uuid, group_id uuid, place integer,
+               institution_key text, ranking_snapshot jsonb)
+        JOIN LATERAL jsonb_array_elements(p_rulings) AS ruling(value)
+          ON ruling.value = j.ranking_snapshot -> 'ruling'
+        WHERE j.prize_id = old.prize_id
+          AND j.group_id = old.group_id
+          AND j.place = old.place
+          AND j.institution_key IS DISTINCT FROM old.institution_key
+          AND ruling.value ->> 'group_id' = j.group_id::text
+          AND ruling.value ->> 'allocation_version' = v_new::text
+          AND ruling.value ->> 'supersedes_allocation_version' = v_latest::text
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(
+              ruling.value -> 'award_instructions'
+            ) AS instruction(value)
+            WHERE instruction.value ->> 'place' = j.place::text
+              AND instruction.value ->> 'institution_key' = j.institution_key
+          )
+      )
   ) THEN
     RAISE EXCEPTION 'team_v2_previous_winner_changed';
   END IF;
