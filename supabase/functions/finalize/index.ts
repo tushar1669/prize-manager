@@ -209,7 +209,10 @@ Deno.serve(async (req) => {
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      if (activeTeamRules.some(group => group.ranking_rules !== null)) {
+      // Old NULL-rule ranking is obsolete, too. Never use the historical
+      // multi-request MAX+1 writer for NEW team prize allocation versions.
+      // Previously saved historical versions and team-less finalization stay.
+      if (activeTeamRules.length > 0) {
         return new Response(
           JSON.stringify({
             error: 'team_v2_atomic_writer_required',
