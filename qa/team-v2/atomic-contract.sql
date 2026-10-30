@@ -76,6 +76,53 @@ DELETE FROM public.allocations
  WHERE tournament_id='00000000-0000-4000-8000-000000000011';
 DELETE FROM public.team_allocations
  WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+-- A partial scorer response cannot silently pay only 1 of 2 configured
+-- individual prizes, even if its submitted award row is valid.
+INSERT INTO public.prizes(id,category_id,is_active)
+VALUES('00000000-0000-4000-8000-000000000008',
+       '00000000-0000-4000-8000-000000000002',true);
+DO $individual_coverage$
+BEGIN
+  PERFORM qa.submit_version(0,
+    '00000000-0000-4000-8000-000000000010',9,false);
+  RAISE EXCEPTION 'FAIL incomplete individual awards accepted';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_incomplete_initial_individual_awards' THEN RAISE; END IF;
+END $individual_coverage$;
+DO $coverage_rollback$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.allocations) OR
+     EXISTS (SELECT 1 FROM public.team_allocations) THEN
+    RAISE EXCEPTION 'FAIL incomplete individual awards partially written';
+  END IF;
+END $coverage_rollback$;
+DELETE FROM public.prizes
+WHERE id='00000000-0000-4000-8000-000000000008';
+
+-- A partial team scorer response cannot pay just one of two configured
+-- cash-prize places, even when the award payload for place one is valid.
+INSERT INTO public.institution_prizes
+ (id,group_id,place,cash_amount,has_trophy,has_medal,is_active)
+VALUES('00000000-0000-4000-8000-000000000009',
+       '00000000-0000-4000-8000-000000000006',2,80,false,false,true);
+DO $team_coverage$
+BEGIN
+  PERFORM qa.submit_version(0,
+    '00000000-0000-4000-8000-000000000010',9,false);
+  RAISE EXCEPTION 'FAIL incomplete team awards accepted';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_incomplete_team_awards' THEN RAISE; END IF;
+END $team_coverage$;
+DO $team_rollback$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.allocations) OR
+     EXISTS (SELECT 1 FROM public.team_allocations) THEN
+    RAISE EXCEPTION 'FAIL incomplete team awards partially written';
+  END IF;
+END $team_rollback$;
+DELETE FROM public.institution_prizes
+WHERE id='00000000-0000-4000-8000-000000000009';
+
 -- An update followed by reversion across TWO committed transactions must
 -- not masquerade as the original scorer snapshot. Equal points are not a
 -- sufficient consistency proof; the original row creation xid must differ.
