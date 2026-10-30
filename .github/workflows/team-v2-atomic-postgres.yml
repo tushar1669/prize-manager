@@ -35,6 +35,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f qa/team-v2/isolated-schema.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261025193000_team_tiebreak_v2_additive.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027080000_team_v2_adjudicated_atomic_version.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027110000_team_v2_source_epoch.sql
           psql -v ON_ERROR_STOP=1 -f qa/team-v2/seed.sql
       - name: Privileges, failed-transaction rollback, saved version and pin assertions
         run: psql -v ON_ERROR_STOP=1 -f qa/team-v2/atomic-contract.sql
