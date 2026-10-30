@@ -150,6 +150,16 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
   });
 
+  it('honors an authenticated master entitlement override without trusting service-role auth.uid()', () => {
+    const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
+    // get_tournament_access_state() only sees auth.uid() when invoked with
+    // the actual user JWT. This Edge route uses a service-role client, so a
+    // separately server-verified master must retain its entitlement override.
+    expect(source).toContain("access.has_full_access !== true && master !== true");
+    expect(source).toContain("db.rpc('has_role'");
+    expect(source).toContain("if (master !== true)");
+  });
+
   it('connects official ruling proposals to SERVER-validated rows before the atomic writer', () => {
     const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
     expect(source).toContain("prepareAdjudicatedTeamV2Rows(");
