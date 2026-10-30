@@ -59,6 +59,7 @@ SET search_path = ''
 AS $fn$
 DECLARE
   v_owner uuid;
+  v_canary_enabled boolean;
   v_latest integer;
   v_new integer;
   v_ruling jsonb;
@@ -93,16 +94,11 @@ BEGIN
     RAISE EXCEPTION 'team_v2_forbidden';
   END IF;
 
-  -- Lock source tables BEFORE taking the tournament FOR UPDATE row lock.
-  -- NOWAIT is essential: an editor can already hold ROW EXCLUSIVE on players
-  -- before updating tournaments; waiting on multiple table locks would
-  -- deadlock even if the tournament row lock were acquired later.
-  -- If ANY input table is being edited, abort this Save; the organizer may
-  -- rescore/retry. Never partially commit or block concurrent edits indefinitely.
-  -- Cross-tournament writer contention remains a release/load-test gate.
-  LOCK TABLE public.tournaments, public.categories, public.prizes,
-    public.players, public.rule_config, public.institution_prize_groups,
-    public.institution_prizes IN SHARE MODE NOWAIT;
+  -- Tournament-specific serialization only. Six scorer-input table
+  -- AFTER-row triggers update this same tournament row for an ENABLED canary.
+  -- Never acquire table-wide SHARE locks that stall unrelated organizers.
+  -- A source change during the two HTTP scorer reads invalidates the digest;
+  -- a pending source change cannot commit between this row lock and Save.
   SELECT owner_id INTO v_owner
   FROM public.tournaments WHERE id = p_tournament_id
   FOR UPDATE;
@@ -110,6 +106,13 @@ BEGIN
     v_owner = p_actor_id OR public.has_role(p_actor_id, 'master'::public.app_role)
   ) THEN
     RAISE EXCEPTION 'team_v2_forbidden';
+  END IF;
+  -- Lock the allowlist entry until commit: deactivation cannot race an award.
+  SELECT enabled INTO v_canary_enabled
+    FROM public.team_v2_canary_tournaments
+    WHERE tournament_id = p_tournament_id FOR SHARE;
+  IF v_canary_enabled IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'team_v2_canary_disabled';
   END IF;
 
   SELECT GREATEST(
@@ -459,14 +462,14 @@ GRANT EXECUTE ON FUNCTION public.commit_team_v2_adjudicated_version(
 
 
 -- Fence legacy direct/MULTI-request allocation writers at the database boundary.
--- Legacy groups (NULL rules) continue to work unchanged. The flag cannot be
+-- Noncanary legacy groups continue unchanged. Enabled canary groups are fenced. The flag cannot be
 -- supplied through any browser field; it is set inside the authorized atomic RPC
 -- only after ownership, version and source-fingerprint validation.
 CREATE FUNCTION public.reject_team_v2_legacy_allocation()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
 AS $guard$
 BEGIN
-  IF EXISTS (
+  IF public.team_v2_canary_active(NEW.tournament_id) AND EXISTS (
     SELECT 1 FROM public.institution_prize_groups g
     WHERE g.tournament_id = NEW.tournament_id
       AND g.is_active IS TRUE
