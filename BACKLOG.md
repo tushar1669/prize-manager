@@ -13,6 +13,8 @@
 - Duplicate legacy `Category Cards` tab found in the released UI; [PR #486](https://github.com/tushar1669/prize-manager/pull/486) removes the old renderer from Finalize, stand-alone Final Prize and public winner presentations, keeps updated design as first/default, redirects existing `/final/v1` links to `/final/v6`, and updates the print shortcut. No award, database or ranking changes.
 - Status: merged through PR #486 at 47dc29d30d3b53a32a5a41912ed47c8213f62869. Lovable editor matches; Publish request f4645300-cc0d-45a4-baf0-0463a908507a returned pending. Live public runtime verification remains UNKNOWN. Scoped tests passed; overall CI failed at authenticated Swiss signup flow.
 
+- Display-name cleanup: [PR #487](https://github.com/tushar1669/prize-manager/pull/487) merged as `1b7a934e0585df04b3190c72a4fecc62bf1eccbc`. The sole approved v6 category-card renderer now **displays just "Category Cards"** (Finalize, standalone Final Prize, public winners, accessibility). Layout, v6 default and v1 redirect are unchanged. Existing format guard, build, lint, unit and public smoke passed; overall CI failed at the separate authenticated Swiss suite. No Team V2 modifications.
+
 ## FROZEN, separate: Team Prizes V2
 - Existing [draft PR #484](https://github.com/tushar1669/prize-manager/pull/484) stays DRAFT, unmerged, undeployed.
 - No new Team V2 ranking, new awards, Master canary enablement or SQL rollout in #485.
