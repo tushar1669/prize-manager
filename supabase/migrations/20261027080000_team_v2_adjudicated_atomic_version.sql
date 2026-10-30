@@ -432,7 +432,9 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM public.institution_prize_groups g
     WHERE g.tournament_id = NEW.tournament_id
-      AND g.is_active IS TRUE AND g.ranking_rules IS NOT NULL
+      AND g.is_active IS TRUE
+      -- Even NULL/obsolete rules are not an authorization to create
+      -- new payouts through the old multi-request team writer.
   ) AND (
     current_user <> 'service_role'
     OR pg_catalog.current_setting('prize_manager.team_v2_atomic_writer', true)
