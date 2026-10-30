@@ -76,6 +76,12 @@ Deno.serve(async (request: Request) => {
     // Remove this gate only in a separately approved general-availability release.
     if (master !== true)
       return json({ error: 'master_only_preview', saved: false }, 403);
+    // Canary is a private, default-off DB allowlist. A Master role alone
+    // never activates money-bearing V2 Save on a live tournament.
+    const { data: canary, error: canaryError } =
+      await db.rpc('team_v2_canary_active', { p_tournament_id: tournamentId });
+    if (canaryError || canary !== true)
+      return json({ error: 'team_v2_tournament_not_enabled', saved: false }, 403);
     const { data: access, error: accessError } = await db
       .rpc('get_tournament_access_state', { tournament_id: tournamentId }).maybeSingle();
     // The service-role RPC has no auth.uid(), so its response does not
