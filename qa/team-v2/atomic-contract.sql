@@ -22,6 +22,34 @@ END $$;
 RESET ROLE;
 
 SET ROLE service_role;
+-- RED: A global schema must start with ALL team v2 tournaments disabled.
+-- No table, no enabled row, or stale owner setting may silently opt a user in.
+DO $no_canary$
+BEGIN
+  IF public.team_v2_canary_active('00000000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'FAIL tournament enabled by default';
+  END IF;
+  BEGIN
+    PERFORM qa.submit_version(0);
+    RAISE EXCEPTION 'FAIL atomic Save permitted without canary opt in';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'team_v2_canary_disabled' THEN RAISE; END IF;
+  END;
+END $no_canary$;
+RESET ROLE;
+-- Only service-role backend may read the canary boundary or change its rows.
+DO $privileges$
+BEGIN
+ IF has_table_privilege('authenticated','public.team_v2_canary_tournaments','SELECT') OR
+    has_table_privilege('anon','public.team_v2_canary_tournaments','SELECT') OR
+    has_table_privilege('authenticated','public.team_v2_canary_tournaments','INSERT') OR
+    has_function_privilege('authenticated','public.team_v2_canary_active(uuid)','EXECUTE')
+ THEN RAISE EXCEPTION 'FAIL public role can control or enumerate v2 canaries'; END IF;
+END $privileges$;
+-- The operator permits one synthetic tournament ONLY after the deny test.
+INSERT INTO public.team_v2_canary_tournaments (tournament_id)
+ VALUES ('00000000-0000-4000-8000-000000000001');
+SET ROLE service_role;
 -- An old finalize or tie writer cannot insert either half of a v2 allocation.
 DO $legacy_fence$
 BEGIN
