@@ -469,12 +469,15 @@ CREATE FUNCTION public.reject_team_v2_legacy_allocation()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
 AS $guard$
 BEGIN
-  IF public.team_v2_canary_active(NEW.tournament_id) AND EXISTS (
-    SELECT 1 FROM public.institution_prize_groups g
-    WHERE g.tournament_id = NEW.tournament_id
-      AND g.is_active IS TRUE
-      -- Even NULL/obsolete rules are not an authorization to create
-      -- new payouts through the old multi-request team writer.
+  -- Enrollment is permanent for write-fencing even when Save is OFF.
+  -- A kill switch must never reopen legacy writers on a V2-paid tournament.
+  -- Historical V2 snapshots add defense if an allowlist entry was lost.
+  IF (
+    EXISTS (SELECT 1 FROM public.team_v2_canary_tournaments marker
+      WHERE marker.tournament_id = NEW.tournament_id)
+    OR EXISTS (SELECT 1 FROM public.team_allocations history
+      WHERE history.tournament_id = NEW.tournament_id
+        AND history.ranking_snapshot IS NOT NULL)
   ) AND (
     current_user <> 'service_role'
     OR pg_catalog.current_setting('prize_manager.team_v2_atomic_writer', true)
