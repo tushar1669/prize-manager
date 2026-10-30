@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
+import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
 import type {
   TeamPrizeResultsResponse,
@@ -267,7 +268,8 @@ function GroupCard({
                   <ul className="list-disc pl-5 space-y-1">
                     {rankingIssues.map((issue, index) => <li key={index}>{issue}</li>)}
                   </ul>
-                  {(group.adjudication_ties?.length ?? 0) > 0 && onV2RulingRequest && (
+                  {showDiagnostics && hasFullAccess && onV2RulingRequest &&
+                    (group.adjudication_ties?.length ?? 0) > 0 && (
                     <Button type="button" size="sm" variant="outline" className="mt-3"
                       onClick={() => onV2RulingRequest(group)}>
                       Review official tie ruling
@@ -332,6 +334,11 @@ function GroupCard({
                                   </span>
                                 ))}
                               </div>
+                              {(winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Tie-break applied: {winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="pm-team-prize-stat text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}
