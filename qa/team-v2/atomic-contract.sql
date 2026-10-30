@@ -316,6 +316,26 @@ BEGIN
        IS DISTINCT FROM (SELECT player_id FROM public.allocations WHERE version=2 LIMIT 1)
  THEN RAISE EXCEPTION 'FAIL follow-up Save overwrote historical winners/pin'; END IF;
 END $v2_history$;
+
+-- Two equal-score clubs are eligible for the same cash place.
+-- A documented regulation-bound official ruling can correct the team winner
+-- only by creating a NEW allocation version. Earlier team/individual versions
+-- and their publication pins must remain bit-for-bit unchanged.
+SELECT qa.submit_version(
+  2, '00000000-0000-4000-8000-000000000010', 9, true, NULL, false, true
+) AS official_ruling_version_three;
+DO $official_changed_winner$
+BEGIN
+ IF (SELECT count(*) FROM public.allocations WHERE version IN (1,2,3)) <> 3 OR
+    (SELECT count(*) FROM public.team_allocations WHERE version IN (1,2,3)) <> 3 OR
+    (SELECT institution_key FROM public.team_allocations WHERE version=1) <> 'Club A' OR
+    (SELECT institution_key FROM public.team_allocations WHERE version=2) <> 'Club A' OR
+    (SELECT institution_key FROM public.team_allocations WHERE version=3) <> 'Club B' OR
+    (SELECT count(*) FROM public.team_allocations
+      WHERE version=3 AND ranking_snapshot ? 'ruling') <> 1 OR
+    (SELECT count(*) FROM public.publications WHERE allocation_version=0) <> 1
+ THEN RAISE EXCEPTION 'FAIL official ruling did not create protected new version'; END IF;
+END $official_changed_winner$;
 TRUNCATE public.allocations, public.team_allocations;
 
 -- A submitted ruling must still match the prize-specific saved award.
