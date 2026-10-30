@@ -53,7 +53,6 @@ type SupabaseMaybeSingleQuery<T> = {
   maybeSingle(): Promise<SupabaseQueryResult<T>>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClientLike = Pick<typeof supabase, "from">;
 
 type SupabaseQueryError = Error & {
