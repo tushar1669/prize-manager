@@ -154,6 +154,14 @@ function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
+/** Styled rupee/numeral spacing is print-only, with the same numeric award. */
+function CashAmount({ amount }: { amount: number }) {
+  return <span className="pm-team-cash" aria-label={formatCurrency(amount)}>
+    <span aria-hidden="true" className="pm-team-cash-symbol">₹</span>
+    <span aria-hidden="true" className="pm-team-cash-digits">{amount.toLocaleString('en-IN')}</span>
+  </span>;
+}
+
 function GroupCard({
   group,
   groupIndex,
@@ -231,15 +239,15 @@ function GroupCard({
 
           {/* Config badges */}
           <div className="pm-team-prize-meta-row flex flex-wrap gap-2 mt-2">
-            <Badge variant="secondary">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
-            <Badge variant="outline">Top {group.config.team_size} players</Badge>
-            {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
-            <Badge variant="secondary">
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
+            <Badge variant="outline" className="pm-team-prize-meta-badge">Top {group.config.team_size} players</Badge>
+            {ruleClause && <Badge variant="outline" className="pm-team-prize-meta-badge">Rule: {ruleClause}</Badge>}
+            <Badge variant="secondary" className="pm-team-prize-meta-badge">
               {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
             {filledPrizes.length > 0 && (
-              <Badge className="bg-primary/10 text-primary border-primary/20">
-                {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
+              <Badge className="pm-team-prize-meta-badge bg-primary/10 text-primary border-primary/20">
+                {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • <CashAmount amount={totalCash} />
               </Badge>
             )}
           </div>
@@ -310,10 +318,12 @@ function GroupCard({
                             <TableCell className="pm-team-prize-amount text-right">
                               <div className="pm-team-prize-value flex items-center justify-end gap-1">
                                 {prize.cash_amount > 0 && (
-                                  <span className="font-medium">{formatCurrency(prize.cash_amount)}</span>
+                                  <CashAmount amount={prize.cash_amount} />
                                 )}
-                                {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-accent" />}
-                                {prize.has_medal && <Medal className="h-3.5 w-3.5 text-success" />}
+                                <span className="pm-team-prize-awards inline-flex items-center gap-1">
+                                  {prize.has_trophy && <Trophy className="h-3.5 w-3.5 text-accent" />}
+                                  {prize.has_medal && <Medal className="h-3.5 w-3.5 text-success" />}
+                                </span>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -421,7 +431,7 @@ function GroupCard({
                 persisted and public paths until TC1.6, and the empty array renders
                 nothing rather than an empty collapsible. */}
             {showDiagnostics && ineligibleDetails.length > 0 && (
-              <Collapsible open={showIneligible} onOpenChange={setShowIneligible}>
+              <Collapsible data-team-print-hide open={showIneligible} onOpenChange={setShowIneligible}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     {showIneligible ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
@@ -490,10 +500,10 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
           Team Prizes
         </h2>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
+          <Badge variant="secondary" className="pm-team-prizes-overview-badge">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
           {totalWinners > 0 && (
-            <Badge className="bg-primary/10 text-primary border-primary/20">
-              {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • {formatCurrency(totalCash)}
+            <Badge className="pm-team-prizes-overview-badge bg-primary/10 text-primary border-primary/20">
+              {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • <CashAmount amount={totalCash} />
             </Badge>
           )}
         </div>
