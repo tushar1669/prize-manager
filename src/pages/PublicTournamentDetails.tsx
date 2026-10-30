@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
-import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
+import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
@@ -315,7 +315,7 @@ export default function PublicTournamentDetails() {
                     No published results yet.
                   </div>
                 ) : (
-                  <CategoryCardsView groups={grouped.groups} />
+                  <CategoryCardsUpdatedView groups={grouped.groups} />
                 )}
               </CardContent>
             </Card>
