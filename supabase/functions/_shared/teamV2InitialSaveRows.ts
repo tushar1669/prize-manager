@@ -93,6 +93,15 @@ export function prepareInitialUncontestedTeamV2Rows(
         return { ok: false, reason: 'unresolved_team_awards' };
       }
       const winner = prize.winner_institution;
+      // A valid roster/audit is not enough: its resolved rank must own this
+      // exact money-bearing place. Never pay a lower team from a swapped
+      // scorer response or infer an arbitrary order from a prize ID.
+      const rankedSlots = group.adjudication_partitions.flatMap(part =>
+        part.teams.map(team => team.key));
+      if (typeof winner.key !== 'string' ||
+          rankedSlots[prize.place - 1] !== winner.key) {
+        return { ok: false, reason: 'ranking_contract_mismatch' };
+      }
       const players = winner.players;
       const names = new Set<string>();
       const snapshot: Array<{ player_id: string; points: number }> = [];
