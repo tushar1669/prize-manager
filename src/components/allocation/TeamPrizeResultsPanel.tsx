@@ -156,11 +156,13 @@ function formatCurrency(amount: number): string {
 
 function GroupCard({
   group,
+  groupIndex,
   onTieResolutionRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
+  groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
@@ -212,9 +214,9 @@ function GroupCard({
     diagnostics.players_without_points === selectedPoolSize;
 
   return (
-    <Card>
+    <Card className="pm-team-prize-group" data-team-tone={['gold','teal','navy'][groupIndex % 3]}>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3" data-team-group-header>
           <div className="flex items-center justify-between">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
@@ -228,7 +230,7 @@ function GroupCard({
           </div>
 
           {/* Config badges */}
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="pm-team-prize-meta-row flex flex-wrap gap-2 mt-2">
             <Badge variant="secondary">Grouped by: {GROUP_BY_LABELS[group.config.group_by] || group.config.group_by}</Badge>
             <Badge variant="outline">Top {group.config.team_size} players</Badge>
             {ruleClause && <Badge variant="outline">Rule: {ruleClause}</Badge>}
@@ -254,9 +256,7 @@ function GroupCard({
                       <TableHead className="w-16">Place</TableHead>
                       <TableHead>Team</TableHead>
                       <TableHead className="text-right">Points</TableHead>
-                      <TableHead className="text-right">Rank Sum</TableHead>
-                      <TableHead className="text-right">Best Rank</TableHead>
-                      <TableHead className="text-right">Prize</TableHead>
+                                            <TableHead className="text-right">Prize</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -274,7 +274,7 @@ function GroupCard({
                                 {getPlaceOrdinal(prize.place)}
                               </div>
                             </TableCell>
-                            <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                            <TableCell colSpan={3} className="text-sm text-muted-foreground">
                               Locked — upgrade to Pro to reveal this placing
                             </TableCell>
                           </TableRow>
@@ -304,17 +304,11 @@ function GroupCard({
                                 ))}
                               </div>
                             </TableCell>
-                            <TableCell className="text-right font-mono">
+                            <TableCell className="pm-team-prize-stat text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}
                             </TableCell>
-                            <TableCell className="text-right font-mono text-muted-foreground">
-                              {winner.rank_sum}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-muted-foreground">
-                              #{winner.best_individual_rank}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
+                            <TableCell className="pm-team-prize-amount text-right">
+                              <div className="pm-team-prize-value flex items-center justify-end gap-1">
                                 {prize.cash_amount > 0 && (
                                   <span className="font-medium">{formatCurrency(prize.cash_amount)}</span>
                                 )}
@@ -513,10 +507,11 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
       </Alert>
 
       <div className="space-y-4">
-        {data.groups.map((group) => (
+        {data.groups.map((group, groupIndex) => (
           <GroupCard
             key={group.group_id}
             group={group}
+            groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
