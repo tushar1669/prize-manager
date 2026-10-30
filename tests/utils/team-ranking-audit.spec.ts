@@ -68,6 +68,38 @@ describe('versioned team-ranking audit saved per award', () => {
     ])).toBeNull();
   });
 
+  it('records the real tied partition and documented official ruling without pretending it was resolved', () => {
+    const tied = [{ teams: [candidates[0], candidates[1]], status: 'tied' as const }];
+    const ruling = {
+      schema_version: 2 as const, group_id: 'group-fixture',
+      allocation_version: 3, supersedes_allocation_version: 2,
+      actor_id: 'owner-fixture', recorded_at: '2026-10-30T00:00:00Z',
+      method: 'documented_arbiter_ruling' as const,
+      regulation_reference: 'fixture event regulations §3',
+      arbiter_decision_reference: 'official ruling 7',
+      explanation: 'Exhausted event TBs under published regulations',
+      tied_team_keys: ['A', 'B'], ordered_team_keys: ['B', 'A'],
+      affected_places: [1],
+      award_instructions: [{ place: 1, institution_key: 'B' }],
+    };
+    const result = buildTeamRankingAwardAudit(
+      'group-fixture', groupRule, prize, 'B', rules, candidates, tied, ruling,
+    );
+    expect(result).toMatchObject({
+      decided_by_criterion: 'documented_arbiter_ruling',
+      winner_key: 'B',
+      partitions: [{ status: 'tied', team_keys: ['A', 'B'] }],
+      ruling: { arbiter_decision_reference: 'official ruling 7', allocation_version: 3 },
+    });
+    expect(buildTeamRankingAwardAudit(
+      'group-fixture', groupRule, prize, 'A', rules, candidates, tied, ruling,
+    )).toBeNull();
+    expect(buildTeamRankingAwardAudit(
+      'group-fixture', groupRule, prize, 'B', rules, candidates,
+      [{ teams: [candidates[0], candidates[1]], status: 'blocked' }], ruling,
+    )).toBeNull();
+  });
+
   it('finalize guard rejects tampered rankings or missing player points', () => {
     const partitions = [
       { teams: [candidates[0]], status: 'resolved' as const, criterion: 'TB2' },
