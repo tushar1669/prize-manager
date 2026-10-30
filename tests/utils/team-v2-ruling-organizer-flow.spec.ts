@@ -80,7 +80,7 @@ describe('owner-only v2 ruling review flow — source-only, no payout writer', (
     expect(allocator).toContain('sourceHash: player.sourceHash');
     expect(allocator).toContain('individualTieBreaks: player.individualTieBreaks');
     expect(allocator).toContain('adjudication_partitions: adjudicationPartitions');
-    expect(allocator).toContain('members: inst?.team.map');
+    expect(allocator).toContain('members: scoredByKey.get(team.key)?.team.map');
     expect(server).toContain('request.proposal.regulation_reference !== rules.published_reference');
   });
 
