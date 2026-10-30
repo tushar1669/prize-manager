@@ -1,24 +1,27 @@
 -- Private deterministic fingerprint of all scorer-read tournament data.
--- Whole-row projections include active/inactive flags, source ranking tags and
--- gift/rule metadata. No source data is returned from this function.
+-- Whole-row projections include active/inactive flags, source ranking tags,
+-- gift/rule metadata and the MVCC row-creation xid (xmin).
+-- xmin detects an update followed by a reversion of the visible row bytes,
+-- but NOT a temporary insert+delete: a durable mutation journal would be
+-- needed for a full no-ABA guarantee. No source data leaves this function.
 CREATE FUNCTION public.team_v2_source_fingerprint(p_tournament_id uuid)
 RETURNS text LANGUAGE sql STABLE SECURITY INVOKER SET search_path = ''
 AS $source$
  SELECT encode(sha256(convert_to(
    jsonb_build_array(
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.tournaments t WHERE t.id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.categories t WHERE t.tournament_id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.prizes t WHERE t.category_id IN (SELECT c.id FROM public.categories c WHERE c.tournament_id = p_tournament_id)),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.players t WHERE t.tournament_id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.rule_config t WHERE t.tournament_id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.institution_prize_groups t WHERE t.tournament_id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.institution_prizes t WHERE t.group_id IN (SELECT g.id FROM public.institution_prize_groups g WHERE g.tournament_id = p_tournament_id))
    )::text, 'UTF8')), 'hex');
 $source$;
