@@ -36,9 +36,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function prepareInitialUncontestedTeamV2Rows(
   individualPrizeIds: readonly string[], individualPreview: unknown,
   dbGroups: readonly ActiveTeamV2Group[], dbPrizes: readonly ActiveTeamV2Prize[],
-  teamPreview: unknown, actorId: string,
+  teamPreview: unknown, actorId: string, newVersion = 1,
 ): Result {
-  if (!actorId || !Array.isArray(dbGroups) || !dbGroups.length ||
+  if (!actorId || !Number.isSafeInteger(newVersion) || newVersion < 1 ||
+      !Array.isArray(dbGroups) || !dbGroups.length ||
       !Array.isArray(dbPrizes) || !dbPrizes.length ||
       !obj(teamPreview) || !Array.isArray(teamPreview.groups) ||
       !verifyTeamV2ReviewPrizeInventory(dbGroups, dbPrizes, teamPreview.groups)) {
@@ -115,7 +116,7 @@ export function prepareInitialUncontestedTeamV2Rows(
         player_snapshot: snapshot,
         ranking_snapshot: {
           ...winner.ranking_snapshot,
-          allocation_version: 1, finalized_by: actorId,
+          allocation_version: newVersion, finalized_by: actorId,
           // No fabricated official adjudication for resolved partitions.
         },
       });
