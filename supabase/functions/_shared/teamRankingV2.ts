@@ -123,6 +123,14 @@ export function rankTeamCandidatesV2(
     return [{ teams: [...candidates], status: 'blocked', reason: invalid ? 'missing_points' : 'invalid_team_size' }];
   }
 
+  // New payouts MUST have explicitly approved v2 regulations. Previously
+  // unique Total Points groups were resolved without checking rules, making
+  // obsolete/null legacy configurations look like authorized cash awards.
+  // Historical SAVED versions are unaffected; only fresh scorer results hold.
+  if (!config?.organizer_confirmed || !config.published_reference.trim()) {
+    return [{ teams: [...candidates], status: 'blocked', reason: 'unapproved_rules' }];
+  }
+
   const groups = new Map<number, TeamRankingCandidate[]>();
   for (const team of candidates) {
     const score = team.selectedPlayers.reduce((sum, player) => sum + (player.points as number), 0);
