@@ -110,6 +110,10 @@ BEGIN
        IS DISTINCT FROM p_expected_source_fingerprint THEN
     RAISE EXCEPTION 'team_v2_source_changed';
   END IF;
+  -- Only this reviewed atomic RPC may write v2 allocation rows. The
+  -- transaction-local marker is checked by both allocation-table triggers;
+  -- the old finalize/tie writers never set it and remain rejected.
+  PERFORM pg_catalog.set_config('prize_manager.team_v2_atomic_writer', '1', true);
   v_new := v_latest + 1;
 
   -- First ever finalized version: use the individual winners independently
@@ -377,3 +381,36 @@ REVOKE EXECUTE ON FUNCTION public.commit_team_v2_adjudicated_version(
 GRANT EXECUTE ON FUNCTION public.commit_team_v2_adjudicated_version(
   uuid, integer, uuid, jsonb, jsonb, jsonb, text
 ) TO service_role;
+
+
+-- Fence legacy direct/MULTI-request allocation writers at the database boundary.
+-- Legacy groups (NULL rules) continue to work unchanged. The flag cannot be
+-- supplied through any browser field; it is set inside the authorized atomic RPC
+-- only after ownership, version and source-fingerprint validation.
+CREATE FUNCTION public.reject_team_v2_legacy_allocation()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.institution_prize_groups g
+    WHERE g.tournament_id = NEW.tournament_id
+      AND g.is_active IS TRUE AND g.ranking_rules IS NOT NULL
+  ) AND NOT (
+    current_user = 'service_role'
+    AND pg_catalog.current_setting('prize_manager.team_v2_atomic_writer', true) = '1'
+  ) THEN
+    RAISE EXCEPTION 'team_v2_atomic_writer_required';
+  END IF;
+  RETURN NEW;
+END;
+$guard$;
+REVOKE EXECUTE ON FUNCTION public.reject_team_v2_legacy_allocation()
+  FROM PUBLIC, anon, authenticated;
+
+CREATE TRIGGER protect_v2_individual_allocations
+BEFORE INSERT ON public.allocations
+FOR EACH ROW EXECUTE FUNCTION public.reject_team_v2_legacy_allocation();
+
+CREATE TRIGGER protect_v2_team_allocations
+BEFORE INSERT ON public.team_allocations
+FOR EACH ROW EXECUTE FUNCTION public.reject_team_v2_legacy_allocation();
