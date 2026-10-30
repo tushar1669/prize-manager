@@ -80,11 +80,26 @@ BEGIN
     RAISE EXCEPTION 'team_v2_invalid_request';
   END IF;
 
-  -- Only writers using this function participate in the tournament lock.
-  -- Replacing the old unguarded finalize writer is a MANDATORY rollout gate.
+  -- Cheap permission preflight before taking globally contended table locks.
+  -- Re-check the owner under the row lock below (ownership may change).
   SELECT owner_id INTO v_owner
-  FROM public.tournaments
-  WHERE id = p_tournament_id
+  FROM public.tournaments WHERE id = p_tournament_id;
+  IF v_owner IS NULL OR NOT (
+    v_owner = p_actor_id OR public.has_role(p_actor_id, 'master'::public.app_role)
+  ) THEN
+    RAISE EXCEPTION 'team_v2_forbidden';
+  END IF;
+
+  -- Lock source tables BEFORE taking the tournament FOR UPDATE row lock.
+  -- The inverse ordering deadlocks with a source editor that already owns a
+  -- ROW EXCLUSIVE lock on players and then updates tournaments. SHARE locks
+  -- also protect the final digest comparison and inserts from concurrent edits.
+  -- Cross-tournament write contention is still a separate release gate.
+  LOCK TABLE public.tournaments, public.categories, public.prizes,
+    public.players, public.rule_config, public.institution_prize_groups,
+    public.institution_prizes IN SHARE MODE;
+  SELECT owner_id INTO v_owner
+  FROM public.tournaments WHERE id = p_tournament_id
   FOR UPDATE;
   IF v_owner IS NULL OR NOT (
     v_owner = p_actor_id OR public.has_role(p_actor_id, 'master'::public.app_role)
@@ -101,11 +116,6 @@ BEGIN
   IF v_latest <> p_expected_version THEN
     RAISE EXCEPTION 'team_v2_stale_allocation_version';
   END IF;
-  -- Locks protect all independent scorer input tables through final inserts.
-  -- Shared table locks may block other tournaments briefly; review before deployment.
-  LOCK TABLE public.tournaments, public.categories, public.prizes,
-    public.players, public.rule_config, public.institution_prize_groups,
-    public.institution_prizes IN SHARE MODE;
   IF public.team_v2_source_fingerprint(p_tournament_id)
        IS DISTINCT FROM p_expected_source_fingerprint THEN
     RAISE EXCEPTION 'team_v2_source_changed';
