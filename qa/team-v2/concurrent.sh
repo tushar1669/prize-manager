@@ -26,6 +26,47 @@ if [[ "$individual" != 1 || "$team" != 1 || "$versions" != 1 || "$pins" != 1 ]];
 fi
 echo "PASS two real parallel connections: 1 commit, 1 stale reject, no partial allocation or pin change"
 
+# An edit to a different NONCANARY tournament must NOT lock out the
+# administrator's canary Save. Both are real concurrent PG sessions.
+psql -v ON_ERROR_STOP=1 -c "TRUNCATE public.allocations, public.team_allocations" >/dev/null
+psql -v ON_ERROR_STOP=1 > /tmp/team-v2-other-tournament-edit.log 2>&1 <<'SQL' &
+BEGIN;
+UPDATE public.players SET points=2
+ WHERE id='00000000-0000-4000-8000-000000000030'::uuid;
+SELECT pg_sleep(5);
+COMMIT;
+SQL
+other_editor=$!
+other_started=0
+for i in $(seq 1 60); do
+  if grep -q 'UPDATE 1' /tmp/team-v2-other-tournament-edit.log; then
+    other_started=1
+    break
+  fi
+  if ! kill -0 "$other_editor" 2>/dev/null; then break; fi
+  sleep 0.1
+done
+if [[ "$other_started" != 1 ]]; then
+  wait "$other_editor" || true
+  echo "FAIL other event editor did not reach its update"
+  exit 1
+fi
+set +e
+timeout 3s psql -v ON_ERROR_STOP=1 -c "SET ROLE service_role;
+  SELECT qa.submit_version(0,'00000000-0000-4000-8000-000000000010'::uuid,9,false);" \
+  > /tmp/team-v2-canary-independent-save.log 2>&1
+other_save_rc=$?
+wait "$other_editor"; other_rc=$?
+set -e
+if [[ "$other_save_rc" != 0 || "$other_rc" != 0 ]] ||
+   [[ "$(psql -At -c "SELECT count(*) FROM public.team_allocations WHERE version=1")" != 1 ]]; then
+  echo "FAIL noncanary concurrent editor delayed or corrupted separate canary Save"
+  cat /tmp/team-v2-canary-independent-save.log
+  exit 1
+fi
+echo "PASS noncanary concurrent editor: independent canary Save completed without global lock"
+
+
 # Verify a concurrent source edit is never committed against a pre-edit
 # server fingerprint. Two separate PostgreSQL sessions; no production data.
 # The mutator holds its real ROW EXCLUSIVE table lock until after Save begins.
