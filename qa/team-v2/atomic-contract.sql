@@ -80,8 +80,8 @@ BEGIN
  END IF;
 END $legacy_fence$;
 
--- A pre-v2 (NULL-rule) group may keep historical SAVED allocations,
--- but must not issue any NEW team payout through the obsolete writer.
+-- Non-canary events must retain prior production allocation behavior.
+-- The canary restriction must affect ONLY the opted-in event.
 INSERT INTO public.tournaments(id,owner_id)
  VALUES('00000000-0000-4000-8000-000000000011',
         '00000000-0000-4000-8000-000000000010');
@@ -90,34 +90,47 @@ INSERT INTO public.institution_prize_groups
  VALUES('00000000-0000-4000-8000-000000000012',
         '00000000-0000-4000-8000-000000000011',
         'Legacy synthetic group','club',2,0,0,'by_top_k_score',true,NULL);
-DO $null_rule_legacy_block$
+INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
+ VALUES('00000000-0000-4000-8000-000000000011',1,
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004');
+INSERT INTO public.team_allocations
+ (tournament_id,version,group_id,prize_id,place,institution_key,total_points,player_ids,player_snapshot)
+ VALUES('00000000-0000-4000-8000-000000000011',1,
+        '00000000-0000-4000-8000-000000000012',
+        '00000000-0000-4000-8000-000000000007',1,'Club A',9,
+        ARRAY['00000000-0000-4000-8000-000000000004'::uuid],'[]'::jsonb);
+DO $noncanary_legacy$
 BEGIN
- BEGIN
-  INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
-   VALUES('00000000-0000-4000-8000-000000000011',1,
-          '00000000-0000-4000-8000-000000000003',
-          '00000000-0000-4000-8000-000000000004');
-  RAISE EXCEPTION 'FAIL obsolete null-rule individual writer accepted';
- EXCEPTION WHEN OTHERS THEN
-  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
- END;
- BEGIN
-  INSERT INTO public.team_allocations
-   (tournament_id,version,group_id,prize_id,place,institution_key,total_points,player_ids,player_snapshot)
-   VALUES('00000000-0000-4000-8000-000000000011',1,
-          '00000000-0000-4000-8000-000000000012',
-          '00000000-0000-4000-8000-000000000007',1,'Club A',9,
-          ARRAY['00000000-0000-4000-8000-000000000004'::uuid],'[]'::jsonb);
-  RAISE EXCEPTION 'FAIL obsolete null-rule team writer accepted';
- EXCEPTION WHEN OTHERS THEN
-  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
- END;
- IF EXISTS (SELECT 1 FROM public.allocations WHERE tournament_id =
-      '00000000-0000-4000-8000-000000000011')
-   OR EXISTS (SELECT 1 FROM public.team_allocations WHERE tournament_id =
-      '00000000-0000-4000-8000-000000000011')
- THEN RAISE EXCEPTION 'FAIL partial obsolete allocation'; END IF;
-END $null_rule_legacy_block$;
+ IF (SELECT count(*) FROM public.allocations
+   WHERE tournament_id='00000000-0000-4000-8000-000000000011') <> 1 OR
+    (SELECT count(*) FROM public.team_allocations
+   WHERE tournament_id='00000000-0000-4000-8000-000000000011') <> 1 THEN
+   RAISE EXCEPTION 'FAIL legacy non-canary payout changed by v2 canary';
+ END IF;
+ IF public.team_v2_canary_active('00000000-0000-4000-8000-000000000011') THEN
+   RAISE EXCEPTION 'FAIL non-canary was auto-activated';
+ END IF;
+END $noncanary_legacy$;
+DELETE FROM public.allocations WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+DELETE FROM public.team_allocations WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+-- A noncanary player edit cannot bump the event tournament MVCC lineage.
+DO $noncanary_epoch$
+DECLARE
+ before_xmin text;
+ after_xmin text;
+BEGIN
+ SELECT xmin::text INTO before_xmin FROM public.tournaments
+ WHERE id='00000000-0000-4000-8000-000000000011';
+ INSERT INTO public.players(id,tournament_id,points,club)
+ VALUES('00000000-0000-4000-8000-000000000030',
+        '00000000-0000-4000-8000-000000000011',1,'Club Z');
+ SELECT xmin::text INTO after_xmin FROM public.tournaments
+ WHERE id='00000000-0000-4000-8000-000000000011';
+ IF before_xmin IS DISTINCT FROM after_xmin THEN
+  RAISE EXCEPTION 'FAIL source trigger touched noncanary tournament';
+ END IF;
+END $noncanary_epoch$;
 
 -- A partial scorer response cannot silently pay only 1 of 2 configured
 -- individual prizes, even if its submitted award row is valid.
