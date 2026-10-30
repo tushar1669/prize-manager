@@ -18,7 +18,7 @@ export type ActiveTeamV2Prize = {
   cash_amount: number; has_trophy: boolean; has_medal: boolean;
 };
 export type InitialTeamV2Rows = {
-  individual_rows: Array<{ prize_id: string; player_id: string;
+  individual_rows: Array<{ prize_id: string; player_id: string | null;
     reason_codes: string[]; is_manual: boolean }>;
   team_rows: Array<{ group_id: string; prize_id: string; place: number;
     institution_key: string; total_points: number; player_ids: string[];
@@ -46,10 +46,10 @@ export function prepareInitialUncontestedTeamV2Rows(
   }
   if (!hasCompleteInitialTeamV2IndividualPreview(individualPrizeIds, individualPreview) ||
       !obj(individualPreview) || !Array.isArray(individualPreview.winners) ||
-      !Array.isArray(individualPreview.unfilled) ||
-      individualPreview.unfilled.length > 0) {
-    // First-version SQL cannot represent unfilled individual awards. Never
-    // silently drop any prize or invent an individual winner.
+      !Array.isArray(individualPreview.unfilled)) {
+    // Reject masked/missing winners and invalid unfilled evidence. The SQL
+    // writer must carry an explicit NULL-player row for each genuine unfilled
+    // prize and insert only the real winners.
     return { ok: false, reason: 'incomplete_individual_awards' };
   }
   const validated = verifyTeamFinalizePreview(teamPreview, dbGroups.length);
@@ -126,13 +126,22 @@ export function prepareInitialUncontestedTeamV2Rows(
     return { ok: false, reason: 'unresolved_team_awards' };
   }
   const winners = individualPreview.winners as Array<Record<string, unknown>>;
+  const unfilled = individualPreview.unfilled as Array<Record<string, unknown>>;
   return { ok: true, rows: {
-    individual_rows: winners.map(winner => ({
-      prize_id: winner.prizeId as string,
-      player_id: winner.playerId as string,
-      reason_codes: winner.reasons as string[],
-      is_manual: winner.isManual as boolean,
-    })),
+    individual_rows: [
+      ...winners.map(winner => ({
+        prize_id: winner.prizeId as string,
+        player_id: winner.playerId as string,
+        reason_codes: winner.reasons as string[],
+        is_manual: winner.isManual as boolean,
+      })),
+      // SQL counts this explicit non-winner towards exact prize coverage, but
+      // NEVER inserts it as an allocation or invents a recipient.
+      ...unfilled.map(entry => ({
+        prize_id: entry.prizeId as string, player_id: null,
+        reason_codes: entry.reasonCodes as string[], is_manual: false,
+      })),
+    ],
     team_rows: rows, rulings: [],
   } };
 }
