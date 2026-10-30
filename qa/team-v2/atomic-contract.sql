@@ -76,6 +76,38 @@ DELETE FROM public.allocations
  WHERE tournament_id='00000000-0000-4000-8000-000000000011';
 DELETE FROM public.team_allocations
  WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+-- An update followed by reversion across TWO committed transactions must
+-- not masquerade as the original scorer snapshot. Equal points are not a
+-- sufficient consistency proof; the original row creation xid must differ.
+SELECT pg_catalog.set_config(
+  'qa.team_v2_prior_digest',
+  public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid),
+  false
+);
+UPDATE public.players SET points=6 WHERE id='00000000-0000-4000-8000-000000000004';
+UPDATE public.players SET points=5 WHERE id='00000000-0000-4000-8000-000000000004';
+DO $aba_check$
+BEGIN
+  IF (SELECT points FROM public.players
+      WHERE id='00000000-0000-4000-8000-000000000004') <> 5
+  THEN RAISE EXCEPTION 'FAIL ABA fixture did not revert points'; END IF;
+  IF public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid)
+      IS NOT DISTINCT FROM pg_catalog.current_setting('qa.team_v2_prior_digest')
+  THEN RAISE EXCEPTION 'FAIL update-and-revert source digest was reused'; END IF;
+  BEGIN
+    PERFORM qa.submit_version(
+      0, '00000000-0000-4000-8000-000000000010', 9, false,
+      pg_catalog.current_setting('qa.team_v2_prior_digest')
+    );
+    RAISE EXCEPTION 'FAIL ABA source digest committed awards';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'team_v2_source_changed' THEN RAISE; END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM public.allocations) OR
+     EXISTS (SELECT 1 FROM public.team_allocations)
+  THEN RAISE EXCEPTION 'FAIL ABA conflict left partial awards'; END IF;
+END $aba_check$;
+
 -- A changed source row must fail even when expected version is still zero.
 DO $source_check$
 DECLARE prior_token text;
