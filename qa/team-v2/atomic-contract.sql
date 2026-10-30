@@ -52,7 +52,8 @@ BEGIN
  END IF;
 END $legacy_fence$;
 
--- Negative guard must not change the existing legacy (NULL-rules) contract.
+-- A pre-v2 (NULL-rule) group may keep historical SAVED allocations,
+-- but must not issue any NEW team payout through the obsolete writer.
 INSERT INTO public.tournaments(id,owner_id)
  VALUES('00000000-0000-4000-8000-000000000011',
         '00000000-0000-4000-8000-000000000010');
@@ -61,21 +62,35 @@ INSERT INTO public.institution_prize_groups
  VALUES('00000000-0000-4000-8000-000000000012',
         '00000000-0000-4000-8000-000000000011',
         'Legacy synthetic group','club',2,0,0,'by_top_k_score',true,NULL);
-INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
- VALUES('00000000-0000-4000-8000-000000000011',1,
-        '00000000-0000-4000-8000-000000000003',
-        '00000000-0000-4000-8000-000000000004');
-INSERT INTO public.team_allocations
- (tournament_id,version,group_id,prize_id,place,institution_key,total_points,player_ids,player_snapshot)
- VALUES('00000000-0000-4000-8000-000000000011',1,
-        '00000000-0000-4000-8000-000000000012',
-        '00000000-0000-4000-8000-000000000007',
-        1,'Club A',9,ARRAY['00000000-0000-4000-8000-000000000004'::uuid],
-        '[]'::jsonb);
-DELETE FROM public.allocations
- WHERE tournament_id='00000000-0000-4000-8000-000000000011';
-DELETE FROM public.team_allocations
- WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+DO $null_rule_legacy_block$
+BEGIN
+ BEGIN
+  INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
+   VALUES('00000000-0000-4000-8000-000000000011',1,
+          '00000000-0000-4000-8000-000000000003',
+          '00000000-0000-4000-8000-000000000004');
+  RAISE EXCEPTION 'FAIL obsolete null-rule individual writer accepted';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO public.team_allocations
+   (tournament_id,version,group_id,prize_id,place,institution_key,total_points,player_ids,player_snapshot)
+   VALUES('00000000-0000-4000-8000-000000000011',1,
+          '00000000-0000-4000-8000-000000000012',
+          '00000000-0000-4000-8000-000000000007',1,'Club A',9,
+          ARRAY['00000000-0000-4000-8000-000000000004'::uuid],'[]'::jsonb);
+  RAISE EXCEPTION 'FAIL obsolete null-rule team writer accepted';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
+ END;
+ IF EXISTS (SELECT 1 FROM public.allocations WHERE tournament_id =
+      '00000000-0000-4000-8000-000000000011')
+   OR EXISTS (SELECT 1 FROM public.team_allocations WHERE tournament_id =
+      '00000000-0000-4000-8000-000000000011')
+ THEN RAISE EXCEPTION 'FAIL partial obsolete allocation'; END IF;
+END $null_rule_legacy_block$;
+
 -- A partial scorer response cannot silently pay only 1 of 2 configured
 -- individual prizes, even if its submitted award row is valid.
 INSERT INTO public.prizes(id,category_id,is_active)
