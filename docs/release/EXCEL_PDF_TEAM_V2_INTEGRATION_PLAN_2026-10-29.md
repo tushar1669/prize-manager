@@ -1,5 +1,8 @@
 # Prize Manager — Excel, PDF and Team Ranking v2 integration and release-gate plan
 
+**30 Oct draft initial Team v2 Save:** [source and QA](../qa/PR484_TEAM_V2_INITIAL_SAVE_SOURCE_2026-10-30.md) at `1aa7e4fe071ec7cd28335b126d479f18391fe518` implements a JWT/owner/full-access protected, disabled-by-default initial *uncontested* Save route deriving both preview engines on server, with 712 unit tests PASS. No UI, deployed Edge or production schema change. **Do not enable the flag or release:** complete source-freshness verification under the DB lock, official ties/later amendments, authenticated isolated QA, rollback/recovery, and legacy writer fencing remain OPEN. Overall CI FAILS at required isolated QA preflight.
+
+
 **29 October latest server HTML print evidence:** [updated scoped report](../qa/PR484_REPORT_PARITY_QA_2026-10-29.md) at `6a1d37deec573aee555321050dcfe18951aa38fb`: 30 focused tests, 6 React A4 and 3 server HTML Chromium print tests PASS; exact synthetic report renders 2/4 A4 pages with 12/42 team rows, no orphan page, gold/teal/navy group styles. Server still returns printable HTML through the unchanged response contract (not PDF bytes). **Runtime authenticated Edge execution, Team v2 atomic Save, isolated backend QA and production rollback/owner release authorization remain blocked.** Overall CI RED at authenticated QA preflight despite 706 passing unit tests.
 
 
