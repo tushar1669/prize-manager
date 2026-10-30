@@ -18,6 +18,9 @@ export interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  /** Optional saved read-only award audit; no Team V2 scoring or writes here. */
+  ranking_snapshot?: unknown;
+  applied_rule_label?: string | null;
 }
 
 export interface GroupConfig {
