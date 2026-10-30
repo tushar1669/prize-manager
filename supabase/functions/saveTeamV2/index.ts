@@ -44,7 +44,7 @@ Deno.serve(async (request: Request) => {
     const requestBody: unknown = await request.json();
     if (!record(requestBody) ||
         Object.keys(requestBody).some(key =>
-          !['tournament_id', 'expected_version', 'official_rulings'].includes(key)) ||
+          !['tournament_id', 'expected_version', 'official_rulings', 'action'].includes(key)) ||
         (requestBody.official_rulings !== undefined &&
           (!Array.isArray(requestBody.official_rulings) ||
            requestBody.official_rulings.length > 20)) ||
@@ -55,6 +55,8 @@ Deno.serve(async (request: Request) => {
         requestBody.expected_version >= 2147483647) {
       return json({ error: 'invalid_expected_version', saved: false }, 400);
     }
+    if (requestBody.action !== undefined && requestBody.action !== 'status')
+      return json({ error: 'invalid_action', saved: false }, 400);
     const tournamentId = requestBody.tournament_id;
     const expectedVersion = requestBody.expected_version;
     const nextVersion = expectedVersion + 1;
@@ -101,6 +103,12 @@ Deno.serve(async (request: Request) => {
       if (i.error || t.error) return null;
       return Math.max(Number(i.data?.[0]?.version ?? 0), Number(t.data?.[0]?.version ?? 0));
     };
+    if (requestBody.action === 'status') {
+      const currentVersion = await version();
+      if (currentVersion === null)
+        return json({ error: 'version_unavailable', saved: false }, 409);
+      return json({ enabled: true, saved: false, expected_version: currentVersion });
+    }
     if (await version() !== expectedVersion)
       return json({ error: 'stale_version', saved: false }, 409);
 
