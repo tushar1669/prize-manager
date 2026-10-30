@@ -159,6 +159,17 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'team_v2_duplicate_initial_prize';
     END IF;
+    -- Independent DB prize coverage prevents an otherwise valid truncated
+    -- scorer response from creating a money-bearing partial version.
+    IF jsonb_array_length(p_individual_rows) <> (
+      SELECT count(*)
+      FROM public.prizes pz
+      JOIN public.categories cat ON cat.id = pz.category_id
+      WHERE cat.tournament_id = p_tournament_id
+        AND cat.is_active IS TRUE AND pz.is_active IS TRUE
+    ) THEN
+      RAISE EXCEPTION 'team_v2_incomplete_initial_individual_awards';
+    END IF;
     INSERT INTO public.allocations (
       tournament_id, version, prize_id, player_id, reason_codes,
       is_manual, decided_by, decided_at
@@ -230,9 +241,21 @@ BEGIN
     RAISE EXCEPTION 'team_v2_invalid_team_rows';
   END IF;
 
+  -- Every active prize-bearing group must have all its prize slots covered.
+  -- Above, each submitted prize has been validated as active and unique, so
+  -- an exact inventory count proves that no prize was silently omitted.
+  IF jsonb_array_length(p_team_rows) <> (
+    SELECT count(*) FROM public.institution_prizes p
+    JOIN public.institution_prize_groups g ON g.id = p.group_id
+    WHERE g.tournament_id = p_tournament_id
+      AND g.is_active IS TRUE AND p.is_active IS TRUE
+  ) THEN
+    RAISE EXCEPTION 'team_v2_incomplete_team_awards';
+  END IF;
+
   -- Check submitted K-player roster against current player records. These
   -- checks do NOT replicate the trusted rank/slot picker, provenance-aware TB
-  -- scorer, or completeness of the fresh server-derived award plan.
+  -- scorer, or full winner eligibility/ordering of the server-derived plan.
   IF EXISTS (
     SELECT 1 FROM jsonb_to_recordset(p_team_rows) AS j(prize_id uuid)
     GROUP BY j.prize_id HAVING COUNT(*) > 1
