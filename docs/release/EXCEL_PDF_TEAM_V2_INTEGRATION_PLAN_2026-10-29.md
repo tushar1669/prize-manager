@@ -1,5 +1,8 @@
 # Prize Manager — Excel, PDF and Team Ranking v2 integration and release-gate plan
 
+**30 Oct source-freshness check:** [QA details](../qa/PR484_TEAM_V2_INITIAL_SAVE_SOURCE_2026-10-30.md) and [source `d6494d840c1a0f4621eda329245109f913b5c790`](https://github.com/tushar1669/prize-manager/commit/d6494d840c1a0f4621eda329245109f913b5c790). The draft initial Team v2 Save now verifies SHA-256 equality of all seven scorer-input tables before and after preview, then checks the same source token under SHARE locks in the atomic transaction. Isolated Postgres 17 source-mutation tests PASS. **This is not consistent-snapshot/authenticated runtime proof**: scorer calls are separate transactions, contention/legacy writers/official rulings and isolated authenticated QA remain unresolved, overall CI RED. Save flag OFF, PR DRAFT, deployment prohibited.
+
+
 **30 Oct draft initial Team v2 Save:** [source and QA](../qa/PR484_TEAM_V2_INITIAL_SAVE_SOURCE_2026-10-30.md) at `1aa7e4fe071ec7cd28335b126d479f18391fe518` implements a JWT/owner/full-access protected, disabled-by-default initial *uncontested* Save route deriving both preview engines on server, with 712 unit tests PASS. No UI, deployed Edge or production schema change. **Do not enable the flag or release:** complete source-freshness verification under the DB lock, official ties/later amendments, authenticated isolated QA, rollback/recovery, and legacy writer fencing remain OPEN. Overall CI FAILS at required isolated QA preflight.
 
 
