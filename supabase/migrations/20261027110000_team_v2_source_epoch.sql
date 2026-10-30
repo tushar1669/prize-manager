@@ -53,6 +53,9 @@ BEGIN
     WHERE v.tournament_id IS NOT NULL
     ORDER BY v.tournament_id
   LOOP
+    -- A row trigger exists at schema level, but must have no writes or locks
+    -- on any event other than a deliberately opted-in test tournament.
+    IF NOT public.team_v2_canary_active(touched) THEN CONTINUE; END IF;
     UPDATE public.tournaments
        SET updated_at = pg_catalog.clock_timestamp()
      WHERE id = touched;
