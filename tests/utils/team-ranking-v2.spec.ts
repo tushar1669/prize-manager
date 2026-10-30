@@ -122,6 +122,22 @@ describe('safe ordered team prize partitions — no invented awards', () => {
     expect(result.every(p => p.status === 'resolved')).toBe(true);
   });
 
+  it('does not pay teams under obsolete rules even when total points differ', () => {
+    // A legacy group with no v2 rules must NEVER silently award first prize:
+    // unique total scores do not authorize replacing the event regulations.
+    const candidates = [team('Club A', [8, 7]), team('Club B', [6, 5])];
+    for (const unapproved of [null, {
+      ...approved(), organizer_confirmed: false,
+    }, {
+      ...approved(), published_reference: '',
+    }]) {
+      const partitions = rankTeamCandidatesV2(candidates, unapproved);
+      expect(partitions.every(partition => partition.status === 'blocked')).toBe(true);
+      expect(partitions.flatMap(partition => partition.teams).map(t => t.key).sort())
+        .toEqual(['Club A', 'Club B']);
+    }
+  });
+
   it('withholds results when organizer has not confirmed the published team rules', () => {
     const result = rankTeamCandidatesV2([team('A', [7, 5]), team('B', [6, 6])], null);
     expect(result).toMatchObject([{ status: 'blocked', reason: 'unapproved_rules' }]);
