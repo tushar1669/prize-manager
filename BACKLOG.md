@@ -22,7 +22,7 @@ This root document is a **pointer and current evidence index**, not approval to 
 
 ### Scope and source evidence
 
-- Preserve individual allocation engine, historical prize allocation versions, publication pins, authoritative Master/ownership authorization, source-grounded prize computation, no CSV import/export and existing CI/security checks.
+- Preserve individual allocation engine, historical prize allocation versions, publication pins, authoritative Master/ownership authorization, source-grounded prize computation, locked file-format restrictions and existing CI/security checks.
 - Team V2 new awards require organizer-confirmed published rules; Rank Sum / Best Rank are not default monetary tie-breakers.
 - Excel four-sheet Final Prizes plus Coverage/RCA and printable server HTML/A4 source verified in existing synthetic QA. Server endpoint returns **printable HTML**, not binary PDF bytes; do not claim live parity.
 - Master-only Team V2 Save is source-implemented behind `ENABLE_TEAM_V2_ATOMIC_SAVE` and a default-off per-tournament DB canary. No production canary migration, scoring migration, service enablement or activation occurred.
