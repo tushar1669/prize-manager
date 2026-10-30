@@ -152,6 +152,43 @@ END $team_rollback$;
 DELETE FROM public.institution_prizes
 WHERE id='00000000-0000-4000-8000-000000000009';
 
+-- ABA INSERT+DELETE: after two successful statements the prize rows are
+-- byte-identical to the starting state. A source digest relying on row bytes
+-- and surviving xmin values cannot detect this without a durable epoch.
+SELECT pg_catalog.set_config(
+ 'qa.team_v2_deleted_prize_digest',
+ public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid),
+ false
+);
+INSERT INTO public.institution_prizes
+ (id,group_id,place,cash_amount,has_trophy,has_medal,is_active)
+ VALUES('00000000-0000-4000-8000-000000000020',
+        '00000000-0000-4000-8000-000000000006',9,25,false,false,true);
+DELETE FROM public.institution_prizes
+ WHERE id='00000000-0000-4000-8000-000000000020';
+DO $delete_aba$
+BEGIN
+ IF EXISTS (SELECT 1 FROM public.institution_prizes
+    WHERE id='00000000-0000-4000-8000-000000000020') THEN
+   RAISE EXCEPTION 'FAIL transient synthetic prize still exists';
+ END IF;
+ IF public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid)
+    IS NOT DISTINCT FROM pg_catalog.current_setting('qa.team_v2_deleted_prize_digest')
+ THEN RAISE EXCEPTION 'FAIL transient insert-delete kept original source token'; END IF;
+ BEGIN
+  PERFORM qa.submit_version(0,
+   '00000000-0000-4000-8000-000000000010',9,false,
+    pg_catalog.current_setting('qa.team_v2_deleted_prize_digest'));
+  RAISE EXCEPTION 'FAIL transient insertion and deletion accepted as fresh';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_source_changed' THEN RAISE; END IF;
+ END;
+ IF EXISTS (SELECT 1 FROM public.allocations) OR
+    EXISTS (SELECT 1 FROM public.team_allocations) THEN
+   RAISE EXCEPTION 'FAIL stale transient-source Save partially wrote awards';
+ END IF;
+END $delete_aba$;
+
 -- An update followed by reversion across TWO committed transactions must
 -- not masquerade as the original scorer snapshot. Equal points are not a
 -- sufficient consistency proof; the original row creation xid must differ.
