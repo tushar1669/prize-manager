@@ -1,7 +1,7 @@
 // TC1.6 — organizer-preview masking for team prize winners.
 //
 // Deliberately the INVERSE of the individual-prize masking rule
-// (CategoryCardsView, PosterGridView, ArbiterSheetView all hide the LOWER
+// (CategoryCardsUpdatedView, PosterGridView, ArbiterSheetView all hide the LOWER
 // placings and preview the top). Team prizes hide the TOP placing(s) instead:
 // the binding rule is that the visible set is a subset of 2nd-place-and-below,
 // and 1st place is NEVER revealed to a viewer without full access.

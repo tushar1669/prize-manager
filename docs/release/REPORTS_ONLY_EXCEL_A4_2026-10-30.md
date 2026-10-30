@@ -14,7 +14,7 @@ Split previously approved report layouts out of frozen Team Prizes V2 so no new 
 
 ## Release verification (actual facts)
 - [Report-only scoped CI 41057721544](https://github.com/tushar1669/prize-manager/actions/runs/41057721544): SUCCESS, workbook, browser Chromium A4, printable Edge HTML synthetic data.
-- [Full CI 41057721549](https://github.com/tushar1669/prize-manager/actions/runs/41057721549): OVERALL FAILURE at authenticated Swiss-import suite (separate QA backend missing). CSV guard, build, lint, unit tests and public smoke PASS. No tests were weakened, skipped artificially or rerouted to production.
+- [Full CI 41057721549](https://github.com/tushar1669/prize-manager/actions/runs/41057721549): OVERALL FAILURE at authenticated Swiss-import suite (separate QA backend missing). Locked file-format guard, build, lint, unit tests and public smoke PASS. No tests were weakened, skipped artificially or rerouted to production.
 - GitHub PR #485: merged as `6af6e89bccfe50a39881fd58664d0afc1c71a79e`, no migrations, no Team V2 Save deployment or activation.
 - Lovable project `ee2c255e-4041-44cb-8cca-2353ed6c5c8d`: editor latest SHA matches main and is_published true; explicit deploy returned pending, so live publish completion not yet proved.
 - Supabase project `nvjjifnzwrueutbirpde`: `generatePdf` deployed and ACTIVE at version 361 (previous version 360). No Team V2 migrations or `saveTeamV2` deployed.
@@ -30,3 +30,10 @@ If actual reports regress after deployment, revert only PR #485's report code, i
 
 ## Separate Team V2 handoff
 [#484](https://github.com/tushar1669/prize-manager/pull/484) stays draft, with new Save disabled and per-event canary unapplied. Follow-up remains a separate coherent workflow; do not reintroduce old monetary ranking or treat synthetic tests as production verification.
+
+## Owner visual acceptance and canonical Category Cards correction (30 October 2026)
+
+- Owner supplied and accepted the updated Category Cards (5 printed pages), Arbiter Sheet (3 printed pages), and Team Prizes (1 printed page) from a personal tournament. This verifies their displayed print layouts **only**; it is neither verification nor release approval of the new Team Prizes V2 ranking or atomic Save.
+- Owner spotted duplicate Final Prize tabs: legacy `Category Cards` and `Category Cards — Updated`. UI correction [PR #486](https://github.com/tushar1669/prize-manager/pull/486) retains only the approved **Category Cards — Updated** as the first and default tab in Finalize and the standalone Final Prize page, and switches existing public winner displays to the same approved renderer. Existing inbound `/final/v1` links redirect to `/final/v6`.
+- Other print/export pages, the saved individual/team prize data, publication access controls, prize allocation engine, team allocation rules and reporting contract remain unchanged. This correction removes the obsolete renderer, not historical award data.
+- Verify exact commit with lint, unit, format guard, public smoke and regression tests. GitHub CI overall status must be reported independently from these specific passes. No database or Edge Function deployment is required by this correction.

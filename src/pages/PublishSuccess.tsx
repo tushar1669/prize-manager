@@ -153,7 +153,7 @@ export default function PublishSuccess() {
                     View Final Prizes
                   </Button>
                   <Button
-                    onClick={() => navigate(`/t/${id}/final/v1`)}
+                    onClick={() => navigate(`/t/${id}/final/v6`)}
                     variant="outline"
                     className="gap-2"
                   >
