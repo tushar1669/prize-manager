@@ -41,11 +41,16 @@ fi
 
 # Edit two scorer tables in one real transaction, in the opposite order
 # to the database Save's table locks. A blocking SHARE lock deadlocks here.
-psql -v ON_ERROR_STOP=1 -c "BEGIN;
-  UPDATE public.players SET points=6 WHERE id='$player_id'::uuid;
-  SELECT pg_sleep(4);
-  UPDATE public.tournaments SET owner_id=owner_id WHERE id='$source_id'::uuid;
-  COMMIT;" > /tmp/team-v2-source-mutator.log 2>&1 &
+# Separate psql statements ensure UPDATE 1 is flushed BEFORE pg_sleep.
+# A single -c multi-statement string can buffer output until COMMIT and
+# deceptively make this a sequential, not concurrent, test.
+psql -v ON_ERROR_STOP=1 > /tmp/team-v2-source-mutator.log 2>&1 <<SQL &
+BEGIN;
+UPDATE public.players SET points=6 WHERE id='$player_id'::uuid;
+SELECT pg_sleep(4);
+UPDATE public.tournaments SET owner_id=owner_id WHERE id='$source_id'::uuid;
+COMMIT;
+SQL
 mutator=$!
 
 # Prove the second client starts only after the uncommitted source update
