@@ -83,11 +83,11 @@ if [[ "$mutator_rc" != 0 || "$save_rc" == 0 || "$save_rc" == 124 ]]; then
   cat /tmp/team-v2-source-mutator.log
   exit 1
 fi
-# Contended NOWAIT lock is the expected first rejection. After the writer
+# Per-event row serialization must reject the obsolete source digest. After the writer
 # commits, re-check with the ORIGINAL pre-edit digest to prove the stale
 # score cannot be committed on an immediately retried request either.
-grep -q 'could not obtain lock on relation' /tmp/team-v2-source-save.log || {
-  echo "FAIL source Save did not fail closed on contended input tables"
+grep -q 'team_v2_source_changed' /tmp/team-v2-source-save.log || {
+  echo "FAIL source Save accepted old digest after concurrent edit"
   cat /tmp/team-v2-source-save.log
   exit 1
 }
@@ -108,5 +108,5 @@ if [[ "$(psql -At -c "SELECT count(*) FROM public.allocations")" != 0 ||
   echo "FAIL concurrent source rejection wrote awards or changed publication"
   exit 1
 fi
-echo "PASS two-table source editor vs Save: no deadlock, NOWAIT conflict, then stale digest rejected; no partial award, pin preserved"
+echo "PASS two-table source editor vs Save: no deadlock, source fingerprint rejected; no partial award, pin preserved"
 
