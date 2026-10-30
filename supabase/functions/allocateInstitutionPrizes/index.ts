@@ -14,7 +14,7 @@ import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-10-25-team-v2-candidate-ranking";
+const BUILD_VERSION = "2026-10-30-team-v2-source-scored-adjudication-rosters";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -177,7 +177,11 @@ interface GroupResponse {
     status: 'resolved' | 'tied' | 'blocked';
     criterion?: string;
     reason?: string;
-    teams: Array<{ key: string; selectedPlayers: Array<{ points: number | null }> }>;
+    teams: Array<{ key: string;
+      selectedPlayers: Array<{ playerId: string; points: number | null;
+        sourceHash: string | null; individualTieBreaks: Record<number, number | null> }>;
+      members: TeamPlayerInfo[];
+    }>;
   }>;
   adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
   adjudication_rules_reference?: string;
@@ -523,7 +527,18 @@ Deno.serve(async (req: Request) => {
         reason: partition.reason,
         teams: partition.teams.map(team => ({
           key: team.key,
-          selectedPlayers: team.selectedPlayers.map(player => ({ points: player.points })),
+          selectedPlayers: team.selectedPlayers.map(player => ({
+            playerId: player.playerId,
+            points: player.points,
+            sourceHash: player.sourceHash ?? null,
+            individualTieBreaks: player.individualTieBreaks ?? {},
+          })),
+          // Save must construct the award from scorer-selected members. Never
+          // substitute client-provided rosters or alphabetically ordered keys.
+          members: scoredByKey.get(team.key)?.team.map(player => ({
+            player_id: player.id, name: player.name, rank: player.rank,
+            points: player.points, gender: player.gender,
+          })) ?? [],
         })),
       }));
       const rankingIssues = groupPrizes.flatMap(prize => {
