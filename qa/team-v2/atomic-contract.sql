@@ -396,6 +396,36 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   IF SQLERRM NOT LIKE '%team_v2_stale_allocation_version%' THEN RAISE; END IF;
 END $$;
+-- Deactivation is a kill switch for NEW V2 commits, NOT permission to
+-- reopen obsolete writers against historical V2 cash awards.
+UPDATE public.team_v2_canary_tournaments SET enabled=false
+ WHERE tournament_id='00000000-0000-4000-8000-000000000001';
+DO $deactivated_history$
+BEGIN
+  IF public.team_v2_canary_active('00000000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'FAIL disabled canary still active';
+  END IF;
+  BEGIN
+    PERFORM qa.submit_version(1);
+    RAISE EXCEPTION 'FAIL disabled canary accepted fresh v2 Save';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'team_v2_canary_disabled' THEN RAISE; END IF;
+  END;
+  BEGIN
+    INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
+      VALUES('00000000-0000-4000-8000-000000000001',2,
+             '00000000-0000-4000-8000-000000000003',
+             '00000000-0000-4000-8000-000000000004');
+    RAISE EXCEPTION 'FAIL deactivated V2 allowed legacy cash writer';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
+  END;
+  IF (SELECT count(*) FROM public.team_allocations WHERE version=1) <> 1 OR
+     (SELECT count(*) FROM public.allocations WHERE version=1) <> 1
+  THEN RAISE EXCEPTION 'FAIL kill switch mutated saved version'; END IF;
+END $deactivated_history$;
+UPDATE public.team_v2_canary_tournaments SET enabled=true
+ WHERE tournament_id='00000000-0000-4000-8000-000000000001';
 RESET ROLE;
 -- Restore blank synthetic state for separate parallel-sessions race test.
 TRUNCATE public.allocations, public.team_allocations;
