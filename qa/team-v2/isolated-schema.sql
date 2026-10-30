@@ -30,9 +30,12 @@ CREATE TABLE public.allocations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id uuid NOT NULL, version integer NOT NULL,
   prize_id uuid NOT NULL, player_id uuid NOT NULL, reason_codes text[] NOT NULL DEFAULT '{}',
-  is_manual boolean, decided_by uuid, decided_at timestamptz,
-  UNIQUE(tournament_id,version,prize_id)
+  is_manual boolean, decided_by uuid, decided_at timestamptz
 );
+-- Production has a non-unique lookup index, not a per-prize unique key.
+-- Duplicate award rejection is exercised in the atomic writer contract.
+CREATE INDEX idx_allocations_tournament_version
+  ON public.allocations(tournament_id,version);
 CREATE TABLE public.institution_prize_groups (
   id uuid PRIMARY KEY, tournament_id uuid NOT NULL, name text NOT NULL,
   group_by text NOT NULL, team_size integer NOT NULL,
@@ -51,7 +54,7 @@ CREATE TABLE public.team_allocations (
   institution_key text NOT NULL, total_points numeric NOT NULL,
   player_ids uuid[] NOT NULL, player_snapshot jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(tournament_id,version,prize_id)
+  UNIQUE(tournament_id,version,group_id,place)
 );
 CREATE TABLE public.publications (
   tournament_id uuid NOT NULL, allocation_version integer NOT NULL, is_active boolean NOT NULL
