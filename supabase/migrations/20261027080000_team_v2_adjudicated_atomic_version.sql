@@ -395,9 +395,10 @@ BEGIN
     SELECT 1 FROM public.institution_prize_groups g
     WHERE g.tournament_id = NEW.tournament_id
       AND g.is_active IS TRUE AND g.ranking_rules IS NOT NULL
-  ) AND NOT (
-    current_user = 'service_role'
-    AND pg_catalog.current_setting('prize_manager.team_v2_atomic_writer', true) = '1'
+  ) AND (
+    current_user <> 'service_role'
+    OR pg_catalog.current_setting('prize_manager.team_v2_atomic_writer', true)
+      IS DISTINCT FROM '1'
   ) THEN
     RAISE EXCEPTION 'team_v2_atomic_writer_required';
   END IF;
