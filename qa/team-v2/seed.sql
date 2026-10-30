@@ -64,14 +64,16 @@ CREATE FUNCTION qa.submit_version(
   )
   SELECT public.commit_team_v2_adjudicated_version(
     '00000000-0000-4000-8000-000000000001', expected, actor,
-    '[{"prize_id":"00000000-0000-4000-8000-000000000003",
-       "player_id":"00000000-0000-4000-8000-000000000004",
-       "reason_codes":["synthetic"],"is_manual":false}]'::jsonb
-       || CASE WHEN with_unfilled THEN
-         '[{"prize_id":"00000000-0000-4000-8000-000000000008",
-            "player_id":null,"reason_codes":["no_eligible_players"],
-            "is_manual":false}]'::jsonb
-         ELSE '[]'::jsonb END,
+    CASE WHEN expected = 0 THEN (
+      '[{"prize_id":"00000000-0000-4000-8000-000000000003",
+         "player_id":"00000000-0000-4000-8000-000000000004",
+         "reason_codes":["synthetic"],"is_manual":false}]'::jsonb
+         || CASE WHEN with_unfilled THEN
+           '[{"prize_id":"00000000-0000-4000-8000-000000000008",
+              "player_id":null,"reason_codes":["no_eligible_players"],
+              "is_manual":false}]'::jsonb
+           ELSE '[]'::jsonb END
+    ) ELSE '[]'::jsonb END,
     (SELECT jsonb_build_array(entry) FROM award),
     CASE WHEN with_ruling
       THEN (SELECT jsonb_build_array(entry) FROM ruling)
