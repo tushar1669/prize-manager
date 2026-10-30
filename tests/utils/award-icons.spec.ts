@@ -3,7 +3,7 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
+import { CategoryCardsUpdatedView } from '@/components/final-prize/CategoryCardsUpdatedView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import type { FinalPrizeCategoryGroup, FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import * as prizeAwards from '@/utils/prizeAwards';
@@ -84,7 +84,7 @@ describe('award icon helper usage', () => {
       },
     ];
 
-    render(React.createElement(CategoryCardsView, { groups }));
+    render(React.createElement(CategoryCardsUpdatedView, { groups }));
     render(
       React.createElement(
         MemoryRouter,
