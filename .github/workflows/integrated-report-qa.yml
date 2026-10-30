@@ -1,0 +1,53 @@
+name: Integrated Excel and A4 synthetic visual QA (draft only)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  report-fixtures:
+    if: github.event.pull_request.number == 484
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    env:
+      CI: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Locked dependencies
+        run: npm ci --no-audit --fund=false
+      - name: Approved synthetic Excel, team and version-pin tests
+        run: npx vitest run tests/utils/server-printable-html.spec.ts tests/utils/branded-workbook.spec.ts tests/utils/team-final-workbook.spec.ts tests/utils/team-pdf-version.spec.ts tests/utils/team-prize-masking.spec.ts
+      - name: Verify code style
+        run: npx eslint src/utils/brandedWorkbookXlsx.ts src/utils/teamPrizeExport.ts src/utils/finalPrizeWorkbook.ts src/components/final-prize/TeamPrizesTabView.tsx src/components/allocation/TeamPrizeResultsPanel.tsx
+      - name: Build integrated source
+        run: npm run build
+      - name: Render actual Team Prize React print in Chromium
+        run: npx playwright test --config qa/team-prizes/playwright.config.ts
+      - name: Render exact Edge printable HTML using synthetic data
+        run: npx playwright test --config qa/server-report/playwright.config.ts
+      - name: Upload server HTML A4 PDF render artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrated-server-report-a4
+          path: artifacts/server-print-a4/
+          if-no-files-found: ignore
+      - name: Upload source-generated Excel workbooks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrated-synthetic-excel
+          path: artifacts/branded-xlsx/
+          if-no-files-found: ignore
+      - name: Upload Chromium A4 PDFs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrated-team-a4
+          path: artifacts/team-prizes-a4/
+          if-no-files-found: ignore
