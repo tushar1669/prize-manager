@@ -95,27 +95,38 @@ export async function fetchTeamPrizeResults(
 
   if (allocationVersion !== undefined && allocationVersion !== null) {
     const version = Number(allocationVersion);
-    // Step 1: fetch groups first so we can scope prizes to this tournament's groups
-    const [{ data: groups }, { data: allocations }, { data: notes }] = await Promise.all([
+    if (!Number.isSafeInteger(version) || version < 1)
+      throw new Error('Invalid team allocation version');
+    // A saved version is never permission to re-score current teams.
+    const [
+      { data: groups, error: groupsError },
+      { data: allocations, error: allocationsError },
+      { data: notes, error: notesError },
+    ] = await Promise.all([
       supabase.from('institution_prize_groups').select('*').eq('tournament_id', tournamentId).eq('is_active', true).order('name'),
       supabase.from('team_allocations').select('*').eq('tournament_id', tournamentId).eq('version', version),
       supabase.from('team_allocation_notes').select('group_id, note').eq('tournament_id', tournamentId).eq('version', version),
     ]);
 
+    if (groupsError || allocationsError || notesError)
+      throw new Error('Version-pinned team allocation data could not be loaded');
     // Step 2: scope institution_prizes to only groups belonging to this tournament
     const groupIds = (groups ?? []).map((g: Record<string, unknown>) => String(g.id));
     let prizes: Record<string, unknown>[] | null = null;
     if (groupIds.length > 0) {
-      const { data } = await supabase
+      const { data, error: prizeError } = await supabase
         .from('institution_prizes')
         .select('*')
         .in('group_id', groupIds)
         .eq('is_active', true)
         .order('place');
+      if (prizeError)
+        throw new Error('Version-pinned team prize definitions could not be loaded');
       prizes = data as Record<string, unknown>[] | null;
     }
 
-    if ((groups ?? []).length > 0 && (allocations ?? []).length > 0) {
+    // No team awards at this historical version means unfilled, not fresh winners.
+    if ((groups ?? []).length >= 0) {
       const noteByGroup = new Map((notes ?? []).map((n: { group_id: string; note: string }) => [n.group_id, n.note]));
       const byGroup = new Map<string, Array<Record<string, unknown>>>();
       for (const row of (allocations ?? []) as Array<Record<string, unknown>>) {
