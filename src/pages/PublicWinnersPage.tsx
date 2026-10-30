@@ -142,7 +142,7 @@ export default function PublicWinnersPage() {
             ) : (
               <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
                 <TabsList className="grid w-full grid-cols-4 mb-6 print:hidden">
-                  <TabsTrigger value="cards">Category Cards — Updated</TabsTrigger>
+                  <TabsTrigger value="cards">Category Cards</TabsTrigger>
                   <TabsTrigger value="table">Table View</TabsTrigger>
                   <TabsTrigger value="poster">Poster Grid</TabsTrigger>
                   <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>

@@ -646,7 +646,7 @@ export default function Finalize() {
               ) : (
                 <Tabs value={activeView} onValueChange={v => setActiveView(v as FinalViewTab)} className="w-full">
                   <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-muted p-1 print:hidden">
-                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">Category Cards — Updated</TabsTrigger>
+                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">Category Cards</TabsTrigger>
                     <TabsTrigger value="v3" className="rounded-md px-4 py-2 text-sm font-medium">
                       Poster Grid
                     </TabsTrigger>

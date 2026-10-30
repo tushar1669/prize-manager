@@ -17,7 +17,7 @@ import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
 import { BackendMigrationMissingAlert } from '@/components/access/BackendMigrationMissingAlert';
 
 const VIEW_TABS = [
-  { id: 'v6', label: 'Category Cards — Updated' },
+  { id: 'v6', label: 'Category Cards' },
   { id: 'v3', label: 'Poster Grid' },
   { id: 'v4', label: 'Arbiter Sheet' },
   { id: 'v5', label: 'Team Prizes' },
