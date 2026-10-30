@@ -5,8 +5,8 @@ Scope: Team Prizes V2 ONLY. Use latest default-branch facts; this file is a date
 
 ## Already delivered
 - Branded Excel + A4 print reports released through PR #485, squash 6af6e89bccfe50a39881fd58664d0afc1c71a79e.
-- Owner accepted three attached real-tournament visual reports (Category Cards Updated, Arbiter Sheet, Team Prizes) on 30 October. Visual acceptance is NOT Team V2 engine/payout/Save acceptance.
-- PR #486 removes old Category Cards across Finalize, stand-alone Final Prize and public views, retains only the updated design, defaults to v6, redirects /final/v1 to /final/v6. Verify current merge and runtime before asserting publication.
+- Owner accepted three attached real-tournament visual reports (Category Cards Updated, Arbiter Sheet, Team Prizes) on 30 October. Visual acceptance is NOT Team V2 engine/payout/Save acceptance. CI 41063601688 at exact #486 source passed locked format guard, build, lint, unit and public smoke; overall CI failed at separate authenticated Swiss signup-navigation timeout.
+- PR #486 MERGED, source at 47dc29d30d3b53a32a5a41912ed47c8213f62869. It removes the old Category Cards component across Finalize, stand-alone Final Prize and public views; updated design is the sole default, old /final/v1 links redirect to /final/v6. Lovable editor matches the merge; Publish request f4645300-cc0d-45a4-baf0-0463a908507a was pending. External live URL verification remains UNKNOWN.
 - Production generatePdf Edge Function previously observed ACTIVE v361; it serves printable HTML, not binary PDF bytes.
 
 ## Current V2 candidate, do not blindly merge
