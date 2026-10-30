@@ -111,6 +111,20 @@ BEGIN
     RAISE EXCEPTION 'FAIL incomplete individual awards partially written';
   END IF;
 END $coverage_rollback$;
+-- A real event can have genuine unfilled individual prizes. The caller
+-- explicitly documents each without inserting a fabricated player winner.
+SELECT qa.submit_version(
+  0, '00000000-0000-4000-8000-000000000010', 9, false, NULL, true
+) AS version_with_unfilled_individual;
+DO $unfilled_acceptance$
+BEGIN
+ IF (SELECT count(*) FROM public.allocations WHERE version=1) <> 1 OR
+    (SELECT count(*) FROM public.allocations WHERE player_id IS NULL) <> 0 OR
+    (SELECT count(*) FROM public.team_allocations WHERE version=1) <> 1 OR
+    (SELECT count(*) FROM public.publications WHERE allocation_version=0) <> 1
+ THEN RAISE EXCEPTION 'FAIL explicit unfilled prize wrote fabricated/partial awards'; END IF;
+END $unfilled_acceptance$;
+TRUNCATE public.allocations, public.team_allocations;
 DELETE FROM public.prizes
 WHERE id='00000000-0000-4000-8000-000000000008';
 
