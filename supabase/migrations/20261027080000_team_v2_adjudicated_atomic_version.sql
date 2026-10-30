@@ -17,7 +17,7 @@ AS $source$
        FROM public.prizes t WHERE t.category_id IN (SELECT c.id FROM public.categories c WHERE c.tournament_id = p_tournament_id)),
       (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.players t WHERE t.tournament_id = p_tournament_id),
-      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
+      (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.tournament_id), '[]'::jsonb)
        FROM public.rule_config t WHERE t.tournament_id = p_tournament_id),
       (SELECT COALESCE(jsonb_agg((to_jsonb(t) || jsonb_build_object('_mvcc_xmin', t.xmin::text)) ORDER BY t.id), '[]'::jsonb)
        FROM public.institution_prize_groups t WHERE t.tournament_id = p_tournament_id),
