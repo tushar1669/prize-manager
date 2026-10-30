@@ -185,7 +185,8 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     expect(source).toContain("commit_team_v2_adjudicated_version");
     expect(source).toContain("p_individual_rows: expectedVersion === 0 ? proposal.rows.individual_rows : []");
     expect(source).not.toMatch(/p_individual_rows:\s*proposal\.rows\.individual_rows\s*,/);
-    expect(source).toContain("p_rulings: []");
+    expect(source).toContain("p_rulings: proposal.rows.rulings");
+    expect(source).toContain("prepareAdjudicatedTeamV2Rows(");
     expect(source).toContain("team_v2_source_fingerprint");
     expect(source).toContain("p_expected_source_fingerprint: before");
     expect(source).toContain("after !== before");
