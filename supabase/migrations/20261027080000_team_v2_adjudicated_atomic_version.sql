@@ -136,18 +136,29 @@ BEGIN
   -- previous version to clone. The Edge caller validates the individual
   -- preview before invoking this RPC.
   IF v_latest = 0 THEN
-    IF jsonb_array_length(p_individual_rows) = 0 OR EXISTS (
+    -- Explicit NULL-player rows represent trusted, genuinely unfilled prizes.
+    -- They satisfy prize-inventory coverage but are NEVER allocated a player.
+    -- At least one genuine individual winner is required for initial Save.
+    IF jsonb_array_length(p_individual_rows) = 0 OR
+       NOT EXISTS (
+         SELECT 1 FROM jsonb_to_recordset(p_individual_rows)
+           AS j(player_id uuid) WHERE j.player_id IS NOT NULL
+       ) OR EXISTS (
       SELECT 1
       FROM jsonb_to_recordset(p_individual_rows)
         AS j(prize_id uuid, player_id uuid, reason_codes text[], is_manual boolean)
       LEFT JOIN public.prizes pz ON pz.id = j.prize_id
       LEFT JOIN public.categories cat ON cat.id = pz.category_id
       LEFT JOIN public.players pl ON pl.id = j.player_id
-      WHERE j.prize_id IS NULL OR j.player_id IS NULL OR
+      WHERE j.prize_id IS NULL OR
         cat.tournament_id IS DISTINCT FROM p_tournament_id OR
         cat.is_active IS DISTINCT FROM true OR
         pz.is_active IS DISTINCT FROM true OR
-        pl.tournament_id IS DISTINCT FROM p_tournament_id
+        (j.player_id IS NOT NULL AND pl.tournament_id IS DISTINCT FROM p_tournament_id) OR
+        (j.player_id IS NULL AND (
+          j.is_manual IS DISTINCT FROM false OR
+          j.reason_codes IS NULL OR cardinality(j.reason_codes) = 0
+        ))
     ) THEN
       RAISE EXCEPTION 'team_v2_invalid_initial_individuals';
     END IF;
@@ -178,7 +189,8 @@ BEGIN
       COALESCE(j.reason_codes, ARRAY[]::text[]),
       COALESCE(j.is_manual, false), p_actor_id, now()
     FROM jsonb_to_recordset(p_individual_rows)
-      AS j(prize_id uuid, player_id uuid, reason_codes text[], is_manual boolean);
+      AS j(prize_id uuid, player_id uuid, reason_codes text[], is_manual boolean)
+    WHERE j.player_id IS NOT NULL;
   ELSE
     -- Later manual ruling: keep *all* individual winners exactly as they were.
     -- Do not accept caller-supplied individual changes at this boundary.
