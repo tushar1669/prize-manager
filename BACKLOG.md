@@ -11,7 +11,7 @@
 ## Owner-accepted reports: one canonical Category Cards renderer
 - Owner confirmed pass of current printed **Category Cards — Updated, Arbiter Sheet and Team Prizes** layouts on 30 Oct. This is print acceptance only, not Team V2 payout correctness or general acceptance of all authenticated exports.
 - Duplicate legacy `Category Cards` tab found in the released UI; [PR #486](https://github.com/tushar1669/prize-manager/pull/486) removes the old renderer from Finalize, stand-alone Final Prize and public winner presentations, keeps updated design as first/default, redirects existing `/final/v1` links to `/final/v6`, and updates the print shortcut. No award, database or ranking changes.
-- State is **IN_PROGRESS (source)** until merge and verified publication; do not call the correction live just because this branch contains it.
+- Status: merged through PR #486 at 47dc29d30d3b53a32a5a41912ed47c8213f62869. Lovable editor matches; Publish request f4645300-cc0d-45a4-baf0-0463a908507a returned pending. Live public runtime verification remains UNKNOWN. Scoped tests passed; overall CI failed at authenticated Swiss signup flow.
 
 ## FROZEN, separate: Team Prizes V2
 - Existing [draft PR #484](https://github.com/tushar1669/prize-manager/pull/484) stays DRAFT, unmerged, undeployed.
@@ -26,4 +26,4 @@
 - Unlisted P0/P1/P2 inventory is **UNKNOWN**, not assumed empty. Do not invent priorities.
 
 ## Next exact action
-Complete #486 scoped regression and existing CI checks; release/publish the owner-requested Category Cards correction, verify exact live ref, sync release evidence, then hand off exclusively to draft Team Prizes V2 #484. Keep V2 frozen during the UI correction.
+Next cycle: reconcile main with draft Team Prizes V2 PR #484 following docs/handoff/TEAM_V2_CONTINUATION_2026-10-30.md. Do not reintroduce the removed legacy Category Cards.
