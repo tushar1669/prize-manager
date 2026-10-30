@@ -299,7 +299,6 @@ BEGIN
         WHERE allocation_version=0) <> 1
   THEN RAISE EXCEPTION 'FAIL no-ruling resolved award or publication pin'; END IF;
 END $no_tie_check$;
-TRUNCATE public.allocations, public.team_allocations;
 
 -- Exact next-version Save must copy existing individual awards, not
 -- let a caller replace any previously published individual winner.
