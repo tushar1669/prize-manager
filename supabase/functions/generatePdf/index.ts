@@ -1,8 +1,10 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 import { exportUpgradeHint, resolveFreePlayerThreshold } from '../_shared/tournamentAccess.ts';
+import { buildVersionedTeamPdfResults, type PinnedTeamGroup, type PinnedTeamPrize, type PinnedTeamAllocation } from '../_shared/teamPdfSnapshot.ts';
+import { generateHtmlReport, type TeamPrizeResults } from '../_shared/prizePrintableHtml.ts';
 
-const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const BUILD_VERSION = "2026-10-29-version-pinned-A4-printable-report";
 const FUNCTION_NAME = "generatePdf";
 const MISSING_ACCESS_RPC_MESSAGE = 'Database migrations not deployed (missing get_tournament_access_state)';
 
@@ -13,121 +15,14 @@ interface GeneratePdfRequest {
   version: number;
 }
 
-// Team prize types matching allocateInstitutionPrizes response
-interface TeamPlayerInfo {
-  player_id: string;
-  name: string;
-  rank: number;
-  points: number;
-  gender: string | null;
-}
-
-interface WinnerInstitution {
-  key: string;
-  label: string;
-  total_points: number;
-  rank_sum: number;
-  best_individual_rank: number;
-  players: TeamPlayerInfo[];
-}
-
-interface GroupConfig {
-  group_by: string;
-  team_size: number;
-  female_slots: number;
-  male_slots: number;
-  scoring_mode: string;
-}
-
-interface PrizeWithWinner {
-  id: string;
-  place: number;
-  cash_amount: number;
-  has_trophy: boolean;
-  has_medal: boolean;
-  is_active: boolean;
-  winner_institution: WinnerInstitution | null;
-}
-
-interface GroupResponse {
-  group_id: string;
-  name: string;
-  config: GroupConfig;
-  prizes: PrizeWithWinner[];
-  eligible_institutions: number;
-  ineligible_institutions: number;
-  ineligible_reasons: string[];
-  /**
-   * Optional: shipped by allocateInstitutionPrizes (TC1.5), absent from the persisted
-   * snapshot until TC1.6. When absent the Points column behaves exactly as before.
-   */
-  players_without_points?: number;
-}
-
-interface TeamPrizeResults {
-  groups: GroupResponse[];
-  players_loaded: number;
-  max_rank: number;
-}
-
 type CachedTeamPrizes = {
   data: TeamPrizeResults | null;
   error: string | null;
   expiresAt: number;
 };
 
-const TEAM_PRIZE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const TEAM_PRIZE_CACHE_TTL_MS = 5 * 60 * 1000;
 const teamPrizeCache = new Map<string, CachedTeamPrizes>();
-
-const GROUP_BY_LABELS: Record<string, string> = {
-  // TC1.6: names the FIELD grouped on, never a claim about the prize itself —
-  // the group's own name (e.g. "Best State") already says what it's for.
-  club: 'Club / institution field',
-  city: 'City',
-  state: 'State',
-  group_label: 'Swiss Group (Gr)',
-  type_label: 'Swiss Type',
-};
-
-/**
- * RULING 2 (PRD §3), binding: printed output states the RULE THAT WAS APPLIED and
- * never asserts a count of players' attributes. The PDF previously printed
- * "(2F + 2M required)", which claimed to know what four people on a roster are.
- *
- * RULING 1: `male_slots` means "not F" — satisfied by a player whose sex was never
- * recorded — so it prints as "other players", never "boys" or "male".
- *
- * A deliberate PARALLEL of `formatTeamRuleClause` in
- * `src/components/allocation/TeamPrizeResultsPanel.tsx`. The two run in different
- * runtimes (Deno edge function vs. browser bundle) with no module they can share,
- * so the duplication is the cost of the boundary — same pattern as the exclusion
- * sentences in allocateInstitutionPrizes. Keep the wording in step.
- *
- * Returns null when both minimums are zero: no rule was applied, so nothing prints.
- */
-function formatTeamRuleClause(config: { female_slots: number; male_slots: number }): string | null {
-  const female = Math.max(0, Math.trunc(Number(config?.female_slots) || 0));
-  const male = Math.max(0, Math.trunc(Number(config?.male_slots) || 0));
-  if (female === 0 && male === 0) return null;
-
-  const parts: string[] = [];
-  if (female > 0) parts.push(`at least ${female} girl${female === 1 ? '' : 's'}`);
-  if (male > 0) {
-    const lead = parts.length === 0 ? 'at least ' : '';
-    parts.push(`${lead}${male} other player${male === 1 ? '' : 's'}`);
-  }
-  return parts.join(', ');
-}
-
-function escapeHtml(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 function isMissingAccessStateRpc(error: unknown): boolean {
   const message = error instanceof Error
@@ -138,91 +33,62 @@ function isMissingAccessStateRpc(error: unknown): boolean {
   return message.includes('get_tournament_access_state') && message.toLowerCase().includes('does not exist');
 }
 
-function getPlaceOrdinal(place: number): string {
-  if (place === 1) return '1st';
-  if (place === 2) return '2nd';
-  if (place === 3) return '3rd';
-  return `${place}th`;
-}
-
 async function loadTeamPrizes(
   supabaseClient: SupabaseClient,
   tournamentId: string,
-  authHeader: string
-) {
-  const cacheKey = `${tournamentId}:latest`;
+  version: number,
+): Promise<CachedTeamPrizes> {
+  // A version-pinned PDF must never display another version's team ranking.
+  const cacheKey = `${tournamentId}:${version}`;
   const now = Date.now();
   const cached = teamPrizeCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > now) {
-    return cached;
-  }
+  if (cached && cached.expiresAt > now) return cached;
 
   let teamPrizeResults: TeamPrizeResults | null = null;
   let teamPrizeError: string | null = null;
 
   try {
-    const { count, error: countError } = await supabaseClient
-      .from('institution_prize_groups')
-      .select('*', { count: 'exact', head: true })
+    const { data: allocations, error: allocationError } = await supabaseClient
+      .from('team_allocations')
+      .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('is_active', true);
+      .eq('version', version);
+    if (allocationError) throw new Error('Team allocation version could not be loaded');
 
-    if (countError) {
-      console.error('[generatePdf] Error checking team prizes:', countError);
-      teamPrizeError = countError.message || 'Unknown error';
-    } else if ((count || 0) > 0) {
-      const { data: latestAlloc } = await supabaseClient
-        .from('team_allocations')
-        .select('version')
-        .eq('tournament_id', tournamentId)
-        .order('version', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: groups, error: groupsError } = await supabaseClient
+      .from('institution_prize_groups')
+      .select('id, name, group_by, team_size, female_slots, male_slots, scoring_mode')
+      .eq('tournament_id', tournamentId)
+      .eq('is_active', true)
+      .order('name');
+    if (groupsError) throw new Error('Team Prize group definitions could not be loaded');
 
-      if (latestAlloc?.version != null) {
-        const { data: persistedData, error: persistedError } = await supabaseClient.functions.invoke('publicTeamPrizes', {
-          body: { tournament_id: tournamentId }
-        });
-        if (!persistedError && persistedData?.groups?.length) {
-          teamPrizeResults = persistedData as TeamPrizeResults;
-        }
-      }
-
-      if (!teamPrizeResults) {
-        console.log(`[generatePdf] Found ${count} active team prize groups, calling allocator`);
-        const { data: teamData, error: teamError } = await supabaseClient.functions.invoke(
-          'allocateInstitutionPrizes',
-          {
-            body: { tournament_id: tournamentId },
-            headers: { Authorization: authHeader }
-          }
-        );
-
-        if (teamError) {
-          console.error('[generatePdf] Team prize allocation error:', teamError);
-          teamPrizeError = teamError.message || 'Unknown error';
-        } else {
-          teamPrizeResults = teamData as TeamPrizeResults;
-          console.log(`[generatePdf] Team prizes loaded: ${teamPrizeResults.groups.length} groups`);
-        }
-      }
-    } else {
-      console.log('[generatePdf] No active team prize groups');
+    const groupRows = (groups ?? []) as PinnedTeamGroup[];
+    let prizeRows: PinnedTeamPrize[] = [];
+    if (groupRows.length > 0) {
+      const { data: prizes, error: prizesError } = await supabaseClient
+        .from('institution_prizes')
+        .select('id, group_id, place, cash_amount, has_trophy, has_medal')
+        .in('group_id', groupRows.map(group => group.id))
+        .eq('is_active', true)
+        .order('place');
+      if (prizesError) throw new Error('Team Prize definitions could not be loaded');
+      prizeRows = (prizes ?? []) as PinnedTeamPrize[];
     }
-  } catch (e: unknown) {
-    console.error('[generatePdf] Exception loading team prizes:', e);
-    teamPrizeError = e instanceof Error ? e.message : 'Unknown error';
+
+    // The only award source is team_allocations at precisely the requested version.
+    // Missing rows are unfilled places, not permission to recompute live rankings.
+    teamPrizeResults = buildVersionedTeamPdfResults(
+      groupRows, prizeRows, (allocations ?? []) as PinnedTeamAllocation[],
+    );
+  } catch {
+    // Never log player data, nor return a partial export on historical read failure.
+    teamPrizeError = 'Version-pinned Team Prize data could not be verified';
   }
 
-  const cacheEntry: CachedTeamPrizes = {
-    data: teamPrizeResults,
-    error: teamPrizeError,
-    expiresAt: now + TEAM_PRIZE_CACHE_TTL_MS,
-  };
-
-  teamPrizeCache.set(cacheKey, cacheEntry);
-  return cacheEntry;
+  const entry = { data: teamPrizeResults, error: teamPrizeError, expiresAt: now + TEAM_PRIZE_CACHE_TTL_MS };
+  if (!teamPrizeError) teamPrizeCache.set(cacheKey, entry);
+  return entry;
 }
 
 Deno.serve(async (req) => {
@@ -331,6 +197,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!Number.isSafeInteger(version) || version < 1) {
+      return new Response(
+        JSON.stringify({ error: 'invalid_allocation_version' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     console.log(`[generatePdf] Generating PDF for tournament ${tournamentId}, version ${version}`);
 
     // 1) Fetch tournament details
@@ -362,8 +235,9 @@ Deno.serve(async (req) => {
     const { data: teamPrizeResults, error: teamPrizeError } = await loadTeamPrizes(
       supabaseClient,
       tournamentId,
-      authHeader
+      version
     );
+    if (teamPrizeError) throw new Error('Version-pinned Team Prize export is unavailable');
 
     // 4) Generate HTML report
     const htmlContent = generateHtmlReport(tournament, allocations, version, teamPrizeResults, teamPrizeError);
@@ -393,180 +267,3 @@ Deno.serve(async (req) => {
   }
 });
 
-// Tournament type for generating HTML report
-type TournamentInfo = {
-  title: string;
-  start_date: string;
-  end_date: string;
-  venue?: string | null;
-};
-
-// Allocation row type for HTML report
-type AllocationRow = {
-  players?: { rank?: number | null; name?: string | null } | null;
-  prizes?: {
-    categories?: { name?: string | null } | null;
-    place?: number | null;
-    cash_amount?: number | null;
-    has_trophy?: boolean | null;
-    has_medal?: boolean | null;
-  } | null;
-};
-
-function generateHtmlReport(
-  tournament: TournamentInfo,
-  allocations: AllocationRow[],
-  version: number,
-  teamPrizes: TeamPrizeResults | null,
-  teamPrizeError: string | null
-): string {
-  // Generate team prizes section HTML
-  let teamPrizesHtml = '';
-  
-  if (teamPrizeError) {
-    teamPrizesHtml = `
-      <div style="page-break-before: always;"></div>
-      <h2>Team / Institution Prizes</h2>
-      <p class="meta" style="color: #c53030;">
-        Team prizes could not be included due to an error: ${escapeHtml(teamPrizeError)}<br>
-        Please check the online Team Prizes view.
-      </p>
-    `;
-  } else if (teamPrizes && teamPrizes.groups.length > 0) {
-    teamPrizesHtml = `
-      <div style="page-break-before: always;"></div>
-      <h2>Team / Institution Prizes</h2>
-      <p class="meta">Team prizes are allocated separately from individual prizes. Players may win both individual and team prizes.</p>
-      ${teamPrizes.groups.map(group => {
-        const filledPrizes = group.prizes.filter(p => p.winner_institution !== null);
-        const groupByLabel = GROUP_BY_LABELS[group.config.group_by] || group.config.group_by;
-
-        const ruleClause = formatTeamRuleClause(group.config);
-        const genderReq = ruleClause ? ` (rule applied: ${ruleClause})` : '';
-
-        // Every scored institution contributes exactly team_size players, so this is
-        // the pool allocateInstitutionPrizes counted `players_without_points` over.
-        // Equal means not one counted player had a points value, and every total in
-        // the table below is a 0 that means "absent" rather than "scored nothing".
-        const selectedPoolSize = group.eligible_institutions * group.config.team_size;
-        const pointsAbsent =
-          typeof group.players_without_points === 'number' &&
-          selectedPoolSize > 0 &&
-          group.players_without_points === selectedPoolSize;
-
-        return `
-          <h3>${escapeHtml(group.name)}</h3>
-          <p class="meta">
-            ${escapeHtml(groupByLabel)} • Teams of ${group.config.team_size}${escapeHtml(genderReq)}
-            • ${group.eligible_institutions} eligible institution${group.eligible_institutions !== 1 ? 's' : ''}
-          </p>
-          ${filledPrizes.length > 0 ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>Place</th>
-                  <th>Institution</th>
-                  <th>Points</th>
-                  <th>Prize</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filledPrizes.map(prize => {
-                  const winner = prize.winner_institution!;
-                  const prizeText = [
-                    prize.cash_amount > 0 ? `₹${prize.cash_amount}` : '',
-                    prize.has_trophy ? '🏆' : '',
-                    prize.has_medal ? '🥇' : '',
-                  ].filter(Boolean).join(' ') || '—';
-
-                  return `
-                    <tr>
-                      <td>${getPlaceOrdinal(prize.place)}</td>
-                      <td>
-                        <strong>${escapeHtml(winner.label)}</strong>
-                        <div style="font-size: 11px; color: #666;">
-                          ${winner.players.map(p => `${escapeHtml(p.name)} (#${p.rank})`).join(', ')}
-                        </div>
-                      </td>
-                      <td>${pointsAbsent ? '&mdash;' : winner.total_points}</td>
-                      <td>${escapeHtml(prizeText)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-            ${pointsAbsent ? `
-              <p class="meta">Points were not imported for this tournament. Teams were ranked by rank sum.</p>
-            ` : ''}
-          ` : `
-            <p class="meta">No eligible institutions for this group.</p>
-          `}
-        `;
-      }).join('')}
-    `;
-  }
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${escapeHtml(tournament.title)} - Prize Allocations v${version}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    h1 { color: #1F6E5B; }
-    h2 { color: #1F6E5B; margin-top: 30px; border-bottom: 2px solid #1F6E5B; padding-bottom: 5px; }
-    h3 { color: #333; margin-top: 20px; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-    th { background-color: #1F6E5B; color: white; }
-    .meta { color: #666; margin: 10px 0; }
-    @media print {
-      body { margin: 20px; }
-      table { page-break-inside: auto; }
-      tr { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(tournament.title)}</h1>
-  <div class="meta">
-    <p><strong>Date:</strong> ${escapeHtml(tournament.start_date)} to ${escapeHtml(tournament.end_date)}</p>
-    <p><strong>Venue:</strong> ${escapeHtml(tournament.venue || 'N/A')}</p>
-    <p><strong>Version:</strong> ${version}</p>
-  </div>
-
-  <h2>Individual Prize Allocations</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Rank</th>
-        <th>Player</th>
-        <th>Category</th>
-        <th>Prize</th>
-        <th>Cash</th>
-        <th>Trophy</th>
-        <th>Medal</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${allocations.map(a => `
-        <tr>
-          <td>${escapeHtml(a.players?.rank ?? 'N/A')}</td>
-          <td>${escapeHtml(a.players?.name || 'N/A')}</td>
-          <td>${escapeHtml(a.prizes?.categories?.name || 'N/A')}</td>
-          <td>Place ${escapeHtml(a.prizes?.place ?? 'N/A')}</td>
-          <td>₹${Number(a.prizes?.cash_amount || 0)}</td>
-          <td>${a.prizes?.has_trophy ? '✓' : '—'}</td>
-          <td>${a.prizes?.has_medal ? '✓' : '—'}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-
-  ${teamPrizesHtml}
-
-  <p class="meta">Generated on ${new Date().toLocaleDateString()}</p>
-</body>
-</html>
-  `;
-}

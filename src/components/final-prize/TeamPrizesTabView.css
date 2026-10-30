@@ -1,0 +1,227 @@
+/* Team Prizes handout only. No shared table or public page styling is changed. */
+.pm-team-prizes-print {
+  --pm-team-gold: #b38a32;
+  --pm-team-teal: #1f6e5b;
+  --pm-team-navy: #0b3d91;
+}
+.pm-team-prizes-print .pm-team-prizes-heading {
+  padding: 12px 14px;
+  border-left: 4px solid var(--pm-team-gold);
+  border-radius: 6px;
+  background: hsl(var(--card));
+  font-weight: 800;
+}
+@media print {
+  .pm-team-prizes-print { color: #182c43; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .pm-team-prizes-print .pm-team-prize-group {
+    --pm-team-accent: var(--pm-team-gold);
+    --pm-team-fill: #faf3e3;
+    break-inside: auto;
+    background: white !important;
+    border: 1px solid #cad4df !important;
+    border-top: 3px solid var(--pm-team-accent) !important;
+    box-shadow: none !important;
+    margin: 0 0 5mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="teal"] {
+    --pm-team-accent: var(--pm-team-teal);
+    --pm-team-fill: #eaf5ef;
+  }
+  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="navy"] {
+    --pm-team-accent: var(--pm-team-navy);
+    --pm-team-fill: #eaf1fc;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] {
+    padding: 2mm 3mm 1.5mm !important;
+    border-bottom: 1px solid #c7d3df !important;
+    break-after: avoid;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+    color: var(--pm-team-accent) !important;
+    font-size: 11pt;
+    font-weight: 800;
+  }
+  .pm-team-prizes-print button { pointer-events: none !important; }
+  .pm-team-prizes-print [data-team-group-header] svg { display: none !important; }
+  .pm-team-prizes-print [data-team-print-hide] { display: none !important; }
+  .pm-team-prizes-print .pm-team-prize-group table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+  }
+  .pm-team-prizes-print .pm-team-prize-group thead { display: table-header-group !important; }
+  .pm-team-prizes-print .pm-team-prize-group th {
+    background: #edf2f8 !important;
+    color: #182c43 !important;
+    font-size: 7.3pt;
+    padding: 2mm 1mm !important;
+    border: 1px solid #bcc9d6 !important;
+    white-space: normal;
+  }
+  .pm-team-prizes-print .pm-team-prize-group tbody tr { break-inside: avoid; page-break-inside: avoid; }
+  .pm-team-prizes-print .pm-team-prize-group tbody td {
+    padding: 1.15mm 1mm !important;
+    background: var(--pm-team-fill) !important;
+    border: 1px solid #c7d3df !important;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    color: #243246 !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group th:first-child { width: 10%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(2) { width: 45%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(3) { width: 15%; }
+  .pm-team-prizes-print .pm-team-prize-group th:nth-child(4) { width: 30%; }
+  .pm-team-prizes-print .pm-team-prize-group td:first-child {
+    font-weight: 800;
+    font-size: 10pt;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-winner-name] {
+    color: #182c43 !important;
+    font-weight: 800;
+  }
+  .pm-team-prizes-print .pm-team-prize-group svg { width: 11px; height: 11px; }
+  .pm-team-prizes-print .pm-team-prize-group [data-state="closed"] { display: block !important; height: auto !important; overflow: visible !important; }
+}
+
+
+/* Owner-requested refinement: centered headings and group-matched metadata.
+   Deliberately scoped to the final Team Prizes view, not the allocation/public panels. */
+.pm-team-prizes-print .pm-team-prize-group {
+  --pm-team-accent: #9b741f;
+  --pm-team-fill: #faf3e3;
+  --pm-team-badge-ink: #654a12;
+}
+.pm-team-prizes-print .pm-team-prize-group[data-team-tone="teal"] {
+  --pm-team-accent: #1f6e5b;
+  --pm-team-fill: #eaf5ef;
+  --pm-team-badge-ink: #14503f;
+}
+.pm-team-prizes-print .pm-team-prize-group[data-team-tone="navy"] {
+  --pm-team-accent: #0b3d91;
+  --pm-team-fill: #eaf1fc;
+  --pm-team-badge-ink: #123b80;
+}
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child {
+  justify-content: center;
+  text-align: center;
+}
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child button,
+.pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+  justify-content: center;
+  text-align: center;
+  margin-inline: auto;
+}
+.pm-team-prizes-print .pm-team-prize-meta-row {
+  justify-content: center;
+  align-items: center;
+}
+.pm-team-prizes-print .pm-team-prize-group .pm-team-prize-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  text-align: center;
+  background: var(--pm-team-fill) !important;
+  color: var(--pm-team-badge-ink) !important;
+  border: 1px solid var(--pm-team-accent) !important;
+  border-radius: 4px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.pm-team-prizes-print .pm-team-prizes-overview-badge {
+  background: #faf3e3 !important;
+  border: 1px solid #b38a32 !important;
+  color: #654a12 !important;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.pm-team-prizes-print .pm-team-prize-group thead th {
+  text-align: center !important;
+  vertical-align: middle;
+}
+@media print {
+  .pm-team-prizes-print .pm-team-prizes-overview {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2mm;
+    text-align: center;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] h3 {
+    width: 100%;
+    font-size: 11pt;
+    line-height: 1.3;
+  }
+  .pm-team-prizes-print .pm-team-prize-group [data-team-group-header] > div:first-child button {
+    width: 100%;
+    background: transparent !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-meta-row {
+    gap: 1.4mm !important;
+    margin-top: 2mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-group .pm-team-prize-meta-badge {
+    padding: .8mm 1.8mm !important;
+    font-size: 7.1pt !important;
+    background: var(--pm-team-fill) !important;
+    color: var(--pm-team-badge-ink) !important;
+    border: 1px solid var(--pm-team-accent) !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-team-prizes-print .pm-team-prize-group thead th {
+    text-align: center !important;
+    vertical-align: middle !important;
+    padding: 2.3mm .9mm !important;
+    line-height: 1.25;
+  }
+  .pm-team-prizes-print .pm-team-prizes-overview-badge {
+    background: #faf3e3 !important;
+    border: 1px solid #b38a32 !important;
+    color: #654a12 !important;
+  }
+}
+
+
+/* Final review correction ONLY: distinct rupee glyph/numerals, centered numeric
+   prize columns and visible separation between cash and trophy/medal icons. */
+.pm-team-prizes-print .pm-team-cash {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  column-gap: 3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  vertical-align: baseline;
+}
+.pm-team-prizes-print .pm-team-cash-symbol,
+.pm-team-prizes-print .pm-team-cash-digits { display: inline-block; flex-shrink: 0; }
+.pm-team-prizes-print .pm-team-prize-group tbody td.pm-team-prize-stat,
+.pm-team-prizes-print .pm-team-prize-group tbody td.pm-team-prize-amount { text-align: center !important; }
+.pm-team-prizes-print .pm-team-prize-value {
+  display: flex;
+  align-items: center;
+  justify-content: center !important;
+  flex-wrap: wrap;
+  column-gap: 8px !important;
+  row-gap: 2px !important;
+}
+.pm-team-prizes-print .pm-team-prize-awards {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  column-gap: 5px;
+}
+@media print {
+  .pm-team-prizes-print .pm-team-cash { column-gap: .9mm; }
+  .pm-team-prizes-print .pm-team-prize-value {
+    justify-content: center !important;
+    column-gap: 2mm !important;
+    row-gap: .5mm !important;
+  }
+  .pm-team-prizes-print .pm-team-prize-awards { column-gap: 1.2mm; }
+}
