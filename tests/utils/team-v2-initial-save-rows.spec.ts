@@ -150,6 +150,18 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
   });
 
+  it('connects official ruling proposals to SERVER-validated rows before the atomic writer', () => {
+    const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
+    expect(source).toContain("prepareAdjudicatedTeamV2Rows(");
+    expect(source).toContain("'official_rulings'");
+    expect(source).toContain("requestBody.official_rulings");
+    expect(source).toContain("p_rulings: proposal.rows.rulings");
+    expect(source).toContain("p_expected_source_fingerprint: before");
+    expect(source).toContain("if (master !== true)");
+    expect(source).not.toContain("requestBody.winners");
+    expect(source).not.toContain("resolve_team_tie");
+  });
+
   it('keeps the Edge route off unless explicitly enabled and rejects client award inputs', () => {
     const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
     expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
