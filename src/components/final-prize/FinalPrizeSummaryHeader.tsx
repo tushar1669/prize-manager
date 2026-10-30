@@ -1,15 +1,15 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrencyINR, formatNumberIN } from '@/utils/currency';
-import { downloadWorkbookXlsx, sanitizeFilename } from '@/utils/excel';
-import { buildFinalPrizeExportRows } from '@/utils/finalPrizeExport';
+import { downloadFinalPrizeWorkbook } from '@/utils/finalPrizeWorkbook';
 import { FinalPrizeWinnerRow } from '@/hooks/useFinalPrizeData';
 import { Printer, Download, Lock } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { BackendMigrationMissingAlert } from '@/components/access/BackendMigrationMissingAlert';
 
 interface FinalPrizeSummaryHeaderProps {
+  tournamentId?: string;
   tournamentTitle?: string;
   city?: string | null;
   dateRange?: string;
@@ -24,44 +24,30 @@ interface FinalPrizeSummaryHeaderProps {
   accessErrorCode?: string | null;
 }
 
-export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winners, totals, hasFullAccess = true, accessErrorCode }: FinalPrizeSummaryHeaderProps) {
+export function FinalPrizeSummaryHeader({ tournamentId, tournamentTitle, city, dateRange, winners, totals, hasFullAccess = true, accessErrorCode }: FinalPrizeSummaryHeaderProps) {
   const hasBackendMigrationIssue = accessErrorCode === 'backend_migration_missing';
-  const exportRows = useMemo(
-    () => buildFinalPrizeExportRows(winners),
-    [winners]
-  );
-
-  const arbiterRows = useMemo(
-    () => exportRows.map(row => ({ ...row, Signature: '' })),
-    [exportRows]
-  );
-
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
 
-  const handleExportXlsx = useCallback(() => {
-    if (winners.length === 0) {
-      toast.error('No data to export');
+  const handleExportXlsx = useCallback(async () => {
+    if (!tournamentId) {
+      toast.error('Tournament information is unavailable');
       return;
     }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const safeSlug = sanitizeFilename(tournamentTitle || 'final_prize');
-    const filename = `${safeSlug}_final_prizes_${today}.xlsx`;
-
-    const success = downloadWorkbookXlsx(filename, {
-      Winners: exportRows,
-      'Poster Grid': exportRows,
-      'Arbiter Sheet': arbiterRows,
+    const result = await downloadFinalPrizeWorkbook({
+      tournamentId, title: tournamentTitle, winners, hasFullAccess,
     });
-
-    if (success) {
-      toast.success(`Exported ${exportRows.length} rows to ${filename}`);
+    if (result.ok) {
+      toast.success(`Exported ${result.winnerCount} individual and ${result.teamCount} team awards`);
     } else {
-      toast.error('Export failed');
+      toast.error(result.reason === 'team_data_unavailable'
+        ? 'Team prizes could not be loaded. Please retry before exporting.'
+        : result.reason === 'no_data' ? 'No prize results to export'
+        : result.reason === 'access_denied' ? 'Full access required to export'
+        : 'Export failed');
     }
-  }, [arbiterRows, exportRows, tournamentTitle, winners.length]);
+  }, [tournamentId, tournamentTitle, winners, hasFullAccess]);
 
   return (
     <>
@@ -99,7 +85,7 @@ export function FinalPrizeSummaryHeader({ tournamentTitle, city, dateRange, winn
                 variant="outline"
                 size="sm"
                 onClick={handleExportXlsx}
-                disabled={!hasFullAccess}
+                disabled={!hasFullAccess || !tournamentId}
                 title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to export') : undefined}
                 className="rounded-full border-primary text-primary hover:bg-primary/10"
               >

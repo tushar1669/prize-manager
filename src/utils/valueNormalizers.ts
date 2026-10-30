@@ -166,7 +166,7 @@ export function digitsOnly(raw: unknown): string | null {
 export function hasPcToken(label: unknown): boolean {
   if (label == null) return false;
   return String(label)
-    .split(/[\s,;|/\-]+/)
+    .split(/[\s,;|/-]+/)
     .some(token => token.trim().toUpperCase() === 'PC');
 }
 

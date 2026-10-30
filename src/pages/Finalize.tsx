@@ -22,11 +22,11 @@ import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
+import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { TeamPrizesTabView } from "@/components/final-prize/TeamPrizesTabView";
-import { buildFinalPrizeExportRows } from "@/utils/finalPrizeExport";
-import { downloadWorkbookXlsx, sanitizeFilename } from "@/utils/excel";
+import { downloadFinalPrizeWorkbook } from "@/utils/finalPrizeWorkbook";
 import { useTournamentAccess } from "@/hooks/useTournamentAccess";
 import { freeTierSummaryBody, freeTierSummaryLabel } from '@/constants/tournamentAccess';
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
@@ -72,7 +72,7 @@ interface CategoryRecord {
   is_main?: boolean | null;
 }
 
-type FinalViewTab = 'v1' | 'v3' | 'v4' | 'v5';
+type FinalViewTab = 'v1' | 'v6' | 'v3' | 'v4' | 'v5';
 
 export default function Finalize() {
   const { id } = useParams();
@@ -267,39 +267,28 @@ export default function Finalize() {
   const finalizeUpgradeUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`) : '/dashboard'), [id]);
   const finalizeCouponUrl = useMemo(() => (id ? getUpgradeUrl(id, `/t/${id}/finalize`, { coupon: true }) : '/dashboard'), [id]);
 
-  // Export XLSX for the active tab (reuses same 3-sheet workbook as FinalPrizeSummaryHeader)
-  const exportRows = useMemo(
-    () => buildFinalPrizeExportRows(finalPrizeData?.winners ?? []),
-    [finalPrizeData?.winners]
-  );
-
-  const arbiterRows = useMemo(
-    () => exportRows.map(row => ({ ...row, Signature: '' })),
-    [exportRows]
-  );
-
-  const handleTabExportXlsx = useCallback(() => {
-    if (!finalPrizeData?.winners?.length) {
-      toast.error('No data to export');
-      return;
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const safeSlug = sanitizeFilename(finalPrizeData?.tournament?.title || 'final_prize');
-    const filename = `${safeSlug}_final_prizes_${today}.xlsx`;
-
-    const success = downloadWorkbookXlsx(filename, {
-      Winners: exportRows,
-      'Poster Grid': exportRows,
-      'Arbiter Sheet': arbiterRows,
+  // Both Final Prize screens use the same guarded four-sheet export.
+  const handleTabExportXlsx = useCallback(async () => {
+    if (!id) return;
+    const result = await downloadFinalPrizeWorkbook({
+      tournamentId: id,
+      title: finalPrizeData?.tournament?.title,
+      winners: finalPrizeData?.winners ?? [],
+      hasFullAccess,
+      // Before finalization the team output is a draft preview, not the future allocation version.
+      teamAllocationVersion: finalizeResult?.version,
     });
 
-    if (success) {
-      toast.success(`Exported ${exportRows.length} rows to ${filename}`);
+    if (result.ok) {
+      toast.success(`Exported ${result.winnerCount} individual and ${result.teamCount} team awards`);
     } else {
-      toast.error('Export failed');
+      toast.error(result.reason === 'team_data_unavailable'
+        ? 'Team prizes could not be loaded. Please retry before exporting.'
+        : result.reason === 'no_data' ? 'No prize results to export'
+        : result.reason === 'access_denied' ? 'Full access required to export'
+        : 'Export failed');
     }
-  }, [arbiterRows, exportRows, finalPrizeData?.winners?.length, finalPrizeData?.tournament?.title]);
+  }, [id, finalPrizeData?.tournament?.title, finalPrizeData?.winners, hasFullAccess, allocationVersion]);
 
   const handleTabPrint = useCallback(() => {
     window.print();
@@ -458,7 +447,6 @@ export default function Finalize() {
     return <NoAllocationGuard />;
   }
 
-  const isTeamTab = activeView === 'v5';
 
   // B13 #8 — single publish surface. The public link is gated on a positive
   // is_published read (D32): if the summary query has not resolved or has
@@ -614,7 +602,7 @@ export default function Finalize() {
                   variant="outline"
                   size="sm"
                   onClick={handleTabExportXlsx}
-                  disabled={isTeamTab || !finalPrizeData?.winners?.length || !hasFullAccess}
+                  disabled={!hasFullAccess}
                   title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to export') : undefined}
                   className="rounded-full"
                 >
@@ -623,7 +611,7 @@ export default function Finalize() {
                 <Button
                   size="sm"
                   onClick={handleTabPrint}
-                  disabled={(isTeamTab && !finalPrizeData?.winners?.length) || !hasFullAccess}
+                  disabled={!hasFullAccess}
                   title={!hasFullAccess ? (hasBackendMigrationIssue ? 'System issue: backend migration missing. Retry later.' : 'Upgrade to Pro to print') : undefined}
                   className="rounded-full"
                 >
@@ -662,6 +650,7 @@ export default function Finalize() {
                     <TabsTrigger value="v1" className="rounded-md px-4 py-2 text-sm font-medium">
                       Category Cards
                     </TabsTrigger>
+                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">Category Cards — Updated</TabsTrigger>
                     <TabsTrigger value="v3" className="rounded-md px-4 py-2 text-sm font-medium">
                       Poster Grid
                     </TabsTrigger>
@@ -676,6 +665,9 @@ export default function Finalize() {
                     <TabsContent value="v1" className="m-0">
                       <CategoryCardsView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                     </TabsContent>
+                    <TabsContent value="v6" className="m-0">
+                      <CategoryCardsUpdatedView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
+                    </TabsContent>
                     <TabsContent value="v3" className="m-0">
                       <PosterGridView winners={finalPrizeData?.winners ?? []} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />
                     </TabsContent>
@@ -685,7 +677,9 @@ export default function Finalize() {
                     <TabsContent value="v5" className="m-0">
                       <TeamPrizesTabView
                         tournamentId={id as string}
-                        allocationVersion={allocationVersion}
+                        // Until a finalized version exists, review current scorer
+                        // results rather than fetching a nonexistent next version.
+                        allocationVersion={finalizeResult?.version}
                         showDiagnostics
                         hasFullAccess={hasFullAccess}
                       />

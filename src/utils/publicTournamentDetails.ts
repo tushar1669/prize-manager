@@ -1,4 +1,5 @@
 import type { PostgrestError } from "@supabase/supabase-js";
+import type { supabase } from "@/integrations/supabase/client";
 
 const MISSING_EVENT_CODE_SNIPPET = "published_tournaments.event_code";
 
@@ -52,12 +53,7 @@ type SupabaseMaybeSingleQuery<T> = {
   maybeSingle(): Promise<SupabaseQueryResult<T>>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClientLike = {
-  from(table: "published_tournaments"): {
-    select(fields: string): any;
-  };
-};
+type SupabaseClientLike = Pick<typeof supabase, "from">;
 
 type SupabaseQueryError = Error & {
   status?: number;

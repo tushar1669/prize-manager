@@ -1,0 +1,255 @@
+/* Arbiter Sheet only — complements approved Category Cards / Poster Grid print family.
+   Data, signature fields, access checks and the shared print surface are unchanged. */
+.pm-arbiter-sheet {
+  --pm-arbiter-gold: #b38a32;
+  --pm-arbiter-teal: #1f6e5b;
+  --pm-arbiter-navy: #0b3d91;
+  --pm-arbiter-ink: #182c43;
+}
+
+.pm-arbiter-titleband {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  border: 1px solid hsl(var(--border));
+  border-left: 4px solid var(--pm-arbiter-gold);
+  border-radius: 8px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+.pm-arbiter-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.pm-arbiter-subtitle { font-size: 11px; letter-spacing: .06em; color: hsl(var(--muted-foreground)); }
+.pm-arbiter-frame { border-top: 3px solid var(--pm-arbiter-gold); }
+.pm-arbiter-table { border-collapse: collapse; }
+.pm-arbiter-table th, .pm-arbiter-table td { vertical-align: middle; }
+.pm-arbiter-thead { color: hsl(var(--foreground)); }
+.pm-arbiter-thead th {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.pm-arbiter-row td { padding-top: 13px; padding-bottom: 13px; }
+.pm-arbiter-player { overflow-wrap: anywhere; line-height: 1.4; }
+.pm-arbiter-category, .pm-arbiter-gift { overflow-wrap: anywhere; }
+.pm-arbiter-row--main { --pm-arbiter-category-color: var(--pm-arbiter-gold); }
+.pm-arbiter-row--teal { --pm-arbiter-category-color: var(--pm-arbiter-teal); }
+.pm-arbiter-row--navy { --pm-arbiter-category-color: var(--pm-arbiter-navy); }
+.pm-arbiter-row .pm-arbiter-place {
+  border-left: 3px solid var(--pm-arbiter-category-color);
+  font-variant-numeric: tabular-nums;
+}
+.pm-arbiter-row .pm-arbiter-category { font-weight: 650; }
+.pm-arbiter-cash { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pm-arbiter-sign-box { min-width: 58px; }
+
+@media (max-width: 640px) {
+  .pm-arbiter-titleband { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
+
+/* Clean white A4 table with repeatable navy headers, thin brand rails and
+   signature boxes sized for handwriting. No page-break changes outside this view. */
+@media print {
+  .pm-arbiter-sheet {
+    --pm-arbiter-gold: #b38a32;
+    --pm-arbiter-teal: #1f6e5b;
+    --pm-arbiter-navy: #0b3d91;
+    color: var(--pm-arbiter-ink);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .pm-arbiter-sheet .pm-arbiter-titleband {
+    margin: 0 0 3mm;
+    padding: 2.6mm 3mm;
+    border: 1px solid #c3ced9;
+    border-left: 3px solid var(--pm-arbiter-gold);
+    border-radius: 1.5mm;
+    background: #fff;
+    color: var(--pm-arbiter-ink);
+    break-after: avoid;
+  }
+  .pm-arbiter-sheet .pm-arbiter-title { font-size: 11pt; font-weight: 800; }
+  .pm-arbiter-sheet .pm-arbiter-subtitle { font-size: 7.5pt; color: #516274; }
+  .pm-arbiter-sheet .pm-arbiter-frame {
+    border: 1px solid #c4cfdb !important;
+    border-top: 2px solid var(--pm-arbiter-gold) !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8.2pt;
+    color: var(--pm-arbiter-ink);
+  }
+  .pm-arbiter-sheet .pm-arbiter-thead {
+    display: table-header-group !important;
+    background: #edf2f8 !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-thead th {
+    padding: 2.1mm 1.1mm !important;
+    border-bottom: 1px solid #aebfce;
+    color: #182c43 !important;
+    background: #edf2f8 !important;
+    font-size: 7.2pt;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #fff !important;
+    border-bottom: 1px solid #dbe2ea !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row:nth-child(even) { background: #f5f7fa !important; }
+  .pm-arbiter-sheet .pm-arbiter-row td {
+    padding: 2.2mm 1.1mm !important;
+    color: #243246 !important;
+    font-size: 8pt;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid #e0e6ed;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-place {
+    border-left: 2px solid var(--pm-arbiter-category-color);
+    font-weight: 800;
+    color: #182c43 !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-category {
+    color: var(--pm-arbiter-category-color) !important;
+    font-weight: 700;
+  }
+  .pm-arbiter-sheet .pm-arbiter-player {
+    color: #182c43 !important;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-cash {
+    color: #182c43 !important;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-gift {
+    color: #34465b !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign {
+    border-left: 1px solid #c4cfdb !important;
+    min-width: 17mm;
+  }
+  .pm-arbiter-sheet .pm-arbiter-sign-box {
+    min-width: 15mm;
+    min-height: 7mm;
+    border: 1px dashed #8e9fb0 !important;
+    border-radius: 1mm;
+    background: #fff;
+  }
+  /* Explicit proportions stop Category/Rank from breaking into stacked letters
+     when the optional Gift column is present, while preserving signature space. */
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(1) { width: 5%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(2) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(3) { width: 23%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(4) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(5) { width: 13%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(6) { width: 16%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(7) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(8) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(9) { width: 11%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(1) { width: 6%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(2) { width: 16%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(3) { width: 27%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(4) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(5) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(6) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(7) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(8) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-row td:nth-child(4) { white-space: nowrap; }
+  .pm-arbiter-sheet .pm-arbiter-row--main { --pm-arbiter-category-color: #86651d; }
+  .pm-arbiter-sheet .pm-arbiter-row svg { width: 12px; height: 12px; }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign { break-inside: avoid; }
+}
+
+/* Review revision: label sits under the heading; category is a whole-row band,
+   not just colored text; vertical and horizontal rules remain legible. */
+.pm-arbiter-sheet .pm-arbiter-titleband { align-items: center; justify-content: flex-start; }
+.pm-arbiter-sheet .pm-arbiter-titlegroup { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
+.pm-arbiter-sheet .pm-arbiter-title { line-height: 1.1; }
+.pm-arbiter-sheet .pm-arbiter-table th,
+.pm-arbiter-sheet .pm-arbiter-table td { border-right: 1px solid hsl(var(--border)); }
+.pm-arbiter-sheet .pm-arbiter-row--main { --pm-arbiter-section-fill: rgba(179,138,50,.12); }
+.pm-arbiter-sheet .pm-arbiter-row--teal { --pm-arbiter-section-fill: rgba(31,110,91,.12); }
+.pm-arbiter-sheet .pm-arbiter-row--navy { --pm-arbiter-section-fill: rgba(11,61,145,.12); }
+.pm-arbiter-sheet .pm-arbiter-row td { background: var(--pm-arbiter-section-fill); }
+.pm-arbiter-sheet .pm-arbiter-row--section-start td { border-top: 2px solid var(--pm-arbiter-category-color); }
+.pm-arbiter-sheet .pm-arbiter-row--section-end td { border-bottom: 2px solid var(--pm-arbiter-category-color); }
+.pm-arbiter-sheet .pm-arbiter-place,
+.pm-arbiter-sheet .pm-arbiter-rank {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+  font-size: 1.18em;
+}
+@media print {
+  .pm-arbiter-sheet .pm-arbiter-titleband { padding: 3mm 3.5mm; }
+  .pm-arbiter-sheet .pm-arbiter-table { table-layout: fixed; border-collapse: collapse; }
+  .pm-arbiter-sheet .pm-arbiter-thead th {
+    padding: 2.6mm 1.1mm !important;
+    border-right: 1px solid #bbc8d6 !important;
+    vertical-align: middle;
+  }
+  .pm-arbiter-sheet .pm-arbiter-thead th:last-child { border-right: 0 !important; }
+  .pm-arbiter-sheet .pm-arbiter-thead th:nth-child(1),
+  .pm-arbiter-sheet .pm-arbiter-thead th:nth-child(4),
+  .pm-arbiter-sheet .pm-arbiter-thead th:nth-last-child(-n+3) { text-align: center; }
+  .pm-arbiter-sheet .pm-arbiter-thead th:nth-child(5) { text-align: right; }
+  .pm-arbiter-sheet .pm-arbiter-thead th:nth-last-child(-n+3) {
+    font-size: 6.8pt; padding-left: .5mm !important; padding-right: .5mm !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row--main { --pm-arbiter-category-color: #86651d; --pm-arbiter-section-fill: #faf3e3; }
+  .pm-arbiter-sheet .pm-arbiter-row--teal { --pm-arbiter-category-color: #1f6e5b; --pm-arbiter-section-fill: #eaf5ef; }
+  .pm-arbiter-sheet .pm-arbiter-row--navy { --pm-arbiter-category-color: #0b3d91; --pm-arbiter-section-fill: #eaf1fc; }
+  .pm-arbiter-sheet .pm-arbiter-row td {
+    padding: 1.8mm 1.1mm !important;
+    background: var(--pm-arbiter-section-fill) !important;
+    border-right: 1px solid #bcc9d6 !important;
+    border-bottom: 1px solid #d2dce6 !important;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row--section-start td { border-top: 2px solid var(--pm-arbiter-category-color) !important; }
+  .pm-arbiter-sheet .pm-arbiter-row--section-end td { border-bottom: 2px solid var(--pm-arbiter-category-color) !important; }
+  .pm-arbiter-sheet .pm-arbiter-row td:last-child { border-right: 2px solid var(--pm-arbiter-category-color) !important; }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-place {
+    font-size: 10.2pt !important; text-align: center; white-space: nowrap;
+  }
+  .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-rank {
+    font-size: 10pt !important; color: #182c43 !important; font-weight: 800;
+    text-align: center; white-space: nowrap;
+  }
+  /* All grid proportions total exactly 100%, whether the gift column exists or not. */
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(1) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(2) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(3) { width: 21%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(4) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(5) { width: 12%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(6) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(7) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(8) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="yes"] th:nth-child(9) { width: 11%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(1) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(2) { width: 17%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(3) { width: 26%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(4) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(5) { width: 14%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(6) { width: 8%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(7) { width: 7%; }
+  .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(8) { width: 13%; }
+}

@@ -33,13 +33,6 @@ const PUBLISHED_DETAILS = {
   cash_prize_total: null,
 };
 
-const PUBLISHED_RESULTS = {
-  id: SMOKE_TOURNAMENT.id,
-  title: SMOKE_TOURNAMENT.title,
-  slug: SMOKE_TOURNAMENT.public_slug,
-  brochure_url: null,
-};
-
 function withCorsHeaders() {
   return {
     'access-control-allow-origin': '*',
@@ -87,9 +80,11 @@ test.describe('@smoke public navigation', () => {
       }
 
       if (path.startsWith('/rest/v1/published_tournaments')) {
-        const responsePayload = url.searchParams.get('select')?.includes('slug')
-          ? PUBLISHED_RESULTS
-          : PUBLISHED_DETAILS;
+        // PostgREST list queries request arrays; .single() requests an object.
+        // Select lists often include "slug" in both cases, so that field
+        // cannot be used to determine the response shape.
+        const expectsSingle = request.headers()['accept']?.includes('application/vnd.pgrst.object+json');
+        const responsePayload = expectsSingle ? PUBLISHED_DETAILS : [SMOKE_TOURNAMENT];
         await route.fulfill({
           status: 200,
           headers: withCorsHeaders(),
@@ -142,7 +137,7 @@ test.describe('@smoke public navigation', () => {
     await expect(page.getByRole('heading', { name: SMOKE_TOURNAMENT.title })).toBeVisible();
 
     await page.getByRole('button', { name: /back/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/public');
   });
 
   test('results page back button returns to home @smoke', async ({ page }) => {
@@ -150,6 +145,6 @@ test.describe('@smoke public navigation', () => {
     await expect(page.getByRole('heading', { name: SMOKE_TOURNAMENT.title })).toBeVisible();
 
     await page.getByRole('button', { name: /back/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/public');
   });
 });
