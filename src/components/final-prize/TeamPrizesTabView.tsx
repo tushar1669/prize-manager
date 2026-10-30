@@ -34,9 +34,10 @@ interface TeamPrizesTabViewProps {
    * see `selectVisibleTeamPrizes` for the masking rule this gates.
    */
   hasFullAccess?: boolean;
+  onV2OfficialRulingReviewed?: (groupId: string, proposal: Record<string, unknown>) => void;
 }
 
-export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false, hasFullAccess = true }: TeamPrizesTabViewProps) {
+export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false, hasFullAccess = true, onV2OfficialRulingReviewed }: TeamPrizesTabViewProps) {
   const {
     hasTeamPrizes,
     checkingTeamPrizes,
@@ -137,6 +138,7 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
           onOpenChange={(open) => { if (!open) setSelectedV2Group(null); }}
           tournamentId={tournamentId}
           group={selectedV2Group}
+          onReviewed={onV2OfficialRulingReviewed}
         />
       )}
 
