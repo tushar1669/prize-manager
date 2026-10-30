@@ -1,5 +1,47 @@
 -- All identities and entries are synthetic and reside in ephemeral CI Postgres only.
 -- Test exact unmodified draft SQL as service_role, without production keys.
+-- Production catalog contract: the fixture must NOT silently provide a
+-- stronger allocation uniqueness rule than the real database. This test
+-- deliberately checks physical indexes, not only named constraints.
+DO $allocation_catalog$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_index ix
+    WHERE ix.indrelid = 'public.allocations'::regclass
+      AND ix.indisunique
+      AND pg_get_indexdef(ix.indexrelid)
+        LIKE '%(tournament_id, version, prize_id)%'
+  ) THEN
+    RAISE EXCEPTION 'FAIL isolated individual allocation has nonexistent production uniqueness';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_index ix
+    WHERE ix.indrelid = 'public.allocations'::regclass
+      AND NOT ix.indisunique
+      AND pg_get_indexdef(ix.indexrelid) LIKE '%(tournament_id, version)%'
+  ) THEN
+    RAISE EXCEPTION 'FAIL missing production individual allocation lookup index';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_index ix
+    WHERE ix.indrelid = 'public.team_allocations'::regclass
+      AND ix.indisunique
+      AND pg_get_indexdef(ix.indexrelid)
+        LIKE '%(tournament_id, version, group_id, place)%'
+  ) THEN
+    RAISE EXCEPTION 'FAIL missing production team award uniqueness';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_index ix
+    WHERE ix.indrelid = 'public.team_allocations'::regclass
+      AND ix.indisunique
+      AND pg_get_indexdef(ix.indexrelid)
+        LIKE '%(tournament_id, version, prize_id)%'
+  ) THEN
+    RAISE EXCEPTION 'FAIL isolated team award has nonexistent production prize uniqueness';
+  END IF;
+END $allocation_catalog$;
+
 DO $$
 BEGIN
   IF has_function_privilege('authenticated',
