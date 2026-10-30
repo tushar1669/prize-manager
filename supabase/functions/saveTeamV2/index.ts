@@ -78,7 +78,11 @@ Deno.serve(async (request: Request) => {
       return json({ error: 'master_only_preview', saved: false }, 403);
     const { data: access, error: accessError } = await db
       .rpc('get_tournament_access_state', { tournament_id: tournamentId }).maybeSingle();
-    if (accessError || !record(access) || access.has_full_access !== true)
+    // The service-role RPC has no auth.uid(), so its response does not
+    // recognize the current actor's master entitlement. The role has already
+    // been independently checked with the authenticated actor ID above.
+    if (accessError || !record(access) ||
+        (access.has_full_access !== true && master !== true))
       return json({ error: 'full_access_required', saved: false }, 403);
 
     const version = async (): Promise<number | null> => {
