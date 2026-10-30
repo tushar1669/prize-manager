@@ -73,9 +73,9 @@ export default function PublishSuccess() {
 
       setIsPublished(false);
       toast.success("Tournament unpublished — public page is no longer accessible");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[unpublish] error', err);
-      toast.error("Failed to unpublish: " + (err.message || 'Unknown error'));
+      toast.error("Failed to unpublish: " + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setUnpublishing(false);
     }
