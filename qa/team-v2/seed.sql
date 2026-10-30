@@ -7,7 +7,9 @@ INSERT INTO public.prizes(id,category_id,is_active) VALUES
 ('00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000002',true);
 INSERT INTO public.players(id,tournament_id,points,club) VALUES
 ('00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000001',5,'Club A'),
-('00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000001',4,'Club A');
+('00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000001',4,'Club A'),
+('00000000-0000-4000-8000-000000000024','00000000-0000-4000-8000-000000000001',5,'Club B'),
+('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000001',4,'Club B');
 INSERT INTO public.institution_prize_groups
 (id,tournament_id,name,group_by,team_size,female_slots,male_slots,scoring_mode,is_active,ranking_rules)
 VALUES ('00000000-0000-4000-8000-000000000006','00000000-0000-4000-8000-000000000001',
@@ -22,7 +24,8 @@ INSERT INTO public.publications VALUES('00000000-0000-4000-8000-000000000001',0,
 CREATE FUNCTION qa.submit_version(
   expected integer, actor uuid DEFAULT '00000000-0000-4000-8000-000000000010',
   points numeric DEFAULT 9, with_ruling boolean DEFAULT true,
-  expected_digest text DEFAULT NULL, with_unfilled boolean DEFAULT false
+  expected_digest text DEFAULT NULL, with_unfilled boolean DEFAULT false,
+  change_winner boolean DEFAULT false
 ) RETURNS integer LANGUAGE sql SECURITY INVOKER SET search_path = '' AS $$
   WITH ruling AS (
     SELECT jsonb_build_object(
@@ -33,21 +36,31 @@ CREATE FUNCTION qa.submit_version(
       'arbiter_decision_reference','synthetic-arbiter-1',
       'explanation','Synthetic tie reviewed by test fixture',
       'affected_places',jsonb_build_array(1),
-      'award_instructions',jsonb_build_array(jsonb_build_object('place',1,'institution_key','Club A'))
+      'award_instructions',jsonb_build_array(jsonb_build_object('place',1,'institution_key',
+        CASE WHEN change_winner THEN 'Club B' ELSE 'Club A' END))
     ) AS entry
   ), award AS (
     SELECT jsonb_build_object(
       'group_id','00000000-0000-4000-8000-000000000006',
       'prize_id','00000000-0000-4000-8000-000000000007','place',1,
-      'institution_key','Club A','total_points',points,
-      'player_ids',jsonb_build_array('00000000-0000-4000-8000-000000000004',
-                                   '00000000-0000-4000-8000-000000000005'),
+      'institution_key',CASE WHEN change_winner THEN 'Club B' ELSE 'Club A' END,
+      'total_points',points,
+      'player_ids',jsonb_build_array(
+         CASE WHEN change_winner THEN '00000000-0000-4000-8000-000000000024'
+              ELSE '00000000-0000-4000-8000-000000000004' END,
+         CASE WHEN change_winner THEN '00000000-0000-4000-8000-000000000025'
+              ELSE '00000000-0000-4000-8000-000000000005' END),
       'player_snapshot',jsonb_build_array(
-         jsonb_build_object('player_id','00000000-0000-4000-8000-000000000004','points',5),
-         jsonb_build_object('player_id','00000000-0000-4000-8000-000000000005','points',4)),
+         jsonb_build_object('player_id',
+           CASE WHEN change_winner THEN '00000000-0000-4000-8000-000000000024'
+                ELSE '00000000-0000-4000-8000-000000000004' END,'points',5),
+         jsonb_build_object('player_id',
+           CASE WHEN change_winner THEN '00000000-0000-4000-8000-000000000025'
+                ELSE '00000000-0000-4000-8000-000000000005' END,'points',4)),
       'ranking_snapshot',jsonb_build_object(
          'schema_version',2,'group_id','00000000-0000-4000-8000-000000000006',
-         'winner_key','Club A','allocation_version',expected+1,
+         'winner_key',CASE WHEN change_winner THEN 'Club B' ELSE 'Club A' END,
+         'allocation_version',expected+1,
          'finalized_by',actor::text,
          'declared_rules',g.ranking_rules,
          'group_rule',jsonb_build_object('group_by','club','team_size',2,
@@ -81,4 +94,4 @@ CREATE FUNCTION qa.submit_version(
     COALESCE(expected_digest, public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid))
   );
 $$;
-GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric,boolean,text,boolean) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric,boolean,text,boolean,boolean) TO service_role, authenticated;
