@@ -136,6 +136,20 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
       }],
     }] }).ok).toBe(false);
   });
+  it('requires real server-side master role for early admin-only Save', () => {
+    const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
+    const identity = source.indexOf("db.auth.getUser(auth.slice('Bearer '.length))");
+    const roleLookup = source.indexOf("db.rpc('has_role'");
+    const masterOnly = source.indexOf("if (master !== true)");
+    const write = source.indexOf("db.rpc(\n      'commit_team_v2_adjudicated_version'");
+    expect(identity).toBeGreaterThan(-1);
+    expect(roleLookup).toBeGreaterThan(identity);
+    expect(masterOnly).toBeGreaterThan(roleLookup);
+    expect(write).toBeGreaterThan(masterOnly);
+    expect(source).toContain("error: 'master_only_preview'");
+    expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
+  });
+
   it('keeps the Edge route off unless explicitly enabled and rejects client award inputs', () => {
     const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
     expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
