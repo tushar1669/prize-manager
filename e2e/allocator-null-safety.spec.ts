@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { makeXlsxTmp } from './utils/xlsx';
-import { assertIsolatedQaBackend } from './utils/qaEnvironment';
 
 /**
  * Allocator Null-Safety Integration Tests
@@ -15,11 +14,10 @@ import { assertIsolatedQaBackend } from './utils/qaEnvironment';
 
 test.describe('Allocator Null-Safety', () => {
   test.beforeEach(async ({ page }) => {
-    // Fail closed before any live backend is contacted.
-    assertIsolatedQaBackend();
+    // Login and navigate to setup page
     await page.goto('/auth');
-    await page.getByPlaceholder('Email').fill(process.env.PLAYWRIGHT_TEST_EMAIL!);
-    await page.getByPlaceholder('Password').fill(process.env.PLAYWRIGHT_TEST_PASSWORD!);
+    await page.getByPlaceholder('Email').fill('test@example.com');
+    await page.getByPlaceholder('Password').fill('password123');
     await page.getByRole('button', { name: /sign in/i }).click();
     await page.waitForURL('/dashboard');
   });

@@ -88,7 +88,7 @@ async function fetchOrganizerDrilldown(key: string, range: DateRange, offset: nu
   if (error) throw error;
   const all = (data ?? []) as Array<{ user_id: string; is_verified: boolean; created_at: string | null; role: string }>;
   let filtered = all.filter((r) => withinDateRange(r.created_at, range));
-  let limitation: string | null = null;
+  const limitation: string | null = null;
 
   if (key === "Verified") {
     filtered = filtered.filter((r) => r.is_verified);

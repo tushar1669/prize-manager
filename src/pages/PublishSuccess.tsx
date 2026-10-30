@@ -75,8 +75,7 @@ export default function PublishSuccess() {
       toast.success("Tournament unpublished — public page is no longer accessible");
     } catch (err: unknown) {
       console.error('[unpublish] error', err);
-      const message = (err as { message?: string } | null)?.message || 'Unknown error';
-      toast.error("Failed to unpublish: " + message);
+      toast.error("Failed to unpublish: " + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setUnpublishing(false);
     }
@@ -154,7 +153,7 @@ export default function PublishSuccess() {
                     View Final Prizes
                   </Button>
                   <Button
-                    onClick={() => navigate(`/t/${id}/final/v1`)}
+                    onClick={() => navigate(`/t/${id}/final/v6`)}
                     variant="outline"
                     className="gap-2"
                   >

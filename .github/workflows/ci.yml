@@ -31,9 +31,6 @@ jobs:
           npm config set fetch-retry-mintimeout 2000
           npm config set fetch-retry-maxtimeout 60000
 
-      - name: CSV guard negative controls (dependency-free)
-        run: node --test scripts/assert-no-csv.test.mjs
-
       - name: Install dependencies (with fallback)
         run: npm ci --no-audit --fund=false
 

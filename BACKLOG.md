@@ -1,52 +1,31 @@
-# Prize Manager — Canonical Backlog Index (draft restoration)
+# Prize Manager — Active release pointer
+**Updated:** 30 October 2026. **Canonical item ID/priority:** UNKNOWN (not owner-assigned).
 
-**Updated:** 30 October 2026. **Status:** Draft on PR #484 only; do not treat as deployed or merged.
+## Current coherent item: Excel/XLSX and A4 printable handouts
+- Status: **RELEASED** to main via [PR #485](https://github.com/tushar1669/prize-manager/pull/485), squash commit `6af6e89bccfe50a39881fd58664d0afc1c71a79e`. Lovable editor matches main; explicit Lovable publish triggered (deployment `43cf3d85-e907-4f7c-880b-b94d5465bf59`, status returned PENDING); `generatePdf` Edge Function v361 ACTIVE. External public URL and authenticated live export not yet independently verified.
+- Scope: branded four-sheet Final Prize workbook (Winners, Poster Grid, Arbiter Sheet, Team Prizes), separate Coverage/RCA report, styled browser A4 printable pages and server HTML printable A4 report.
+- Data: read-only export of saved individual/team awards and version-pinned historical snapshots; no new ranking, allocation logic, schema migration or team prize saving.
+- Gate: existing AGENTS.md build/lint/unit and relevant browser report/public navigation QA; do not misrepresent an unrelated authenticated E2E preflight as a passing workflow.
+- Recovery: revert the reports-only code release if deployed print/export errors occur. No database migration is bundled.
 
-## Why this file exists
+## Owner-accepted reports: one canonical Category Cards renderer
+- Owner confirmed pass of current printed **Category Cards — Updated, Arbiter Sheet and Team Prizes** layouts on 30 Oct. This is print acceptance only, not Team V2 payout correctness or general acceptance of all authenticated exports.
+- Duplicate legacy `Category Cards` tab found in the released UI; [PR #486](https://github.com/tushar1669/prize-manager/pull/486) removes the old renderer from Finalize, stand-alone Final Prize and public winner presentations, keeps updated design as first/default, redirects existing `/final/v1` links to `/final/v6`, and updates the print shortcut. No award, database or ranking changes.
+- Status: merged through PR #486 at 47dc29d30d3b53a32a5a41912ed47c8213f62869. Lovable editor matches; Publish request f4645300-cc0d-45a4-baf0-0463a908507a returned pending. Live public runtime verification remains UNKNOWN. Scoped tests passed; overall CI failed at authenticated Swiss signup flow.
 
-An exact-path history check for root `BACKLOG.md` on `main` returned no commits as of 30 October 2026. This is not proof there was never a backlog: `docs/BACKLOG_POST_TEMPLATE_V2.md` **exists on `main`** (added 26 April, updated 29 April 2026), while `PROJECT_STATE.md` contains historical handoffs. Earlier AI cycles incorrectly said backlog inventory was missing without first finding the existing document.
+- Display-name cleanup: [PR #487](https://github.com/tushar1669/prize-manager/pull/487) merged as `1b7a934e0585df04b3190c72a4fecc62bf1eccbc`. The sole approved v6 category-card renderer now **displays just "Category Cards"** (Finalize, standalone Final Prize, public winners, accessibility). Layout, v6 default and v1 redirect are unchanged. Existing format guard, build, lint, unit and public smoke passed; overall CI failed at the separate authenticated Swiss suite. No Team V2 modifications.
 
-This root document is a **pointer and current evidence index**, not approval to manufacture priorities, merge unfinished features or replace the existing post-template backlog.
+## FROZEN, separate: Team Prizes V2
+- Existing [draft PR #484](https://github.com/tushar1669/prize-manager/pull/484) stays DRAFT, unmerged, undeployed.
+- No new Team V2 ranking, new awards, Master canary enablement or SQL rollout in #485.
+- Continue the existing item in this chat or any later chat only after owner requests it; preserve historical allocation versions, publications and server-side authorization.
+- V2 open gates: live database migration/recovery, authenticated Save and official ruling checks, full CI, runtime evidence and owner tournament acceptance.
+- The obsolete team payout rules are not authorization to create NEW V2 allocations.
 
-## Current coherent delivery item
-
-| Field | Evidence-based current state |
-|---|---|
-| Item | Excel, printable PDF/A4, Team Prizes V2, restricted Master-only trial |
-| Canonical backlog ID | **UNKNOWN** — no owner-assigned ID found in existing root backlog |
-| Canonical priority | **UNKNOWN** — do not invent P0/P1 |
-| Lifecycle | **IN_PROGRESS; release BLOCKED** (draft source & scoped tests, no production release) |
-| Existing PR | [#484](https://github.com/tushar1669/prize-manager/pull/484) — DRAFT, unmerged |
-| Latest verified main baseline at reconciliation | `104aa4221016091ed4ca1b15a033f062da44d178` |
-| Owner direction | Master-only trial first on an owner test tournament; no new paid test environment; retire obsolete team-ranking rules for **new V2 allocations**, preserve historical awards; UI/UX follow-up after functional acceptance |
-
-### Scope and source evidence
-
-- Preserve individual allocation engine, historical prize allocation versions, publication pins, authoritative Master/ownership authorization, source-grounded prize computation, locked file-format restrictions and existing CI/security checks.
-- Team V2 new awards require organizer-confirmed published rules; Rank Sum / Best Rank are not default monetary tie-breakers.
-- Excel four-sheet Final Prizes plus Coverage/RCA and printable server HTML/A4 source verified in existing synthetic QA. Server endpoint returns **printable HTML**, not binary PDF bytes; do not claim live parity.
-- Master-only Team V2 Save is source-implemented behind `ENABLE_TEAM_V2_ATOMIC_SAVE` and a default-off per-tournament DB canary. No production canary migration, scoring migration, service enablement or activation occurred.
-- Existing draft SQL safeguards now restrict the canary to a selected tournament, rather than locking unrelated events; deactivation must not reopen legacy team writers on already saved V2 versions.
-
-### Remaining release dependencies, not new backlog priorities
-
-1. Verify **project-specific usable recovery point** and rollback process before applying any production Team V2 migration. Pro organization subscription by itself is not evidence of a restorable project backup.
-2. Verify production-compatible schema/migration ordering and the complete authenticated server Master-only scorer → official ruling → RPC Save, with source consistency and historical version protection. Existing authenticated Swiss-import e2e suite fails closed without a separately configured nonproduction QA backend; do not bypass or count passing unit/isolated PG as all CI green.
-3. Review production load and unexpected side effects of per-row source lineage triggers before enabling. Ensure no impact on unrelated tournaments.
-4. Once required release gates pass, use recorded owner authorization for restricted Master-only release, verify actual deployed ref/environment, then request owner test tournament acceptance (including sanitized HAR/console as needed). UI/UX review and general availability are later, separately approved work.
-
-**Latest pre-index scoped evidence:** [PostgreSQL transaction CI 41047237072](https://github.com/tushar1669/prize-manager/actions/runs/41047237072), [Excel/A4 QA 41047237128](https://github.com/tushar1669/prize-manager/actions/runs/41047237128), [migration guard 41047236999](https://github.com/tushar1669/prize-manager/actions/runs/41047236999): PASS. [Overall CI 41047237052](https://github.com/tushar1669/prize-manager/actions/runs/41047237052): FAIL (authenticated QA gate), not release green.
-
-## Existing queue to preserve, not absorb into the current release
-
-**[Post-template V2 non-blocking backlog](docs/BACKLOG_POST_TEMPLATE_V2.md)** — five recorded UX/copy/flow follow-ups, including Prize-tab hierarchy, density, apply wording, Team mode discoverability and micro-polish. They are **not prerequisites** for the current safety-focused V2 release. Preserve that file and its original non-blocking designation.
-
-**[PROJECT_STATE.md](PROJECT_STATE.md)** — dated 28 September 2026; historical canonical operational notes and older planned work. It is **not a current, verified October priority ordering**, and must not silently be converted into P0/P1 tickets.
-
-## Inventory and ordering
-
-P0/P1/P2 project-wide inventory is **UNKNOWN until an owner-approved normalized inventory exists**. Do not claim there are no P0/P1 items. During incomplete canonical normalization, existing `AGENTS.md`, `PROJECT_STATE.md` and approved design/QA/spec decisions retain authority. Execute the active release item; do not start unrelated normalization.
+## Existing queue preserved
+- [Historical PROJECT_STATE.md](PROJECT_STATE.md) remains authority during incomplete normalization.
+- [Post-template V2 backlog](docs/BACKLOG_POST_TEMPLATE_V2.md) contains five non-blocking UX follow-ups, not prerequisites for Excel/A4 delivery.
+- Unlisted P0/P1/P2 inventory is **UNKNOWN**, not assumed empty. Do not invent priorities.
 
 ## Next exact action
-
-Verify a direct, project-specific production recovery/restore path using connected existing tools; if unavailable, block risky database execution and report the precise missing proof or minimal owner action. Do not merge, deploy, enable canaries or update main merely to publish this index.
+Next cycle: reconcile main with draft Team Prizes V2 PR #484 following docs/handoff/TEAM_V2_CONTINUATION_2026-10-30.md. Do not reintroduce the removed legacy Category Cards.

@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
 import type { AllocationVersionSelector } from "@/utils/getLatestAllocations";
-import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
+import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { formatCurrencyINR } from "@/utils/currency";
@@ -22,7 +22,7 @@ import { PublicHeader } from "@/components/public/PublicHeader";
 
 export default function PublicWinnersPage() {
   const { id } = useParams();
-  const [activeView, setActiveView] = useState<string>("v1");
+  const [activeView, setActiveView] = useState<string>("cards");
 
   const { data: tournament, isLoading: tournamentLoading } = useQuery({
     queryKey: ['public-tournament-by-id', id],
@@ -142,14 +142,14 @@ export default function PublicWinnersPage() {
             ) : (
               <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
                 <TabsList className="grid w-full grid-cols-4 mb-6 print:hidden">
-                  <TabsTrigger value="v1">Category Cards</TabsTrigger>
+                  <TabsTrigger value="cards">Category Cards</TabsTrigger>
                   <TabsTrigger value="table">Table View</TabsTrigger>
                   <TabsTrigger value="poster">Poster Grid</TabsTrigger>
                   <TabsTrigger value="arbiter">Arbiter Sheet</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="v1" className={activeView !== 'v1' ? 'print:hidden' : ''}>
-                  <CategoryCardsView groups={categories} />
+                <TabsContent value="cards" className={activeView !== 'cards' ? 'print:hidden' : ''}>
+                  <CategoryCardsUpdatedView groups={categories} />
                 </TabsContent>
 
                 <TabsContent value="table" className={activeView !== 'table' ? 'print:hidden' : ''}>

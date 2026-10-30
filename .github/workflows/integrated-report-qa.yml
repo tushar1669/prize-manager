@@ -1,10 +1,10 @@
-name: Integrated Excel and A4 synthetic visual QA (draft only)
+name: Report-only Excel and A4 synthetic visual QA
 on:
   pull_request:
     branches: [main]
 jobs:
   report-fixtures:
-    if: github.event.pull_request.number == 484
+    if: github.event.pull_request.head.ref == 'release/report-only-excel-a4-20261030'
     runs-on: ubuntu-latest
     container: mcr.microsoft.com/playwright:v1.56.1-jammy
     env:
@@ -20,7 +20,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Locked dependencies
         run: npm ci --no-audit --fund=false
-      - name: Approved synthetic Excel, team and version-pin tests
+      - name: Report-only branded Excel, team snapshot and printable HTML tests
         run: npx vitest run tests/utils/server-printable-html.spec.ts tests/utils/branded-workbook.spec.ts tests/utils/team-final-workbook.spec.ts tests/utils/team-pdf-version.spec.ts tests/utils/team-prize-masking.spec.ts
       - name: Verify code style
         run: npx eslint src/utils/brandedWorkbookXlsx.ts src/utils/teamPrizeExport.ts src/utils/finalPrizeWorkbook.ts src/components/final-prize/TeamPrizesTabView.tsx src/components/allocation/TeamPrizeResultsPanel.tsx

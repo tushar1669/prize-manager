@@ -38,6 +38,21 @@ const PUBLIC_TOURNAMENT_DETAILS_LEGACY_FIELDS = [
   "public_slug",
 ];
 
+type SupabaseQueryResult<T> = {
+  data: T | null;
+  error: PostgrestError | null;
+  status?: number;
+};
+
+type SupabasePublishedTournamentQuery<T> = {
+  or(filters: string): SupabaseMaybeSingleQuery<T>;
+  eq(column: string, value: string): SupabaseMaybeSingleQuery<T>;
+};
+
+type SupabaseMaybeSingleQuery<T> = {
+  maybeSingle(): Promise<SupabaseQueryResult<T>>;
+};
+
 type SupabaseClientLike = Pick<typeof supabase, "from">;
 
 type SupabaseQueryError = Error & {
@@ -165,9 +180,7 @@ export async function fetchPublicTournamentDetails(
   );
 
   if (indexedResult.data) {
-    // The field list is built at runtime, so Supabase's static select parser cannot infer its shape.
-    // This retains the pre-existing projection contract without changing the published-view query.
-    return indexedResult.data as unknown as TournamentDetails;
+    return indexedResult.data;
   }
 
   const fallbackResult = await fetchWithLegacySupport(
@@ -178,5 +191,5 @@ export async function fetchPublicTournamentDetails(
     "computed"
   );
 
-  return fallbackResult.data as unknown as TournamentDetails | null;
+  return fallbackResult.data;
 }

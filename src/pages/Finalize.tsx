@@ -21,7 +21,6 @@ import { UnfilledPrizesPanel } from "@/components/allocation/UnfilledPrizesPanel
 import { ImportQualityNotes } from "@/components/import/ImportQualityNotes";
 import { useFinalizeData } from "@/hooks/useFinalizeData";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
-import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
@@ -72,7 +71,7 @@ interface CategoryRecord {
   is_main?: boolean | null;
 }
 
-type FinalViewTab = 'v1' | 'v6' | 'v3' | 'v4' | 'v5';
+type FinalViewTab = 'v6' | 'v3' | 'v4' | 'v5';
 
 export default function Finalize() {
   const { id } = useParams();
@@ -124,7 +123,7 @@ export default function Finalize() {
   const { role } = useUserRole();
   const [finalizeResult, setFinalizeResult] = useState(locationState?.finalizeResult ?? null);
   const hasAutoFinalizedRef = useRef(false);
-  const [activeView, setActiveView] = useState<FinalViewTab>('v1');
+  const [activeView, setActiveView] = useState<FinalViewTab>('v6');
   // Debug log: which source was used (once per mount)
   useEffect(() => {
     console.log('[finalize] Page loaded', {
@@ -647,10 +646,7 @@ export default function Finalize() {
               ) : (
                 <Tabs value={activeView} onValueChange={v => setActiveView(v as FinalViewTab)} className="w-full">
                   <TabsList className="w-full justify-start overflow-x-auto rounded-lg bg-muted p-1 print:hidden">
-                    <TabsTrigger value="v1" className="rounded-md px-4 py-2 text-sm font-medium">
-                      Category Cards
-                    </TabsTrigger>
-                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">Category Cards — Updated</TabsTrigger>
+                    <TabsTrigger value="v6" className="rounded-md px-4 py-2 text-sm font-medium">Category Cards</TabsTrigger>
                     <TabsTrigger value="v3" className="rounded-md px-4 py-2 text-sm font-medium">
                       Poster Grid
                     </TabsTrigger>
@@ -662,9 +658,6 @@ export default function Finalize() {
                     </TabsTrigger>
                   </TabsList>
                   <div className="pm-print-surface">
-                    <TabsContent value="v1" className="m-0">
-                      <CategoryCardsView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
-                    </TabsContent>
                     <TabsContent value="v6" className="m-0">
                       <CategoryCardsUpdatedView groups={finalPrizeGrouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                     </TabsContent>

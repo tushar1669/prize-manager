@@ -164,7 +164,7 @@ function stripControlChars(text: string): string {
   return (
     text
       // deno-lint-ignore no-control-regex
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "") // eslint-disable-line no-control-regex -- Intentionally strip C0/DEL before jsonb insertion.
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "") // eslint-disable-line no-control-regex -- Intentional C0/DEL scrub before jsonb insertion.
       // An unpaired UTF-16 surrogate (OCR of decorative glyphs can produce them) survives
       // JSON.stringify as an escape sequence that PostgREST rejects as invalid JSON — the same
       // failure mode as NUL, from a different character class.

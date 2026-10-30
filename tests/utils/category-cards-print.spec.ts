@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
+import { CategoryCardsUpdatedView } from '@/components/final-prize/CategoryCardsUpdatedView';
 import type { FinalPrizeCategoryGroup } from '@/hooks/useFinalPrizeData';
 
-describe('CategoryCardsView print layout', () => {
+describe('CategoryCardsUpdatedView print layout', () => {
   it('renders one print-safe card per category', () => {
     const groups: FinalPrizeCategoryGroup[] = [
       {
@@ -48,12 +48,12 @@ describe('CategoryCardsView print layout', () => {
       },
     ];
 
-    const { container } = render(React.createElement(CategoryCardsView, { groups }));
-    const cards = container.querySelectorAll('[data-category-card]');
+    const { container } = render(React.createElement(CategoryCardsUpdatedView, { groups }));
+    const cards = container.querySelectorAll('[data-v6-category-card]');
 
     expect(cards).toHaveLength(2);
     cards.forEach(card => {
-      expect(card.classList.contains('pm-print-avoid-break')).toBe(true);
+      expect(card.classList.contains('pmv6-category')).toBe(true);
     });
   });
 
@@ -81,7 +81,7 @@ describe('CategoryCardsView print layout', () => {
       },
     ];
 
-    render(React.createElement(CategoryCardsView, { groups }));
+    render(React.createElement(CategoryCardsUpdatedView, { groups }));
 
     expect(screen.getByRole('columnheader', { name: 'Gift' })).toBeTruthy();
     expect(screen.getByText('Chess Book ×2')).toBeTruthy();

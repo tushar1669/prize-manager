@@ -18,9 +18,8 @@ export interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
-  /** Saved server v2 audit, absent on legacy awards. */
+  /** Optional saved read-only award audit; no Team V2 scoring or writes here. */
   ranking_snapshot?: unknown;
-  /** Public API exposes only the safe named criterion, never the full audit. */
   applied_rule_label?: string | null;
 }
 
@@ -52,9 +51,7 @@ export interface GroupResponse {
   ineligible_institutions: number;
   ineligible_reasons: string[];
   scored_institutions?: WinnerInstitution[];
-  /** Preview-only v2 award holds; never treat null winners as arbitrary ranking. */
   ranking_issues?: string[];
-  /** Owner-only preview, created from actual v2 scorer partitions (never public). */
   adjudication_partitions?: Array<{
     status: 'resolved' | 'tied' | 'blocked';
     criterion?: string;
@@ -87,7 +84,7 @@ type TeamPrizeCacheEntry = {
 
 const teamPrizeResultCache = new Map<string, TeamPrizeCacheEntry>();
 
-/** Expire preview data after team-rule/prize edits, without rewriting snapshots. */
+/** Invalidate only this tournament's scorer previews after a rules/prize edit. */
 export function invalidateTeamPrizeResultCache(tournamentId: string): void {
   for (const key of teamPrizeResultCache.keys()) {
     if (key.startsWith(`${tournamentId}:`)) teamPrizeResultCache.delete(key);
@@ -114,7 +111,9 @@ export async function fetchTeamPrizeResults(
 
   if (allocationVersion !== undefined && allocationVersion !== null) {
     const version = Number(allocationVersion);
-    // Step 1: fetch groups first so we can scope prizes to this tournament's groups
+    if (!Number.isSafeInteger(version) || version < 1)
+      throw new Error('Invalid team allocation version');
+    // A saved version is never permission to re-score current teams.
     const [
       { data: groups, error: groupsError },
       { data: allocations, error: allocationsError },
@@ -125,31 +124,25 @@ export async function fetchTeamPrizeResults(
       supabase.from('team_allocation_notes').select('group_id, note').eq('tournament_id', tournamentId).eq('version', version),
     ]);
 
-    // Never replace a requested historical version with live/recomputed results.
-    if (!Number.isSafeInteger(version) || version < 1) {
-      throw new Error('Invalid team allocation version');
-    }
-    if (groupsError || allocationsError || notesError) {
+    if (groupsError || allocationsError || notesError)
       throw new Error('Version-pinned team allocation data could not be loaded');
-    }
-
     // Step 2: scope institution_prizes to only groups belonging to this tournament
     const groupIds = (groups ?? []).map((g: Record<string, unknown>) => String(g.id));
     let prizes: Record<string, unknown>[] | null = null;
     if (groupIds.length > 0) {
-      const { data, error: prizesError } = await supabase
+      const { data, error: prizeError } = await supabase
         .from('institution_prizes')
         .select('*')
         .in('group_id', groupIds)
         .eq('is_active', true)
         .order('place');
-      if (prizesError) throw new Error('Version-pinned team prize definitions could not be loaded');
+      if (prizeError)
+        throw new Error('Version-pinned team prize definitions could not be loaded');
       prizes = data as Record<string, unknown>[] | null;
     }
 
-    // An entirely unawarded historical version is still an empty snapshot,
-    // not permission to show winners recalculated from today's player data.
-    if ((groups ?? []).length > 0) {
+    // No team awards at this historical version means unfilled, not fresh winners.
+    if ((groups ?? []).length >= 0) {
       const noteByGroup = new Map((notes ?? []).map((n: { group_id: string; note: string }) => [n.group_id, n.note]));
       const byGroup = new Map<string, Array<Record<string, unknown>>>();
       for (const row of (allocations ?? []) as Array<Record<string, unknown>>) {
@@ -211,10 +204,6 @@ export async function fetchTeamPrizeResults(
       teamPrizeResultCache.set(cacheKey, { data: response, expiresAt: now + TEAM_PRIZE_RESULT_TTL_MS });
       return response;
     }
-    // No currently visible groups for this version: do not request live results.
-    const emptyResponse: TeamPrizeResultsResponse = { groups: [], players_loaded: 0, max_rank: 0 };
-    teamPrizeResultCache.set(cacheKey, { data: emptyResponse, expiresAt: now + TEAM_PRIZE_RESULT_TTL_MS });
-    return emptyResponse;
   }
 
   const { data: { session } } = await supabase.auth.getSession();

@@ -19,7 +19,7 @@ export function CategoryCardsUpdatedView({
   const nonEmptyGroups = groups.filter(group => group.winners.length > 0);
 
   return (
-    <section className="pm-category-cards-updated" aria-label="Category Cards Updated">
+    <section className="pm-category-cards-updated" aria-label="Category Cards">
       <img src="/brand/prize-manager-logo-print-contrast.png" alt="" aria-hidden="true" loading="eager" className="pmv6-print-logo-preload" />
       <div className="pmv6-intro">
         <span className="pmv6-intro-label">Category prize list</span>

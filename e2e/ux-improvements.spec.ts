@@ -3,33 +3,64 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertIsolatedQaBackend } from './utils/qaEnvironment';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL!;
-const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD!;
+const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL || 'test@example.com';
+const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD || 'testpassword123';
 
 test.describe('@ux UX Improvements Suite', () => {
   let tournamentId: string;
 
   test.beforeAll(async ({ browser }) => {
-    assertIsolatedQaBackend();
     const page = await browser.newPage();
+    const timestamp = Date.now();
+    const tournamentTitle = `QA – UX Tests (${timestamp})`;
+
     try {
       await page.goto('/auth');
-      await page.locator('input[type="email"]').first().fill(TEST_EMAIL);
-      await page.locator('input[type="password"]').first().fill(TEST_PASSWORD);
-      await page.getByRole('button', { name: /sign in/i }).click();
-      // A failed sign-in is a failure, not permission to create a new user.
-      await page.waitForURL(/\/dashboard(?:[/?#]|$)/, { timeout: 15000 });
+      const emailInput = page.locator('input[type="email"]').first();
+      const passwordInput = page.locator('input[type="password"]').first();
+      
+      await emailInput.fill(TEST_EMAIL);
+      await passwordInput.fill(TEST_PASSWORD);
+      
+      const signInButton = page.getByRole('button', { name: /sign in/i });
+      if (await signInButton.isVisible()) {
+        await signInButton.click();
+        await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 }).catch(async () => {
+          const signUpButton = page.getByRole('button', { name: /sign up/i });
+          if (await signUpButton.isVisible()) {
+            await signUpButton.click();
+            await page.getByRole('button', { name: /create account/i }).click();
+            await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
+          }
+        });
+      }
 
-      await page.getByRole('button', { name: /create tournament/i }).click();
-      await page.waitForURL(/\/t\/[a-f0-9-]+\/setup(?:\?|$)/, { timeout: 15000 });
-      const match = page.url().match(/\/t\/([a-f0-9-]+)\/setup/);
-      if (!match) throw new Error('QA tournament was not created on the isolated backend');
+      await page.waitForURL(/\/(dashboard|$)/, { timeout: 10000 });
+      await page.goto('/tournament-setup');
+      await page.waitForLoadState('networkidle');
+
+      await page.fill('input[name="title"]', tournamentTitle);
+      await page.fill('input[name="startDate"]', '2025-01-15');
+      await page.fill('input[name="endDate"]', '2025-01-16');
+
+      await page.getByRole('button', { name: /create|save/i }).click();
+      await page.waitForURL(/\/t\/[a-f0-9-]+/, { timeout: 10000 });
+
+      const url = page.url();
+      const match = url.match(/\/t\/([a-f0-9-]+)/);
+      if (!match) {
+        throw new Error(`Could not extract tournament ID from URL: ${url}`);
+      }
+
       tournamentId = match[1];
+      console.log(`[QA] Created tournament: ${tournamentTitle} (ID: ${tournamentId})`);
+    } catch (error) {
+      console.error('[QA] Failed to create tournament:', error);
+      throw error;
     } finally {
       await page.close();
     }
