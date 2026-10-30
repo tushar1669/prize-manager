@@ -8,7 +8,8 @@ CREATE FUNCTION public.has_role(_user_id uuid, _role public.app_role)
 RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
 
 CREATE TABLE public.tournaments (
-  id uuid PRIMARY KEY, owner_id uuid NOT NULL
+  id uuid PRIMARY KEY, owner_id uuid NOT NULL,
+  updated_at timestamptz
 );
 CREATE TABLE public.players (
   id uuid PRIMARY KEY, tournament_id uuid NOT NULL, points numeric,
