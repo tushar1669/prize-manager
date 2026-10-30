@@ -65,6 +65,11 @@ Deno.serve(async (request: Request) => {
     });
     if (masterError || (tournament.owner_id !== actorId && master !== true))
       return json({ error: 'forbidden', saved: false }, 403);
+    // First rollout is a SERVER-ENFORCED administrator canary, not a UI
+    // visibility toggle. Ownership alone cannot enable a money-bearing Save.
+    // Remove this gate only in a separately approved general-availability release.
+    if (master !== true)
+      return json({ error: 'master_only_preview', saved: false }, 403);
     const { data: access, error: accessError } = await db
       .rpc('get_tournament_access_state', { tournament_id: tournamentId }).maybeSingle();
     if (accessError || !record(access) || access.has_full_access !== true)
