@@ -22,6 +22,60 @@ END $$;
 RESET ROLE;
 
 SET ROLE service_role;
+-- An old finalize or tie writer cannot insert either half of a v2 allocation.
+DO $legacy_fence$
+BEGIN
+ BEGIN
+  INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
+    VALUES('00000000-0000-4000-8000-000000000001',1,
+           '00000000-0000-4000-8000-000000000003',
+           '00000000-0000-4000-8000-000000000004');
+  RAISE EXCEPTION 'FAIL legacy individual writer bypassed v2 fence';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
+ END;
+ BEGIN
+  INSERT INTO public.team_allocations(tournament_id,version,group_id,prize_id,
+      place,institution_key,total_points,player_ids,player_snapshot)
+    VALUES('00000000-0000-4000-8000-000000000001',1,
+           '00000000-0000-4000-8000-000000000006',
+           '00000000-0000-4000-8000-000000000007',
+           1,'Club A',9,ARRAY['00000000-0000-4000-8000-000000000004'::uuid],
+           '[]'::jsonb);
+  RAISE EXCEPTION 'FAIL legacy team writer bypassed v2 fence';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_atomic_writer_required' THEN RAISE; END IF;
+ END;
+ IF EXISTS (SELECT 1 FROM public.allocations)
+    OR EXISTS (SELECT 1 FROM public.team_allocations) THEN
+  RAISE EXCEPTION 'FAIL blocked legacy writer left a partial allocation';
+ END IF;
+END $legacy_fence$;
+
+-- Negative guard must not change the existing legacy (NULL-rules) contract.
+INSERT INTO public.tournaments(id,owner_id)
+ VALUES('00000000-0000-4000-8000-000000000011',
+        '00000000-0000-4000-8000-000000000010');
+INSERT INTO public.institution_prize_groups
+ (id,tournament_id,name,group_by,team_size,female_slots,male_slots,scoring_mode,is_active,ranking_rules)
+ VALUES('00000000-0000-4000-8000-000000000012',
+        '00000000-0000-4000-8000-000000000011',
+        'Legacy synthetic group','club',2,0,0,'by_top_k_score',true,NULL);
+INSERT INTO public.allocations(tournament_id,version,prize_id,player_id)
+ VALUES('00000000-0000-4000-8000-000000000011',1,
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004');
+INSERT INTO public.team_allocations
+ (tournament_id,version,group_id,prize_id,place,institution_key,total_points,player_ids,player_snapshot)
+ VALUES('00000000-0000-4000-8000-000000000011',1,
+        '00000000-0000-4000-8000-000000000012',
+        '00000000-0000-4000-8000-000000000007',
+        1,'Club A',9,ARRAY['00000000-0000-4000-8000-000000000004'::uuid],
+        '[]'::jsonb);
+DELETE FROM public.allocations
+ WHERE tournament_id='00000000-0000-4000-8000-000000000011';
+DELETE FROM public.team_allocations
+ WHERE tournament_id='00000000-0000-4000-8000-000000000011';
 -- A changed source row must fail even when expected version is still zero.
 DO $source_check$
 DECLARE prior_token text;
