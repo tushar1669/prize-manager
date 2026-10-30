@@ -79,12 +79,12 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
   });
 
 
-  it('fences configured Team Ranking v2 from the competing MAX+1 legacy finalize writer', () => {
+  it('fences every active team group, even null-rule legacy groups, from unsafe finalize', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const ownerGate = source.indexOf('tournamentAccess.owner_id !== user.id && !isMaster');
     const rulesRead = source.indexOf(".select('id, ranking_rules')");
     const missingRules = source.indexOf('activeTeamRulesError || !activeTeamRules');
-    const v2Fence = source.indexOf('activeTeamRules.some(group => group.ranking_rules !== null)');
+    const v2Fence = source.indexOf('activeTeamRules.length > 0');
     const denied = source.indexOf("error: 'team_v2_atomic_writer_required'");
     const write = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
     expect(ownerGate).toBeGreaterThan(-1);
@@ -96,12 +96,12 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
     expect(source).not.toContain(".rpc('commit_team_v2_adjudicated_version'");
   });
 
-  it('fails closed on missing/stale rule reads rather than treating unknown as legacy', () => {
+  it('fails closed on missing/stale group reads and obsolete null rules', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const clauses = [
       'activeTeamRulesError || !activeTeamRules',
       'activeTeamRules.length !== teamGroupCount',
-      'group.ranking_rules !== null',
+      'activeTeamRules.length > 0',
       "error: 'team_v2_writer_route_unavailable'",
       "error: 'team_v2_atomic_writer_required'",
     ];
