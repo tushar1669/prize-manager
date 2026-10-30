@@ -47,8 +47,8 @@ BEGIN
  THEN RAISE EXCEPTION 'FAIL public role can control or enumerate v2 canaries'; END IF;
 END $privileges$;
 -- The operator permits one synthetic tournament ONLY after the deny test.
-INSERT INTO public.team_v2_canary_tournaments (tournament_id)
- VALUES ('00000000-0000-4000-8000-000000000001');
+INSERT INTO public.team_v2_canary_tournaments (tournament_id, enabled)
+ VALUES ('00000000-0000-4000-8000-000000000001', true);
 SET ROLE service_role;
 -- An old finalize or tie writer cannot insert either half of a v2 allocation.
 DO $legacy_fence$
