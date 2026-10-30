@@ -47,8 +47,8 @@ const team = {
   adjudication_ties: [] }],
 };
 const prepare = (ind: unknown = individual, sc: unknown = team,
-  groups = [group], prizes = [prize], individualIds = ['ip']) =>
-  prepareInitialUncontestedTeamV2Rows(individualIds, ind, groups, prizes, sc, 'owner');
+  groups = [group], prizes = [prize], individualIds = ['ip'], newVersion = 1) =>
+  prepareInitialUncontestedTeamV2Rows(individualIds, ind, groups, prizes, sc, 'owner', newVersion);
 
 describe('initial Team v2 Save source-only fail-closed assembler', () => {
   it('builds complete server-sourced award arrays for a genuinely uncontested first version', () => {
@@ -82,6 +82,15 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
         reason_codes: ['no_eligible_players'], is_manual: false },
     ]);
     expect(result.rows.team_rows).toHaveLength(1);
+  });
+
+  it('builds the audited next version without changing the roster or historical awards', () => {
+    const result = prepare(individual, team, [group], [prize], ['ip'], 2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.team_rows[0].ranking_snapshot).toMatchObject({
+      allocation_version: 2, finalized_by: 'owner', winner_key: 'Club A',
+    });
   });
 
   it('rejects missing or masked individual prize coverage', () => {
@@ -131,7 +140,9 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     const source = readFileSync('supabase/functions/saveTeamV2/index.ts', 'utf8');
     expect(source).toContain("ENABLE_TEAM_V2_ATOMIC_SAVE");
     expect(source).toContain("!== '1'");
-    expect(source).toContain("requestBody.expected_version !== 0");
+    expect(source).toContain("Number.isSafeInteger(requestBody.expected_version)");
+    expect(source).toContain("p_expected_version: expectedVersion");
+    expect(source).toContain("expectedVersion === 0 ? proposal.rows.individual_rows : []");
     expect(source).toContain("Object.keys(requestBody).some");
     expect(source).toContain("has_role");
     expect(source).toContain("get_tournament_access_state");
