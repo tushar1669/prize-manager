@@ -91,13 +91,15 @@ BEGIN
   END IF;
 
   -- Lock source tables BEFORE taking the tournament FOR UPDATE row lock.
-  -- The inverse ordering deadlocks with a source editor that already owns a
-  -- ROW EXCLUSIVE lock on players and then updates tournaments. SHARE locks
-  -- also protect the final digest comparison and inserts from concurrent edits.
-  -- Cross-tournament write contention is still a separate release gate.
+  -- NOWAIT is essential: an editor can already hold ROW EXCLUSIVE on players
+  -- before updating tournaments; waiting on multiple table locks would
+  -- deadlock even if the tournament row lock were acquired later.
+  -- If ANY input table is being edited, abort this Save; the organizer may
+  -- rescore/retry. Never partially commit or block concurrent edits indefinitely.
+  -- Cross-tournament writer contention remains a release/load-test gate.
   LOCK TABLE public.tournaments, public.categories, public.prizes,
     public.players, public.rule_config, public.institution_prize_groups,
-    public.institution_prizes IN SHARE MODE;
+    public.institution_prizes IN SHARE MODE NOWAIT;
   SELECT owner_id INTO v_owner
   FROM public.tournaments WHERE id = p_tournament_id
   FOR UPDATE;
