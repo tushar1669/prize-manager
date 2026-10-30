@@ -122,6 +122,42 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
       } }],
     }] }).ok).toBe(false);
   });
+  it('rejects a lower-ranked team silently assigned to a higher cash prize', () => {
+    // Each audit and source roster is internally consistent, but Club B is
+    // ranked second. A corrupt scorer response must not pay it first prize.
+    const runnerPlayers = people.map((p, i) => ({
+      ...p, player_id: `runner-${i + 1}`, points: i === 0 ? 4 : 3,
+    }));
+    const runnerAudit = {
+      ...audit, winner_key: 'Club B',
+      candidates: [
+        ...audit.candidates,
+        { key: 'Club B', selected_players: runnerPlayers.map(p => ({
+          player_id: p.player_id, points: p.points,
+          source_hash: null, individual_tbs: {},
+        })) },
+      ],
+      partitions: [
+        ...audit.partitions,
+        { status: 'resolved', criterion: 'total_points', team_keys: ['Club B'] },
+      ],
+    };
+    const misplaced = { groups: [{
+      ...team.groups[0],
+      prizes: [{ ...prize, is_active: true, winner_institution: {
+        key: 'Club B', total_points: 7, players: runnerPlayers,
+        ranking_snapshot: runnerAudit,
+      } }],
+      adjudication_partitions: [
+        { status: 'resolved', criterion: 'total_points', teams: [{ key: 'Club A' }] },
+        { status: 'resolved', criterion: 'total_points', teams: [{ key: 'Club B' }] },
+      ],
+    }] };
+    expect(prepare(individual, misplaced)).toMatchObject({
+      ok: false, reason: 'ranking_contract_mismatch',
+    });
+  });
+
   it('requires verified, exact event rules and genuine audit', () => {
     expect(prepare(individual, team, [{ ...group,
       ranking_rules: { ...rules, organizer_confirmed: false } }]).ok).toBe(false);
