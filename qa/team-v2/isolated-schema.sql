@@ -20,9 +20,10 @@ CREATE TABLE public.categories (
 CREATE TABLE public.prizes (
   id uuid PRIMARY KEY, category_id uuid NOT NULL, is_active boolean NOT NULL
 );
+-- Match production: rule_config is keyed by tournament_id and has NO id.
+-- The old synthetic id column hid a production-only SQL compilation failure.
 CREATE TABLE public.rule_config (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- tournament_id uuid NOT NULL, score_weights jsonb
+ tournament_id uuid PRIMARY KEY, strict_age boolean
 );
 CREATE TABLE public.allocations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
