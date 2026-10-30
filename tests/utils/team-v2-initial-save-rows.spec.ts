@@ -120,6 +120,9 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     expect(source).toContain("commit_team_v2_adjudicated_version");
     expect(source).toContain("p_individual_rows: proposal.rows.individual_rows");
     expect(source).toContain("p_rulings: []");
+    expect(source).toContain("team_v2_source_fingerprint");
+    expect(source).toContain("p_expected_source_fingerprint: before");
+    expect(source).toContain("after !== before");
     expect(source).not.toContain("requestBody.winners");
   });
 });

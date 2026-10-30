@@ -75,6 +75,17 @@ Deno.serve(async (request: Request) => {
     };
     if (await version() !== 0) return json({ error: 'existing_version_requires_review', saved: false }, 409);
 
+    // All individual + Team scorer input tables are covered; failures block Save.
+    const sourceDigest = async (): Promise<string | null> => {
+      const { data, error } = await db.rpc('team_v2_source_fingerprint', {
+        p_tournament_id: tournamentId,
+      });
+      return !error && typeof data === 'string' &&
+        /^[0-9a-f]{64}$/.test(data) ? data : null;
+    };
+    const before = await sourceDigest();
+    if (!before) return json({ error: 'source_unavailable', saved: false }, 409);
+
     const [groups, categories] = await Promise.all([
       db.from('institution_prize_groups').select(
         'id,group_by,team_size,female_slots,male_slots,scoring_mode,ranking_rules',
@@ -124,6 +135,9 @@ Deno.serve(async (request: Request) => {
     // A full source-revision lock remains a mandatory gate before enabling
     // this draft route in any runtime.
     if (await version() !== 0) return json({ error: 'stale_version', saved: false }, 409);
+    const after = await sourceDigest();
+    if (!after || after !== before)
+      return json({ error: 'source_changed', saved: false }, 409);
 
     const { data: newVersion, error: commitError } = await db.rpc(
       'commit_team_v2_adjudicated_version', {
@@ -131,6 +145,7 @@ Deno.serve(async (request: Request) => {
         p_actor_id: actorId,
         p_individual_rows: proposal.rows.individual_rows,
         p_team_rows: proposal.rows.team_rows, p_rulings: [],
+        p_expected_source_fingerprint: before,
       },
     );
     if (commitError || newVersion !== 1)

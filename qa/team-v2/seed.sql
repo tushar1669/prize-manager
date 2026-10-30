@@ -21,7 +21,8 @@ INSERT INTO public.publications VALUES('00000000-0000-4000-8000-000000000001',0,
 
 CREATE FUNCTION qa.submit_version(
   expected integer, actor uuid DEFAULT '00000000-0000-4000-8000-000000000010',
-  points numeric DEFAULT 9, with_ruling boolean DEFAULT true
+  points numeric DEFAULT 9, with_ruling boolean DEFAULT true,
+  expected_digest text DEFAULT NULL
 ) RETURNS integer LANGUAGE sql SECURITY INVOKER SET search_path = '' AS $$
   WITH ruling AS (
     SELECT jsonb_build_object(
@@ -69,7 +70,8 @@ CREATE FUNCTION qa.submit_version(
     (SELECT jsonb_build_array(entry) FROM award),
     CASE WHEN with_ruling
       THEN (SELECT jsonb_build_array(entry) FROM ruling)
-      ELSE '[]'::jsonb END
+      ELSE '[]'::jsonb END,
+    COALESCE(expected_digest, public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid))
   );
 $$;
-GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric,boolean) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION qa.submit_version(integer,uuid,numeric,boolean,text) TO service_role, authenticated;

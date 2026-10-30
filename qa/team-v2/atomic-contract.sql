@@ -3,9 +3,9 @@
 DO $$
 BEGIN
   IF has_function_privilege('authenticated',
-     'public.commit_team_v2_adjudicated_version(uuid,integer,uuid,jsonb,jsonb,jsonb)','EXECUTE')
+     'public.commit_team_v2_adjudicated_version(uuid,integer,uuid,jsonb,jsonb,jsonb,text)','EXECUTE')
      OR has_function_privilege('anon',
-     'public.commit_team_v2_adjudicated_version(uuid,integer,uuid,jsonb,jsonb,jsonb)','EXECUTE')
+     'public.commit_team_v2_adjudicated_version(uuid,integer,uuid,jsonb,jsonb,jsonb,text)','EXECUTE')
   THEN RAISE EXCEPTION 'FAIL direct client role can EXECUTE atomic writer'; END IF;
 END $$;
 -- Wrapper is a test-only fixture: it must still be rejected as non-service caller.
@@ -22,6 +22,40 @@ END $$;
 RESET ROLE;
 
 SET ROLE service_role;
+-- A changed source row must fail even when expected version is still zero.
+DO $source_check$
+DECLARE prior_token text;
+BEGIN
+ prior_token := public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid);
+ UPDATE public.players SET points=6
+  WHERE id='00000000-0000-4000-8000-000000000004';
+ BEGIN
+  PERFORM qa.submit_version(0,'00000000-0000-4000-8000-000000000010',
+    9,false,prior_token);
+  RAISE EXCEPTION 'FAIL player mutation accepted';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_source_changed' THEN RAISE; END IF;
+ END;
+ UPDATE public.players SET points=5
+  WHERE id='00000000-0000-4000-8000-000000000004';
+ IF EXISTS(SELECT 1 FROM public.allocations) OR
+    EXISTS(SELECT 1 FROM public.team_allocations) THEN
+  RAISE EXCEPTION 'FAIL partial allocations after source mismatch';
+ END IF;
+ prior_token := public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid);
+ UPDATE public.institution_prizes SET cash_amount=200
+  WHERE id='00000000-0000-4000-8000-000000000007';
+ BEGIN
+  PERFORM qa.submit_version(0,'00000000-0000-4000-8000-000000000010',
+    9,false,prior_token);
+  RAISE EXCEPTION 'FAIL changed prize accepted';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM <> 'team_v2_source_changed' THEN RAISE; END IF;
+ END;
+ UPDATE public.institution_prizes SET cash_amount=100
+  WHERE id='00000000-0000-4000-8000-000000000007';
+END $source_check$;
+
 DO $$
 BEGIN
   PERFORM qa.submit_version(0, '00000000-0000-4000-8000-000000000099');

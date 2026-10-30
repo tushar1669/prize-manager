@@ -20,6 +20,10 @@ CREATE TABLE public.categories (
 CREATE TABLE public.prizes (
   id uuid PRIMARY KEY, category_id uuid NOT NULL, is_active boolean NOT NULL
 );
+CREATE TABLE public.rule_config (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ tournament_id uuid NOT NULL, score_weights jsonb
+);
 CREATE TABLE public.allocations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id uuid NOT NULL, version integer NOT NULL,

@@ -1,3 +1,32 @@
+-- Private deterministic fingerprint of all scorer-read tournament data.
+-- Whole-row projections include active/inactive flags, source ranking tags and
+-- gift/rule metadata. No source data is returned from this function.
+CREATE FUNCTION public.team_v2_source_fingerprint(p_tournament_id uuid)
+RETURNS text LANGUAGE sql STABLE SECURITY INVOKER SET search_path = ''
+AS $source$
+ SELECT encode(sha256(convert_to(
+   jsonb_build_array(
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.tournaments t WHERE t.id = p_tournament_id),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.categories t WHERE t.tournament_id = p_tournament_id),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.prizes t WHERE t.category_id IN (SELECT c.id FROM public.categories c WHERE c.tournament_id = p_tournament_id)),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.players t WHERE t.tournament_id = p_tournament_id),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.rule_config t WHERE t.tournament_id = p_tournament_id),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.institution_prize_groups t WHERE t.tournament_id = p_tournament_id),
+      (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id), '[]'::jsonb)
+       FROM public.institution_prizes t WHERE t.group_id IN (SELECT g.id FROM public.institution_prize_groups g WHERE g.tournament_id = p_tournament_id))
+   )::text, 'UTF8')), 'hex');
+$source$;
+REVOKE EXECUTE ON FUNCTION public.team_v2_source_fingerprint(uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.team_v2_source_fingerprint(uuid)
+  TO service_role;
+
 -- DRAFT ONLY — Team Ranking v2 adjudicated allocation version.
 -- Prerequisite: 20261025193000_team_tiebreak_v2_additive.sql (ranking_snapshot).
 -- Never deploy this migration before protected finalize routing, legacy-RPC
@@ -18,7 +47,8 @@ CREATE FUNCTION public.commit_team_v2_adjudicated_version(
   p_actor_id uuid,
   p_individual_rows jsonb,
   p_team_rows jsonb,
-  p_rulings jsonb
+  p_rulings jsonb,
+  p_expected_source_fingerprint text
 ) RETURNS integer
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -39,6 +69,8 @@ BEGIN
   IF p_actor_id IS NULL OR p_tournament_id IS NULL OR
      p_expected_version IS NULL OR p_expected_version < 0 OR
      p_expected_version >= 2147483647 OR
+     p_expected_source_fingerprint IS NULL OR
+     p_expected_source_fingerprint !~ '^[0-9a-f]{64}$' OR
      jsonb_typeof(p_team_rows) IS DISTINCT FROM 'array' OR
      -- An uncontested, fully resolved rank has no official tie ruling.
      -- Nonempty entries are individually validated below, and no award may
@@ -68,6 +100,15 @@ BEGIN
   ) INTO v_latest;
   IF v_latest <> p_expected_version THEN
     RAISE EXCEPTION 'team_v2_stale_allocation_version';
+  END IF;
+  -- Locks protect all independent scorer input tables through final inserts.
+  -- Shared table locks may block other tournaments briefly; review before deployment.
+  LOCK TABLE public.tournaments, public.categories, public.prizes,
+    public.players, public.rule_config, public.institution_prize_groups,
+    public.institution_prizes IN SHARE MODE;
+  IF public.team_v2_source_fingerprint(p_tournament_id)
+       IS DISTINCT FROM p_expected_source_fingerprint THEN
+    RAISE EXCEPTION 'team_v2_source_changed';
   END IF;
   v_new := v_latest + 1;
 
@@ -331,8 +372,8 @@ $fn$;
 -- A service-role-only invocation; do not expose this to logged-in browsers.
 -- Even if PUBLIC has automatic function EXECUTE privileges, revoke them.
 REVOKE EXECUTE ON FUNCTION public.commit_team_v2_adjudicated_version(
-  uuid, integer, uuid, jsonb, jsonb, jsonb
+  uuid, integer, uuid, jsonb, jsonb, jsonb, text
 ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.commit_team_v2_adjudicated_version(
-  uuid, integer, uuid, jsonb, jsonb, jsonb
+  uuid, integer, uuid, jsonb, jsonb, jsonb, text
 ) TO service_role;
