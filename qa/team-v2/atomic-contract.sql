@@ -301,6 +301,24 @@ BEGIN
 END $no_tie_check$;
 TRUNCATE public.allocations, public.team_allocations;
 
+-- Exact next-version Save must copy existing individual awards, not
+-- let a caller replace any previously published individual winner.
+SELECT qa.submit_version(
+  1, '00000000-0000-4000-8000-000000000010', 9, false
+) AS unchanged_winners_version_two;
+DO $v2_history$
+BEGIN
+ IF (SELECT count(*) FROM public.allocations WHERE version=1) <> 1 OR
+    (SELECT count(*) FROM public.allocations WHERE version=2) <> 1 OR
+    (SELECT count(*) FROM public.team_allocations WHERE version=1) <> 1 OR
+    (SELECT count(*) FROM public.team_allocations WHERE version=2) <> 1 OR
+    (SELECT count(*) FROM public.publications WHERE allocation_version=0) <> 1 OR
+    (SELECT player_id FROM public.allocations WHERE version=1 LIMIT 1)
+       IS DISTINCT FROM (SELECT player_id FROM public.allocations WHERE version=2 LIMIT 1)
+ THEN RAISE EXCEPTION 'FAIL follow-up Save overwrote historical winners/pin'; END IF;
+END $v2_history$;
+TRUNCATE public.allocations, public.team_allocations;
+
 -- A submitted ruling must still match the prize-specific saved award.
 SELECT qa.submit_version(0) AS version_created;
 DO $$
