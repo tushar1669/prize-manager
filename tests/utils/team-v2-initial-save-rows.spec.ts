@@ -66,6 +66,24 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     });
     expect(result.rows.rulings).toEqual([]);
   });
+  it('supports an explicit genuinely unfilled individual prize without inventing a winner', () => {
+    const unfilledId = 'ip-without-eligible-player';
+    const preview = {
+      ...individual,
+      unfilled: [{ prizeId: unfilledId, reasonCodes: ['no_eligible_players'] }],
+      meta: { ...individual.meta, activePrizeCount: 2, unfilledCount: 1 },
+    };
+    const result = prepare(preview, team, [group], [prize], ['ip', unfilledId]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.individual_rows).toEqual([
+      { prize_id: 'ip', player_id: 'p1', reason_codes: ['rank'], is_manual: false },
+      { prize_id: unfilledId, player_id: null,
+        reason_codes: ['no_eligible_players'], is_manual: false },
+    ]);
+    expect(result.rows.team_rows).toHaveLength(1);
+  });
+
   it('rejects missing or masked individual prize coverage', () => {
     expect(prepare({ ...individual, meta: { ...individual.meta, hiddenWinnersCount: 1 } }).ok).toBe(false);
     expect(prepare({ ...individual, unfilled: [{ prizeId: 'ip', reasonCodes: ['none'] }],
