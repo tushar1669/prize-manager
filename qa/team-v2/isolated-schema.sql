@@ -15,6 +15,36 @@ CREATE TABLE public.players (
   id uuid PRIMARY KEY, tournament_id uuid NOT NULL, points numeric,
   team text, club text, city text, state text, group_label text, type_label text
 );
+
+-- Production's existing statement-level player import watermark, not a V2
+-- migration. Mirror the catalog shape and handler only in ephemeral CI.
+CREATE TABLE public.tournament_player_watermark (
+  tournament_id uuid PRIMARY KEY REFERENCES public.tournaments(id) ON DELETE CASCADE,
+  players_count_max integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE FUNCTION public.tg_players_bump_watermark()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public'
+AS $watermark$
+BEGIN
+  INSERT INTO public.tournament_player_watermark AS w
+    (tournament_id, players_count_max, updated_at)
+  SELECT s.tid,
+         (SELECT count(*) FROM public.players p WHERE p.tournament_id = s.tid),
+         now()
+  FROM (SELECT DISTINCT tournament_id AS tid FROM new_players WHERE tournament_id IS NOT NULL) s
+  ON CONFLICT (tournament_id) DO UPDATE
+    SET players_count_max = GREATEST(w.players_count_max, EXCLUDED.players_count_max),
+        updated_at = now();
+  RETURN NULL;
+END;
+$watermark$;
+CREATE TRIGGER trg_players_bump_watermark_ins
+AFTER INSERT ON public.players REFERENCING NEW TABLE AS new_players
+FOR EACH STATEMENT EXECUTE FUNCTION public.tg_players_bump_watermark();
+CREATE TRIGGER trg_players_bump_watermark_upd
+AFTER UPDATE ON public.players REFERENCING NEW TABLE AS new_players
+FOR EACH STATEMENT EXECUTE FUNCTION public.tg_players_bump_watermark();
 CREATE TABLE public.categories (
   id uuid PRIMARY KEY, tournament_id uuid NOT NULL, is_active boolean NOT NULL
 );
