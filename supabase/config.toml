@@ -45,3 +45,6 @@ verify_jwt = true
 
 [functions.saveTeamV2]
 verify_jwt = true
+
+[functions.prepareTeamRulingV2]
+verify_jwt = true
