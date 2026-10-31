@@ -45,6 +45,8 @@ export const TEAM_TIEBREAK_METHODS: readonly TeamTieBreakMethod[] = [
     aliases: ['wins', 'win', 'won', 'gameswon', 'numberofgameswon'] },
   { id: 'black', name: 'Games played with Black', optionLabel: 'Games played with Black', summable: true,
     aliases: ['bpg', 'gameswithblack', 'blackgames', 'numberofgameswithblack', 'numberofgamesplayedwithblack'] },
+  { id: 'black_wins', name: 'Games won with Black', optionLabel: 'Games won with Black (BWG)', summable: true,
+    aliases: ['bwg', 'blackwins', 'winswithblack', 'numberofgameswonwithblack'] },
   { id: 'aro', name: 'Average Rating of Opponents', optionLabel: 'Average Rating of Opponents (ARO)', summable: true,
     aliases: ['aro', 'averageopponentrating', 'avgratingofopponents', 'averageratingofopponentsaro'] },
   { id: 'tpr', name: 'Performance Rating', optionLabel: 'Performance Rating (TPR)', summable: true,
@@ -74,6 +76,8 @@ export function findTeamTieBreakMethod(name: string | null | undefined): TeamTie
 
 /** Fragments that mark a head-to-head method however the name is written. */
 const NON_SUMMABLE_MARKERS = ['directencounter', 'headtohead', 'mutualresult', 'mutualencounter'] as const;
+/** Exact codes for head-to-head methods (EDE = Extended Direct Encounter). */
+const NON_SUMMABLE_EXACT = new Set(['de', 'ede', 'h2h']);
 
 /**
  * True for any name meaning a method whose values cannot be added for a team.
@@ -84,5 +88,26 @@ export function isNonSummableTieBreakName(name: string | null | undefined): bool
   const method = findTeamTieBreakMethod(name);
   if (method) return !method.summable;
   const key = normalizeTieBreakName(name ?? '');
-  return NON_SUMMABLE_MARKERS.some(marker => key.includes(marker));
+  return NON_SUMMABLE_EXACT.has(key) || NON_SUMMABLE_MARKERS.some(marker => key.includes(marker));
+}
+
+const SWISS_MANAGER_CODE = /^([A-Z]+)(?::(?:GP|MP))?(?:\/([A-Z0-9]+))?$/;
+
+/**
+ * Suggest the standard method for a Swiss-Manager tie-break column heading
+ * such as "BH:GP/C1" (Buchholz Cut-1). Null when the code or its modifier has
+ * no exact entry in the list; the organizer then chooses "Other".
+ * A suggestion only pre-fills the dropdown — it is never a confirmation.
+ */
+export function tieBreakMethodFromSwissManagerCode(header: string | null | undefined): TeamTieBreakMethod | null {
+  if (typeof header !== 'string') return null;
+  const match = SWISS_MANAGER_CODE.exec(header.trim());
+  if (!match) return null;
+  const [, code, modifier] = match;
+  const byCode: Record<string, string | undefined> = modifier
+    ? { BH: { C1: 'bh_c1', C2: 'bh_c2', M1: 'bh_m1' }[modifier], WIN: 'wins', DE: 'de' }
+    : { BH: 'bh', SB: 'sb', PS: 'progressive', WIN: 'wins', BPG: 'black', BWG: 'black_wins',
+        ARO: 'aro', TPR: 'tpr', KS: 'koya', DE: 'de' };
+  const id = byCode[code];
+  return id ? TEAM_TIEBREAK_METHODS.find(method => method.id === id) ?? null : null;
 }

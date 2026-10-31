@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { defaultTeamRankingCriteria, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
-import { TEAM_TIEBREAK_METHODS, findTeamTieBreakMethod } from '@/utils/teamTieBreakMethods';
+import { TEAM_TIEBREAK_METHODS, findTeamTieBreakMethod, tieBreakMethodFromSwissManagerCode } from '@/utils/teamTieBreakMethods';
 
 /** Dropdown value for a tie-break that is not in the standard list. */
 const OTHER_METHOD = 'other';
@@ -71,7 +71,14 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
   const fileHash = imported?.fileHash ?? null;
   const columns = imported?.columns ?? [];
   const ordinals = useMemo(() => columns.map(column => column.ordinal), [columns]);
-  const defaultCriteria = useMemo(() => defaultTeamRankingCriteria(ordinals), [ordinals]);
+  // A Swiss-Manager code heading (e.g. "BH:GP/C1") names its method, so the
+  // dropdown starts on it. It is still unconfirmed until the organizer ticks it.
+  const defaultCriteria = useMemo(() => defaultTeamRankingCriteria(ordinals).map(rule => {
+    if (rule.kind !== 'source_tb') return rule;
+    const header = columns.find(column => column.ordinal === rule.ordinal)?.header;
+    const suggested = tieBreakMethodFromSwissManagerCode(header);
+    return suggested ? { ...rule, name: suggested.name } : rule;
+  }), [ordinals, columns]);
   const criteria = value?.criteria ?? defaultCriteria;
 
   // A new group starts with the default, without silently asserting the
@@ -187,6 +194,11 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
                     {source?.duplicate ? ' · duplicate TB ordinal' : ''}
                   </p>
                   <Label htmlFor={`method-${criterion.ordinal}`}>What is TB{criterion.ordinal} in this tournament?</Label>
+                  {source && method && tieBreakMethodFromSwissManagerCode(source.header)?.id === method.id && (
+                    <p className="text-xs text-muted-foreground">
+                      Filled in from the column heading “{source.header}”. Check it matches your brochure before ticking.
+                    </p>
+                  )}
                   <select id={`method-${criterion.ordinal}`} className="w-full rounded border bg-background px-2 py-1 text-sm"
                     value={selected}
                     onChange={event => {

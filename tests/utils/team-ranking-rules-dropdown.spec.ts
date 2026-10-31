@@ -7,23 +7,24 @@ import type { TeamRankingRuleConfig } from '@/utils/teamRankingV2';
 
 // The editor reads the latest successful import's detected TB columns.
 // Synthetic metadata only: two TB columns, no player data.
+const importMeta = vi.hoisted(() => ({ headers: ['TB1', 'TB2'] as string[] }));
 vi.mock('@/integrations/supabase/client', () => {
-  const rows = [{
-    file_hash: 'synthetic-file-hash',
-    imported_at: '2026-10-31T00:00:00Z',
-    meta: {
-      import_success: true,
-      individual_tb_columns: [
-        { ordinal: 1, header: 'TB1', duplicate: false, present: 20, missing: 0, invalid: 0 },
-        { ordinal: 2, header: 'TB2', duplicate: false, present: 20, missing: 0, invalid: 0 },
-      ],
-    },
-  }];
   const chain = {
     select: () => chain,
     eq: () => chain,
     order: () => chain,
-    limit: () => Promise.resolve({ data: rows, error: null }),
+    limit: () => Promise.resolve({
+      data: [{
+        file_hash: 'synthetic-file-hash',
+        imported_at: '2026-10-31T00:00:00Z',
+        meta: {
+          import_success: true,
+          individual_tb_columns: importMeta.headers.map((header, i) => (
+            { ordinal: i + 1, header, duplicate: false, present: 20, missing: 0, invalid: 0 })),
+        },
+      }],
+      error: null,
+    }),
   };
   return { supabase: { from: () => chain } };
 });
@@ -51,7 +52,7 @@ function renderEditor(initial: TeamRankingRuleConfig | null = null) {
 const tbRule = (ordinal: number) => latest?.criteria.find(rule => rule.kind === 'source_tb' && rule.ordinal === ordinal);
 const confirmBoxes = () => screen.getAllByRole('checkbox', { name: /summing this individual TB/ });
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); importMeta.headers = ['TB1', 'TB2']; });
 
 describe('Team ranking rules — tie-break name dropdown', () => {
   it('offers the standard methods plus Other for each TB column found in the import', async () => {
@@ -119,5 +120,20 @@ describe('Team ranking rules — tie-break name dropdown', () => {
     expect(select.value).toBe('bh_c1');
     const second = screen.getByLabelText('What is TB2 in this tournament?') as HTMLSelectElement;
     expect(second.value).toBe('');
+  });
+
+  it('Swiss-Manager code headings pre-fill the dropdown but stay unconfirmed', async () => {
+    importMeta.headers = ['BH:GP/C1', 'DE'];
+    renderEditor();
+    const first = await screen.findByLabelText('What is TB1 in this tournament?') as HTMLSelectElement;
+    await screen.findByText(/Filled in from the column heading “BH:GP\/C1”/);
+    expect(first.value).toBe('bh_c1');
+    const second = screen.getByLabelText('What is TB2 in this tournament?') as HTMLSelectElement;
+    expect(second.value).toBe('de');
+    expect(tbRule(1)).toMatchObject({ name: 'Buchholz Cut-1', verified: false });
+    expect(tbRule(2)).toMatchObject({ name: 'Direct Encounter', verified: false });
+    expect(latest?.organizer_confirmed).toBe(false);
+    expect((confirmBoxes()[0] as HTMLButtonElement).disabled).toBe(false);
+    expect((confirmBoxes()[1] as HTMLButtonElement).disabled).toBe(true);
   });
 });

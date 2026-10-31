@@ -1,9 +1,18 @@
 /**
- * Read-only discovery of Swiss-Manager individual tie-break columns.
+ * Discovery of Swiss-Manager individual tie-break columns.
  *
- * TB1/TB2 are source positions, NOT named methods. The importer does not yet
- * persist or apply these values to team scoring. Never infer a Buchholz method,
- * default an empty value to zero, or use these samples to allocate prizes.
+ * Two header styles exist:
+ *  - Standings exports label columns TB1, TB2, … — source positions, NOT named
+ *    methods. Never infer a Buchholz method from a position.
+ *  - Swiss-Manager's detailed "Final ranking" export labels each column with
+ *    its FIDE tie-break code instead, e.g. "BH:GP/C1", "BH:GP", "SB", "DE".
+ *    The code names the method; the ordinal is the column's order among the
+ *    detected tie-break columns. Rating statistics ("Rp", "Ra", "Nrat-Ø") and
+ *    the plain "Wins" count are not tie-break columns and are never detected.
+ *
+ * Values are saved with each player for Team Ranking v2 only. An organizer
+ * must still confirm every method in Team Prizes → Edit Rules before it can
+ * decide a prize. Never default an empty value to zero.
  */
 export type ImportedTieBreakColumn = {
   ordinal: number;
@@ -17,6 +26,9 @@ export type ImportedTieBreakColumn = {
 };
 
 const TIE_BREAK_HEADER = /^t[\s._-]*b[\s._-]*0*(\d+)$/i;
+/** FIDE C.07 code as written by Swiss-Manager: CODE[:GP|:MP][/MODIFIER]. Case-sensitive. */
+const SWISS_MANAGER_TB_CODE =
+  /^(?:BH|FB|AOB|SB|ESB|DE|EDE|WIN|WON|BPG|BWG|PS|KS|ARO|TPR|PTP|APRO|APPO)(?::(?:GP|MP))?(?:\/[A-Z0-9]{1,4})?$/;
 const STRICT_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 export function parseImportedTieBreakNumber(value: unknown): number | null {
@@ -36,7 +48,7 @@ export function detectImportedTieBreakColumns(
   headers: readonly string[],
   previewRows: readonly Record<string, unknown>[],
 ): ImportedTieBreakColumn[] {
-  const recognised = headers.flatMap((sourceHeader, index) => {
+  const numbered = headers.flatMap((sourceHeader, index) => {
     if (sourceHeader.startsWith('__EMPTY_COL_')) return [];
     const match = TIE_BREAK_HEADER.exec(sourceHeader.trim());
     if (!match) return [];
@@ -44,6 +56,15 @@ export function detectImportedTieBreakColumns(
     if (!Number.isSafeInteger(ordinal) || ordinal < 1) return [];
     return [{ ordinal, sourceHeader, sourceColumn: index + 1 }];
   });
+  // Numbered TB columns win when present; otherwise use Swiss-Manager codes,
+  // numbered by their order in the file.
+  const recognised = numbered.length > 0 ? numbered : headers
+    .flatMap((sourceHeader, index) => {
+      if (sourceHeader.startsWith('__EMPTY_COL_')) return [];
+      return SWISS_MANAGER_TB_CODE.test(sourceHeader.trim())
+        ? [{ sourceHeader, sourceColumn: index + 1 }] : [];
+    })
+    .map((column, position) => ({ ordinal: position + 1, ...column }));
 
   const frequency = new Map<number, number>();
   for (const column of recognised) {
