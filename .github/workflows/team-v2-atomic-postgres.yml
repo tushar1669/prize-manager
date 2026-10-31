@@ -42,3 +42,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f qa/team-v2/atomic-contract.sql
       - name: Parallel exact-version lock and stale-writer rejection
         run: bash qa/team-v2/concurrent.sh
+      - name: Load synthetic bulk-import helpers (production import shape, synthetic data only)
+        run: psql -v ON_ERROR_STOP=1 -f qa/team-v2/bulk-import.sql
+      - name: Bulk player import (100/500/1250) vs concurrent Team V2 Save
+        run: bash qa/team-v2/bulk-import-concurrency.sh
+      - name: Bulk-import negative controls must each fail the harness
+        run: bash qa/team-v2/bulk-import-negative-controls.sh
