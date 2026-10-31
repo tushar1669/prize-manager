@@ -235,6 +235,73 @@ END $team_rollback$;
 DELETE FROM public.institution_prizes
 WHERE id='00000000-0000-4000-8000-000000000009';
 
+-- Production-compatible player import interaction. The live import RPC
+-- deletes tournament players then inserts replacements in ONE transaction.
+-- Real production has AFTER INSERT/UPDATE STATEMENT watermark triggers with
+-- transition tables as well as BEFORE ROW hooks. The isolated fixture must
+-- preserve these statements when exercising the new AFTER ROW V2 epoch trigger.
+DO $import_trigger_contract$
+BEGIN
+  IF to_regclass('public.tournament_player_watermark') IS NULL THEN
+    RAISE EXCEPTION 'FAIL missing production player watermark fixture';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger t
+    WHERE t.tgrelid = 'public.players'::regclass
+      AND t.tgname = 'trg_players_bump_watermark_ins'
+      AND t.tgenabled = 'O'
+      AND pg_get_triggerdef(t.oid) LIKE '%FOR EACH STATEMENT%'
+      AND pg_get_triggerdef(t.oid) LIKE '%REFERENCING NEW TABLE AS new_players%'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_trigger t
+    WHERE t.tgrelid = 'public.players'::regclass
+      AND t.tgname = 'trg_players_bump_watermark_upd'
+      AND t.tgenabled = 'O'
+      AND pg_get_triggerdef(t.oid) LIKE '%FOR EACH STATEMENT%'
+      AND pg_get_triggerdef(t.oid) LIKE '%REFERENCING NEW TABLE AS new_players%'
+  ) THEN
+    RAISE EXCEPTION 'FAIL missing production statement-level player hooks';
+  END IF;
+  IF (SELECT players_count_max FROM public.tournament_player_watermark
+      WHERE tournament_id = '00000000-0000-4000-8000-000000000001') <> 4 THEN
+    RAISE EXCEPTION 'FAIL seeded player import did not update production watermark';
+  END IF;
+END $import_trigger_contract$;
+
+-- Simulate the real import RPC's DELETE-then-INSERT shape on the canary,
+-- without executing any live import or introducing customer data. This is
+-- intentionally rolled back after verifying mutation lineage.
+BEGIN;
+SELECT pg_catalog.set_config('qa.import_pre_digest',
+ public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid), true);
+DELETE FROM public.players
+ WHERE tournament_id='00000000-0000-4000-8000-000000000001';
+INSERT INTO public.players(id,tournament_id,points,club) VALUES
+ ('00000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000001',5,'Club A'),
+ ('00000000-0000-4000-8000-000000000005','00000000-0000-4000-8000-000000000001',4,'Club A'),
+ ('00000000-0000-4000-8000-000000000024','00000000-0000-4000-8000-000000000001',5,'Club B'),
+ ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000001',4,'Club B');
+DO $import_lineage$
+BEGIN
+ IF (SELECT players_count_max FROM public.tournament_player_watermark
+     WHERE tournament_id='00000000-0000-4000-8000-000000000001') <> 4 OR
+    (SELECT count(*) FROM public.players
+     WHERE tournament_id='00000000-0000-4000-8000-000000000001') <> 4 THEN
+   RAISE EXCEPTION 'FAIL import replacement broke watermark/roster consistency';
+ END IF;
+ IF public.team_v2_source_fingerprint('00000000-0000-4000-8000-000000000001'::uuid)
+    IS NOT DISTINCT FROM pg_catalog.current_setting('qa.import_pre_digest') THEN
+   RAISE EXCEPTION 'FAIL same-data replacement retained stale scorer fingerprint';
+ END IF;
+END $import_lineage$;
+ROLLBACK;
+DO $import_rollback$
+BEGIN
+  IF (SELECT count(*) FROM public.players
+      WHERE tournament_id='00000000-0000-4000-8000-000000000001') <> 4
+  THEN RAISE EXCEPTION 'FAIL rollback changed preexisting players'; END IF;
+END $import_rollback$;
+
 -- ABA INSERT+DELETE: after two successful statements the prize rows are
 -- byte-identical to the starting state. A source digest relying on row bytes
 -- and surviving xmin values cannot detect this without a durable epoch.
