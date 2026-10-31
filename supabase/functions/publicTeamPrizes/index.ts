@@ -36,6 +36,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
+import { teamAppliedCriterionLabel } from "../_shared/teamAppliedCriterion.ts";
 
 const BUILD_VERSION = "2026-09-05T20:00:00Z-TC0d";
 const FUNCTION_NAME = "publicTeamPrizes";
@@ -204,6 +205,8 @@ Deno.serve(async (req: Request) => {
                   rank_sum: rankSum,
                   best_individual_rank: bestRank,
                   players: snapshot.map((p) => ({ player_id: p.player_id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+                  // Public-safe winning criterion only. Never expose the raw audit.
+                  applied_rule_label: teamAppliedCriterionLabel(winner.ranking_snapshot),
                 }
               : null,
           };

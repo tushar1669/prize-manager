@@ -602,6 +602,10 @@ export default function AdminTournaments({ embeddedInAdmin = false }: AdminTourn
                               <FileText className="mr-2 h-4 w-4" />
                               Open Allocation
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/team-v2/${t.id}`)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Master-only Team V2 trial
+                            </DropdownMenuItem>
 
                             <DropdownMenuSeparator />
 

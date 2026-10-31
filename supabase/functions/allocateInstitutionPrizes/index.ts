@@ -2,18 +2,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
 import {
   computeTeamScoresWithReasons,
-  detectTieAtPrizeBoundary,
   type TeamExclusion,
   type TeamPrizePlayer,
   type TeamGroupByKey,
   type TeamWarning,
 } from "../_shared/teamPrizes.ts";
+import { rankTeamCandidatesV2, parseTeamRankingRuleConfig } from "../_shared/teamRankingV2.ts";
+import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-09-07T09:00:00Z-TC1.5";
+const BUILD_VERSION = "2026-10-30-team-v2-source-scored-adjudication-rosters";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -37,7 +38,8 @@ const corsHeaders = CORS_HEADERS;
  * - Score per player is the raw `players.points` column, passed through unchanged
  * - Players are ordered by rank ascending, tie-broken by id
  * - Team total_points = sum of the selected players' points
- * - Tie-break: rank_sum (lower better), then best_individual_rank (lower better), then institution name
+ * - New team rankings: total points, ordered selected-player scores, then verified imported TBs
+ * - An unresolved/unsupported TB never auto-assigns monetary prize places
  *
  * `max_rank` is reported in the response but is NOT used in scoring. Two claims in an
  * earlier version of this header said otherwise; see ARCHITECTURE §1.2 (DD5).
@@ -53,6 +55,7 @@ interface InstitutionPrizeGroup {
   female_slots: number;
   male_slots: number;
   scoring_mode: string;
+  ranking_rules?: unknown;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -82,6 +85,7 @@ interface Player {
   state: string | null;
   group_label: string | null;
   type_label: string | null;
+  tags_json?: unknown;
 }
 
 // Response types
@@ -108,6 +112,7 @@ interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
+  ranking_snapshot?: NonNullable<ReturnType<typeof buildTeamRankingAwardAudit>>;
   tied_at_boundary?: boolean;
   /**
    * ARCHITECTURE §4 warn codes raised by the scorer for this institution. Present
@@ -165,6 +170,21 @@ interface GroupResponse {
    */
   players_without_points: number;
   scored_institutions?: WinnerInstitution[];
+  /** A withheld placing requires organizer / arbiter review, not auto Rank Sum. */
+  ranking_issues?: string[];
+  /** Owner-only preview, created from actual v2 scorer partitions (never public). */
+  adjudication_partitions?: Array<{
+    status: 'resolved' | 'tied' | 'blocked';
+    criterion?: string;
+    reason?: string;
+    teams: Array<{ key: string;
+      selectedPlayers: Array<{ playerId: string; points: number | null;
+        sourceHash: string | null; individualTieBreaks: Record<number, number | null> }>;
+      members: TeamPlayerInfo[];
+    }>;
+  }>;
+  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
+  adjudication_rules_reference?: string;
 }
 
 interface AllocateInstitutionPrizesResponse {
@@ -196,6 +216,24 @@ const EXCLUSION_SENTENCES: Record<TeamExclusion['reason'], string> = {
 
 function formatExclusion(exclusion: TeamExclusion): string {
   return `${exclusion.key}: ${EXCLUSION_SENTENCES[exclusion.reason]}`;
+}
+
+/** Reads only the reserved, typed individual TB namespace; never uses
+ * unrelated tags, event-rule names inferred from TB ordinals, or missing zeros.
+ */
+function parsePlayerTbs(tags: unknown): { sourceHash: string | null; values: Record<number, number | null> } | null {
+  if (!tags || typeof tags !== 'object' || Array.isArray(tags)) return null;
+  const raw = (tags as Record<string, unknown>).team_tiebreak_v2;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj.version !== 1 || !obj.values || typeof obj.values !== 'object' || Array.isArray(obj.values)) return null;
+  const values: Record<number, number | null> = {};
+  for (const [key, value] of Object.entries(obj.values)) {
+    const ordinal = Number(key);
+    if (!Number.isSafeInteger(ordinal) || ordinal < 1 || key !== String(ordinal)) return null;
+    values[ordinal] = typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+  return { sourceHash: typeof obj.source_hash === 'string' ? obj.source_hash : null, values };
 }
 
 // All supported group_by keys (must match _shared/teamPrizes.ts TeamGroupByKey)
@@ -336,7 +374,7 @@ Deno.serve(async (req: Request) => {
     // Load players for this tournament (all groupable columns)
     const { data: players, error: playersError } = await supabase
       .from('players')
-      .select('id, name, rank, gender, club, team, city, state, group_label, type_label, points, tournament_id')
+      .select('id, name, rank, gender, club, team, city, state, group_label, type_label, points, tags_json, tournament_id')
       .eq('tournament_id', tournament_id)
       .order('rank');
 
@@ -445,14 +483,77 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const boundaryTies = detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
-      console.log(`[allocateInstitutionPrizes] Group "${group.name}": ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${droppedPlayersWithoutKey} players without a ${columnName} value`);
+      // Retain the shipped rank-first / gender-slot PLAYER SELECTION, but do
+      // NOT use its historical Rank Sum order to determine new team awards.
+      // Team v2 compares the exact selected K against raw, nullable points.
+      const rawPlayerById = new Map(typedPlayers.map(p => [String(p.id), p]));
+      const config = parseTeamRankingRuleConfig(group.ranking_rules);
+      const selectedCandidates = scoredInstitutions.map(institution => ({
+        key: institution.key,
+        selectedPlayers: institution.team.map(selected => {
+          const raw = rawPlayerById.get(selected.id);
+          const sourceTbs = parsePlayerTbs(raw?.tags_json);
+          return {
+            playerId: selected.id,
+            points: typeof raw?.points === 'number' && Number.isFinite(raw.points) ? raw.points : null,
+            sourceHash: sourceTbs?.sourceHash ?? null,
+            individualTieBreaks: sourceTbs?.values ?? {},
+          };
+        }),
+      }));
+      const partitions = rankTeamCandidatesV2(selectedCandidates, config);
+      const scoredByKey = new Map(scoredInstitutions.map(institution => [institution.key, institution]));
+      const rankedSlots = partitions.flatMap(partition =>
+        partition.teams.map(team => ({ partition, institution: scoredByKey.get(team.key) })),
+      );
+      // Fresh, authenticated owner/master-only ranking context used by the
+      // separate read-only official-ruling review flow. A blocked source TB is
+      // NOT a tied partition and must never become a manual cash award.
+      let precedingTeams = 0;
+      const adjudicationTies = partitions.flatMap(partition => {
+        const start = precedingTeams;
+        precedingTeams += partition.teams.length;
+        if (partition.status !== 'tied') return [];
+        const affectedPlaces = groupPrizes
+          .filter(prize => prize.place > start && prize.place <= precedingTeams)
+          .map(prize => prize.place).sort((a, b) => a - b);
+        return affectedPlaces.length
+          ? [{ team_keys: partition.teams.map(team => team.key), affected_places: affectedPlaces }]
+          : [];
+      });
+      const adjudicationPartitions = partitions.map(partition => ({
+        status: partition.status,
+        criterion: partition.criterion,
+        reason: partition.reason,
+        teams: partition.teams.map(team => ({
+          key: team.key,
+          selectedPlayers: team.selectedPlayers.map(player => ({
+            playerId: player.playerId,
+            points: player.points,
+            sourceHash: player.sourceHash ?? null,
+            individualTieBreaks: player.individualTieBreaks ?? {},
+          })),
+          // Save must construct the award from scorer-selected members. Never
+          // substitute client-provided rosters or alphabetically ordered keys.
+          members: scoredByKey.get(team.key)?.team.map(player => ({
+            player_id: player.id, name: player.name, rank: player.rank,
+            points: player.points, gender: player.gender,
+          })) ?? [],
+        })),
+      }));
+      const rankingIssues = groupPrizes.flatMap(prize => {
+        const slot = rankedSlots[prize.place - 1];
+        if (!slot || slot.partition.status === 'resolved') return [];
+        return [`Place ${prize.place}: team ranking ${slot.partition.status}; ${slot.partition.reason ?? 'tie-breaks exhausted'}`];
+      });
+      console.log(`[allocateInstitutionPrizes] Group result: ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${rankingIssues.length} ranking holds`);
 
       // Assign prizes
       const prizesWithWinners: PrizeWithWinner[] = groupPrizes.map((prize, index) => {
         // Prizes are already sorted by place
         const placeIndex = prize.place - 1;
-        const winner = scoredInstitutions[placeIndex];
+        const slot = rankedSlots[placeIndex];
+        const winner = slot?.partition.status === 'resolved' ? slot.institution : null;
 
         return {
           id: prize.id,
@@ -468,7 +569,15 @@ Deno.serve(async (req: Request) => {
             rank_sum: winner.rank_sum,
             best_individual_rank: winner.best_individual_rank,
             players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
-            tied_at_boundary: boundaryTies.includes(winner.key),
+            ranking_snapshot: buildTeamRankingAwardAudit(
+              group.id,
+              { group_by: group.group_by, team_size: group.team_size, female_slots: group.female_slots,
+                male_slots: group.male_slots, scoring_mode: group.scoring_mode },
+              { id: prize.id, place: prize.place, cash_amount: prize.cash_amount,
+                has_trophy: prize.has_trophy, has_medal: prize.has_medal },
+              winner.key, config, selectedCandidates, partitions,
+            ) ?? undefined,
+            tied_at_boundary: false,
             ...(winner.warnings ? { warnings: winner.warnings } : {}),
           } : null,
         };
@@ -477,8 +586,8 @@ Deno.serve(async (req: Request) => {
       // Build scored_institutions for client-side tie detection
       // Include enough to cover all prizes + runner-up for boundary detection
       const maxPrizePlace = groupPrizes.reduce((max, p) => Math.max(max, p.place), 0);
-      const scoredLimit = Math.min(maxPrizePlace + 2, scoredInstitutions.length);
-      const scoredForResponse: WinnerInstitution[] = scoredInstitutions.slice(0, scoredLimit).map((inst) => ({
+      const scoredLimit = Math.min(maxPrizePlace + 2, rankedSlots.length);
+      const scoredForResponse: WinnerInstitution[] = rankedSlots.slice(0, scoredLimit).flatMap(({ institution: inst }) => inst ? [{
         key: inst.key,
         label: inst.key,
         total_points: inst.total_points,
@@ -486,7 +595,7 @@ Deno.serve(async (req: Request) => {
         best_individual_rank: inst.best_individual_rank,
         players: inst.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
         ...(inst.warnings ? { warnings: inst.warnings } : {}),
-      }));
+      }] : []);
 
       groupResponses.push({
         group_id: group.id,
@@ -505,6 +614,10 @@ Deno.serve(async (req: Request) => {
         ineligible_details: ineligibleDetails,
         players_without_group_field: droppedPlayersWithoutKey,
         players_without_points: playersWithoutPoints,
+        ranking_issues: rankingIssues,
+        adjudication_partitions: adjudicationPartitions,
+        adjudication_ties: adjudicationTies,
+        adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
         scored_institutions: scoredForResponse,
       });
     }

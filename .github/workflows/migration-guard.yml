@@ -61,12 +61,12 @@ jobs:
             ${migrationList}
 
             Required references:
-            - SOP: `docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md`
-            - Production ledger: `docs/PRODUCTION_MIGRATION_LEDGER.md`
+            - SOP: docs/SUPABASE_MIGRATION_DEPLOYMENT_SOP.md
+            - Production ledger: docs/PRODUCTION_MIGRATION_LEDGER.md
 
             ⚠️ **Warning:** Lovable/frontend publish is blocked until production DB migration verification is complete.
 
-            Reminder: after production migration apply, add/update the required entry in `docs/PRODUCTION_MIGRATION_LEDGER.md`.
+            Reminder: after production migration apply, add/update the required entry in docs/PRODUCTION_MIGRATION_LEDGER.md.
 
             ${advisory}
             `.split('\n').map((line) => line.trimEnd()).join('\n');

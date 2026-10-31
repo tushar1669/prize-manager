@@ -51,6 +51,15 @@ export interface GroupResponse {
   ineligible_institutions: number;
   ineligible_reasons: string[];
   scored_institutions?: WinnerInstitution[];
+  ranking_issues?: string[];
+  adjudication_partitions?: Array<{
+    status: 'resolved' | 'tied' | 'blocked';
+    criterion?: string;
+    reason?: string;
+    teams: Array<{ key: string; selectedPlayers: Array<{ points: number | null }> }>;
+  }>;
+  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
+  adjudication_rules_reference?: string;
 }
 
 export interface TeamPrizeResultsResponse {
@@ -74,6 +83,13 @@ type TeamPrizeCacheEntry = {
 };
 
 const teamPrizeResultCache = new Map<string, TeamPrizeCacheEntry>();
+
+/** Invalidate only this tournament's scorer previews after a rules/prize edit. */
+export function invalidateTeamPrizeResultCache(tournamentId: string): void {
+  for (const key of teamPrizeResultCache.keys()) {
+    if (key.startsWith(`${tournamentId}:`)) teamPrizeResultCache.delete(key);
+  }
+}
 
 function getCacheKey(tournamentId: string, allocationVersion?: number | string) {
   const versionKey = allocationVersion ?? 'latest';
@@ -171,6 +187,7 @@ export async function fetchTeamPrizeResults(
                       rank_sum: rankSum,
                       best_individual_rank: bestRank,
                       players: snapshot,
+                      ranking_snapshot: winner.ranking_snapshot ?? null,
                     }
                   : null,
               };

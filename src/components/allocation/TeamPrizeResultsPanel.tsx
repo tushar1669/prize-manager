@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
+import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
 import type {
   TeamPrizeResultsResponse,
@@ -34,6 +35,7 @@ interface TeamPrizeResultsPanelProps {
   allocationVersion?: number;
   tournamentId?: string;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  onV2RulingRequest?: (group: GroupResponse) => void;
   /**
    * Organizer-only diagnostics: the list of institutions that did not qualify.
    *
@@ -166,12 +168,14 @@ function GroupCard({
   group,
   groupIndex,
   onTieResolutionRequest,
+  onV2RulingRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
   groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
+  onV2RulingRequest?: (group: GroupResponse) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
 }) {
@@ -183,6 +187,7 @@ function GroupCard({
     [group.prizes]
   );
   const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
+  const rankingIssues = group.ranking_issues ?? [];
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
 
@@ -255,6 +260,24 @@ function GroupCard({
 
         <CollapsibleContent>
           <CardContent className="pt-0 space-y-4">
+            {showDiagnostics && hasFullAccess && rankingIssues.length > 0 && (
+              <Alert variant="destructive" data-team-print-hide>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Team V2 ranking requires official review</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {rankingIssues.map((issue, index) => <li key={index}>{issue}</li>)}
+                  </ul>
+                  {showDiagnostics && hasFullAccess && onV2RulingRequest &&
+                    (group.adjudication_ties?.length ?? 0) > 0 && (
+                    <Button type="button" size="sm" variant="outline" className="mt-3"
+                      onClick={() => onV2RulingRequest(group)}>
+                      Review official tie ruling
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Winners table */}
             {filledPrizes.length > 0 ? (
               <div className="rounded-md border">
@@ -311,6 +334,11 @@ function GroupCard({
                                   </span>
                                 ))}
                               </div>
+                              {(winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)) && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Tie-break applied: {winner.applied_rule_label ?? teamAppliedCriterionLabel(winner.ranking_snapshot)}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="pm-team-prize-stat text-right font-mono">
                               {pointsAbsent ? '—' : winner.total_points}
@@ -457,7 +485,7 @@ function GroupCard({
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, onV2RulingRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -523,6 +551,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
             group={group}
             groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
+            onV2RulingRequest={onV2RulingRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
           />

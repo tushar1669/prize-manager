@@ -1,0 +1,50 @@
+name: Team v2 draft atomic Postgres contract (isolated CI only)
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  isolated-postgres-contract:
+    if: github.event.pull_request.number == 484
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: temporary-synthetic-ci-only
+          POSTGRES_DB: synthetic_contract
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: temporary-synthetic-ci-only
+      PGDATABASE: synthetic_contract
+      PGSSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install local Postgres client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Create synthetic schema and apply exact DRAFT SQL in ephemeral Postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 -f qa/team-v2/isolated-schema.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261025193000_team_tiebreak_v2_additive.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261025194000_team_v2_canary_activation.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027080000_team_v2_adjudicated_atomic_version.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261027110000_team_v2_source_epoch.sql
+          psql -v ON_ERROR_STOP=1 -f qa/team-v2/seed.sql
+      - name: Privileges, failed-transaction rollback, saved version and pin assertions
+        run: psql -v ON_ERROR_STOP=1 -f qa/team-v2/atomic-contract.sql
+      - name: Parallel exact-version lock and stale-writer rejection
+        run: bash qa/team-v2/concurrent.sh
+      - name: Load synthetic bulk-import helpers (production import shape, synthetic data only)
+        run: psql -v ON_ERROR_STOP=1 -f qa/team-v2/bulk-import.sql
+      - name: Bulk player import (100/500/1250) vs concurrent Team V2 Save
+        run: bash qa/team-v2/bulk-import-concurrency.sh
+      - name: Bulk-import negative controls must each fail the harness
+        run: bash qa/team-v2/bulk-import-negative-controls.sh

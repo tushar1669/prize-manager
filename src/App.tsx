@@ -69,6 +69,7 @@ const AdminHome = lazy(() => import("./pages/admin/AdminHome"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminTeamSnapshots = lazy(() => import("./pages/admin/AdminTeamSnapshots"));
+const TeamV2Trial = lazy(() => import("./pages/admin/TeamV2Trial"));
 const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout").then((module) => ({ default: module.AdminLayout })));
 
@@ -196,6 +197,7 @@ const AppInner = () => {
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="audit" element={<AdminAuditLogs embeddedInAdmin />} />
                   <Route path="team-snapshots" element={<AdminTeamSnapshots />} />
+                  <Route path="team-v2/:id" element={<TeamV2Trial />} />
                 </Route>
 
                 {/* Fallback */}
