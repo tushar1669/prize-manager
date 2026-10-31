@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,6 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { defaultTeamRankingCriteria, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
+import { TEAM_TIEBREAK_METHODS, findTeamTieBreakMethod } from '@/utils/teamTieBreakMethods';
+
+/** Dropdown value for a tie-break that is not in the standard list. */
+const OTHER_METHOD = 'other';
 export { parseTeamRankingRuleConfig } from '@/utils/teamRankingV2';
 
 type ImportColumn = { ordinal: number; header: string; duplicate: boolean; present: number; missing: number; invalid: number };
@@ -41,6 +45,8 @@ function sourceColumns(meta: unknown): ImportColumn[] {
 /** Reuses the existing Team Prizes → Edit Rules drawer. No new route or save button. */
 export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: Props) {
   const draggedIndex = useRef<number | null>(null);
+  // TB columns where the organizer picked "Other" but has not typed a name yet.
+  const [otherOrdinals, setOtherOrdinals] = useState<ReadonlySet<number>>(new Set());
   const { data: imported } = useQuery({
     queryKey: ['team-ranking-import-source', tournamentId],
     enabled: open && !!tournamentId,
@@ -141,7 +147,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
           >
             <div className="flex items-center gap-2">
               <GripVertical size={16} className="text-muted-foreground shrink-0" aria-hidden="true"/>
-              <span className="flex-1 text-sm font-medium">{index + 2}. {isVector ? 'Highest individual scores' : `Individual TB${criterion.ordinal}`}</span>
+              <span className="flex-1 text-sm font-medium">{index + 2}. {isVector ? 'Highest individual scores' : `Individual TB${criterion.ordinal}${criterion.name.trim() ? ` · ${criterion.name.trim()}` : ''}`}</span>
               <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                 disabled={index === 0} title="Move up"
                 aria-label={`Move criterion ${index + 2} up`}
@@ -153,44 +159,98 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
             </div>
             {isVector ? (
               <p className="text-xs text-muted-foreground">Compare selected players' scores highest to lowest; then the next player.</p>
-            ) : (
-              <div className="space-y-2">
-                <p className={`text-xs ${missing || source?.duplicate || source?.invalid ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  Source: {source?.header ?? 'not exported'} · {source?.present ?? 0} numeric preview values · {source?.missing ?? 0} blanks · {source?.invalid ?? 0} invalid
-                  {source?.duplicate ? ' · duplicate TB ordinal' : ''}
-                </p>
-                <Label htmlFor={`method-${criterion.ordinal}`}>Published individual tie-break name</Label>
-                <Input id={`method-${criterion.ordinal}`} value={criterion.name}
-                  placeholder="e.g., Buchholz Cut-1 (only if verified)"
-                  onChange={event => update({
-                    criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
-                      ? { ...item, name: event.target.value, verified: false } : item),
-                    organizer_confirmed: false,
-                  })}
-                />
-                <div className="flex gap-2 items-center">
-                  <Label htmlFor={`direction-${criterion.ordinal}`}>Better result</Label>
-                  <select id={`direction-${criterion.ordinal}`} className="rounded border bg-background px-2 py-1 text-sm"
-                    value={criterion.direction} onChange={event => update({
-                      criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
-                        ? { ...item, direction: event.target.value as 'higher' | 'lower', verified: false } : item),
-                      organizer_confirmed: false,
-                    })}>
-                    <option value="higher">Higher total</option>
-                    <option value="lower">Lower total</option>
+            ) : (() => {
+              if (criterion.kind !== 'source_tb') return null;
+              // "Other" keeps its text box open while typing, even when the
+              // text matches a standard name; the guard still recognises it.
+              const typedOther = otherOrdinals.has(criterion.ordinal);
+              const matched = findTeamTieBreakMethod(criterion.name);
+              const method = typedOther ? null : matched;
+              const isOther = typedOther || (!matched && criterion.name.trim() !== '');
+              const nonSummable = matched !== null && !matched.summable;
+              const selected = method ? method.id : isOther ? OTHER_METHOD : '';
+              // Any change to a tie-break's meaning must be re-confirmed.
+              const setTieBreak = (patch: { name?: string; direction?: 'higher' | 'lower' }) => update({
+                criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
+                  ? { ...item, ...patch, verified: false } : item),
+                organizer_confirmed: false,
+              });
+              const setOther = (on: boolean) => setOtherOrdinals(previous => {
+                const next = new Set(previous);
+                if (on) next.add(criterion.ordinal); else next.delete(criterion.ordinal);
+                return next;
+              });
+              return (
+                <div className="space-y-2">
+                  <p className={`text-xs ${missing || source?.duplicate || source?.invalid ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    Source: {source?.header ?? 'not exported'} · {source?.present ?? 0} numeric preview values · {source?.missing ?? 0} blanks · {source?.invalid ?? 0} invalid
+                    {source?.duplicate ? ' · duplicate TB ordinal' : ''}
+                  </p>
+                  <Label htmlFor={`method-${criterion.ordinal}`}>What is TB{criterion.ordinal} in this tournament?</Label>
+                  <select id={`method-${criterion.ordinal}`} className="w-full rounded border bg-background px-2 py-1 text-sm"
+                    value={selected}
+                    onChange={event => {
+                      const next = event.target.value;
+                      if (next === OTHER_METHOD) {
+                        setOther(true);
+                        setTieBreak({ name: method ? '' : criterion.name });
+                        return;
+                      }
+                      setOther(false);
+                      const chosen = TEAM_TIEBREAK_METHODS.find(item => item.id === next);
+                      // Every standard FIDE tie-break ranks a higher value first.
+                      setTieBreak({ name: chosen ? chosen.name : '', direction: 'higher' });
+                    }}>
+                    <option value="">Choose the tie-break this event uses…</option>
+                    {TEAM_TIEBREAK_METHODS.map(item => (
+                      <option key={item.id} value={item.id}>{item.optionLabel}</option>
+                    ))}
+                    <option value={OTHER_METHOD}>Other — type the exact name from the brochure</option>
                   </select>
+                  {isOther && (
+                    <Input id={`method-name-${criterion.ordinal}`} value={criterion.name}
+                      aria-label={`Exact name of TB${criterion.ordinal}`}
+                      placeholder="Exact tie-break name, as printed in the brochure"
+                      onChange={event => setTieBreak({ name: event.target.value })}
+                    />
+                  )}
+                  {nonSummable ? (
+                    <p className="text-xs text-destructive">
+                      Direct Encounter compares results between the tied players themselves, so it cannot be added up for a team.
+                      This step never decides a prize automatically — a tie that reaches it needs an official ruling.
+                    </p>
+                  ) : method && criterion.direction === 'higher' ? (
+                    <p className="text-xs text-muted-foreground">
+                      Team value = sum of the counted players&apos; TB{criterion.ordinal} values · higher total wins.
+                    </p>
+                  ) : !method && !isOther ? (
+                    <p className="text-xs text-muted-foreground">
+                      Pick what TB{criterion.ordinal} means in this event. Until then, this step cannot decide a prize.
+                    </p>
+                  ) : (
+                    <div className="flex gap-2 items-center">
+                      <Label htmlFor={`direction-${criterion.ordinal}`}>Better result</Label>
+                      <select id={`direction-${criterion.ordinal}`} className="rounded border bg-background px-2 py-1 text-sm"
+                        value={criterion.direction}
+                        onChange={event => setTieBreak({ direction: event.target.value as 'higher' | 'lower' })}>
+                        <option value="higher">Higher total</option>
+                        <option value="lower">Lower total</option>
+                      </select>
+                    </div>
+                  )}
+                  <Label className="flex items-start gap-2 text-xs">
+                    <Checkbox checked={criterion.verified && !nonSummable}
+                      disabled={!criterion.name.trim() || missing || source?.duplicate || Boolean(source?.invalid) || nonSummable}
+                      onCheckedChange={checked => update({
+                        criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
+                          ? { ...item, verified: checked === true } : item),
+                        organizer_confirmed: false,
+                      })}/>
+                    I confirm that summing this individual TB for selected players is allowed by the published team-prize rules.
+                  </Label>
                 </div>
-                <Label className="flex items-start gap-2 text-xs">
-                  <Checkbox checked={criterion.verified} disabled={!criterion.name.trim() || missing || source?.duplicate || Boolean(source?.invalid)}
-                    onCheckedChange={checked => update({
-                      criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
-                        ? { ...item, verified: checked === true } : item),
-                      organizer_confirmed: false,
-                    })}/>
-                  I confirm that summing this individual TB for selected players is allowed by the published team-prize rules.
-                </Label>
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
       })}
