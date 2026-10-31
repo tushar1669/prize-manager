@@ -6,6 +6,8 @@
  * criterion as verified. This module NEVER awards a prize, invents a missing
  * player score, or uses historical Rank Sum.
  */
+import { isNonSummableTieBreakName } from './teamTieBreakMethods.ts';
+
 export type TeamRankingCriterion =
   | { kind: 'score_vector' }
   | {
@@ -150,7 +152,10 @@ export function rankTeamCandidatesV2(
     const criterion = config.criteria[index];
     const label = criterion.kind === 'score_vector' ? 'score_vector' : `TB${criterion.ordinal}`;
 
-    if (criterion.kind === 'source_tb' && (!criterion.verified || !criterion.name.trim())) {
+    // A non-summable method (Direct Encounter) can be declared but never
+    // decides a team prize by adding individual values: hold for a ruling.
+    if (criterion.kind === 'source_tb' &&
+        (!criterion.verified || !criterion.name.trim() || isNonSummableTieBreakName(criterion.name))) {
       return [{ teams: subset, status: 'blocked', criterion: label, reason: 'undefined_tb' }];
     }
 
@@ -266,6 +271,9 @@ export function compareTeamRankingV2(
     }
     if (!criterion.name.trim()) {
       return { status: 'blocked', order: 0, criterion: identifier, reason: 'invalid_criterion' };
+    }
+    if (isNonSummableTieBreakName(criterion.name)) {
+      return { status: 'blocked', order: 0, criterion: identifier, reason: 'undefined_tb' };
     }
     const rowsA = a.selectedPlayers.map(player => player.individualTieBreaks?.[criterion.ordinal]);
     const rowsB = b.selectedPlayers.map(player => player.individualTieBreaks?.[criterion.ordinal]);
