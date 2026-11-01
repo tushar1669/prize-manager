@@ -2988,7 +2988,8 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {previewTieBreakColumns.length > 0 && (
+            {/* Team V2 is Master-operated; organizers would see a notice they cannot act on. */}
+            {isMaster && previewTieBreakColumns.length > 0 && (
               <div className="rounded-md border px-4 py-3 text-sm" role="status">
                 <p className="font-medium">
                   Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col =>
