@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
+import { detectTeamTiesAtBoundary, isTeamV2Group, type TieInfo } from '@/utils/teamTieDetection';
 import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
 import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
@@ -362,7 +362,10 @@ function GroupCard({
                 </Table>
                 {pointsAbsent && (
                   <p className="px-3 py-2 text-xs text-muted-foreground border-t">
-                    Points were not imported for this tournament. Teams were ranked by rank sum.
+                    {/* Team V2 never uses Rank Sum: without points it cannot rank teams. */}
+                    {isTeamV2Group(group)
+                      ? 'Points were not imported for this tournament, so Team V2 cannot rank these teams.'
+                      : 'Points were not imported for this tournament. Teams were ranked by rank sum.'}
                   </p>
                 )}
                 {hiddenFilledPrizes.length > 0 && (

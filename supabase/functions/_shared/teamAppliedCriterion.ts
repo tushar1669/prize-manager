@@ -8,6 +8,7 @@ export function teamAppliedCriterionLabel(snapshot: unknown): string | null {
   const audit = snapshot as Record<string, unknown>;
   if (audit.schema_version !== 2) return null;
   if (audit.decided_by_criterion === 'score_vector') return 'Highest individual scores';
+  if (audit.decided_by_criterion === 'best_rank') return 'Best individual rank';
   const criterion = audit.decided_by_criterion;
   if (typeof criterion !== 'string' || !/^TB[1-9]\d*$/.test(criterion)) return null;
   const ordinal = Number(criterion.slice(2));

@@ -84,6 +84,7 @@ export function buildTeamRankingAwardAudit(
       selected_players: team.selectedPlayers.map(player => ({
         player_id: player.playerId,
         points: player.points,
+        rank: player.rank ?? null,
         source_hash: player.sourceHash ?? null,
         individual_tbs: Object.fromEntries(
           Object.entries(player.individualTieBreaks ?? {}).map(([ordinal, value]) => [ordinal, value ?? null]),

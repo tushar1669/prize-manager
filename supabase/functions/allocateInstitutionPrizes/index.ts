@@ -178,7 +178,7 @@ interface GroupResponse {
     criterion?: string;
     reason?: string;
     teams: Array<{ key: string;
-      selectedPlayers: Array<{ playerId: string; points: number | null;
+      selectedPlayers: Array<{ playerId: string; points: number | null; rank: number | null;
         sourceHash: string | null; individualTieBreaks: Record<number, number | null> }>;
       members: TeamPlayerInfo[];
     }>;
@@ -496,6 +496,8 @@ Deno.serve(async (req: Request) => {
           return {
             playerId: selected.id,
             points: typeof raw?.points === 'number' && Number.isFinite(raw.points) ? raw.points : null,
+            // Needed by the optional "Best individual rank" step. Absent is not a rank.
+            rank: typeof raw?.rank === 'number' && Number.isFinite(raw.rank) ? raw.rank : null,
             sourceHash: sourceTbs?.sourceHash ?? null,
             individualTieBreaks: sourceTbs?.values ?? {},
           };
@@ -530,6 +532,7 @@ Deno.serve(async (req: Request) => {
           selectedPlayers: team.selectedPlayers.map(player => ({
             playerId: player.playerId,
             points: player.points,
+            rank: player.rank ?? null,
             sourceHash: player.sourceHash ?? null,
             individualTieBreaks: player.individualTieBreaks ?? {},
           })),

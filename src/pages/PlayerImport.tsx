@@ -2988,14 +2988,18 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {previewTieBreakColumns.length > 0 && (
+            {/* Team V2 is Master-operated; organizers would see a notice they cannot act on. */}
+            {isMaster && previewTieBreakColumns.length > 0 && (
               <div className="rounded-md border px-4 py-3 text-sm" role="status">
                 <p className="font-medium">
-                  Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col => `TB${col.ordinal}`).join(', ')}
+                  Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col =>
+                    /^t[\s._-]*b/i.test(col.sourceHeader) ? `TB${col.ordinal}` : `TB${col.ordinal} = ${col.sourceHeader}`,
+                  ).join(', ')}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Preview only (up to 20 rows). These source TB columns are not yet saved or used
-                  for Team Prize rankings. The method, direction and team calculation need validation.
+                  Each player&apos;s values are saved with the import for Team Prize tie-breaks only; individual prizes
+                  do not use them. In Team Prizes → Edit Rules, confirm what each tie-break is before it can decide a
+                  team prize. Counts here are a preview of the first 20 rows.
                 </p>
                 {previewTieBreakColumns.some(col => col.duplicateOrdinal || col.sampleInvalid > 0) && (
                   <p className="mt-1 text-xs text-destructive">

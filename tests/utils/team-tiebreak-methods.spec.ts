@@ -32,10 +32,10 @@ describe('standard team tie-break method list', () => {
     expect(TEAM_TIEBREAK_METHODS.filter(method => !method.summable).map(method => method.id)).toEqual(['de']);
   });
 
-  it('contains the owner-approved dropdown entries in order', () => {
+  it('contains the owner-approved dropdown entries in order (plus BWG, needed by real Swiss-Manager files)', () => {
     expect(TEAM_TIEBREAK_METHODS.map(method => method.name)).toEqual([
       'Buchholz Cut-1', 'Buchholz', 'Buchholz Cut-2', 'Median Buchholz', 'Sonneborn-Berger',
-      'Progressive / Cumulative score', 'Number of wins', 'Games played with Black',
+      'Progressive / Cumulative score', 'Number of wins', 'Games played with Black', 'Games won with Black',
       'Average Rating of Opponents', 'Performance Rating', 'Koya score', 'Direct Encounter',
     ]);
   });

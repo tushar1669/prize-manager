@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { GROUP_BY_OPTIONS, type InstitutionPrizeGroup } from './types';
 import { TeamRankingRulesEditor, parseTeamRankingRuleConfig, type TeamRankingRuleConfig } from './TeamRankingRulesEditor';
 import type { Json } from '@/integrations/supabase/types';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface Props {
   open: boolean;
@@ -19,6 +20,11 @@ interface Props {
 }
 
 export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournamentId, onSave, saving }: Props) {
+  // Team V2 ranking steps decide prizes only on tournaments a Master has
+  // enabled for V2, and only a Master can save V2 results. Organizers keep the
+  // standard team drawer, so nobody configures steps that would be ignored.
+  const { isMaster, authzStatus } = useUserRole();
+  const canConfigureTeamV2 = authzStatus === 'ready' && isMaster;
   const [name, setName] = useState('');
   const [groupBy, setGroupBy] = useState('club');
   const [teamSize, setTeamSize] = useState(4);
@@ -220,12 +226,14 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             </div>
           </div>
 
-          <TeamRankingRulesEditor
-            tournamentId={tournamentId}
-            open={open}
-            value={rankingRules}
-            onChange={setRankingRules}
-          />
+          {canConfigureTeamV2 && (
+            <TeamRankingRulesEditor
+              tournamentId={tournamentId}
+              open={open}
+              value={rankingRules}
+              onChange={setRankingRules}
+            />
+          )}
         </div>
 
         <SheetFooter>
