@@ -1,8 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
-import { verifyTeamFinalizePreview, type FinalizeTeamGroup } from "../_shared/teamFinalizeGuard.ts";
+import { isTeamV2Tournament } from "../_shared/teamV2Tournament.ts";
 
-const BUILD_VERSION = "2025-12-20T20:00:00Z";
+const BUILD_VERSION = "2026-11-01-team-v2-fence-canary-only";
 const FUNCTION_NAME = "finalize";
 const corsHeaders = CORS_HEADERS;
 
@@ -172,9 +172,7 @@ Deno.serve(async (req) => {
 
     console.log(`[finalize] start tId=${tournamentId} winners=${winners.length} version=${nextVersion}`);
 
-    // Validate all active team prize groups BEFORE any allocation write.
-    // A preview with unadjudicated award ties must not silently finalize
-    // the individual prizes and omit the unresolved monetary team prizes.
+    // Decide the team route BEFORE any allocation write.
     const { count: teamGroupCount, error: teamGroupCountError } = await supabaseClient
       .from('institution_prize_groups')
       .select('id', { count: 'exact', head: true })
@@ -185,38 +183,23 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to check team groups: ${teamGroupCountError.message}`);
     }
 
-    let teamGroups: FinalizeTeamGroup[] = [];
+    type StandardTeamGroup = { group_id: string; prizes: Array<{ id: string; place: number;
+      winner_institution: { key: string; total_points: number;
+        players: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }> } | null }> };
+    let teamGroups: StandardTeamGroup[] = [];
     if ((teamGroupCount ?? 0) > 0) {
-      // DD1 / Team v2 isolation: this legacy finalize route writes allocations
-      // in separate HTTP transactions using MAX+1. It cannot hold the
-      // tournament row lock used by the proposed atomic Team v2 SQL writer.
-      // Refuse every configured v2 team group BEFORE any allocation write;
-      // never treat a missing/malformed rules value as a legacy green light.
-      // This is a fail-closed ROUTING FENCE, not a database transaction lock.
-      const { data: activeTeamRules, error: activeTeamRulesError } = await supabaseClient
-        .from('institution_prize_groups')
-        .select('id, ranking_rules')
-        .eq('tournament_id', tournamentId)
-        .eq('is_active', true);
-
-      if (activeTeamRulesError || !activeTeamRules ||
-          activeTeamRules.length !== teamGroupCount) {
+      // Team Prizes V2 tournaments are saved only by the master-only atomic
+      // Team V2 Save (the database also rejects legacy writes for them).
+      // Every other tournament keeps this standard route, as before V2.
+      // If the check fails, refuse before any write.
+      const teamV2 = await isTeamV2Tournament(supabaseClient as never, tournamentId);
+      if (teamV2 !== false) {
         return new Response(
           JSON.stringify({
-            error: 'team_v2_writer_route_unavailable',
-            hint: 'Team ranking rules could not be verified. No allocations were saved.',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      // Old NULL-rule ranking is obsolete, too. Never use the historical
-      // multi-request MAX+1 writer for NEW team prize allocation versions.
-      // Previously saved historical versions and team-less finalization stay.
-      if (activeTeamRules.length > 0) {
-        return new Response(
-          JSON.stringify({
-            error: 'team_v2_atomic_writer_required',
-            hint: 'Team Ranking v2 allocations cannot use the legacy finalization route. No allocations were saved.',
+            error: teamV2 === null ? 'team_v2_check_unavailable' : 'team_v2_save_required',
+            hint: teamV2 === null
+              ? 'Team prize settings could not be checked. Nothing was saved; please try again.'
+              : 'This tournament uses Team Prizes V2. Save its prizes from Admin → Team V2 instead of Finalize. Nothing was saved here.',
           }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -231,19 +214,7 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to compute team allocations: ${teamError.message}`);
       }
 
-      const checked = verifyTeamFinalizePreview(teamData, teamGroupCount!);
-      if (!checked.ok) {
-        // The reason is a fixed code, never raw player, tournament or tie-break data.
-        console.warn(`[finalize] team prize preflight rejected: ${checked.reason}`);
-        return new Response(
-          JSON.stringify({
-            error: 'team_prizes_not_ready',
-            hint: 'Review and resolve team prize ranking issues before finalizing.',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      teamGroups = checked.groups;
+      teamGroups = (teamData as { groups?: StandardTeamGroup[] })?.groups ?? [];
     }
 
     // Insert new allocations
@@ -267,7 +238,7 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to insert allocations: ${insertError.message}`);
     }
 
-    // Persist only the preflight-validated team snapshot for this version.
+    // Persist the standard team snapshot for this version.
     if (teamGroups.length > 0) {
       // Build player_ids from the player list and store full players array as player_snapshot
       const rows = teamGroups.flatMap((group) =>
@@ -283,14 +254,7 @@ Deno.serve(async (req) => {
             total_points: prize.winner_institution!.total_points,
             player_ids: prize.winner_institution!.players.map((p) => p.player_id),
             player_snapshot: prize.winner_institution!.players,
-            // Written only to the new nullable additive column on a NEW version.
-            // Historical allocation rows remain untouched.
-            ranking_snapshot: {
-              ...prize.winner_institution!.ranking_snapshot,
-              allocation_version: nextVersion,
-              finalized_by: user.id,
-              finalized_at: new Date().toISOString(),
-            },
+            // Standard route: no ranking_snapshot. A snapshot marks a V2 award.
           }))
       );
 

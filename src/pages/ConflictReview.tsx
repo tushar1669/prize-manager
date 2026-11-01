@@ -36,6 +36,7 @@ import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { coerceGiftItems } from "@/lib/utils";
 import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
+import { finalizeErrorWithHint } from '@/utils/finalizeError';
 
 interface Winner {
   prizeId: string;
@@ -409,7 +410,7 @@ export default function ConflictReview() {
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
 
-      if (error) throw error;
+      if (error) throw await finalizeErrorWithHint(error);
       return data as { version: number; allocationsCount: number };
     },
     onSuccess: (data) => {

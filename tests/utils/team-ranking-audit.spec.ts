@@ -129,15 +129,9 @@ describe('versioned team-ranking audit saved per award', () => {
     }), 1).ok).toBe(false);
   });
 
-  it('writes audit in the same versioned team row only after preflight', () => {
+  it('the standard Finalize route never writes a V2 audit (V2 awards come only from Team V2 Save)', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
-    const guard = source.indexOf('verifyTeamFinalizePreview(teamData');
-    const persisted = source.indexOf('ranking_snapshot: {');
-    const writer = source.indexOf(".from('team_allocations')\n          .insert(rows)");
-    expect(guard).toBeGreaterThan(-1);
-    expect(persisted).toBeGreaterThan(guard);
-    expect(writer).toBeGreaterThan(persisted);
-    expect(source).toContain('allocation_version: nextVersion');
-    expect(source).toContain('finalized_by: user.id');
+    expect(source).not.toContain('ranking_snapshot: {');
+    expect(source).toContain("'team_v2_save_required'");
   });
 });

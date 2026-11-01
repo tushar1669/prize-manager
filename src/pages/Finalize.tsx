@@ -31,6 +31,7 @@ import { freeTierSummaryBody, freeTierSummaryLabel } from '@/constants/tournamen
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { ManualPrizesCard } from "@/components/manual-prizes/ManualPrizesCard";
 import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
+import { finalizeErrorWithHint } from '@/utils/finalizeError';
 
 interface Winner {
   prizeId: string;
@@ -303,7 +304,7 @@ export default function Finalize() {
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
       
-      if (error) throw error;
+      if (error) throw await finalizeErrorWithHint(error);
       console.log('[finalize] success', data);
       return data as { version: number; allocationsCount: number };
     },
