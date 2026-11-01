@@ -204,8 +204,12 @@ Deno.serve(async (request: Request) => {
         p_expected_source_fingerprint: before,
       },
     );
-    if (commitError || newVersion !== nextVersion)
-      return json({ error: 'atomic_save_unavailable_or_rejected', saved: false }, 409);
+    if (commitError || newVersion !== nextVersion) {
+      // Pass through only the writer's own fixed refusal code (e.g.
+      // team_v2_previous_winner_changed) — never the raw message.
+      const code = /\bteam_v2_[a-z_]+\b/.exec(commitError?.message ?? '')?.[0];
+      return json({ error: code ?? 'atomic_save_unavailable_or_rejected', saved: false }, 409);
+    }
     return json({ saved: true, allocation_version: nextVersion });
   } catch {
     // No tokens, player names, personal data, scorer payloads or raw errors in logs.

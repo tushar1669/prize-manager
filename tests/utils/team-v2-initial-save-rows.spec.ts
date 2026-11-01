@@ -77,6 +77,11 @@ describe('initial Team v2 Save source-only fail-closed assembler', () => {
     }]);
     expect(result.rows.team_rows).toHaveLength(1);
     expect(result.rows.team_rows[0].player_ids).toEqual(['p1', 'p2']);
+    // Same shape as the standard route, so every results screen shows names.
+    expect(result.rows.team_rows[0].player_snapshot).toEqual([
+      { player_id: 'p1', name: 'Synthetic 1', rank: 1, points: 5, gender: null },
+      { player_id: 'p2', name: 'Synthetic 2', rank: 2, points: 4, gender: null },
+    ]);
     expect(result.rows.team_rows[0].total_points).toBe(9);
     expect(result.rows.team_rows[0].ranking_snapshot).toMatchObject({
       allocation_version: 1, finalized_by: 'owner', winner_key: 'Club A',

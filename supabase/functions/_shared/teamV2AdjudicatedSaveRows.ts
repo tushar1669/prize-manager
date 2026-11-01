@@ -172,7 +172,7 @@ export function prepareAdjudicatedTeamV2Rows(
       total_points: team.selectedPlayers.reduce((sum, p) => sum + p.points, 0),
       player_ids: team.members.map(p => p.player_id),
       player_snapshot: team.members.map(p => ({
-        player_id: p.player_id, points: p.points,
+        player_id: p.player_id, name: p.name, rank: p.rank, points: p.points, gender: p.gender,
       })),
       ranking_snapshot: {
         ...audit,

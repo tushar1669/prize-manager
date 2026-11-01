@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
+import { readTeamV2SaveCode, teamV2SaveMessage } from '@/utils/teamV2SaveError';
 
 type OfficialRuling = { group_id: string; proposal: Record<string, unknown> };
 type Status = { enabled: true; saved: false; expected_version: number };
@@ -63,7 +64,7 @@ export default function TeamV2Trial() {
       });
       if (error || data?.saved !== true ||
           !Number.isSafeInteger(data?.allocation_version)) {
-        throw new Error(serverError(data));
+        throw new Error(teamV2SaveMessage(await readTeamV2SaveCode(error, data)));
       }
       return data as SaveReply;
     },
