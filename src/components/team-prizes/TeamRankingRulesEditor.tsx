@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { defaultTeamRankingCriteria, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
+import { defaultTeamRankingCriteria, teamCriterionId, type TeamRankingCriterion, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
 import { TEAM_TIEBREAK_METHODS, findTeamTieBreakMethod, tieBreakMethodFromSwissManagerCode } from '@/utils/teamTieBreakMethods';
 
 /** Dropdown value for a tie-break that is not in the standard list. */
 const OTHER_METHOD = 'other';
 export { parseTeamRankingRuleConfig } from '@/utils/teamRankingV2';
+export type { TeamRankingRuleConfig } from '@/utils/teamRankingV2';
 
 type ImportColumn = { ordinal: number; header: string; duplicate: boolean; present: number; missing: number; invalid: number };
 
@@ -97,6 +98,9 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
 
   useEffect(() => {
     if (!open || !imported || !value) return;
+    // Removing an imported TB under the same file is deliberate. Only a NEW
+    // import brings missing TB columns back, and the rules must be re-confirmed.
+    if (value.source_hash === fileHash) return;
     const missing = defaultCriteria.filter(rule =>
       rule.kind === 'source_tb' &&
       !value.criteria.some(existing => existing.kind === 'source_tb' && existing.ordinal === rule.ordinal),
@@ -104,7 +108,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
     if (missing.length) {
       onChange({ ...value, criteria: [...value.criteria, ...missing], organizer_confirmed: false });
     }
-  }, [open, imported, value, defaultCriteria, onChange]);
+  }, [open, imported, value, defaultCriteria, onChange, fileHash]);
 
   const update = (patch: Partial<TeamRankingRuleConfig>) => onChange({
     version: 2,
@@ -116,6 +120,9 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
     ...patch,
   });
 
+  const remove = (at: number) =>
+    update({ criteria: criteria.filter((_, i) => i !== at), organizer_confirmed: false });
+
   const move = (from: number, to: number) => {
     if (to < 0 || to >= criteria.length || from === to) return;
     const result = [...criteria];
@@ -125,22 +132,39 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
 
   const fileChanged = Boolean(value && value.source_hash !== fileHash);
   const importedOrdinalSet = new Set(ordinals);
-  const missingRules = ordinals.filter(ordinal => !criteria.some(rule => rule.kind === 'source_tb' && rule.ordinal === ordinal));
+  const missingRules = fileChanged
+    ? ordinals.filter(ordinal => !criteria.some(rule => rule.kind === 'source_tb' && rule.ordinal === ordinal))
+    : [];
+  // Ranks are unique, so nothing after "Best individual rank" is ever reached.
+  const bestRankIndex = criteria.findIndex(rule => rule.kind === 'best_rank');
+  const present = new Set(criteria.map(teamCriterionId));
+  const addable: Array<{ id: string; label: string; rule: TeamRankingCriterion }> = [
+    ...(present.has('score_vector') ? [] : [{ id: 'score_vector', label: 'Highest individual scores', rule: { kind: 'score_vector' } as TeamRankingCriterion }]),
+    ...(present.has('best_rank') ? [] : [{ id: 'best_rank', label: 'Best individual rank', rule: { kind: 'best_rank' } as TeamRankingCriterion }]),
+    ...defaultCriteria
+      .filter(rule => rule.kind === 'source_tb' && !present.has(teamCriterionId(rule)))
+      .map(rule => {
+        const header = rule.kind === 'source_tb' ? columns.find(column => column.ordinal === rule.ordinal)?.header : undefined;
+        return { id: teamCriterionId(rule), label: `${teamCriterionId(rule)}${header ? ` · ${header}` : ''}`, rule };
+      }),
+  ];
 
   return (
     <section className="space-y-3 rounded-lg border p-3" aria-label="Team Ranking and Tie-breaks">
       <div>
         <h3 className="font-semibold text-sm">Ranking &amp; tie-breaks</h3>
-        <p className="text-xs text-muted-foreground">Total Points is always first. Rearrange the remaining criteria to match the published event rules.</p>
+        <p className="text-xs text-muted-foreground">Total Points is always first. Add, remove and drag the steps below to match the published event rules. Only listed steps can decide a prize.</p>
       </div>
       <div className="rounded-md bg-muted/40 p-2 text-sm font-medium">1. Total Points (fixed · higher wins)</div>
       {criteria.map((criterion, index) => {
         const isVector = criterion.kind === 'score_vector';
-        const source = !isVector ? columns.find(column => column.ordinal === criterion.ordinal) : undefined;
-        const missing = !isVector && !importedOrdinalSet.has(criterion.ordinal);
+        const isBestRank = criterion.kind === 'best_rank';
+        const source = criterion.kind === 'source_tb' ? columns.find(column => column.ordinal === criterion.ordinal) : undefined;
+        const missing = criterion.kind === 'source_tb' && !importedOrdinalSet.has(criterion.ordinal);
+        const notReached = bestRankIndex >= 0 && index > bestRankIndex;
         return (
           <div
-            key={isVector ? 'score_vector' : `source_tb_${criterion.ordinal}`}
+            key={teamCriterionId(criterion)}
             className="space-y-2 rounded-md border p-2"
             draggable
             onDragStart={() => { draggedIndex.current = index; }}
@@ -154,7 +178,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
           >
             <div className="flex items-center gap-2">
               <GripVertical size={16} className="text-muted-foreground shrink-0" aria-hidden="true"/>
-              <span className="flex-1 text-sm font-medium">{index + 2}. {isVector ? 'Highest individual scores' : `Individual TB${criterion.ordinal}${criterion.name.trim() ? ` · ${criterion.name.trim()}` : ''}`}</span>
+              <span className="flex-1 text-sm font-medium">{index + 2}. {isVector ? 'Highest individual scores' : isBestRank ? 'Best individual rank' : criterion.kind === 'source_tb' ? `Individual TB${criterion.ordinal}${criterion.name.trim() ? ` · ${criterion.name.trim()}` : ''}` : ''}</span>
               <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                 disabled={index === 0} title="Move up"
                 aria-label={`Move criterion ${index + 2} up`}
@@ -163,9 +187,23 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
                 disabled={index === criteria.length - 1} title="Move down"
                 aria-label={`Move criterion ${index + 2} down`}
                 onClick={() => move(index, index + 1)}><ArrowDown size={14}/></Button>
+              <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                title="Remove step"
+                aria-label={`Remove criterion ${index + 2}`}
+                onClick={() => remove(index)}><X size={14}/></Button>
             </div>
+            {notReached && (
+              <p className="text-xs text-muted-foreground">
+                Not reached: Best individual rank above always decides, because every player has a different rank.
+              </p>
+            )}
             {isVector ? (
               <p className="text-xs text-muted-foreground">Compare selected players' scores highest to lowest; then the next player.</p>
+            ) : isBestRank ? (
+              <p className="text-xs text-muted-foreground">
+                The team whose best counted player is placed higher wins (rank 2 beats rank 5).
+                Every player has a different rank, so this step always decides.
+              </p>
             ) : (() => {
               if (criterion.kind !== 'source_tb') return null;
               // "Other" keeps its text box open while typing, even when the
@@ -266,6 +304,19 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
           </div>
         );
       })}
+      {addable.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Label htmlFor="add-ranking-step" className="text-xs">Add a tie-break step</Label>
+          <select id="add-ranking-step" className="rounded border bg-background px-2 py-1 text-sm" value=""
+            onChange={event => {
+              const next = addable.find(option => option.id === event.target.value);
+              if (next) update({ criteria: [...criteria, next.rule], organizer_confirmed: false });
+            }}>
+            <option value="">Choose a step…</option>
+            {addable.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </div>
+      )}
       {fileChanged && <p className="text-xs text-destructive">Imported Excel has changed. Review and save the rules again before relying on TBs.</p>}
       {missingRules.length > 0 && (
         <p className="text-xs text-destructive">

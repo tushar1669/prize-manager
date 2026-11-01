@@ -29,13 +29,21 @@ function scoresEqual(a: WinnerInstitution, b: WinnerInstitution): boolean {
  * Uses `scored_institutions` (from edge function) when available to
  * also detect ties with the first runner-up beyond the last prize.
  */
+/**
+ * True for a Team V2 group: v2 previews carry ranking_issues, and persisted v2
+ * allocations carry ranking_snapshot on awarded winners. Team V2 never uses
+ * Rank Sum, so no legacy Rank Sum dialog or wording may appear for it.
+ */
+export function isTeamV2Group(group: GroupResponse): boolean {
+  return Array.isArray(group.ranking_issues) ||
+    group.prizes.some(prize => prize.winner_institution?.ranking_snapshot != null);
+}
+
 export function detectTeamTiesAtBoundary(group: GroupResponse): TieInfo | null {
-  // v2 previews carry ranking_issues, but persisted v2 allocations carry
-  // ranking_snapshot on awarded winners instead. Neither may enter the legacy
-  // Rank Sum dialog: its RPC overwrites awards at an existing version.
-  // Historical pre-v2 snapshots without either marker retain their legacy path.
-  if (Array.isArray(group.ranking_issues) ||
-      group.prizes.some(prize => prize.winner_institution?.ranking_snapshot != null)) {
+  // Neither v2 marker may enter the legacy Rank Sum dialog: its RPC overwrites
+  // awards at an existing version. Historical pre-v2 snapshots without either
+  // marker retain their legacy path.
+  if (isTeamV2Group(group)) {
     return null;
   }
   const filledPrizes = group.prizes.filter((p) => p.winner_institution !== null);

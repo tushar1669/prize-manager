@@ -79,7 +79,8 @@ describe('Team Ranking v2 — pure, fail-closed comparison', () => {
   it('refuses unknown event TB meaning; never silently skips it to choose another winner', () => {
     const a = team('A', [6, 6], { 2: [10, 12] });
     const b = team('B', [6, 6], { 2: [8, 8] });
-    const unverified = defaultTeamRankingCriteria([1, 2])[1];
+    // Defaults: [Highest individual scores, Best individual rank, TB1, TB2]
+    const unverified = defaultTeamRankingCriteria([1, 2])[2];
     expect(compareTeamRankingV2(a, b, [unverified, tb(2)])).toMatchObject({
       status: 'blocked', reason: 'undefined_tb', criterion: 'TB1',
     });
@@ -102,9 +103,9 @@ describe('Team Ranking v2 — pure, fail-closed comparison', () => {
 
   it('creates defaults in actual source ordinal order, not TB text sorting', () => {
     const list = defaultTeamRankingCriteria([10, 2, 1, 10, 0, -3]);
-    expect(list.map(x => x.kind === 'score_vector' ? 'vector' : `TB${x.ordinal}`))
-      .toEqual(['vector', 'TB1', 'TB2', 'TB10']);
-    expect(list.slice(1).every(x => x.kind === 'source_tb' && !x.verified && x.name === '')).toBe(true);
+    expect(list.map(x => x.kind === 'score_vector' ? 'vector' : x.kind === 'best_rank' ? 'best_rank' : `TB${x.ordinal}`))
+      .toEqual(['vector', 'best_rank', 'TB1', 'TB2', 'TB10']);
+    expect(list.slice(2).every(x => x.kind === 'source_tb' && !x.verified && x.name === '')).toBe(true);
   });
 });
 

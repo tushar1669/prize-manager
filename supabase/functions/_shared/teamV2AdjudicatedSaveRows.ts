@@ -17,7 +17,7 @@ type Result =
     'unapproved_rules' | 'invalid_roster' | 'invalid_ruling' | 'incomplete_awards' };
 type Member = { player_id: string; name: string; rank: number; points: number;
   gender: string | null };
-type Selected = { playerId: string; points: number; sourceHash: string | null;
+type Selected = { playerId: string; points: number; rank?: number | null; sourceHash: string | null;
   individualTieBreaks: Record<number, number | null> };
 type ScorerTeam = { key: string; members: Member[]; selectedPlayers: Selected[] };
 

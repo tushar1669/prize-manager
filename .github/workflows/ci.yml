@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  # Manual run from the Actions tab ("Run workflow"), choosing any branch.
+  # Commits marked [skip ci] do not start the automatic runs above.
+  workflow_dispatch:
 
 jobs:
   test:

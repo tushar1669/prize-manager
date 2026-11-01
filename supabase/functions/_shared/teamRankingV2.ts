@@ -10,6 +10,11 @@ import { isNonSummableTieBreakName } from './teamTieBreakMethods.ts';
 
 export type TeamRankingCriterion =
   | { kind: 'score_vector' }
+  /**
+   * The team whose best-placed counted player has the better (lower) tournament
+   * rank wins. Ranks are unique, so this step always decides between teams.
+   */
+  | { kind: 'best_rank' }
   | {
       kind: 'source_tb';
       ordinal: number;
@@ -24,6 +29,8 @@ export type TeamRankingCriterion =
 
 export type TeamRankingPlayer = {
   points: number | null;
+  /** Tournament rank (1 = best). Absent is NOT a rank. */
+  rank?: number | null;
   /** Source file provenance for the individual imported TB values. */
   sourceHash?: string | null;
   /** Indexed by source ordinal. Absent is NOT zero. */
@@ -37,9 +44,14 @@ export type TeamRankingCandidate = {
 };
 
 export type TeamRankingComparison =
-  | { status: 'decided'; order: -1 | 1; criterion: 'total_points' | 'score_vector' | `TB${number}`; aValue: number | number[]; bValue: number | number[] }
+  | { status: 'decided'; order: -1 | 1; criterion: 'total_points' | 'score_vector' | 'best_rank' | `TB${number}`; aValue: number | number[]; bValue: number | number[] }
   | { status: 'tied'; order: 0 }
-  | { status: 'blocked'; order: 0; criterion: string; reason: 'invalid_team_size' | 'missing_points' | 'duplicate_criterion' | 'invalid_criterion' | 'undefined_tb' | 'missing_tb' };
+  | { status: 'blocked'; order: 0; criterion: string; reason: 'invalid_team_size' | 'missing_points' | 'duplicate_criterion' | 'invalid_criterion' | 'undefined_tb' | 'missing_tb' | 'missing_rank' };
+
+/** Stable identifier for a criterion: 'score_vector', 'best_rank' or 'TB<n>'. */
+export function teamCriterionId(criterion: TeamRankingCriterion): string {
+  return criterion.kind === 'source_tb' ? `TB${criterion.ordinal}` : criterion.kind;
+}
 
 
 /** The organizer's editable, versioned Team Prize rule order. */
@@ -61,8 +73,8 @@ export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig 
   for (const entry of item.criteria) {
     if (!entry || typeof entry !== 'object') return null;
     const rule = entry as Record<string, unknown>;
-    const identifier = rule.kind === 'score_vector'
-      ? 'score_vector'
+    const identifier = rule.kind === 'score_vector' || rule.kind === 'best_rank'
+      ? rule.kind
       : rule.kind === 'source_tb' && typeof rule.ordinal === 'number' &&
         Number.isSafeInteger(rule.ordinal) && rule.ordinal >= 1
         ? `TB${rule.ordinal}`
@@ -71,6 +83,8 @@ export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig 
     seen.add(identifier);
     if (rule.kind === 'score_vector') {
       criteria.push({ kind: 'score_vector' });
+    } else if (rule.kind === 'best_rank') {
+      criteria.push({ kind: 'best_rank' });
     } else {
       if (rule.aggregation !== 'sum' ||
           (rule.direction !== 'higher' && rule.direction !== 'lower') ||
@@ -85,7 +99,8 @@ export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig 
       });
     }
   }
-  if (!seen.has('score_vector')) return null;
+  // Every step after Total Points is optional: an organizer may declare only
+  // the steps the published regulations list (even none).
   return {
     version: 2,
     source_hash: typeof item.source_hash === 'string' ? item.source_hash : null,
@@ -150,7 +165,7 @@ export function rankTeamCandidatesV2(
     }
     if (index >= config.criteria.length) return [{ teams: subset, status: 'tied' }];
     const criterion = config.criteria[index];
-    const label = criterion.kind === 'score_vector' ? 'score_vector' : `TB${criterion.ordinal}`;
+    const label = teamCriterionId(criterion);
 
     // A non-summable method (Direct Encounter) can be declared but never
     // decides a team prize by adding individual values: hold for a ruling.
@@ -171,9 +186,16 @@ export function rankTeamCandidatesV2(
       if (tbValues.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
         return [{ teams: subset, status: 'blocked', criterion: label, reason: 'missing_tb' }];
       }
-      const scalar = tbValues.reduce<number>((sum, value) => sum + (value as number), 0);
+      let scalar = tbValues.reduce<number>((sum, value) => sum + (value as number), 0);
       if (!Number.isFinite(scalar)) {
         return [{ teams: subset, status: 'blocked', criterion: label, reason: 'missing_tb' }];
+      }
+      if (criterion.kind === 'best_rank') {
+        const ranks = team.selectedPlayers.map(p => p.rank);
+        if (ranks.some(rank => typeof rank !== 'number' || !Number.isFinite(rank))) {
+          return [{ teams: subset, status: 'blocked', criterion: label, reason: 'missing_rank' }];
+        }
+        scalar = Math.min(...(ranks as number[]));
       }
       values.push({ team, vector, scalar });
     }
@@ -182,6 +204,8 @@ export function rankTeamCandidatesV2(
       if (criterion.kind === 'source_tb') {
         return (a.scalar - b.scalar) * (criterion.direction === 'higher' ? -1 : 1);
       }
+      // Best-placed counted player: the lower rank number wins.
+      if (criterion.kind === 'best_rank') return a.scalar - b.scalar;
       for (let i = 0; i < a.vector.length; i++) {
         if (a.vector[i] !== b.vector[i]) return b.vector[i] - a.vector[i];
       }
@@ -247,7 +271,7 @@ export function compareTeamRankingV2(
 
   const seen = new Set<string>();
   for (const criterion of subsequentCriteria) {
-    const identifier = criterion.kind === 'score_vector' ? 'score_vector' : `TB${criterion.ordinal}`;
+    const identifier = teamCriterionId(criterion);
     if (seen.has(identifier)) {
       return { status: 'blocked', order: 0, criterion: identifier, reason: 'duplicate_criterion' };
     }
@@ -260,6 +284,20 @@ export function compareTeamRankingV2(
           return { status: 'decided', order: cmp, criterion: 'score_vector', aValue: vectorA, bValue: vectorB };
         }
       }
+      continue;
+    }
+
+    if (criterion.kind === 'best_rank') {
+      const ranksA = a.selectedPlayers.map(player => player.rank);
+      const ranksB = b.selectedPlayers.map(player => player.rank);
+      if ([...ranksA, ...ranksB].some(rank => !finite(rank))) {
+        return { status: 'blocked', order: 0, criterion: 'best_rank', reason: 'missing_rank' };
+      }
+      const bestA = Math.min(...(ranksA as number[]));
+      const bestB = Math.min(...(ranksB as number[]));
+      // sortNumber ranks the higher value first; a lower rank is better.
+      const cmp = sortNumber(bestB, bestA);
+      if (cmp) return { status: 'decided', order: cmp, criterion: 'best_rank', aValue: bestA, bValue: bestB };
       continue;
     }
 
@@ -293,12 +331,17 @@ export function compareTeamRankingV2(
   return { status: 'tied', order: 0 };
 }
 
-/** Default eligible tie-break order: score vector, TB1…TBn; total is always fixed first. */
+/**
+ * Default order for a new group (owner decision, 1 Nov 2026): Total Points
+ * (fixed, not listed) → Highest individual scores → Best individual rank →
+ * imported TB1…TBn. Every listed step is removable and re-orderable.
+ */
 export function defaultTeamRankingCriteria(
   sourceOrdinals: readonly number[],
 ): TeamRankingCriterion[] {
   return [
     { kind: 'score_vector' },
+    { kind: 'best_rank' },
     ...[...new Set(sourceOrdinals)]
       .filter(ordinal => Number.isSafeInteger(ordinal) && ordinal > 0)
       .sort((a, b) => a - b)

@@ -289,6 +289,8 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                         if (!rules) return null;
                         const ordered = rules.criteria.map(rule => rule.kind === 'score_vector'
                           ? 'Highest scorer'
+                          : rule.kind === 'best_rank'
+                          ? 'Best rank'
                           : `TB${rule.ordinal}${rule.verified && rule.name.trim()
                             ? ` (${rule.name.trim()})`
                             : ' (needs definition)'}`);

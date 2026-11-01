@@ -136,4 +136,49 @@ describe('Team ranking rules — tie-break name dropdown', () => {
     expect((confirmBoxes()[0] as HTMLButtonElement).disabled).toBe(false);
     expect((confirmBoxes()[1] as HTMLButtonElement).disabled).toBe(true);
   });
+  it('starts with Highest individual scores, then Best individual rank, then the imported tie-breaks', async () => {
+    renderEditor();
+    await screen.findByLabelText('What is TB1 in this tournament?');
+    expect(latest?.criteria.map(c => c.kind === 'source_tb' ? `TB${c.ordinal}` : c.kind))
+      .toEqual(['score_vector', 'best_rank', 'TB1', 'TB2']);
+    expect(screen.getByText('2. Highest individual scores')).toBeTruthy();
+    expect(screen.getByText('3. Best individual rank')).toBeTruthy();
+    // Steps after Best individual rank can never be reached (ranks are unique).
+    expect(screen.getAllByText(/Not reached: Best individual rank above always decides/)).toHaveLength(2);
+  });
+
+  it('a removed tie-break stays removed, can be added back, and does not block confirmation', async () => {
+    renderEditor();
+    await screen.findByLabelText('What is TB2 in this tournament?');
+    fireEvent.click(screen.getByLabelText('Remove criterion 5')); // TB2
+    expect(latest?.criteria.some(c => c.kind === 'source_tb' && c.ordinal === 2)).toBe(false);
+    // Not silently re-added for the same imported file.
+    expect(screen.queryByLabelText('What is TB2 in this tournament?')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Published team-prize rules reference'), { target: { value: 'Brochure clause 4' } });
+    const confirm = screen.getByRole('checkbox', { name: /ranking order reflects the declared/ }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(false);
+    // Add it back from the dropdown.
+    const add = screen.getByLabelText('Add a tie-break step') as HTMLSelectElement;
+    expect(Array.from(add.options).map(o => o.textContent)).toContain('TB2 · TB2');
+    fireEvent.change(add, { target: { value: 'TB2' } });
+    expect(latest?.criteria.map(c => c.kind === 'source_tb' ? `TB${c.ordinal}` : c.kind)).toEqual(['score_vector', 'best_rank', 'TB1', 'TB2']);
+  });
+
+  it('Highest individual scores and Best individual rank can be removed and added back', async () => {
+    renderEditor();
+    await screen.findByLabelText('What is TB1 in this tournament?');
+    fireEvent.click(screen.getByLabelText('Remove criterion 2')); // Highest individual scores
+    expect(latest?.criteria[0]).toEqual({ kind: 'best_rank' });
+    expect(screen.queryAllByText(/Not reached/)).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText('Remove criterion 2')); // Best individual rank, now first
+    expect(latest?.criteria.some(c => c.kind === 'best_rank')).toBe(false);
+    expect(screen.queryAllByText(/Not reached/)).toHaveLength(0);
+    const add = screen.getByLabelText('Add a tie-break step') as HTMLSelectElement;
+    const labels = Array.from(add.options).map(o => o.textContent);
+    expect(labels).toContain('Highest individual scores');
+    expect(labels).toContain('Best individual rank');
+    expect(labels.some(label => /rank sum/i.test(label ?? ''))).toBe(false);
+    fireEvent.change(add, { target: { value: 'best_rank' } });
+    expect(latest?.criteria[latest.criteria.length - 1]).toEqual({ kind: 'best_rank' });
+  });
 });
