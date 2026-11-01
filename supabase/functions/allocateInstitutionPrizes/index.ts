@@ -12,12 +12,14 @@ import {
   type ImportedTieBreakContext,
 } from "../_shared/teamRankingV2.ts";
 import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
+import { detectTieAtPrizeBoundary } from "../_shared/teamPrizes.ts";
+import { isTeamV2Tournament } from "../_shared/teamV2Tournament.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-11-01-team-v2-imported-individual-tiebreaks";
+const BUILD_VERSION = "2026-11-01-team-v2-canary-only-standard-ranking-restored";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -414,6 +416,15 @@ Deno.serve(async (req: Request) => {
     // here, once, so organizers can choose the step before importing.
     const importedTieBreaks = importedTieBreakContextFromTags(typedPlayers.map(player => player.tags_json));
 
+    // Team V2 ranking applies ONLY to Team V2 tournaments. Every other
+    // tournament keeps the standard ranking (Total Points → Rank Sum → Best
+    // individual rank) and the standard Finalize route, exactly as before V2.
+    // If the check fails, fail closed: rank as V2, which holds unconfirmed
+    // places instead of paying them.
+    const teamV2Check = await isTeamV2Tournament(supabase as never, tournament_id);
+    const useTeamV2Ranking = teamV2Check !== false;
+    console.log(`[allocateInstitutionPrizes] ranking=${useTeamV2Ranking ? 'team_v2' : 'standard'}${teamV2Check === null ? ' (check failed)' : ''}`);
+
     for (const group of typedGroups) {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
       
@@ -574,11 +585,17 @@ Deno.serve(async (req: Request) => {
       console.log(`[allocateInstitutionPrizes] Group result: ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${rankingIssues.length} ranking holds`);
 
       // Assign prizes
+      // Standard (non-V2) ranking: scoredInstitutions is already ordered by
+      // Total Points → Rank Sum → Best individual rank; ties go to the
+      // organizer's existing tie dialog.
+      const standardBoundaryTies = useTeamV2Ranking ? [] : detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
       const prizesWithWinners: PrizeWithWinner[] = groupPrizes.map((prize, index) => {
         // Prizes are already sorted by place
         const placeIndex = prize.place - 1;
         const slot = rankedSlots[placeIndex];
-        const winner = slot?.partition.status === 'resolved' ? slot.institution : null;
+        const winner = useTeamV2Ranking
+          ? (slot?.partition.status === 'resolved' ? slot.institution : null)
+          : scoredInstitutions[placeIndex] ?? null;
 
         return {
           id: prize.id,
@@ -594,7 +611,7 @@ Deno.serve(async (req: Request) => {
             rank_sum: winner.rank_sum,
             best_individual_rank: winner.best_individual_rank,
             players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
-            ranking_snapshot: buildTeamRankingAwardAudit(
+            ranking_snapshot: !useTeamV2Ranking ? undefined : buildTeamRankingAwardAudit(
               group.id,
               { group_by: group.group_by, team_size: group.team_size, female_slots: group.female_slots,
                 male_slots: group.male_slots, scoring_mode: group.scoring_mode },
@@ -603,7 +620,7 @@ Deno.serve(async (req: Request) => {
               winner.key, config, selectedCandidates, partitions,
               undefined, importedTieBreaks,
             ) ?? undefined,
-            tied_at_boundary: false,
+            tied_at_boundary: !useTeamV2Ranking && standardBoundaryTies.includes(winner.key),
             ...(winner.warnings ? { warnings: winner.warnings } : {}),
           } : null,
         };
@@ -612,8 +629,11 @@ Deno.serve(async (req: Request) => {
       // Build scored_institutions for client-side tie detection
       // Include enough to cover all prizes + runner-up for boundary detection
       const maxPrizePlace = groupPrizes.reduce((max, p) => Math.max(max, p.place), 0);
-      const scoredLimit = Math.min(maxPrizePlace + 2, rankedSlots.length);
-      const scoredForResponse: WinnerInstitution[] = rankedSlots.slice(0, scoredLimit).flatMap(({ institution: inst }) => inst ? [{
+      const orderedInstitutions = useTeamV2Ranking
+        ? rankedSlots.map(({ institution }) => institution)
+        : scoredInstitutions;
+      const scoredLimit = Math.min(maxPrizePlace + 2, orderedInstitutions.length);
+      const scoredForResponse: WinnerInstitution[] = orderedInstitutions.slice(0, scoredLimit).flatMap((inst) => inst ? [{
         key: inst.key,
         label: inst.key,
         total_points: inst.total_points,
@@ -640,11 +660,14 @@ Deno.serve(async (req: Request) => {
         ineligible_details: ineligibleDetails,
         players_without_group_field: droppedPlayersWithoutKey,
         players_without_points: playersWithoutPoints,
-        ranking_issues: rankingIssues,
-        adjudication_partitions: adjudicationPartitions,
-        adjudication_ties: adjudicationTies,
-        adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
-        adjudication_imported_tie_breaks: importedTieBreaks,
+        // V2-only fields. Their absence marks a standard group for the UI.
+        ...(useTeamV2Ranking ? {
+          ranking_issues: rankingIssues,
+          adjudication_partitions: adjudicationPartitions,
+          adjudication_ties: adjudicationTies,
+          adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
+          adjudication_imported_tie_breaks: importedTieBreaks,
+        } : {}),
         scored_institutions: scoredForResponse,
       });
     }

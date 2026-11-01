@@ -79,47 +79,28 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
   });
 
 
-  it('fences every active team group, even null-rule legacy groups, from unsafe finalize', () => {
+  it('fences only Team V2 tournaments; the check runs before any allocation write', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const ownerGate = source.indexOf('tournamentAccess.owner_id !== user.id && !isMaster');
-    const rulesRead = source.indexOf(".select('id, ranking_rules')");
-    const missingRules = source.indexOf('activeTeamRulesError || !activeTeamRules');
-    const v2Fence = source.indexOf('activeTeamRules.length > 0');
-    const denied = source.indexOf("error: 'team_v2_atomic_writer_required'");
+    const check = source.indexOf('await isTeamV2Tournament(supabaseClient');
+    const fence = source.indexOf('if (teamV2 !== false)');
+    const denied = source.indexOf("'team_v2_save_required'");
     const write = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
     expect(ownerGate).toBeGreaterThan(-1);
-    expect(rulesRead).toBeGreaterThan(ownerGate);
-    expect(missingRules).toBeGreaterThan(rulesRead);
-    expect(v2Fence).toBeGreaterThan(missingRules);
-    expect(denied).toBeGreaterThan(v2Fence);
+    expect(check).toBeGreaterThan(ownerGate);
+    expect(fence).toBeGreaterThan(check);
+    expect(denied).toBeGreaterThan(fence);
     expect(write).toBeGreaterThan(denied);
+    // A failed check (null) is refused too, never treated as "standard".
+    expect(source).toContain("teamV2 === null ? 'team_v2_check_unavailable'");
     expect(source).not.toContain(".rpc('commit_team_v2_adjudicated_version'");
   });
 
-  it('fails closed on missing/stale group reads and obsolete null rules', () => {
+  it('a standard (non-V2) tournament writes team rows without a V2 ranking snapshot', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
-    const clauses = [
-      'activeTeamRulesError || !activeTeamRules',
-      'activeTeamRules.length !== teamGroupCount',
-      'activeTeamRules.length > 0',
-      "error: 'team_v2_writer_route_unavailable'",
-      "error: 'team_v2_atomic_writer_required'",
-    ];
-    for (const clause of clauses) {
-      expect(source).toContain(clause);
-      // Negative control: deleting each critical clause must invalidate its check.
-      expect(source.replace(clause, '')).not.toContain(clause);
-    }
-  });
-
-  it('places preflight ahead of the first individual allocation INSERT in the actual Edge route', () => {
-    const source = readFileSync(
-      'supabase/functions/finalize/index.ts', 'utf8',
-    );
-    const verified = source.indexOf('verifyTeamFinalizePreview(teamData');
-    const inserted = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
-    expect(verified).toBeGreaterThan(-1);
-    expect(inserted).toBeGreaterThan(verified);
-    expect(source).not.toMatch(/\.from\('allocations'\)\s*\.insert\([^)]*\)[\s\S]*verifyTeamFinalizePreview\(teamData/);
+    const rows = source.slice(source.indexOf('const rows = teamGroups.flatMap'), source.indexOf(".from('team_allocations')\n          .insert(rows)"));
+    expect(rows.length).toBeGreaterThan(0);
+    // A snapshot would mark the tournament as V2 and the database would reject the write.
+    expect(rows).not.toContain('ranking_snapshot:');
   });
 });
