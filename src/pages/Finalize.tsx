@@ -31,7 +31,7 @@ import { freeTierSummaryBody, freeTierSummaryLabel } from '@/constants/tournamen
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { ManualPrizesCard } from "@/components/manual-prizes/ManualPrizesCard";
 import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
-import { finalizeErrorWithHint } from '@/utils/finalizeError';
+import { finalizeErrorWithHint, latestSavedAllocationVersion } from '@/utils/finalizeError';
 
 interface Winner {
   prizeId: string;
@@ -304,14 +304,26 @@ export default function Finalize() {
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
       
-      if (error) throw await finalizeErrorWithHint(error);
+      if (error) {
+        const hinted = await finalizeErrorWithHint(error);
+        // Team V2 tournaments are saved only by Admin → Team V2. Finalize
+        // wrote nothing; use the version Team V2 already saved (if any)
+        // instead of failing, so it can be reviewed and published.
+        if ((hinted as Error & { code?: string }).code === 'team_v2_save_required') {
+          const saved = await latestSavedAllocationVersion(id);
+          if (saved) return { ...saved, teamV2: true };
+        }
+        throw hinted;
+      }
       console.log('[finalize] success', data);
-      return data as { version: number; allocationsCount: number };
+      return data as { version: number; allocationsCount: number; teamV2?: boolean };
     },
     onSuccess: (data) => {
       console.log('[finalize] finalize complete', data);
       setFinalizeResult(data);
-      toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
+      toast.success(data.teamV2
+        ? `Team V2 saved version ${data.version} (${data.allocationsCount} allocations) — no new version created`
+        : `Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
     },
     onError: (error: unknown) => {
       console.error('[finalize] error', error);

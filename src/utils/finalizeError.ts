@@ -21,3 +21,22 @@ export async function finalizeErrorWithHint(error: unknown): Promise<Error> {
   }
   return error instanceof Error ? error : new Error('Failed to finalize allocations');
 }
+
+/**
+ * The newest saved allocation version of a tournament, with its row count.
+ * Used for Team V2 tournaments, whose versions are written by Team V2 Save.
+ */
+export async function latestSavedAllocationVersion(
+  tournamentId: string | undefined,
+): Promise<{ version: number; allocationsCount: number } | null> {
+  if (!tournamentId) return null;
+  const { supabase } = await import('@/integrations/supabase/client');
+  const { data, error } = await supabase.from('allocations').select('version')
+    .eq('tournament_id', tournamentId).order('version', { ascending: false }).limit(1).maybeSingle();
+  if (error || !data || typeof data.version !== 'number') return null;
+  const { count, error: countError } = await supabase.from('allocations')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId).eq('version', data.version);
+  if (countError) return null;
+  return { version: data.version, allocationsCount: count ?? 0 };
+}

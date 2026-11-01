@@ -36,7 +36,7 @@ import { applyReviewPreviewLimit } from "@/utils/reviewAccess";
 import { getUpgradeUrl } from "@/utils/upgradeUrl";
 import { coerceGiftItems } from "@/lib/utils";
 import { BackendMigrationMissingAlert } from "@/components/access/BackendMigrationMissingAlert";
-import { finalizeErrorWithHint } from '@/utils/finalizeError';
+import { finalizeErrorWithHint, latestSavedAllocationVersion } from '@/utils/finalizeError';
 
 interface Winner {
   prizeId: string;
@@ -410,11 +410,21 @@ export default function ConflictReview() {
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
 
-      if (error) throw await finalizeErrorWithHint(error);
-      return data as { version: number; allocationsCount: number };
+      if (error) {
+        const hinted = await finalizeErrorWithHint(error);
+        // Team V2: Finalize writes nothing; continue with the Team V2 saved version.
+        if ((hinted as Error & { code?: string }).code === 'team_v2_save_required') {
+          const saved = await latestSavedAllocationVersion(id);
+          if (saved) return { ...saved, teamV2: true };
+        }
+        throw hinted;
+      }
+      return data as { version: number; allocationsCount: number; teamV2?: boolean };
     },
     onSuccess: (data) => {
-      toast.success(`Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
+      toast.success(data.teamV2
+        ? `Team V2 saved version ${data.version} (${data.allocationsCount} allocations) — no new version created`
+        : `Finalized as version ${data.version} with ${data.allocationsCount} allocations`);
       navigate(`/t/${id}/finalize`, { state: { winners, previewMeta, conflicts, unfilled, finalizeResult: data } });
     },
     onError: (error: unknown) => {
