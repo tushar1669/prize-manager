@@ -33,6 +33,11 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
   const [scoringMode, setScoringMode] = useState('by_top_k_score');
   const [rankingRules, setRankingRules] = useState<TeamRankingRuleConfig | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // The form state below is loaded from `group` in an effect, i.e. AFTER the
+  // first render of an open drawer. The ranking editor must not mount before
+  // that, or it sees "no rules yet", creates a default order and overwrites
+  // the group's saved rules (reopening Edit Rules after a save showed blanks).
+  const [formLoaded, setFormLoaded] = useState(false);
 
   // Reset form when group changes
   useEffect(() => {
@@ -55,6 +60,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
       setRankingRules(null);
     }
     setValidationError(null);
+    setFormLoaded(open);
   }, [group, open]);
 
   // Validate gender slots constraint
@@ -226,7 +232,7 @@ export default function TeamPrizeRulesSheet({ open, onOpenChange, group, tournam
             </div>
           </div>
 
-          {canConfigureTeamV2 && (
+          {canConfigureTeamV2 && formLoaded && (
             <TeamRankingRulesEditor
               tournamentId={tournamentId}
               open={open}

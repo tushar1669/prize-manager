@@ -17,7 +17,7 @@ import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-10-30-team-v2-source-scored-adjudication-rosters";
+const BUILD_VERSION = "2026-11-01-team-v2-imported-individual-tiebreaks";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
