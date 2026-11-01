@@ -291,6 +291,8 @@ export default function TeamPrizesEditor({ tournamentId, isOrganizer }: Props) {
                           ? 'Highest scorer'
                           : rule.kind === 'best_rank'
                           ? 'Best rank'
+                          : rule.kind === 'imported_tbs'
+                          ? 'Excel tie-breaks'
                           : `TB${rule.ordinal}${rule.verified && rule.name.trim()
                             ? ` (${rule.name.trim()})`
                             : ' (needs definition)'}`);

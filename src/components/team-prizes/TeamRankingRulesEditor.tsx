@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { defaultTeamRankingCriteria, teamCriterionId, type TeamRankingCriterion, type TeamRankingRuleConfig } from '@/utils/teamRankingV2';
-import { TEAM_TIEBREAK_METHODS, findTeamTieBreakMethod, tieBreakMethodFromSwissManagerCode } from '@/utils/teamTieBreakMethods';
+import {
+  defaultTeamRankingCriteria, isComparableImportedTieBreak, teamCriterionId,
+  type TeamRankingCriterion, type TeamRankingRuleConfig,
+} from '@/utils/teamRankingV2';
+import { tieBreakMethodFromSwissManagerCode } from '@/utils/teamTieBreakMethods';
 
-/** Dropdown value for a tie-break that is not in the standard list. */
-const OTHER_METHOD = 'other';
 export { parseTeamRankingRuleConfig } from '@/utils/teamRankingV2';
 export type { TeamRankingRuleConfig } from '@/utils/teamRankingV2';
 
@@ -22,6 +23,13 @@ type Props = {
   value: TeamRankingRuleConfig | null;
   onChange: (value: TeamRankingRuleConfig) => void;
 };
+
+/** Steps an organizer can add; none needs an Excel to have been imported. */
+const BUILT_IN_STEPS: Array<{ id: string; label: string; rule: TeamRankingCriterion }> = [
+  { id: 'score_vector', label: 'Highest individual scores', rule: { kind: 'score_vector' } },
+  { id: 'best_rank', label: 'Best individual rank', rule: { kind: 'best_rank' } },
+  { id: 'imported_tbs', label: 'Imported individual tie-breaks (TB1, TB2, … from the Excel)', rule: { kind: 'imported_tbs' } },
+];
 
 function sourceColumns(meta: unknown): ImportColumn[] {
   if (!meta || typeof meta !== 'object') return [];
@@ -43,11 +51,17 @@ function sourceColumns(meta: unknown): ImportColumn[] {
   }).sort((a, b) => a.ordinal - b.ordinal);
 }
 
+/** "TB1 · BH:GP/C1 (Buchholz Cut-1)"; a bare "TB3" heading names no method. */
+function describeColumn(column: ImportColumn): string {
+  const header = column.header.trim();
+  if (!header || /^t[\s._-]*b[\s._-]*0*\d+$/i.test(header)) return `TB${column.ordinal} (the file does not say which tie-break)`;
+  const method = tieBreakMethodFromSwissManagerCode(header);
+  return `TB${column.ordinal} · ${header}${method ? ` (${method.name})` : ''}`;
+}
+
 /** Reuses the existing Team Prizes → Edit Rules drawer. No new route or save button. */
 export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: Props) {
   const draggedIndex = useRef<number | null>(null);
-  // TB columns where the organizer picked "Other" but has not typed a name yet.
-  const [otherOrdinals, setOtherOrdinals] = useState<ReadonlySet<number>>(new Set());
   const { data: imported } = useQuery({
     queryKey: ['team-ranking-import-source', tournamentId],
     enabled: open && !!tournamentId,
@@ -71,54 +85,36 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
 
   const fileHash = imported?.fileHash ?? null;
   const columns = imported?.columns ?? [];
-  const ordinals = useMemo(() => columns.map(column => column.ordinal), [columns]);
-  // A Swiss-Manager code heading (e.g. "BH:GP/C1") names its method, so the
-  // dropdown starts on it. It is still unconfirmed until the organizer ticks it.
-  const defaultCriteria = useMemo(() => defaultTeamRankingCriteria(ordinals).map(rule => {
-    if (rule.kind !== 'source_tb') return rule;
-    const header = columns.find(column => column.ordinal === rule.ordinal)?.header;
-    const suggested = tieBreakMethodFromSwissManagerCode(header);
-    return suggested ? { ...rule, name: suggested.name } : rule;
-  }), [ordinals, columns]);
-  const criteria = value?.criteria ?? defaultCriteria;
+  const criteria = value?.criteria ?? defaultTeamRankingCriteria();
+  // Only an older per-column "TBn" step is tied to one imported file.
+  const usesFileBoundSteps = criteria.some(rule => rule.kind === 'source_tb');
 
-  // A new group starts with the default, without silently asserting the
-  // source columns' meanings or that regulations authorize prize decisions.
+  // A new group starts with the default order, unconfirmed.
   useEffect(() => {
     if (open && imported && !value) {
       onChange({
         version: 2,
-        source_hash: fileHash,
+        source_hash: null,
         published_reference: '',
         organizer_confirmed: false,
-        criteria: defaultCriteria,
+        criteria: defaultTeamRankingCriteria(),
       });
     }
-  }, [open, imported, value, onChange, fileHash, defaultCriteria]);
+  }, [open, imported, value, onChange]);
 
-  useEffect(() => {
-    if (!open || !imported || !value) return;
-    // Removing an imported TB under the same file is deliberate. Only a NEW
-    // import brings missing TB columns back, and the rules must be re-confirmed.
-    if (value.source_hash === fileHash) return;
-    const missing = defaultCriteria.filter(rule =>
-      rule.kind === 'source_tb' &&
-      !value.criteria.some(existing => existing.kind === 'source_tb' && existing.ordinal === rule.ordinal),
-    );
-    if (missing.length) {
-      onChange({ ...value, criteria: [...value.criteria, ...missing], organizer_confirmed: false });
-    }
-  }, [open, imported, value, defaultCriteria, onChange, fileHash]);
-
-  const update = (patch: Partial<TeamRankingRuleConfig>) => onChange({
-    version: 2,
-    ...value,
-    source_hash: fileHash,
-    published_reference: value?.published_reference ?? '',
-    organizer_confirmed: false,
-    criteria,
-    ...patch,
-  });
+  const update = (patch: Partial<TeamRankingRuleConfig>) => {
+    const next: TeamRankingRuleConfig = {
+      version: 2,
+      ...value,
+      source_hash: null,
+      published_reference: value?.published_reference ?? '',
+      organizer_confirmed: false,
+      criteria,
+      ...patch,
+    };
+    next.source_hash = next.criteria.some(rule => rule.kind === 'source_tb') ? fileHash : null;
+    onChange(next);
+  };
 
   const remove = (at: number) =>
     update({ criteria: criteria.filter((_, i) => i !== at), organizer_confirmed: false });
@@ -130,24 +126,12 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
     update({ criteria: result, organizer_confirmed: false });
   };
 
-  const fileChanged = Boolean(value && value.source_hash !== fileHash);
-  const importedOrdinalSet = new Set(ordinals);
-  const missingRules = fileChanged
-    ? ordinals.filter(ordinal => !criteria.some(rule => rule.kind === 'source_tb' && rule.ordinal === ordinal))
-    : [];
+  const fileChanged = Boolean(value && usesFileBoundSteps && value.source_hash !== fileHash);
   // Ranks are unique, so nothing after "Best individual rank" is ever reached.
   const bestRankIndex = criteria.findIndex(rule => rule.kind === 'best_rank');
   const present = new Set(criteria.map(teamCriterionId));
-  const addable: Array<{ id: string; label: string; rule: TeamRankingCriterion }> = [
-    ...(present.has('score_vector') ? [] : [{ id: 'score_vector', label: 'Highest individual scores', rule: { kind: 'score_vector' } as TeamRankingCriterion }]),
-    ...(present.has('best_rank') ? [] : [{ id: 'best_rank', label: 'Best individual rank', rule: { kind: 'best_rank' } as TeamRankingCriterion }]),
-    ...defaultCriteria
-      .filter(rule => rule.kind === 'source_tb' && !present.has(teamCriterionId(rule)))
-      .map(rule => {
-        const header = rule.kind === 'source_tb' ? columns.find(column => column.ordinal === rule.ordinal)?.header : undefined;
-        return { id: teamCriterionId(rule), label: `${teamCriterionId(rule)}${header ? ` · ${header}` : ''}`, rule };
-      }),
-  ];
+  const addable = BUILT_IN_STEPS.filter(step => !present.has(step.id));
+  const importIssues = columns.some(column => column.duplicate || column.invalid > 0);
 
   return (
     <section className="space-y-3 rounded-lg border p-3" aria-label="Team Ranking and Tie-breaks">
@@ -156,14 +140,17 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
         <p className="text-xs font-medium text-warning">
           Team Prizes V2 only: these steps decide prizes only on tournaments enabled for Team V2.
         </p>
-        <p className="text-xs text-muted-foreground">Total Points is always first. Add, remove and drag the steps below to match the published event rules. Only listed steps can decide a prize.</p>
+        <p className="text-xs text-muted-foreground">
+          Total Points is always first. Add, remove and drag the steps below to match the published event rules.
+          Only listed steps can decide a prize. You can set this before importing the Excel.
+        </p>
       </div>
       <div className="rounded-md bg-muted/40 p-2 text-sm font-medium">1. Total Points (fixed · higher wins)</div>
       {criteria.map((criterion, index) => {
-        const isVector = criterion.kind === 'score_vector';
-        const isBestRank = criterion.kind === 'best_rank';
-        const source = criterion.kind === 'source_tb' ? columns.find(column => column.ordinal === criterion.ordinal) : undefined;
-        const missing = criterion.kind === 'source_tb' && !importedOrdinalSet.has(criterion.ordinal);
+        const title = criterion.kind === 'score_vector' ? 'Highest individual scores'
+          : criterion.kind === 'best_rank' ? 'Best individual rank'
+          : criterion.kind === 'imported_tbs' ? 'Imported individual tie-breaks'
+          : `Individual TB${criterion.ordinal}${criterion.name.trim() ? ` · ${criterion.name.trim()}` : ''} (older step)`;
         const notReached = bestRankIndex >= 0 && index > bestRankIndex;
         return (
           <div
@@ -181,7 +168,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
           >
             <div className="flex items-center gap-2">
               <GripVertical size={16} className="text-muted-foreground shrink-0" aria-hidden="true"/>
-              <span className="flex-1 text-sm font-medium">{index + 2}. {isVector ? 'Highest individual scores' : isBestRank ? 'Best individual rank' : criterion.kind === 'source_tb' ? `Individual TB${criterion.ordinal}${criterion.name.trim() ? ` · ${criterion.name.trim()}` : ''}` : ''}</span>
+              <span className="flex-1 text-sm font-medium">{index + 2}. {title}</span>
               <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                 disabled={index === 0} title="Move up"
                 aria-label={`Move criterion ${index + 2} up`}
@@ -198,112 +185,60 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
             {notReached && (
               <p className="text-xs text-muted-foreground">
                 Not reached: Best individual rank above always decides, because every player has a different rank.
+                Move this step above it if the event rules use it first.
               </p>
             )}
-            {isVector ? (
-              <p className="text-xs text-muted-foreground">Compare selected players' scores highest to lowest; then the next player.</p>
-            ) : isBestRank ? (
+            {criterion.kind === 'score_vector' ? (
+              <p className="text-xs text-muted-foreground">Compare selected players&apos; scores highest to lowest; then the next player.</p>
+            ) : criterion.kind === 'best_rank' ? (
               <p className="text-xs text-muted-foreground">
                 The team whose best counted player is placed higher wins (rank 2 beats rank 5).
                 Every player has a different rank, so this step always decides.
               </p>
-            ) : (() => {
-              if (criterion.kind !== 'source_tb') return null;
-              // "Other" keeps its text box open while typing, even when the
-              // text matches a standard name; the guard still recognises it.
-              const typedOther = otherOrdinals.has(criterion.ordinal);
-              const matched = findTeamTieBreakMethod(criterion.name);
-              const method = typedOther ? null : matched;
-              const isOther = typedOther || (!matched && criterion.name.trim() !== '');
-              const nonSummable = matched !== null && !matched.summable;
-              const selected = method ? method.id : isOther ? OTHER_METHOD : '';
-              // Any change to a tie-break's meaning must be re-confirmed.
-              const setTieBreak = (patch: { name?: string; direction?: 'higher' | 'lower' }) => update({
-                criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
-                  ? { ...item, ...patch, verified: false } : item),
-                organizer_confirmed: false,
-              });
-              const setOther = (on: boolean) => setOtherOrdinals(previous => {
-                const next = new Set(previous);
-                if (on) next.add(criterion.ordinal); else next.delete(criterion.ordinal);
-                return next;
-              });
-              return (
-                <div className="space-y-2">
-                  <p className={`text-xs ${missing || source?.duplicate || source?.invalid ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    Source: {source?.header ?? 'not exported'} · {source?.present ?? 0} numeric preview values · {source?.missing ?? 0} blanks · {source?.invalid ?? 0} invalid
-                    {source?.duplicate ? ' · duplicate TB ordinal' : ''}
+            ) : criterion.kind === 'imported_tbs' ? (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  Uses each player&apos;s TB1, TB2, … from the imported Excel, in the file&apos;s order. First TB1 of each
+                  team&apos;s 1st player (best rank), then TB1 of the 2nd player, and so on. Only if TB1 is equal for
+                  every player does it move to TB2, starting again from the 1st player. Higher wins.
+                </p>
+                {!imported ? (
+                  <p className="text-xs text-muted-foreground">Checking the latest import…</p>
+                ) : columns.length > 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    <p>From the latest import:</p>
+                    <ul className="list-disc pl-4">
+                      {columns.map(column => (
+                        <li key={column.ordinal}>
+                          {describeColumn(column)}
+                          {!isComparableImportedTieBreak(column.header) && ' — skipped: Direct Encounter cannot be compared between different players'}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : fileHash ? (
+                  <p className="text-xs text-destructive">
+                    The latest import has no tie-break columns (TB1, TB2 … or Swiss-Manager codes such as BH:GP/C1).
+                    A tie that reaches this step will be held for a ruling.
                   </p>
-                  <Label htmlFor={`method-${criterion.ordinal}`}>What is TB{criterion.ordinal} in this tournament?</Label>
-                  {source && method && tieBreakMethodFromSwissManagerCode(source.header)?.id === method.id && (
-                    <p className="text-xs text-muted-foreground">
-                      Filled in from the column heading “{source.header}”. Check it matches your brochure before ticking.
-                    </p>
-                  )}
-                  <select id={`method-${criterion.ordinal}`} className="w-full rounded border bg-background px-2 py-1 text-sm"
-                    value={selected}
-                    onChange={event => {
-                      const next = event.target.value;
-                      if (next === OTHER_METHOD) {
-                        setOther(true);
-                        setTieBreak({ name: method ? '' : criterion.name });
-                        return;
-                      }
-                      setOther(false);
-                      const chosen = TEAM_TIEBREAK_METHODS.find(item => item.id === next);
-                      // Every standard FIDE tie-break ranks a higher value first.
-                      setTieBreak({ name: chosen ? chosen.name : '', direction: 'higher' });
-                    }}>
-                    <option value="">Choose the tie-break this event uses…</option>
-                    {TEAM_TIEBREAK_METHODS.map(item => (
-                      <option key={item.id} value={item.id}>{item.optionLabel}</option>
-                    ))}
-                    <option value={OTHER_METHOD}>Other — type the exact name from the brochure</option>
-                  </select>
-                  {isOther && (
-                    <Input id={`method-name-${criterion.ordinal}`} value={criterion.name}
-                      aria-label={`Exact name of TB${criterion.ordinal}`}
-                      placeholder="Exact tie-break name, as printed in the brochure"
-                      onChange={event => setTieBreak({ name: event.target.value })}
-                    />
-                  )}
-                  {nonSummable ? (
-                    <p className="text-xs text-destructive">
-                      Direct Encounter compares results between the tied players themselves, so it cannot be added up for a team.
-                      This step never decides a prize automatically — a tie that reaches it needs an official ruling.
-                    </p>
-                  ) : method && criterion.direction === 'higher' ? (
-                    <p className="text-xs text-muted-foreground">
-                      Team value = sum of the counted players&apos; TB{criterion.ordinal} values · higher total wins.
-                    </p>
-                  ) : !method && !isOther ? (
-                    <p className="text-xs text-muted-foreground">
-                      Pick what TB{criterion.ordinal} means in this event. Until then, this step cannot decide a prize.
-                    </p>
-                  ) : (
-                    <div className="flex gap-2 items-center">
-                      <Label htmlFor={`direction-${criterion.ordinal}`}>Better result</Label>
-                      <select id={`direction-${criterion.ordinal}`} className="rounded border bg-background px-2 py-1 text-sm"
-                        value={criterion.direction}
-                        onChange={event => setTieBreak({ direction: event.target.value as 'higher' | 'lower' })}>
-                        <option value="higher">Higher total</option>
-                        <option value="lower">Lower total</option>
-                      </select>
-                    </div>
-                  )}
-                  <Label className="flex items-start gap-2 text-xs">
-                    <Checkbox checked={criterion.verified && !nonSummable}
-                      disabled={!criterion.name.trim() || missing || source?.duplicate || Boolean(source?.invalid) || nonSummable}
-                      onCheckedChange={checked => update({
-                        criteria: criteria.map((item, i) => i === index && item.kind === 'source_tb'
-                          ? { ...item, verified: checked === true } : item),
-                        organizer_confirmed: false,
-                      })}/>
-                    I confirm that summing this individual TB for selected players is allowed by the published team-prize rules.
-                  </Label>
-                </div>
-              );
-            })()}
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No Excel imported yet. That is fine: the tie-break columns are read from the Excel when prizes are
+                    allocated, so you do not need to come back here after importing.
+                  </p>
+                )}
+                {importIssues && (
+                  <p className="text-xs text-destructive">
+                    The latest import has duplicate tie-break columns or non-numeric values. Blank or unclear values are
+                    never guessed: a tie that needs one is held for a ruling.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Older step that adds up one tie-break for the team. Remove it and use “Imported individual tie-breaks” instead.
+              </p>
+            )}
           </div>
         );
       })}
@@ -320,23 +255,18 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
           </select>
         </div>
       )}
-      {fileChanged && <p className="text-xs text-destructive">Imported Excel has changed. Review and save the rules again before relying on TBs.</p>}
-      {missingRules.length > 0 && (
-        <p className="text-xs text-destructive">
-          Newly imported tie-breaks {missingRules.map(n => `TB${n}`).join(', ')} are not yet configured. Review source columns before prizes are finalized.
-        </p>
-      )}
+      {fileChanged && <p className="text-xs text-destructive">Imported Excel has changed. Review and save the rules again before relying on the older TB steps.</p>}
       <Label htmlFor="published-team-rules">Published team-prize rules reference</Label>
       <Input id="published-team-rules" placeholder="e.g., tournament brochure section"
         value={value?.published_reference ?? ''} onChange={event =>
           update({ published_reference: event.target.value, organizer_confirmed: false })}/>
       <Label className="flex items-start gap-2 text-xs">
         <Checkbox checked={value?.organizer_confirmed ?? false}
-          disabled={!value?.published_reference?.trim() || fileChanged || missingRules.length > 0}
+          disabled={!value?.published_reference?.trim() || fileChanged}
           onCheckedChange={checked => update({ organizer_confirmed: checked === true })}/>
         I confirm the ranking order reflects the declared team-prize regulations.
       </Label>
-      <p className="text-xs text-muted-foreground">Unsupported or unverified TBs cannot automatically decide a cash prize. Unresolved ties require an authorized ruling.</p>
+      <p className="text-xs text-muted-foreground">Blank or unclear tie-break values never decide a cash prize automatically. Unresolved ties require an authorized ruling.</p>
     </section>
   );
 }

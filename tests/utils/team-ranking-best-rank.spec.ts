@@ -50,7 +50,7 @@ describe('Team V2 — Best individual rank (arbiter rule: Total Points → best-
   it('the default order applies Highest individual scores before Best individual rank', () => {
     const x = team('X', [[7, 30], [5, 31]]); // 7+5, best rank 30
     const y = team('Y', [[6, 1], [6, 2]]);   // 6+6, best rank 1
-    expect(compareTeamRankingV2(x, y, defaultTeamRankingCriteria([]))).toMatchObject({ criterion: 'score_vector', order: -1 });
+    expect(compareTeamRankingV2(x, y, defaultTeamRankingCriteria())).toMatchObject({ criterion: 'score_vector', order: -1 });
     // With the arbiter's order (best rank only), Y wins instead.
     expect(compareTeamRankingV2(x, y, [bestRank])).toMatchObject({ criterion: 'best_rank', order: 1 });
   });
