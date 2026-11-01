@@ -89,6 +89,10 @@ describe('official Team V2 Save rows from complete server-scored evidence', () =
       ruling: { arbiter_decision_reference: 'decision-1' },
     });
     expect(result.rows.team_rows[0].player_ids).toEqual(['b1','b2']);
+    expect(result.rows.team_rows[0].player_snapshot).toEqual([
+      { player_id: 'b1', name: 'Fixture 1', rank: 1, points: 5, gender: null },
+      { player_id: 'b2', name: 'Fixture 2', rank: 2, points: 4, gender: null },
+    ]);
     expect(result.rows.individual_rows).toHaveLength(1);
   });
   it('rejects absent/forged official decisions and stale versions', () => {

@@ -23,7 +23,8 @@ export type InitialTeamV2Rows = {
     reason_codes: string[]; is_manual: boolean }>;
   team_rows: Array<{ group_id: string; prize_id: string; place: number;
     institution_key: string; total_points: number; player_ids: string[];
-    player_snapshot: Array<{ player_id: string; points: number }>;
+    /** Same shape as the standard route, so results screens show names. */
+    player_snapshot: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }>;
     ranking_snapshot: Record<string, unknown> }>;
   rulings: [];
 };
@@ -106,7 +107,7 @@ export function prepareInitialUncontestedTeamV2Rows(
       }
       const players = winner.players;
       const names = new Set<string>();
-      const snapshot: Array<{ player_id: string; points: number }> = [];
+      const snapshot: InitialTeamV2Rows['team_rows'][number]['player_snapshot'] = [];
       for (const player of players) {
         if (!obj(player) || typeof player.player_id !== 'string' ||
             !player.player_id || names.has(player.player_id) ||
@@ -114,7 +115,12 @@ export function prepareInitialUncontestedTeamV2Rows(
           return { ok: false, reason: 'invalid_source' };
         }
         names.add(player.player_id);
-        snapshot.push({ player_id: player.player_id, points: player.points });
+        // Name/rank/gender were validated with the winner by verifyTeamFinalizePreview.
+        snapshot.push({
+          player_id: player.player_id, name: String(player.name ?? ''),
+          rank: player.rank as number, points: player.points,
+          gender: typeof player.gender === 'string' ? player.gender : null,
+        });
       }
       const total = snapshot.reduce((sum, player) => sum + player.points, 0);
       if (Math.abs(total - Number(winner.total_points)) > 1e-8)
