@@ -1,5 +1,6 @@
-import type {
-  TeamRankingPartition, TeamRankingRuleConfig, TeamRankingPlayer,
+import {
+  isComparableImportedTieBreak,
+  type ImportedTieBreakContext, type TeamRankingPartition, type TeamRankingRuleConfig, type TeamRankingPlayer,
 } from './teamRankingV2.ts';
 import type { TeamRulingRecord } from './teamTieAdjudicationV2.ts';
 
@@ -41,6 +42,7 @@ export function buildTeamRankingAwardAudit(
   candidates: readonly TeamRankingAuditCandidate[],
   partitions: readonly TeamRankingPartition[],
   verifiedRuling?: TeamRulingRecord,
+  importedTieBreaks?: ImportedTieBreakContext | null,
 ) {
   const resolved = partitions.find(p =>
     p.status === 'resolved' && p.teams.some(t => t.key === winnerKey));
@@ -73,6 +75,21 @@ export function buildTeamRankingAwardAudit(
       organizer_confirmed: config.organizer_confirmed,
       criteria: config.criteria.map(rule => ({ ...rule })),
     } : null,
+    // What "Imported individual tie-breaks" meant for this award: the Excel
+    // columns in file order, and which were compared (DE is skipped).
+    ...(config?.criteria.some(rule => rule.kind === 'imported_tbs') ? {
+      imported_tie_breaks: importedTieBreaks?.status === 'available' ? {
+        status: 'available' as const,
+        source_hash: importedTieBreaks.sourceHash,
+        columns: importedTieBreaks.columns.map(column => ({
+          ordinal: column.ordinal, header: column.header,
+          compared: isComparableImportedTieBreak(column.header),
+        })),
+      } : {
+        status: 'unavailable' as const,
+        reason: importedTieBreaks?.status === 'unavailable' ? importedTieBreaks.reason : 'no_imported_tbs',
+      },
+    } : {}),
     winner_key: winnerKey,
     decided_by_criterion: rulingMatches
       ? 'documented_arbiter_ruling' : resolved?.criterion ?? null,

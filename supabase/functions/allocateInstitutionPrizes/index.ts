@@ -7,7 +7,10 @@ import {
   type TeamGroupByKey,
   type TeamWarning,
 } from "../_shared/teamPrizes.ts";
-import { rankTeamCandidatesV2, parseTeamRankingRuleConfig } from "../_shared/teamRankingV2.ts";
+import {
+  rankTeamCandidatesV2, parseTeamRankingRuleConfig, importedTieBreakContextFromTags,
+  type ImportedTieBreakContext,
+} from "../_shared/teamRankingV2.ts";
 import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
@@ -185,6 +188,8 @@ interface GroupResponse {
   }>;
   adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
   adjudication_rules_reference?: string;
+  /** The imported Excel tie-break columns the scorer used (owner-only preview). */
+  adjudication_imported_tie_breaks?: ImportedTieBreakContext;
 }
 
 interface AllocateInstitutionPrizesResponse {
@@ -212,6 +217,18 @@ const EXCLUSION_SENTENCES: Record<TeamExclusion['reason'], string> = {
     'The rule asks for a minimum number of girls and the entry list does not meet it.',
   male_slots_unfilled:
     'The rule asks for other players and the entry list does not meet it.',
+};
+
+/** Plain-language cause appended to a held placing (codes stay for diagnostics). */
+const RANKING_HOLD_SENTENCES: Record<string, string> = {
+  missing_tb: 'a counted player has a blank tie-break value in the imported Excel',
+  no_imported_tbs: 'no usable tie-break columns in the imported Excel (or no Excel imported yet)',
+  mixed_tb_sources: 'players come from different Excel imports; import the full file again',
+  missing_rank: 'a counted player has no rank',
+  missing_points: 'a counted player has no points',
+  undefined_tb: 'a tie-break step is not confirmed',
+  unapproved_rules: 'the ranking rules are not confirmed in Edit Rules',
+  invalid_team_size: 'teams have different numbers of counted players',
 };
 
 function formatExclusion(exclusion: TeamExclusion): string {
@@ -393,6 +410,10 @@ Deno.serve(async (req: Request) => {
     // Process each group
     const groupResponses: GroupResponse[] = [];
 
+    // "Imported individual tie-breaks" reads the CURRENT import's columns
+    // here, once, so organizers can choose the step before importing.
+    const importedTieBreaks = importedTieBreakContextFromTags(typedPlayers.map(player => player.tags_json));
+
     for (const group of typedGroups) {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
       
@@ -503,7 +524,7 @@ Deno.serve(async (req: Request) => {
           };
         }),
       }));
-      const partitions = rankTeamCandidatesV2(selectedCandidates, config);
+      const partitions = rankTeamCandidatesV2(selectedCandidates, config, importedTieBreaks);
       const scoredByKey = new Map(scoredInstitutions.map(institution => [institution.key, institution]));
       const rankedSlots = partitions.flatMap(partition =>
         partition.teams.map(team => ({ partition, institution: scoredByKey.get(team.key) })),
@@ -547,7 +568,8 @@ Deno.serve(async (req: Request) => {
       const rankingIssues = groupPrizes.flatMap(prize => {
         const slot = rankedSlots[prize.place - 1];
         if (!slot || slot.partition.status === 'resolved') return [];
-        return [`Place ${prize.place}: team ranking ${slot.partition.status}; ${slot.partition.reason ?? 'tie-breaks exhausted'}`];
+        const cause = slot.partition.reason ? RANKING_HOLD_SENTENCES[slot.partition.reason] : undefined;
+        return [`Place ${prize.place}: team ranking ${slot.partition.status}; ${slot.partition.reason ?? 'tie-breaks exhausted'}${cause ? ` (${cause})` : ''}`];
       });
       console.log(`[allocateInstitutionPrizes] Group result: ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${rankingIssues.length} ranking holds`);
 
@@ -579,6 +601,7 @@ Deno.serve(async (req: Request) => {
               { id: prize.id, place: prize.place, cash_amount: prize.cash_amount,
                 has_trophy: prize.has_trophy, has_medal: prize.has_medal },
               winner.key, config, selectedCandidates, partitions,
+              undefined, importedTieBreaks,
             ) ?? undefined,
             tied_at_boundary: false,
             ...(winner.warnings ? { warnings: winner.warnings } : {}),
@@ -621,6 +644,7 @@ Deno.serve(async (req: Request) => {
         adjudication_partitions: adjudicationPartitions,
         adjudication_ties: adjudicationTies,
         adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
+        adjudication_imported_tie_breaks: importedTieBreaks,
         scored_institutions: scoredForResponse,
       });
     }

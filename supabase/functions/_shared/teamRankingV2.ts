@@ -6,7 +6,7 @@
  * criterion as verified. This module NEVER awards a prize, invents a missing
  * player score, or uses historical Rank Sum.
  */
-import { isNonSummableTieBreakName } from './teamTieBreakMethods.ts';
+import { isNonSummableTieBreakName, tieBreakMethodFromSwissManagerCode } from './teamTieBreakMethods.ts';
 
 export type TeamRankingCriterion =
   | { kind: 'score_vector' }
@@ -15,6 +15,17 @@ export type TeamRankingCriterion =
    * rank wins. Ranks are unique, so this step always decides between teams.
    */
   | { kind: 'best_rank' }
+  /**
+   * The individual tie-break columns of the imported Excel, in file order
+   * (TB1, TB2, …), compared position by position: TB1 of each team's 1st
+   * (best-ranked) counted player, then TB1 of the 2nd player, and so on; only
+   * when TB1 is equal for every position does TB2 start again from the 1st
+   * player. Higher wins. The columns are read from the tournament's current
+   * import when prizes are allocated, so this step can be chosen before any
+   * Excel is imported. Direct Encounter columns are skipped: a head-to-head
+   * value cannot be compared between different players.
+   */
+  | { kind: 'imported_tbs' }
   | {
       kind: 'source_tb';
       ordinal: number;
@@ -44,11 +55,104 @@ export type TeamRankingCandidate = {
 };
 
 export type TeamRankingComparison =
-  | { status: 'decided'; order: -1 | 1; criterion: 'total_points' | 'score_vector' | 'best_rank' | `TB${number}`; aValue: number | number[]; bValue: number | number[] }
+  | { status: 'decided'; order: -1 | 1; criterion: 'total_points' | 'score_vector' | 'best_rank' | 'imported_tbs' | `TB${number}`; aValue: number | number[]; bValue: number | number[] }
   | { status: 'tied'; order: 0 }
-  | { status: 'blocked'; order: 0; criterion: string; reason: 'invalid_team_size' | 'missing_points' | 'duplicate_criterion' | 'invalid_criterion' | 'undefined_tb' | 'missing_tb' | 'missing_rank' };
+  | { status: 'blocked'; order: 0; criterion: string; reason: 'invalid_team_size' | 'missing_points' | 'duplicate_criterion' | 'invalid_criterion' | 'undefined_tb' | 'missing_tb' | 'missing_rank' | ImportedTieBreakUnavailableReason };
 
-/** Stable identifier for a criterion: 'score_vector', 'best_rank' or 'TB<n>'. */
+/** Why the tournament's imported tie-break columns cannot be used. */
+export type ImportedTieBreakUnavailableReason = 'no_imported_tbs' | 'mixed_tb_sources';
+
+/** One individual tie-break column of the imported Excel. */
+export type ImportedTieBreakColumnRef = { ordinal: number; header: string };
+
+/**
+ * The tie-break columns of the tournament's current player import, read when
+ * prizes are allocated (never from the saved rules). `sourceHash` identifies
+ * the imported file; a player's values only count if they came from it.
+ */
+export type ImportedTieBreakContext =
+  | { status: 'available'; sourceHash: string; columns: ImportedTieBreakColumnRef[] }
+  | { status: 'unavailable'; reason: ImportedTieBreakUnavailableReason };
+
+/** False for Direct Encounter style columns (DE, EDE, head-to-head). */
+export function isComparableImportedTieBreak(header: string): boolean {
+  return !isNonSummableTieBreakName(header) &&
+    tieBreakMethodFromSwissManagerCode(header)?.summable !== false;
+}
+
+const record = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** Columns of one player's saved `team_tiebreak_v2`, or null when malformed. */
+function importedColumnsOf(raw: Record<string, unknown>): ImportedTieBreakColumnRef[] | null {
+  if (!Array.isArray(raw.source_columns)) return null;
+  const columns: ImportedTieBreakColumnRef[] = [];
+  for (const item of raw.source_columns) {
+    if (!record(item) || typeof item.ordinal !== 'number' || !Number.isSafeInteger(item.ordinal) ||
+        item.ordinal < 1 || typeof item.header !== 'string') return null;
+    // A duplicated position is ambiguous; its values are already saved as blank.
+    if (!columns.some(column => column.ordinal === item.ordinal)) {
+      columns.push({ ordinal: item.ordinal, header: item.header });
+    }
+  }
+  return columns.sort((a, b) => a.ordinal - b.ordinal);
+}
+
+/**
+ * Work out the imported tie-break columns from the players' saved tags. A
+ * player added by hand has none and is ignored here (its values are blank).
+ * Players from two different imports, or with inconsistent column lists,
+ * fail closed: nothing can be compared safely.
+ */
+export function importedTieBreakContextFromTags(tags: readonly unknown[]): ImportedTieBreakContext {
+  let found: { sourceHash: string; columns: ImportedTieBreakColumnRef[]; signature: string } | null = null;
+  for (const tag of tags) {
+    if (!record(tag) || tag.team_tiebreak_v2 === undefined || tag.team_tiebreak_v2 === null) continue;
+    const raw = tag.team_tiebreak_v2;
+    // Values not tied to an imported file can never be compared (blank).
+    if (record(raw) && raw.version === 1 && raw.source_hash === null) continue;
+    if (!record(raw) || raw.version !== 1 || typeof raw.source_hash !== 'string' || !raw.source_hash) {
+      return { status: 'unavailable', reason: 'mixed_tb_sources' };
+    }
+    const columns = importedColumnsOf(raw);
+    if (!columns) return { status: 'unavailable', reason: 'mixed_tb_sources' };
+    const signature = JSON.stringify(columns);
+    if (!found) {
+      found = { sourceHash: raw.source_hash, columns, signature };
+    } else if (found.sourceHash !== raw.source_hash || found.signature !== signature) {
+      return { status: 'unavailable', reason: 'mixed_tb_sources' };
+    }
+  }
+  if (!found || found.columns.length === 0) return { status: 'unavailable', reason: 'no_imported_tbs' };
+  return { status: 'available', sourceHash: found.sourceHash, columns: found.columns };
+}
+
+/** Strict reader for a context carried in a server-to-server scorer response. */
+export function parseImportedTieBreakContext(raw: unknown): ImportedTieBreakContext | null {
+  if (!record(raw)) return null;
+  if (raw.status === 'unavailable') {
+    return raw.reason === 'no_imported_tbs' || raw.reason === 'mixed_tb_sources'
+      ? { status: 'unavailable', reason: raw.reason } : null;
+  }
+  if (raw.status !== 'available' || typeof raw.sourceHash !== 'string' || !raw.sourceHash) return null;
+  const columns = importedColumnsOf({ source_columns: raw.columns });
+  return columns && columns.length ? { status: 'available', sourceHash: raw.sourceHash, columns } : null;
+}
+
+/** Counted players in board order: best (lowest) tournament rank first. */
+function boardOrder(players: readonly TeamRankingPlayer[]): TeamRankingPlayer[] | null {
+  if (players.some(player => typeof player.rank !== 'number' || !Number.isFinite(player.rank))) return null;
+  return [...players].sort((a, b) => (a.rank as number) - (b.rank as number));
+}
+
+/** A player's imported value; values saved from any other file never count. */
+function importedValue(player: TeamRankingPlayer, ordinal: number, sourceHash: string): number | null {
+  if (player.sourceHash !== sourceHash) return null;
+  const value = player.individualTieBreaks?.[ordinal];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Stable identifier for a criterion: 'score_vector', 'best_rank', 'imported_tbs' or 'TB<n>'. */
 export function teamCriterionId(criterion: TeamRankingCriterion): string {
   return criterion.kind === 'source_tb' ? `TB${criterion.ordinal}` : criterion.kind;
 }
@@ -73,7 +177,7 @@ export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig 
   for (const entry of item.criteria) {
     if (!entry || typeof entry !== 'object') return null;
     const rule = entry as Record<string, unknown>;
-    const identifier = rule.kind === 'score_vector' || rule.kind === 'best_rank'
+    const identifier = rule.kind === 'score_vector' || rule.kind === 'best_rank' || rule.kind === 'imported_tbs'
       ? rule.kind
       : rule.kind === 'source_tb' && typeof rule.ordinal === 'number' &&
         Number.isSafeInteger(rule.ordinal) && rule.ordinal >= 1
@@ -85,6 +189,8 @@ export function parseTeamRankingRuleConfig(raw: unknown): TeamRankingRuleConfig 
       criteria.push({ kind: 'score_vector' });
     } else if (rule.kind === 'best_rank') {
       criteria.push({ kind: 'best_rank' });
+    } else if (rule.kind === 'imported_tbs') {
+      criteria.push({ kind: 'imported_tbs' });
     } else {
       if (rule.aggregation !== 'sum' ||
           (rule.direction !== 'higher' && rule.direction !== 'lower') ||
@@ -125,6 +231,7 @@ export type TeamRankingPartition = {
 export function rankTeamCandidatesV2(
   candidates: readonly TeamRankingCandidate[],
   config: TeamRankingRuleConfig | null,
+  importedTieBreaks?: ImportedTieBreakContext | null,
 ): TeamRankingPartition[] {
   if (!candidates.length) return [];
   const invalid = candidates.some(team =>
@@ -166,6 +273,47 @@ export function rankTeamCandidatesV2(
     if (index >= config.criteria.length) return [{ teams: subset, status: 'tied' }];
     const criterion = config.criteria[index];
     const label = teamCriterionId(criterion);
+
+    if (criterion.kind === 'imported_tbs') {
+      if (importedTieBreaks?.status !== 'available') {
+        return [{ teams: subset, status: 'blocked', criterion: label,
+          reason: importedTieBreaks?.status === 'unavailable' ? importedTieBreaks.reason : 'no_imported_tbs' }];
+      }
+      const { sourceHash } = importedTieBreaks;
+      const columns = importedTieBreaks.columns.filter(column => isComparableImportedTieBreak(column.header));
+      if (!columns.length) return [{ teams: subset, status: 'blocked', criterion: label, reason: 'no_imported_tbs' }];
+      const boards = new Map<TeamRankingCandidate, TeamRankingPlayer[]>();
+      for (const team of subset) {
+        const board = boardOrder(team.selectedPlayers);
+        if (!board) return [{ teams: subset, status: 'blocked', criterion: label, reason: 'missing_rank' }];
+        boards.set(team, board);
+      }
+      const positions = subset[0].selectedPlayers.length;
+      // TB-major, player-minor: step s compares TB columns[s / positions] of
+      // the player at board position s % positions. Teams split as soon as a
+      // value differs; a blank holds only the group that needs that value.
+      const byStep = (group: TeamRankingCandidate[], step: number): TeamRankingPartition[] => {
+        if (group.length === 1 || step >= columns.length * positions) return refine(group, index + 1, label);
+        const ordinal = columns[Math.floor(step / positions)].ordinal;
+        const position = step % positions;
+        const scored: Array<{ team: TeamRankingCandidate; value: number }> = [];
+        for (const team of group) {
+          const value = importedValue(boards.get(team)![position], ordinal, sourceHash);
+          if (value === null) return [{ teams: group, status: 'blocked', criterion: label, reason: 'missing_tb' }];
+          scored.push({ team, value });
+        }
+        scored.sort((a, b) => b.value - a.value);
+        const parts: TeamRankingCandidate[][] = [];
+        let previous: number | null = null;
+        for (const entry of scored) {
+          if (previous !== null && entry.value === previous) parts[parts.length - 1].push(entry.team);
+          else parts.push([entry.team]);
+          previous = entry.value;
+        }
+        return parts.flatMap(part => byStep(part, step + 1));
+      };
+      return byStep(subset, 0);
+    }
 
     // A non-summable method (Direct Encounter) can be declared but never
     // decides a team prize by adding individual values: hold for a ruling.
@@ -251,6 +399,7 @@ export function compareTeamRankingV2(
   a: TeamRankingCandidate,
   b: TeamRankingCandidate,
   subsequentCriteria: readonly TeamRankingCriterion[],
+  importedTieBreaks?: ImportedTieBreakContext | null,
 ): TeamRankingComparison {
   if (a.selectedPlayers.length === 0 || a.selectedPlayers.length !== b.selectedPlayers.length) {
     return { status: 'blocked', order: 0, criterion: 'total_points', reason: 'invalid_team_size' };
@@ -301,6 +450,34 @@ export function compareTeamRankingV2(
       continue;
     }
 
+    if (criterion.kind === 'imported_tbs') {
+      if (importedTieBreaks?.status !== 'available') {
+        return { status: 'blocked', order: 0, criterion: identifier,
+          reason: importedTieBreaks?.status === 'unavailable' ? importedTieBreaks.reason : 'no_imported_tbs' };
+      }
+      const columns = importedTieBreaks.columns.filter(column => isComparableImportedTieBreak(column.header));
+      if (!columns.length) return { status: 'blocked', order: 0, criterion: identifier, reason: 'no_imported_tbs' };
+      const boardA = boardOrder(a.selectedPlayers);
+      const boardB = boardOrder(b.selectedPlayers);
+      if (!boardA || !boardB) return { status: 'blocked', order: 0, criterion: identifier, reason: 'missing_rank' };
+      const keyA: number[] = [];
+      const keyB: number[] = [];
+      for (const column of columns) {
+        for (let i = 0; i < boardA.length; i++) {
+          const valueA = importedValue(boardA[i], column.ordinal, importedTieBreaks.sourceHash);
+          const valueB = importedValue(boardB[i], column.ordinal, importedTieBreaks.sourceHash);
+          if (valueA === null || valueB === null) {
+            return { status: 'blocked', order: 0, criterion: identifier, reason: 'missing_tb' };
+          }
+          keyA.push(valueA);
+          keyB.push(valueB);
+          const cmp = sortNumber(valueA, valueB);
+          if (cmp) return { status: 'decided', order: cmp, criterion: 'imported_tbs', aValue: keyA, bValue: keyB };
+        }
+      }
+      continue;
+    }
+
     if (!Number.isSafeInteger(criterion.ordinal) || criterion.ordinal < 1) {
       return { status: 'blocked', order: 0, criterion: identifier, reason: 'invalid_criterion' };
     }
@@ -332,26 +509,11 @@ export function compareTeamRankingV2(
 }
 
 /**
- * Default order for a new group (owner decision, 1 Nov 2026): Total Points
+ * Default order for a new group (owner decisions, 1 Nov 2026): Total Points
  * (fixed, not listed) → Highest individual scores → Best individual rank →
- * imported TB1…TBn. Every listed step is removable and re-orderable.
+ * Imported individual tie-breaks. Every listed step is removable and
+ * re-orderable, and none depends on an Excel having been imported yet.
  */
-export function defaultTeamRankingCriteria(
-  sourceOrdinals: readonly number[],
-): TeamRankingCriterion[] {
-  return [
-    { kind: 'score_vector' },
-    { kind: 'best_rank' },
-    ...[...new Set(sourceOrdinals)]
-      .filter(ordinal => Number.isSafeInteger(ordinal) && ordinal > 0)
-      .sort((a, b) => a - b)
-      .map(ordinal => ({
-        kind: 'source_tb' as const,
-        ordinal,
-        name: '',
-        aggregation: 'sum' as const,
-        direction: 'higher' as const,
-        verified: false,
-      })),
-  ];
+export function defaultTeamRankingCriteria(): TeamRankingCriterion[] {
+  return [{ kind: 'score_vector' }, { kind: 'best_rank' }, { kind: 'imported_tbs' }];
 }

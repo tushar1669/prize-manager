@@ -2,6 +2,7 @@ import { hasCompleteInitialTeamV2IndividualPreview } from './teamV2IndividualPre
 import { verifyTeamV2ReviewPrizeInventory } from './teamV2ReviewPrizeInventory.ts';
 import { verifyTeamFinalizePreview } from './teamFinalizeGuard.ts';
 import { parseTeamRankingRuleConfig } from './teamRankingV2.ts';
+import { sameJson } from './canonicalJson.ts';
 
 /**
  * First-version, UNCONTESTED Team v2 only. Browser-supplied awards never enter
@@ -31,7 +32,8 @@ type Result = { ok: true; rows: InitialTeamV2Rows } |
     'unresolved_team_awards' | 'ranking_contract_mismatch' };
 const obj = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+// Stored jsonb re-orders keys, so compare content, not key order.
+const same = sameJson;
 
 export function prepareInitialUncontestedTeamV2Rows(
   individualPrizeIds: readonly string[], individualPreview: unknown,

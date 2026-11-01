@@ -1,15 +1,20 @@
 import { hasCompleteInitialTeamV2IndividualPreview } from './teamV2IndividualPreview.ts';
 import { verifyTeamV2ReviewPrizeInventory } from './teamV2ReviewPrizeInventory.ts';
-import { parseTeamRankingRuleConfig, type TeamRankingPartition } from './teamRankingV2.ts';
+import {
+  parseImportedTieBreakContext, parseTeamRankingRuleConfig,
+  type ImportedTieBreakContext, type TeamRankingPartition,
+} from './teamRankingV2.ts';
 import { buildTeamRankingAwardAudit } from './teamRankingAudit.ts';
 import { planAuthorizedTeamV2Awards, type V2AuthorizedActor,
   type V2AuthorizedRulingProposal, type V2AuthorizedServerGroup } from './teamV2CommitPlan.ts';
 import type { ActiveTeamV2Group, ActiveTeamV2Prize,
   InitialTeamV2Rows } from './teamV2InitialSaveRows.ts';
+import { sameJson } from './canonicalJson.ts';
 
 const obj = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+// Stored jsonb re-orders keys, so compare content, not key order.
+const same = sameJson;
 type Result =
   | { ok: true; rows: { individual_rows: InitialTeamV2Rows['individual_rows'];
     team_rows: InitialTeamV2Rows['team_rows']; rulings: unknown[] } }
@@ -47,6 +52,8 @@ export function prepareAdjudicatedTeamV2Rows(
   const ranked: V2AuthorizedServerGroup[] = [];
   const rosterByGroup = new Map<string, Map<string, ScorerTeam>>();
   const configs = new Map<string, NonNullable<ReturnType<typeof parseTeamRankingRuleConfig>>>();
+  // Audit evidence only: the partitions themselves are the scorer's decision.
+  const importedByGroup = new Map<string, ImportedTieBreakContext | null>();
   for (const dbGroup of dbGroups) {
     const preview = teamPreview.groups.find((candidate: unknown) =>
       obj(candidate) && candidate.group_id === dbGroup.id);
@@ -66,6 +73,7 @@ export function prepareAdjudicatedTeamV2Rows(
       return { ok: false, reason: 'unapproved_rules' };
     }
     configs.set(dbGroup.id, rules);
+    importedByGroup.set(dbGroup.id, parseImportedTieBreakContext(preview.adjudication_imported_tie_breaks));
     const participants = new Map<string, ScorerTeam>();
     const partitions: TeamRankingPartition[] = [];
     for (const item of preview.adjudication_partitions) {
@@ -153,7 +161,7 @@ export function prepareAdjudicatedTeamV2Rows(
         female_slots: dbGroup.female_slots, male_slots: dbGroup.male_slots,
         scoring_mode: dbGroup.scoring_mode,
       }, prize, award.institution_key, rules, candidates, ranking.partitions,
-      ruling,
+      ruling, importedByGroup.get(award.group_id) ?? null,
     );
     if (!audit || audit.decided_by_criterion !== award.decided_by) {
       return { ok: false, reason: 'invalid_ruling' };

@@ -50,7 +50,24 @@ const prepare = (ind: unknown = individual, sc: unknown = team,
   groups = [group], prizes = [prize], individualIds = ['ip'], newVersion = 1) =>
   prepareInitialUncontestedTeamV2Rows(individualIds, ind, groups, prizes, sc, 'owner', newVersion);
 
+// Exact text production Postgres 17 returned for `rules` above cast to jsonb
+// (captured 1 Nov 2026). jsonb re-orders keys: shorter keys first.
+const RULES_AS_STORED_IN_JSONB =
+  '{"version": 2, "criteria": [{"kind": "score_vector"}], "source_hash": null, ' +
+  '"organizer_confirmed": true, "published_reference": "fixture-regulations"}';
+
 describe('initial Team v2 Save source-only fail-closed assembler', () => {
+  it('accepts rules read back from the database, whose keys Postgres re-orders', () => {
+    const stored = JSON.parse(RULES_AS_STORED_IN_JSONB);
+    expect(Object.keys(stored)).not.toEqual(Object.keys(rules));
+    const result = prepare(individual, team, [{ ...group, ranking_rules: stored }]);
+    expect(result.ok).toBe(true);
+  });
+  it('still rejects stored rules carrying a key the strict parser would drop', () => {
+    const stored = { ...JSON.parse(RULES_AS_STORED_IN_JSONB), injected: true };
+    expect(prepare(individual, team, [{ ...group, ranking_rules: stored }]))
+      .toEqual({ ok: false, reason: 'ranking_contract_mismatch' });
+  });
   it('builds complete server-sourced award arrays for a genuinely uncontested first version', () => {
     const result = prepare();
     expect(result.ok).toBe(true);

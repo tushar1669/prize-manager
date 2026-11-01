@@ -64,6 +64,17 @@ const build = (preview: unknown = scorer, submissions: unknown[] = [official]) =
     [group], dbPrizes, preview, submissions, actor);
 
 describe('official Team V2 Save rows from complete server-scored evidence', () => {
+  it('accepts rules read back from the database, whose keys Postgres re-orders', () => {
+    // Exact production Postgres 17 jsonb text for `rules` (captured 1 Nov 2026).
+    const stored = JSON.parse('{"version": 2, "criteria": [{"kind": "score_vector"}], ' +
+      '"source_hash": null, "organizer_confirmed": true, "published_reference": "regulation-7"}');
+    expect(Object.keys(stored)).not.toEqual(Object.keys(rules));
+    expect(prepareAdjudicatedTeamV2Rows(['individual'], individual,
+      [{ ...group, ranking_rules: stored }], dbPrizes, scorer, [official], actor).ok).toBe(true);
+    expect(prepareAdjudicatedTeamV2Rows(['individual'], individual,
+      [{ ...group, ranking_rules: { ...stored, injected: true } }], dbPrizes, scorer, [official], actor))
+      .toEqual({ ok: false, reason: 'unapproved_rules' });
+  });
   it('builds all two official cash winners, preserving tied audit provenance', () => {
     const result = build();
     expect(result.ok).toBe(true);

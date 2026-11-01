@@ -79,8 +79,9 @@ describe('Team Ranking v2 — pure, fail-closed comparison', () => {
   it('refuses unknown event TB meaning; never silently skips it to choose another winner', () => {
     const a = team('A', [6, 6], { 2: [10, 12] });
     const b = team('B', [6, 6], { 2: [8, 8] });
-    // Defaults: [Highest individual scores, Best individual rank, TB1, TB2]
-    const unverified = defaultTeamRankingCriteria([1, 2])[2];
+    // An older per-column step whose meaning was never confirmed.
+    const unverified: TeamRankingCriterion =
+      { kind: 'source_tb', ordinal: 1, name: '', aggregation: 'sum', direction: 'higher', verified: false };
     expect(compareTeamRankingV2(a, b, [unverified, tb(2)])).toMatchObject({
       status: 'blocked', reason: 'undefined_tb', criterion: 'TB1',
     });
@@ -101,11 +102,9 @@ describe('Team Ranking v2 — pure, fail-closed comparison', () => {
       .toMatchObject({ status: 'blocked', reason: 'invalid_team_size' });
   });
 
-  it('creates defaults in actual source ordinal order, not TB text sorting', () => {
-    const list = defaultTeamRankingCriteria([10, 2, 1, 10, 0, -3]);
-    expect(list.map(x => x.kind === 'score_vector' ? 'vector' : x.kind === 'best_rank' ? 'best_rank' : `TB${x.ordinal}`))
-      .toEqual(['vector', 'best_rank', 'TB1', 'TB2', 'TB10']);
-    expect(list.slice(2).every(x => x.kind === 'source_tb' && !x.verified && x.name === '')).toBe(true);
+  it('defaults never depend on an imported file (prizes are set before the Excel)', () => {
+    expect(defaultTeamRankingCriteria().map(x => x.kind))
+      .toEqual(['score_vector', 'best_rank', 'imported_tbs']);
   });
 });
 

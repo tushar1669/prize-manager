@@ -2998,8 +2998,8 @@ export default function PlayerImport() {
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Each player&apos;s values are saved with the import for Team Prize tie-breaks only; individual prizes
-                  do not use them. In Team Prizes → Edit Rules, confirm what each tie-break is before it can decide a
-                  team prize. Counts here are a preview of the first 20 rows.
+                  do not use them. Team Prizes V2 compares them in the “Imported individual tie-breaks” step (TB1
+                  first, then TB2, …). Counts here are a preview of the first 20 rows.
                 </p>
                 {previewTieBreakColumns.some(col => col.duplicateOrdinal || col.sampleInvalid > 0) && (
                   <p className="mt-1 text-xs text-destructive">

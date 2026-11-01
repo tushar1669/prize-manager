@@ -10,9 +10,9 @@
  *    detected tie-break columns. Rating statistics ("Rp", "Ra", "Nrat-Ø") and
  *    the plain "Wins" count are not tie-break columns and are never detected.
  *
- * Values are saved with each player for Team Ranking v2 only. An organizer
- * must still confirm every method in Team Prizes → Edit Rules before it can
- * decide a prize. Never default an empty value to zero.
+ * Values are saved with each player for Team Ranking v2 only, where the
+ * "Imported individual tie-breaks" step compares them in file order (Direct
+ * Encounter skipped). Never default an empty value to zero.
  */
 export type ImportedTieBreakColumn = {
   ordinal: number;
