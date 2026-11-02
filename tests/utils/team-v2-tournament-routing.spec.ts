@@ -38,9 +38,10 @@ describe('Team V2 applies only to Team V2 tournaments (same rule as the database
     expect(sql).toContain('FROM public.team_v2_canary_tournaments marker');
     expect(sql).toContain('history.ranking_snapshot IS NOT NULL');
   });
-  it('the team allocator uses V2 ranking only for V2 tournaments and fails closed', () => {
+  it('the team allocator ranks every tournament with Team V2 steps', () => {
     const source = readFileSync('supabase/functions/allocateInstitutionPrizes/index.ts', 'utf8');
-    expect(source).toContain('const useTeamV2Ranking = teamV2Check !== false;');
+    expect(source).toContain('const useTeamV2Ranking = true;');
+    expect(source).not.toContain('isTeamV2Tournament(');
     expect(source).toContain(': scoredInstitutions[placeIndex] ?? null;');
     expect(source).toContain('...(useTeamV2Ranking ? {');
   });

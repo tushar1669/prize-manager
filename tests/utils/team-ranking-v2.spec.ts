@@ -122,9 +122,7 @@ describe('safe ordered team prize partitions — no invented awards', () => {
     expect(result.every(p => p.status === 'resolved')).toBe(true);
   });
 
-  it('does not pay teams under obsolete rules even when total points differ', () => {
-    // A legacy group with no v2 rules must NEVER silently award first prize:
-    // unique total scores do not authorize replacing the event regulations.
+  it('ranks by total points with no saved, unconfirmed or unreferenced rules', () => {
     const candidates = [team('Club A', [8, 7]), team('Club B', [6, 5])];
     for (const unapproved of [null, {
       ...approved(), organizer_confirmed: false,
@@ -132,16 +130,25 @@ describe('safe ordered team prize partitions — no invented awards', () => {
       ...approved(), published_reference: '',
     }]) {
       const partitions = rankTeamCandidatesV2(candidates, unapproved);
-      expect(partitions.every(partition => partition.status === 'blocked')).toBe(true);
-      expect(partitions.flatMap(partition => partition.teams).map(t => t.key).sort())
-        .toEqual(['Club A', 'Club B']);
+      expect(partitions.map(partition => partition.teams.map(t => t.key))).toEqual([['Club A'], ['Club B']]);
+      expect(partitions.every(partition => partition.status === 'resolved')).toBe(true);
+      expect(partitions.some(partition => 'reason' in partition && partition.reason === 'unapproved_rules')).toBe(false);
     }
   });
 
-  it('withholds results when organizer has not confirmed the published team rules', () => {
-    const result = rankTeamCandidatesV2([team('A', [7, 5]), team('B', [6, 6])], null);
-    expect(result).toMatchObject([{ status: 'blocked', reason: 'unapproved_rules' }]);
-    expect(result[0].teams).toHaveLength(2);
+  it('with no saved steps the default order applies: Highest individual scores puts [7,5] above [6,6]', () => {
+    const result = rankTeamCandidatesV2([team('B', [6, 6]), team('A', [7, 5])], null);
+    expect(result.map(p => p.teams.map(t => t.key))).toEqual([['A'], ['B']]);
+    expect(result.every(p => p.status === 'resolved')).toBe(true);
+  });
+
+  it('saved steps that differ in one setting give the opposite order: a higher TB1 puts [6,6] above [7,5]', () => {
+    const a = team('A', [7, 5], { 1: [1, 1] });
+    const b = team('B', [6, 6], { 1: [3, 3] });
+    for (const t of [a, b]) t.selectedPlayers.forEach(player => { player.sourceHash = 'fixture-import'; });
+    const result = rankTeamCandidatesV2([a, b], approved([tb(1)]));
+    expect(result.map(p => p.teams.map(t => t.key))).toEqual([['B'], ['A']]);
+    expect(result.every(p => p.status === 'resolved')).toBe(true);
   });
 
   it('only blocks the unresolved subset when an imported TB is missing', () => {

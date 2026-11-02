@@ -247,13 +247,7 @@ export function rankTeamCandidatesV2(
     return [{ teams: [...candidates], status: 'blocked', reason: invalid ? 'missing_points' : 'invalid_team_size' }];
   }
 
-  // New payouts MUST have explicitly approved v2 regulations. Previously
-  // unique Total Points groups were resolved without checking rules, making
-  // obsolete/null legacy configurations look like authorized cash awards.
-  // Historical SAVED versions are unaffected; only fresh scorer results hold.
-  if (!config?.organizer_confirmed || !config.published_reference.trim()) {
-    return [{ teams: [...candidates], status: 'blocked', reason: 'unapproved_rules' }];
-  }
+  const rules = config ?? defaultTeamRankingRuleConfig();
 
   const groups = new Map<number, TeamRankingCandidate[]>();
   for (const team of candidates) {
@@ -267,11 +261,8 @@ export function rankTeamCandidatesV2(
     subset: TeamRankingCandidate[], index: number, decidedBy: string,
   ): TeamRankingPartition[] => {
     if (subset.length === 1) return [{ teams: subset, status: 'resolved', criterion: decidedBy }];
-    if (!config?.organizer_confirmed || !config.published_reference.trim()) {
-      return [{ teams: subset, status: 'blocked', reason: 'unapproved_rules' }];
-    }
-    if (index >= config.criteria.length) return [{ teams: subset, status: 'tied' }];
-    const criterion = config.criteria[index];
+    if (index >= rules.criteria.length) return [{ teams: subset, status: 'tied' }];
+    const criterion = rules.criteria[index];
     const label = teamCriterionId(criterion);
 
     if (criterion.kind === 'imported_tbs') {
@@ -328,7 +319,7 @@ export function rankTeamCandidatesV2(
         ? team.selectedPlayers.map(p => p.points as number).sort((a, b) => b - a)
         : [];
       const tbValues = criterion.kind === 'source_tb' ? team.selectedPlayers.map(p => {
-        if (!config.source_hash || p.sourceHash !== config.source_hash) return null;
+        if (!rules.source_hash || p.sourceHash !== rules.source_hash) return null;
         return p.individualTieBreaks?.[criterion.ordinal] ?? null;
       }) : [];
       if (tbValues.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
@@ -516,4 +507,8 @@ export function compareTeamRankingV2(
  */
 export function defaultTeamRankingCriteria(): TeamRankingCriterion[] {
   return [{ kind: 'score_vector' }, { kind: 'best_rank' }, { kind: 'imported_tbs' }];
+}
+
+export function defaultTeamRankingRuleConfig(): TeamRankingRuleConfig {
+  return { version: 2, source_hash: null, published_reference: '', organizer_confirmed: false, criteria: defaultTeamRankingCriteria() };
 }

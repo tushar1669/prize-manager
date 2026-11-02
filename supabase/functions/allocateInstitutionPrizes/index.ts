@@ -8,18 +8,17 @@ import {
   type TeamWarning,
 } from "../_shared/teamPrizes.ts";
 import {
-  rankTeamCandidatesV2, parseTeamRankingRuleConfig, importedTieBreakContextFromTags,
+  rankTeamCandidatesV2, parseTeamRankingRuleConfig, defaultTeamRankingRuleConfig, importedTieBreakContextFromTags,
   type ImportedTieBreakContext,
 } from "../_shared/teamRankingV2.ts";
 import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
 import { detectTieAtPrizeBoundary } from "../_shared/teamPrizes.ts";
-import { isTeamV2Tournament } from "../_shared/teamV2Tournament.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-11-01-team-v2-canary-only-standard-ranking-restored";
+const BUILD_VERSION = "2026-11-02-team-v2-ranking-for-all";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -416,14 +415,7 @@ Deno.serve(async (req: Request) => {
     // here, once, so organizers can choose the step before importing.
     const importedTieBreaks = importedTieBreakContextFromTags(typedPlayers.map(player => player.tags_json));
 
-    // Team V2 ranking applies ONLY to Team V2 tournaments. Every other
-    // tournament keeps the standard ranking (Total Points → Rank Sum → Best
-    // individual rank) and the standard Finalize route, exactly as before V2.
-    // If the check fails, fail closed: rank as V2, which holds unconfirmed
-    // places instead of paying them.
-    const teamV2Check = await isTeamV2Tournament(supabase as never, tournament_id);
-    const useTeamV2Ranking = teamV2Check !== false;
-    console.log(`[allocateInstitutionPrizes] ranking=${useTeamV2Ranking ? 'team_v2' : 'standard'}${teamV2Check === null ? ' (check failed)' : ''}`);
+    const useTeamV2Ranking = true; // every team prize group is ranked with its saved steps
 
     for (const group of typedGroups) {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
@@ -519,7 +511,7 @@ Deno.serve(async (req: Request) => {
       // NOT use its historical Rank Sum order to determine new team awards.
       // Team v2 compares the exact selected K against raw, nullable points.
       const rawPlayerById = new Map(typedPlayers.map(p => [String(p.id), p]));
-      const config = parseTeamRankingRuleConfig(group.ranking_rules);
+      const config = parseTeamRankingRuleConfig(group.ranking_rules) ?? defaultTeamRankingRuleConfig();
       const selectedCandidates = scoredInstitutions.map(institution => ({
         key: institution.key,
         selectedPlayers: institution.team.map(selected => {
