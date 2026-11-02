@@ -1,7 +1,7 @@
 /**
  * supabase.functions.invoke reports any non-2xx reply as a generic
  * "Edge Function returned a non-2xx status code". The finalize function sends
- * a plain-language `hint` (e.g. "This tournament uses Team Prizes V2…"); show
+ * a plain-language `hint` (e.g. "Run allocation before finalizing"); show
  * that instead. Falls back to the original error when the body has no hint.
  */
 export async function finalizeErrorWithHint(error: unknown): Promise<Error> {
@@ -20,23 +20,4 @@ export async function finalizeErrorWithHint(error: unknown): Promise<Error> {
     }
   }
   return error instanceof Error ? error : new Error('Failed to finalize allocations');
-}
-
-/**
- * The newest saved allocation version of a tournament, with its row count.
- * Used for Team V2 tournaments, whose versions are written by Team V2 Save.
- */
-export async function latestSavedAllocationVersion(
-  tournamentId: string | undefined,
-): Promise<{ version: number; allocationsCount: number } | null> {
-  if (!tournamentId) return null;
-  const { supabase } = await import('@/integrations/supabase/client');
-  const { data, error } = await supabase.from('allocations').select('version')
-    .eq('tournament_id', tournamentId).order('version', { ascending: false }).limit(1).maybeSingle();
-  if (error || !data || typeof data.version !== 'number') return null;
-  const { count, error: countError } = await supabase.from('allocations')
-    .select('id', { count: 'exact', head: true })
-    .eq('tournament_id', tournamentId).eq('version', data.version);
-  if (countError) return null;
-  return { version: data.version, allocationsCount: count ?? 0 };
 }

@@ -9,7 +9,6 @@ import {
   type TeamRankingRuleConfig,
 } from '@/utils/teamRankingV2';
 import { teamAppliedCriterionLabel } from '../../supabase/functions/_shared/teamAppliedCriterion';
-import { isTeamV2Group } from '@/utils/teamTieDetection';
 
 // Synthetic teams: [points, rank] per counted player.
 const team = (key: string, players: Array<[number, number | null]>): TeamRankingCandidate => ({
@@ -94,10 +93,4 @@ describe('Labels and screens', () => {
     expect(teamAppliedCriterionLabel({ schema_version: 2, decided_by_criterion: 'best_rank' })).toBe('Best individual rank');
   });
 
-  it('recognises V2 groups so no Rank Sum wording is shown for them', () => {
-    const base = { prizes: [] } as never;
-    expect(isTeamV2Group({ ...(base as object), ranking_issues: [] } as never)).toBe(true);
-    expect(isTeamV2Group({ prizes: [{ winner_institution: { ranking_snapshot: { schema_version: 2 } } }] } as never)).toBe(true);
-    expect(isTeamV2Group({ prizes: [{ winner_institution: { ranking_snapshot: null } }] } as never)).toBe(false);
-  });
 });

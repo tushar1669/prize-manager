@@ -9,16 +9,14 @@ import {
 } from "../_shared/teamPrizes.ts";
 import {
   rankTeamCandidatesV2, parseTeamRankingRuleConfig, defaultTeamRankingRuleConfig, importedTieBreakContextFromTags,
-  type ImportedTieBreakContext,
 } from "../_shared/teamRankingV2.ts";
 import { buildTeamRankingAwardAudit } from "../_shared/teamRankingAudit.ts";
-import { detectTieAtPrizeBoundary } from "../_shared/teamPrizes.ts";
 
 // Deploy evidence under Y3: `?ping=1` returns this string, and the dashboard's own
 // version number is not evidence of a deploy. It must therefore change whenever this
 // file's behaviour changes — a constant that survives an amendment proves nothing.
 // TC1.5 added `players_without_points` to the response, so it changes here.
-const BUILD_VERSION = "2026-11-02-team-v2-ranking-for-all";
+const BUILD_VERSION = "2026-11-02-team-ties-usual-dialog";
 const FUNCTION_NAME = "allocateInstitutionPrizes";
 
 const corsHeaders = CORS_HEADERS;
@@ -42,8 +40,9 @@ const corsHeaders = CORS_HEADERS;
  * - Score per player is the raw `players.points` column, passed through unchanged
  * - Players are ordered by rank ascending, tie-broken by id
  * - Team total_points = sum of the selected players' points
- * - New team rankings: total points, ordered selected-player scores, then verified imported TBs
- * - An unresolved/unsupported TB never auto-assigns monetary prize places
+ * - Teams rank by total points, then the group's saved tie-break steps
+ * - Places the steps cannot decide stay empty and are listed in `ranking_ties`;
+ *   the organizer chooses the order in the usual tie dialog on Finalize
  *
  * `max_rank` is reported in the response but is NOT used in scoring. Two claims in an
  * earlier version of this header said otherwise; see ARCHITECTURE §1.2 (DD5).
@@ -117,7 +116,6 @@ interface WinnerInstitution {
   best_individual_rank: number;
   players: TeamPlayerInfo[];
   ranking_snapshot?: NonNullable<ReturnType<typeof buildTeamRankingAwardAudit>>;
-  tied_at_boundary?: boolean;
   /**
    * ARCHITECTURE §4 warn codes raised by the scorer for this institution. Present
    * only when the scorer produced any, so a group with no gender slots configured
@@ -174,23 +172,13 @@ interface GroupResponse {
    */
   players_without_points: number;
   scored_institutions?: WinnerInstitution[];
-  /** A withheld placing requires organizer / arbiter review, not auto Rank Sum. */
+  /** Places that could not be decided for the whole group (e.g. missing points). */
   ranking_issues?: string[];
-  /** Owner-only preview, created from actual v2 scorer partitions (never public). */
-  adjudication_partitions?: Array<{
-    status: 'resolved' | 'tied' | 'blocked';
-    criterion?: string;
-    reason?: string;
-    teams: Array<{ key: string;
-      selectedPlayers: Array<{ playerId: string; points: number | null; rank: number | null;
-        sourceHash: string | null; individualTieBreaks: Record<number, number | null> }>;
-      members: TeamPlayerInfo[];
-    }>;
-  }>;
-  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
-  adjudication_rules_reference?: string;
-  /** The imported Excel tie-break columns the scorer used (owner-only preview). */
-  adjudication_imported_tie_breaks?: ImportedTieBreakContext;
+  /**
+   * Places the tie-break steps could not decide. Each lists the teams in
+   * contention; the organizer orders them in the usual tie dialog.
+   */
+  ranking_ties?: Array<{ affected_places: number[]; reason: string; teams: WinnerInstitution[] }>;
 }
 
 interface AllocateInstitutionPrizesResponse {
@@ -220,17 +208,24 @@ const EXCLUSION_SENTENCES: Record<TeamExclusion['reason'], string> = {
     'The rule asks for other players and the entry list does not meet it.',
 };
 
-/** Plain-language cause appended to a held placing (codes stay for diagnostics). */
+/** Plain-language reason a place could not be decided automatically. */
 const RANKING_HOLD_SENTENCES: Record<string, string> = {
   missing_tb: 'a counted player has a blank tie-break value in the imported Excel',
-  no_imported_tbs: 'no usable tie-break columns in the imported Excel (or no Excel imported yet)',
+  no_imported_tbs: 'the imported Excel has no usable tie-break columns (or no Excel is imported yet)',
   mixed_tb_sources: 'players come from different Excel imports; import the full file again',
   missing_rank: 'a counted player has no rank',
   missing_points: 'a counted player has no points',
-  undefined_tb: 'a tie-break step is not confirmed',
-  unapproved_rules: 'the ranking rules are not confirmed in Edit Rules',
+  undefined_tb: 'an older tie-break step has no name; remove it in Edit Rules',
   invalid_team_size: 'teams have different numbers of counted players',
 };
+
+/** Holds that concern every team in the group; the tie dialog cannot settle them. */
+const GROUP_WIDE_HOLDS = new Set(['missing_points', 'invalid_team_size']);
+
+function holdReason(status: string, reason: string | undefined): string {
+  if (status === 'tied') return 'still equal after every tie-break step';
+  return (reason && RANKING_HOLD_SENTENCES[reason]) ?? 'the tie-break steps could not be applied';
+}
 
 function formatExclusion(exclusion: TeamExclusion): string {
   return `${exclusion.key}: ${EXCLUSION_SENTENCES[exclusion.reason]}`;
@@ -415,8 +410,6 @@ Deno.serve(async (req: Request) => {
     // here, once, so organizers can choose the step before importing.
     const importedTieBreaks = importedTieBreakContextFromTags(typedPlayers.map(player => player.tags_json));
 
-    const useTeamV2Ranking = true; // every team prize group is ranked with its saved steps
-
     for (const group of typedGroups) {
       const groupPrizes = allPrizes.filter(p => p.group_id === group.id);
       
@@ -507,9 +500,8 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Retain the shipped rank-first / gender-slot PLAYER SELECTION, but do
-      // NOT use its historical Rank Sum order to determine new team awards.
-      // Team v2 compares the exact selected K against raw, nullable points.
+      // Keep the rank-first / gender-slot PLAYER SELECTION, then rank the
+      // selected teams by total points and the group's tie-break steps.
       const rawPlayerById = new Map(typedPlayers.map(p => [String(p.id), p]));
       const config = parseTeamRankingRuleConfig(group.ranking_rules) ?? defaultTeamRankingRuleConfig();
       const selectedCandidates = scoredInstitutions.map(institution => ({
@@ -532,62 +524,48 @@ Deno.serve(async (req: Request) => {
       const rankedSlots = partitions.flatMap(partition =>
         partition.teams.map(team => ({ partition, institution: scoredByKey.get(team.key) })),
       );
-      // Fresh, authenticated owner/master-only ranking context used by the
-      // separate read-only official-ruling review flow. A blocked source TB is
-      // NOT a tied partition and must never become a manual cash award.
+      // Places the steps could not decide stay empty. A tie among teams goes
+      // to the organizer's tie dialog; a hold affecting the whole group (no
+      // points, uneven teams) is reported as an issue instead.
+      const asInstitution = (institution: (typeof scoredInstitutions)[number]): WinnerInstitution => ({
+        key: institution.key,
+        label: institution.key,
+        total_points: institution.total_points,
+        rank_sum: institution.rank_sum,
+        best_individual_rank: institution.best_individual_rank,
+        players: institution.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+      });
+      const rankingTies: NonNullable<GroupResponse['ranking_ties']> = [];
+      const rankingIssues: string[] = [];
       let precedingTeams = 0;
-      const adjudicationTies = partitions.flatMap(partition => {
+      for (const partition of partitions) {
         const start = precedingTeams;
         precedingTeams += partition.teams.length;
-        if (partition.status !== 'tied') return [];
+        if (partition.status === 'resolved') continue;
         const affectedPlaces = groupPrizes
           .filter(prize => prize.place > start && prize.place <= precedingTeams)
           .map(prize => prize.place).sort((a, b) => a - b);
-        return affectedPlaces.length
-          ? [{ team_keys: partition.teams.map(team => team.key), affected_places: affectedPlaces }]
-          : [];
-      });
-      const adjudicationPartitions = partitions.map(partition => ({
-        status: partition.status,
-        criterion: partition.criterion,
-        reason: partition.reason,
-        teams: partition.teams.map(team => ({
-          key: team.key,
-          selectedPlayers: team.selectedPlayers.map(player => ({
-            playerId: player.playerId,
-            points: player.points,
-            rank: player.rank ?? null,
-            sourceHash: player.sourceHash ?? null,
-            individualTieBreaks: player.individualTieBreaks ?? {},
-          })),
-          // Save must construct the award from scorer-selected members. Never
-          // substitute client-provided rosters or alphabetically ordered keys.
-          members: scoredByKey.get(team.key)?.team.map(player => ({
-            player_id: player.id, name: player.name, rank: player.rank,
-            points: player.points, gender: player.gender,
-          })) ?? [],
-        })),
-      }));
-      const rankingIssues = groupPrizes.flatMap(prize => {
-        const slot = rankedSlots[prize.place - 1];
-        if (!slot || slot.partition.status === 'resolved') return [];
-        const cause = slot.partition.reason ? RANKING_HOLD_SENTENCES[slot.partition.reason] : undefined;
-        return [`Place ${prize.place}: team ranking ${slot.partition.status}; ${slot.partition.reason ?? 'tie-breaks exhausted'}${cause ? ` (${cause})` : ''}`];
-      });
-      console.log(`[allocateInstitutionPrizes] Group result: ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${rankingIssues.length} ranking holds`);
+        if (!affectedPlaces.length) continue;
+        const reason = holdReason(partition.status, partition.reason);
+        if (partition.status === 'blocked' && partition.reason && GROUP_WIDE_HOLDS.has(partition.reason)) {
+          rankingIssues.push(`Places ${affectedPlaces.join(', ')} could not be decided: ${reason}.`);
+          continue;
+        }
+        rankingTies.push({
+          affected_places: affectedPlaces,
+          reason,
+          teams: partition.teams.flatMap(team => {
+            const institution = scoredByKey.get(team.key);
+            return institution ? [asInstitution(institution)] : [];
+          }),
+        });
+      }
+      console.log(`[allocateInstitutionPrizes] Group result: ${scoredInstitutions.length} eligible, ${ineligibleCount} ineligible, ${rankingTies.length} ties, ${rankingIssues.length} ranking issues`);
 
-      // Assign prizes
-      // Standard (non-V2) ranking: scoredInstitutions is already ordered by
-      // Total Points → Rank Sum → Best individual rank; ties go to the
-      // organizer's existing tie dialog.
-      const standardBoundaryTies = useTeamV2Ranking ? [] : detectTieAtPrizeBoundary(scoredInstitutions, groupPrizes.length);
-      const prizesWithWinners: PrizeWithWinner[] = groupPrizes.map((prize, index) => {
-        // Prizes are already sorted by place
-        const placeIndex = prize.place - 1;
-        const slot = rankedSlots[placeIndex];
-        const winner = useTeamV2Ranking
-          ? (slot?.partition.status === 'resolved' ? slot.institution : null)
-          : scoredInstitutions[placeIndex] ?? null;
+      // Assign prizes. Only a decided place gets a winner.
+      const prizesWithWinners: PrizeWithWinner[] = groupPrizes.map((prize) => {
+        const slot = rankedSlots[prize.place - 1];
+        const winner = slot?.partition.status === 'resolved' ? slot.institution : null;
 
         return {
           id: prize.id,
@@ -597,41 +575,26 @@ Deno.serve(async (req: Request) => {
           has_medal: prize.has_medal,
           is_active: prize.is_active,
           winner_institution: winner ? {
-            key: winner.key,
-            label: winner.key, // Use key as label (could be enhanced with lookup)
-            total_points: winner.total_points,
-            rank_sum: winner.rank_sum,
-            best_individual_rank: winner.best_individual_rank,
-            players: winner.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
-            ranking_snapshot: !useTeamV2Ranking ? undefined : buildTeamRankingAwardAudit(
+            ...asInstitution(winner),
+            ranking_snapshot: buildTeamRankingAwardAudit(
               group.id,
               { group_by: group.group_by, team_size: group.team_size, female_slots: group.female_slots,
                 male_slots: group.male_slots, scoring_mode: group.scoring_mode },
               { id: prize.id, place: prize.place, cash_amount: prize.cash_amount,
                 has_trophy: prize.has_trophy, has_medal: prize.has_medal },
-              winner.key, config, selectedCandidates, partitions,
-              undefined, importedTieBreaks,
+              winner.key, config, selectedCandidates, partitions, importedTieBreaks,
             ) ?? undefined,
-            tied_at_boundary: !useTeamV2Ranking && standardBoundaryTies.includes(winner.key),
             ...(winner.warnings ? { warnings: winner.warnings } : {}),
           } : null,
         };
       });
 
-      // Build scored_institutions for client-side tie detection
-      // Include enough to cover all prizes + runner-up for boundary detection
+      // Teams in ranked order, enough to cover all prizes plus the runner-up.
       const maxPrizePlace = groupPrizes.reduce((max, p) => Math.max(max, p.place), 0);
-      const orderedInstitutions = useTeamV2Ranking
-        ? rankedSlots.map(({ institution }) => institution)
-        : scoredInstitutions;
+      const orderedInstitutions = rankedSlots.map(({ institution }) => institution);
       const scoredLimit = Math.min(maxPrizePlace + 2, orderedInstitutions.length);
       const scoredForResponse: WinnerInstitution[] = orderedInstitutions.slice(0, scoredLimit).flatMap((inst) => inst ? [{
-        key: inst.key,
-        label: inst.key,
-        total_points: inst.total_points,
-        rank_sum: inst.rank_sum,
-        best_individual_rank: inst.best_individual_rank,
-        players: inst.team.map((p) => ({ player_id: p.id, name: p.name, rank: p.rank, points: p.points, gender: p.gender })),
+        ...asInstitution(inst),
         ...(inst.warnings ? { warnings: inst.warnings } : {}),
       }] : []);
 
@@ -652,14 +615,8 @@ Deno.serve(async (req: Request) => {
         ineligible_details: ineligibleDetails,
         players_without_group_field: droppedPlayersWithoutKey,
         players_without_points: playersWithoutPoints,
-        // V2-only fields. Their absence marks a standard group for the UI.
-        ...(useTeamV2Ranking ? {
-          ranking_issues: rankingIssues,
-          adjudication_partitions: adjudicationPartitions,
-          adjudication_ties: adjudicationTies,
-          adjudication_rules_reference: config?.organizer_confirmed ? config.published_reference : undefined,
-          adjudication_imported_tie_breaks: importedTieBreaks,
-        } : {}),
+        ranking_issues: rankingIssues,
+        ranking_ties: rankingTies,
         scored_institutions: scoredForResponse,
       });
     }

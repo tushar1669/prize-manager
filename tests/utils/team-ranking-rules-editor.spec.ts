@@ -52,12 +52,11 @@ function renderEditor(initial: TeamRankingRuleConfig | null = null) {
 }
 
 const kinds = () => latest?.criteria.map(c => c.kind === 'source_tb' ? `TB${c.ordinal}` : c.kind);
-const confirmBox = () => screen.getByRole('checkbox', { name: /ranking order reflects the declared/ }) as HTMLButtonElement;
 
 afterEach(() => { cleanup(); importState.headers = null; });
 
 describe('Team ranking rules — set before the Excel is imported', () => {
-  it('a new group starts with the bundled step and can be confirmed with no import at all', async () => {
+  it('a new group starts with the default steps, with no import and nothing to confirm', async () => {
     renderEditor();
     // Until the import check finishes, the editor does not claim there is no import.
     expect(screen.getByText('Checking the latest import…')).toBeTruthy();
@@ -69,16 +68,16 @@ describe('Team ranking rules — set before the Excel is imported', () => {
     expect(screen.getByText(/First TB1 of each team's 1st player \(best rank\), then TB1 of the 2nd player/)).toBeTruthy();
     // Behind Best individual rank it is never reached (ranks are unique).
     expect(screen.getAllByText(/Not reached: Best individual rank above always decides/)).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText('Published team-prize rules reference'), { target: { value: 'Brochure clause 7' } });
-    expect(confirmBox().disabled).toBe(false);
-    fireEvent.click(confirmBox());
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByLabelText('Published team-prize rules reference')).toBeNull();
     expect(latest).toEqual({
-      version: 2, source_hash: null, published_reference: 'Brochure clause 7', organizer_confirmed: true,
+      version: 2, source_hash: null, published_reference: '', organizer_confirmed: false,
       criteria: [{ kind: 'score_vector' }, { kind: 'best_rank' }, { kind: 'imported_tbs' }],
     });
+    expect(screen.getByText(/you choose the order on the\s+Finalize page/)).toBeTruthy();
   });
 
-  it('rules confirmed before the import stay confirmed after it — nothing is added or reset', async () => {
+  it('rules saved before the import stay as they are after it — nothing is added or reset', async () => {
     importState.headers = ['BH:GP/C1', 'BH:GP', 'SB'];
     const savedBeforeImport: TeamRankingRuleConfig = {
       version: 2, source_hash: null, published_reference: 'Brochure clause 7', organizer_confirmed: true,
@@ -88,8 +87,8 @@ describe('Team ranking rules — set before the Excel is imported', () => {
     await screen.findByText(/From the latest import/);
     expect(changes).toBe(0);
     expect(screen.queryByText(/Imported Excel has changed/)).toBeNull();
-    expect(confirmBox().disabled).toBe(false);
-    expect(confirmBox().getAttribute('data-state')).toBe('checked');
+    expect(screen.getByText('3. Imported individual tie-breaks')).toBeTruthy();
+    expect(screen.getByText('4. Best individual rank')).toBeTruthy();
   });
 
   it('after an import, lists the columns with their names; a DE column is shown as skipped', async () => {

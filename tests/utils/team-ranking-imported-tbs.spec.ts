@@ -209,7 +209,7 @@ describe('Imported individual tie-breaks — audit trail and labels', () => {
     const rules = approved([imported]);
     const partitions = rankTeamCandidatesV2([a, b], rules, ctx);
     const snapshot = buildTeamRankingAwardAudit('g', groupRule, prize, 'A', rules,
-      [withIds(a), withIds(b)], partitions, undefined, ctx);
+      [withIds(a), withIds(b)], partitions, ctx);
     expect(snapshot).toMatchObject({
       decided_by_criterion: 'imported_tbs',
       imported_tie_breaks: { status: 'available', source_hash: HASH, columns: [
@@ -225,7 +225,7 @@ describe('Imported individual tie-breaks — audit trail and labels', () => {
     const rules = approved([bestRank]);
     const partitions = rankTeamCandidatesV2([a, b], rules, ctx);
     const snapshot = buildTeamRankingAwardAudit('g', groupRule, prize, 'A', rules,
-      [withIds(a), withIds(b)], partitions, undefined, ctx);
+      [withIds(a), withIds(b)], partitions, ctx);
     expect(snapshot).not.toBeNull();
     expect(snapshot).not.toHaveProperty('imported_tie_breaks');
   });
@@ -234,7 +234,6 @@ describe('Imported individual tie-breaks — audit trail and labels', () => {
     const source = readFileSync('supabase/functions/allocateInstitutionPrizes/index.ts', 'utf8');
     expect(source).toContain('importedTieBreakContextFromTags(typedPlayers.map(');
     expect(source).toContain('rankTeamCandidatesV2(selectedCandidates, config, importedTieBreaks)');
-    expect(source).toMatch(/winner\.key, config, selectedCandidates, partitions,\s*undefined, importedTieBreaks,/);
-    expect(source).toContain('adjudication_imported_tie_breaks: importedTieBreaks');
+    expect(source).toMatch(/winner\.key, config, selectedCandidates, partitions, importedTieBreaks,/);
   });
 });

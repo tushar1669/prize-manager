@@ -3,9 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   defaultTeamRankingCriteria, isComparableImportedTieBreak, teamCriterionId,
   type TeamRankingCriterion, type TeamRankingRuleConfig,
@@ -89,7 +87,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
   // Only an older per-column "TBn" step is tied to one imported file.
   const usesFileBoundSteps = criteria.some(rule => rule.kind === 'source_tb');
 
-  // A new group starts with the default order, unconfirmed.
+  // A new group starts with the default order.
   useEffect(() => {
     if (open && imported && !value) {
       onChange({
@@ -216,7 +214,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
                 ) : fileHash ? (
                   <p className="text-xs text-destructive">
                     The latest import has no tie-break columns (TB1, TB2 … or Swiss-Manager codes such as BH:GP/C1).
-                    A tie that reaches this step will be held for a ruling.
+                    A tie that reaches this step is left for you to decide on the Finalize page.
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
@@ -227,7 +225,7 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
                 {importIssues && (
                   <p className="text-xs text-destructive">
                     The latest import has duplicate tie-break columns or non-numeric values. Blank or unclear values are
-                    never guessed: a tie that needs one is held for a ruling.
+                    never guessed: a tie that needs one is left for you to decide on the Finalize page.
                   </p>
                 )}
               </div>
@@ -253,17 +251,10 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
         </div>
       )}
       {fileChanged && <p className="text-xs text-destructive">Imported Excel has changed. Review and save the rules again before relying on the older TB steps.</p>}
-      <Label htmlFor="published-team-rules">Published team-prize rules reference</Label>
-      <Input id="published-team-rules" placeholder="e.g., tournament brochure section"
-        value={value?.published_reference ?? ''} onChange={event =>
-          update({ published_reference: event.target.value, organizer_confirmed: false })}/>
-      <Label className="flex items-start gap-2 text-xs">
-        <Checkbox checked={value?.organizer_confirmed ?? false}
-          disabled={!value?.published_reference?.trim() || fileChanged}
-          onCheckedChange={checked => update({ organizer_confirmed: checked === true })}/>
-        I confirm the ranking order reflects the declared team-prize regulations.
-      </Label>
-      <p className="text-xs text-muted-foreground">Blank or unclear tie-break values never decide a cash prize automatically. Unresolved ties require an authorized ruling.</p>
+      <p className="text-xs text-muted-foreground">
+        If these steps cannot separate two teams, those places stay empty and you choose the order on the
+        Finalize page. Blank or unclear tie-break values are never guessed.
+      </p>
     </section>
   );
 }
