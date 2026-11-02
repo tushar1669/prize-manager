@@ -1,16 +1,16 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUp, ArrowDown, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import type { WinnerInstitution, GroupResponse, PrizeWithWinner } from '@/components/team-prizes/useTeamPrizeResults';
+import { invalidateTeamPrizeResultCache, type WinnerInstitution, type GroupResponse, type PrizeWithWinner } from '@/components/team-prizes/useTeamPrizeResults';
 import type { TieInfo } from '@/utils/teamTieDetection';
 
 interface TeamTieBreakDialogProps {
@@ -48,18 +48,9 @@ export function TeamTieBreakDialog({
     }
   }, [open, tieInfo.tiedInstitutions]);
 
-  const originalKeys = useMemo(
-    () => tieInfo.tiedInstitutions.map((i) => i.key),
-    [tieInfo.tiedInstitutions]
-  );
-
-  const orderChanged = useMemo(() => {
-    const currentKeys = order.map((i) => i.key);
-    return currentKeys.some((k, idx) => k !== originalKeys[idx]);
-  }, [order, originalKeys]);
-
-  const reasonRequired = orderChanged;
-  const reasonValid = !reasonRequired || reason.trim().length > 0;
+  // The tie-break steps could not decide these places, so the organizer's
+  // order needs a recorded reason.
+  const reasonValid = reason.trim().length > 0;
 
   const moveUp = useCallback((idx: number) => {
     if (idx <= 0) return;
@@ -84,7 +75,7 @@ export function TeamTieBreakDialog({
     setSaving(true);
     setError(null);
 
-    const finalReason = reason.trim() || 'Confirmed default ordering';
+    const finalReason = reason.trim();
 
     try {
       const affectedPlaces = tieInfo.affectedPlaces;
@@ -141,7 +132,8 @@ export function TeamTieBreakDialog({
         if (noteError) throw new Error(`Note save failed: ${noteError.message}`);
       }
 
-      // Invalidate cache and refetch
+      // Drop the in-memory copy too, or the refetch would show the old result.
+      invalidateTeamPrizeResultCache(tournamentId);
       await queryClient.invalidateQueries({ queryKey: ['team-prize-results', tournamentId] });
 
       toast.success('Tie resolution saved');
@@ -162,8 +154,8 @@ export function TeamTieBreakDialog({
         <DialogHeader>
           <DialogTitle>Resolve Team Prize Tie — {group.name}</DialogTitle>
           <DialogDescription>
-            {tieInfo.tiedInstitutions.length} teams have identical scores at the prize boundary.
-            Confirm or reorder them below.
+            The tie-break steps could not separate these {tieInfo.tiedInstitutions.length} teams ({tieInfo.reason}).
+            Put them in order: the top {tieInfo.affectedPlaces.length === 1 ? 'team gets' : `${tieInfo.affectedPlaces.length} teams get`} place{tieInfo.affectedPlaces.length !== 1 ? 's' : ''} {tieInfo.affectedPlaces.join(', ')}.
           </DialogDescription>
         </DialogHeader>
 
@@ -208,7 +200,7 @@ export function TeamTieBreakDialog({
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    Pts: {inst.total_points} · Rank Sum: {inst.rank_sum} · Best: #{inst.best_individual_rank}
+                    Pts: {inst.total_points} · Best individual rank: #{inst.best_individual_rank}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {inst.players.map((p) => p.name).join(', ')}
@@ -219,25 +211,12 @@ export function TeamTieBreakDialog({
           })}
         </div>
 
-        {orderChanged && (
-          <Alert className="border-destructive/30 bg-destructive/5">
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-            <AlertDescription className="text-destructive text-sm">
-              Order changed from computed result. A reason is required.
-            </AlertDescription>
-          </Alert>
-        )}
-
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">
-            Reason for ordering{reasonRequired ? ' *' : ' (optional)'}
+            Reason for this order *
           </label>
           <Textarea
-            placeholder={
-              reasonRequired
-                ? 'Explain why you changed the order…'
-                : 'Optional: add a note (auto-fills "Confirmed default ordering" if empty)'
-            }
+            placeholder="e.g., Decided by the chief arbiter under the event rules"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}

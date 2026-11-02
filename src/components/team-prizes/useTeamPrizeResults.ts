@@ -18,7 +18,7 @@ export interface WinnerInstitution {
   rank_sum: number;
   best_individual_rank: number;
   players: TeamPlayerInfo[];
-  /** Optional saved read-only award audit; no Team V2 scoring or writes here. */
+  /** Saved ranking audit: which step decided this place. */
   ranking_snapshot?: unknown;
   applied_rule_label?: string | null;
 }
@@ -51,15 +51,16 @@ export interface GroupResponse {
   ineligible_institutions: number;
   ineligible_reasons: string[];
   scored_institutions?: WinnerInstitution[];
+  /** Places that could not be decided for the whole group (e.g. missing points). */
   ranking_issues?: string[];
-  adjudication_partitions?: Array<{
-    status: 'resolved' | 'tied' | 'blocked';
-    criterion?: string;
-    reason?: string;
-    teams: Array<{ key: string; selectedPlayers: Array<{ points: number | null }> }>;
-  }>;
-  adjudication_ties?: Array<{ team_keys: string[]; affected_places: number[] }>;
-  adjudication_rules_reference?: string;
+  /** Places the tie-break steps could not decide; the organizer orders these teams. */
+  ranking_ties?: RankingTie[];
+}
+
+export interface RankingTie {
+  affected_places: number[];
+  reason: string;
+  teams: WinnerInstitution[];
 }
 
 export interface TeamPrizeResultsResponse {

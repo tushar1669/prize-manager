@@ -7,9 +7,9 @@ const httpError = (body: unknown) => Object.assign(new Error('Edge Function retu
 
 describe('finalize errors show the server explanation, not a generic status code', () => {
   it('uses the hint', async () => {
-    const err = await finalizeErrorWithHint(httpError({ error: 'team_v2_save_required', hint: 'This tournament uses Team Prizes V2.' }));
-    expect(err.message).toBe('This tournament uses Team Prizes V2.');
-    expect((err as Error & { code?: string }).code).toBe('team_v2_save_required');
+    const err = await finalizeErrorWithHint(httpError({ error: 'No allocations to finalize', hint: 'Run allocation before finalizing' }));
+    expect(err.message).toBe('Run allocation before finalizing');
+    expect((err as Error & { code?: string }).code).toBe('No allocations to finalize');
   });
   it('keeps the original error when there is no hint', async () => {
     const original = httpError({ error: 'x' });

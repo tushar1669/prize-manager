@@ -2,7 +2,6 @@ import {
   isComparableImportedTieBreak,
   type ImportedTieBreakContext, type TeamRankingPartition, type TeamRankingRuleConfig, type TeamRankingPlayer,
 } from './teamRankingV2.ts';
-import type { TeamRulingRecord } from './teamTieAdjudicationV2.ts';
 
 /** Scorer-provided source inputs; never supplied by the finalize request body. */
 export type TeamRankingAuditCandidate = {
@@ -41,27 +40,11 @@ export function buildTeamRankingAwardAudit(
   config: TeamRankingRuleConfig | null,
   candidates: readonly TeamRankingAuditCandidate[],
   partitions: readonly TeamRankingPartition[],
-  verifiedRuling?: TeamRulingRecord,
   importedTieBreaks?: ImportedTieBreakContext | null,
 ) {
   const resolved = partitions.find(p =>
     p.status === 'resolved' && p.teams.some(t => t.key === winnerKey));
-  const tied = partitions.find(p =>
-    p.status === 'tied' && p.teams.some(t => t.key === winnerKey));
-  const rulingMatches = !!verifiedRuling && !resolved && !!tied &&
-    verifiedRuling.schema_version === 2 &&
-    verifiedRuling.group_id === groupId &&
-    verifiedRuling.method === 'documented_arbiter_ruling' &&
-    verifiedRuling.regulation_reference === config?.published_reference &&
-    verifiedRuling.tied_team_keys.length === tied.teams.length &&
-    new Set(verifiedRuling.tied_team_keys).size === tied.teams.length &&
-    tied.teams.every(team => verifiedRuling.tied_team_keys.includes(team.key)) &&
-    verifiedRuling.affected_places.includes(prize.place) &&
-    verifiedRuling.award_instructions.some(award =>
-      award.place === prize.place && award.institution_key === winnerKey);
-  if ((!resolved && !rulingMatches) ||
-      !candidates.some(t => t.key === winnerKey) ||
-      (!!verifiedRuling && !rulingMatches)) return null;
+  if (!resolved || !candidates.some(t => t.key === winnerKey)) return null;
 
   return {
     schema_version: 2 as const,
@@ -91,9 +74,7 @@ export function buildTeamRankingAwardAudit(
       },
     } : {}),
     winner_key: winnerKey,
-    decided_by_criterion: rulingMatches
-      ? 'documented_arbiter_ruling' : resolved?.criterion ?? null,
-    ...(rulingMatches ? { ruling: { ...verifiedRuling! } } : {}),
+    decided_by_criterion: resolved.criterion ?? null,
     // All eligible candidate inputs are necessary to audit a ranking,
     // not only the roster that received a prize.
     candidates: candidates.map(team => ({

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { detectTeamTiesAtBoundary, isTeamV2Group, type TieInfo } from '@/utils/teamTieDetection';
+import { detectTeamTiesAtBoundary, type TieInfo } from '@/utils/teamTieDetection';
 import { selectVisibleTeamPrizes } from '@/utils/teamPrizeMasking';
 import { teamAppliedCriterionLabel } from '@/utils/teamAppliedCriterion';
 
@@ -35,7 +35,6 @@ interface TeamPrizeResultsPanelProps {
   allocationVersion?: number;
   tournamentId?: string;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
-  onV2RulingRequest?: (group: GroupResponse) => void;
   /**
    * Organizer-only diagnostics: the list of institutions that did not qualify.
    *
@@ -168,14 +167,12 @@ function GroupCard({
   group,
   groupIndex,
   onTieResolutionRequest,
-  onV2RulingRequest,
   showDiagnostics = false,
   hasFullAccess = true,
 }: {
   group: GroupResponse;
   groupIndex: number;
   onTieResolutionRequest?: (group: GroupResponse, tieInfo: TieInfo) => void;
-  onV2RulingRequest?: (group: GroupResponse) => void;
   showDiagnostics?: boolean;
   hasFullAccess?: boolean;
 }) {
@@ -186,10 +183,13 @@ function GroupCard({
     () => group.prizes.filter(p => p.winner_institution !== null).sort((a, b) => a.place - b.place),
     [group.prizes]
   );
-  const unfilledPrizes = group.prizes.filter(p => p.winner_institution === null);
   const rankingIssues = group.ranking_issues ?? [];
   const totalCash = filledPrizes.reduce((sum, p) => sum + p.cash_amount, 0);
   const tieInfo = React.useMemo(() => detectTeamTiesAtBoundary(group), [group]);
+  // Places waiting for a tie decision are not "unfilled for lack of teams".
+  const tiedPlaces = new Set((group.ranking_ties ?? []).flatMap(tie => tie.affected_places));
+  const unfilledPrizes = rankingIssues.length > 0 ? []
+    : group.prizes.filter(p => p.winner_institution === null && !tiedPlaces.has(p.place));
 
   // TC1.6 masking — ORGANIZER preview surfaces only (callers wire hasFullAccess;
   // the public path never does, so it always renders unmasked). Inverse of the
@@ -263,18 +263,11 @@ function GroupCard({
             {showDiagnostics && hasFullAccess && rankingIssues.length > 0 && (
               <Alert variant="destructive" data-team-print-hide>
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Team V2 ranking requires official review</AlertTitle>
+                <AlertTitle>Team places could not be decided</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-5 space-y-1">
                     {rankingIssues.map((issue, index) => <li key={index}>{issue}</li>)}
                   </ul>
-                  {showDiagnostics && hasFullAccess && onV2RulingRequest &&
-                    (group.adjudication_ties?.length ?? 0) > 0 && (
-                    <Button type="button" size="sm" variant="outline" className="mt-3"
-                      onClick={() => onV2RulingRequest(group)}>
-                      Review official tie ruling
-                    </Button>
-                  )}
                 </AlertDescription>
               </Alert>
             )}
@@ -362,10 +355,7 @@ function GroupCard({
                 </Table>
                 {pointsAbsent && (
                   <p className="px-3 py-2 text-xs text-muted-foreground border-t">
-                    {/* Team V2 never uses Rank Sum: without points it cannot rank teams. */}
-                    {isTeamV2Group(group)
-                      ? 'Points were not imported for this tournament, so Team V2 cannot rank these teams.'
-                      : 'Points were not imported for this tournament. Teams were ranked by rank sum.'}
+                    Points were not imported for this tournament, so these teams cannot be ranked.
                   </p>
                 )}
                 {hiddenFilledPrizes.length > 0 && (
@@ -408,39 +398,41 @@ function GroupCard({
               </Alert>
             )}
 
-            {group.note && (
+            {group.note && !(showDiagnostics && tieInfo?.hasNote) && (
               <Alert className="border-primary/20 bg-primary/5">
                 <Info className="h-4 w-4" />
                 <AlertDescription>{group.note}</AlertDescription>
               </Alert>
             )}
 
-            {/* Tie detection warnings */}
-            {tieInfo && !tieInfo.hasNote && onTieResolutionRequest && (
-              <Alert className="border-destructive/30 bg-destructive/5">
+            {/* Team ties: places the tie-break steps could not decide */}
+            {showDiagnostics && tieInfo && !tieInfo.hasNote && (
+              <Alert className="border-destructive/30 bg-destructive/5" data-team-print-hide>
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                <AlertTitle className="text-destructive">Tie detected at place {tieInfo.affectedPlaces[tieInfo.affectedPlaces.length - 1]}</AlertTitle>
+                <AlertTitle className="text-destructive">
+                  Tie for place{tieInfo.affectedPlaces.length !== 1 ? 's' : ''} {tieInfo.affectedPlaces.join(', ')}
+                </AlertTitle>
                 <AlertDescription className="text-destructive/80">
-                  {tieInfo.tiedInstitutions.length} teams have identical scores ({tieInfo.tiedInstitutions[0]?.total_points} pts, rank sum {tieInfo.tiedInstitutions[0]?.rank_sum}).
-                  <div className="mt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onTieResolutionRequest(group, tieInfo)}
-                    >
-                      Resolve Tie
-                    </Button>
-                  </div>
+                  {tieInfo.tiedInstitutions.map(i => i.label || i.key).join(', ')}: {tieInfo.reason}.
+                  {onTieResolutionRequest ? (
+                    <div className="mt-2">
+                      <Button size="sm" variant="outline" onClick={() => onTieResolutionRequest(group, tieInfo)}>
+                        Resolve Tie
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-1">These places stay empty until you choose the order on the Finalize page.</div>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
 
-            {tieInfo && tieInfo.hasNote && (
-              <Alert className="border-primary/20 bg-primary/5">
+            {showDiagnostics && tieInfo && tieInfo.hasNote && (
+              <Alert className="border-primary/20 bg-primary/5" data-team-print-hide>
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 <AlertTitle className="text-primary">Tie resolved</AlertTitle>
                 <AlertDescription className="text-muted-foreground">
-                  Arbiter note: "{group.note}"
+                  {group.note ? <>Arbiter note: "{group.note}"</> : 'Order chosen by the organizer.'}
                   {onTieResolutionRequest && (
                     <Button
                       size="sm"
@@ -488,7 +480,7 @@ function GroupCard({
   );
 }
 
-export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, onV2RulingRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
+export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionRequest, showDiagnostics = false, hasFullAccess = true }: TeamPrizeResultsPanelProps) {
   if (isLoading) {
     return (
       <Card>
@@ -554,7 +546,6 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
             group={group}
             groupIndex={groupIndex}
             onTieResolutionRequest={onTieResolutionRequest}
-            onV2RulingRequest={onV2RulingRequest}
             showDiagnostics={showDiagnostics}
             hasFullAccess={hasFullAccess}
           />

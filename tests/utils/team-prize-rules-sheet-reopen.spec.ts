@@ -43,8 +43,6 @@ function Parent() {
 }
 
 const stepTitles = () => screen.getAllByText(/^\d\. (Highest individual scores|Best individual rank|Imported individual tie-breaks)$/).map(e => e.textContent);
-const reference = () => (screen.getByLabelText('Published team-prize rules reference') as HTMLInputElement).value;
-const confirmBox = () => screen.getByRole('checkbox', { name: /ranking order reflects the declared/ });
 
 afterEach(cleanup);
 
@@ -52,9 +50,9 @@ describe('Edit Rules drawer shows the saved ranking rules every time it opens', 
   const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const mount = () => render(React.createElement(QueryClientProvider, { client: client() }, React.createElement(Parent)));
   const expectSaved = async () => {
-    await waitFor(() => expect(reference()).toBe('Saved brochure clause'));
-    expect(stepTitles()).toEqual(['2. Best individual rank', '3. Highest individual scores', '4. Imported individual tie-breaks']);
-    expect(confirmBox().getAttribute('data-state')).toBe('checked');
+    await waitFor(() => expect(stepTitles()).toEqual(['2. Best individual rank', '3. Highest individual scores', '4. Imported individual tie-breaks']));
+    // No confirmation tick: the saved steps apply as they are.
+    expect(screen.queryByRole('checkbox')).toBeNull();
   };
 
   it('first open', async () => {
@@ -63,12 +61,10 @@ describe('Edit Rules drawer shows the saved ranking rules every time it opens', 
     await expectSaved();
   });
 
-  it('a new group still starts with the default order, unconfirmed', async () => {
+  it('a new group still starts with the default order', async () => {
     mount();
     fireEvent.click(screen.getByText('Add Group'));
     await waitFor(() => expect(stepTitles()).toEqual(['2. Highest individual scores', '3. Best individual rank', '4. Imported individual tie-breaks']));
-    expect(reference()).toBe('');
-    expect(confirmBox().getAttribute('data-state')).toBe('unchecked');
   });
 
   it('after saving and reopening (same page, no reload)', async () => {

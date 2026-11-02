@@ -1,21 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import './TeamPrizesTabView.css';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { TeamPrizeResultsPanel } from '@/components/allocation/TeamPrizeResultsPanel';
 import { TeamTieBreakDialog } from '@/components/allocation/TeamTieBreakDialog';
-import { TeamV2RulingDialog } from '@/components/allocation/TeamV2RulingDialog';
 import { useTeamPrizeResults } from '@/components/team-prizes/useTeamPrizeResults';
-import type { GroupResponse } from '@/components/team-prizes/useTeamPrizeResults';
+import type { GroupResponse, TeamPrizeResultsResponse } from '@/components/team-prizes/useTeamPrizeResults';
 import type { TieInfo } from '@/utils/teamTieDetection';
-import { hasUnresolvedTeamTies } from '@/utils/teamTieDetection';
 import { Loader2, Users } from 'lucide-react';
 
 interface TeamPrizesTabViewProps {
   tournamentId: string;
   allocationVersion?: number;
-  /** Called whenever the pending-tie state changes */
-  onPendingTiesChange?: (hasPending: boolean) => void;
   /**
    * Organizer-only diagnostics — the list of institutions that did not qualify.
    *
@@ -34,31 +30,47 @@ interface TeamPrizesTabViewProps {
    * see `selectVisibleTeamPrizes` for the masking rule this gates.
    */
   hasFullAccess?: boolean;
-  onV2OfficialRulingReviewed?: (groupId: string, proposal: Record<string, unknown>) => void;
 }
 
-export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTiesChange, showDiagnostics = false, hasFullAccess = true, onV2OfficialRulingReviewed }: TeamPrizesTabViewProps) {
+/**
+ * A saved version stores only decided places. On the organizer's Finalize view,
+ * add the current scorer's ties and issues so places it could not decide can be
+ * settled in the tie dialog.
+ */
+function withCurrentTies(
+  saved: TeamPrizeResultsResponse | null | undefined,
+  current: TeamPrizeResultsResponse | null | undefined,
+): TeamPrizeResultsResponse | null | undefined {
+  if (!saved || !current) return saved;
+  const currentById = new Map(current.groups.map(group => [group.group_id, group]));
+  return {
+    ...saved,
+    groups: saved.groups.map(group => {
+      const live = currentById.get(group.group_id);
+      return live ? { ...group, ranking_ties: live.ranking_ties, ranking_issues: live.ranking_issues } : group;
+    }),
+  };
+}
+
+export function TeamPrizesTabView({ tournamentId, allocationVersion, showDiagnostics = false, hasFullAccess = true }: TeamPrizesTabViewProps) {
   const {
     hasTeamPrizes,
     checkingTeamPrizes,
-    data,
+    data: savedData,
     isLoading,
     error,
   } = useTeamPrizeResults(tournamentId, { enabled: true, allocationVersion });
+  const { data: currentData } = useTeamPrizeResults(tournamentId, {
+    enabled: showDiagnostics && allocationVersion !== undefined,
+  });
+  const data = useMemo(
+    () => (showDiagnostics && allocationVersion !== undefined ? withCurrentTies(savedData, currentData) : savedData),
+    [showDiagnostics, allocationVersion, savedData, currentData],
+  );
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<GroupResponse | null>(null);
   const [selectedTieInfo, setSelectedTieInfo] = useState<TieInfo | null>(null);
-  const [selectedV2Group, setSelectedV2Group] = useState<GroupResponse | null>(null);
-
-  const hasPending = useMemo(
-    () => data ? hasUnresolvedTeamTies(data.groups) : false,
-    [data]
-  );
-
-  useEffect(() => {
-    onPendingTiesChange?.(hasPending);
-  }, [hasPending, onPendingTiesChange]);
 
   const handleTieResolutionRequest = (group: GroupResponse, tieInfo: TieInfo) => {
     setSelectedGroup(group);
@@ -127,27 +139,17 @@ export function TeamPrizesTabView({ tournamentId, allocationVersion, onPendingTi
         hasFullAccess={hasFullAccess}
         tournamentId={tournamentId}
         allocationVersion={allocationVersion}
-        onTieResolutionRequest={showDiagnostics && hasFullAccess ? handleTieResolutionRequest : undefined}
-        onV2RulingRequest={showDiagnostics && hasFullAccess && allocationVersion === undefined
-          ? setSelectedV2Group : undefined}
+        // Ties are settled on a finalized version only.
+        onTieResolutionRequest={showDiagnostics && hasFullAccess && allocationVersion !== undefined
+          ? handleTieResolutionRequest : undefined}
       />
 
-      {selectedV2Group && (
-        <TeamV2RulingDialog
-          open={!!selectedV2Group}
-          onOpenChange={(open) => { if (!open) setSelectedV2Group(null); }}
-          tournamentId={tournamentId}
-          group={selectedV2Group}
-          onReviewed={onV2OfficialRulingReviewed}
-        />
-      )}
-
-      {selectedGroup && selectedTieInfo && (
+      {selectedGroup && selectedTieInfo && allocationVersion !== undefined && (
         <TeamTieBreakDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           tournamentId={tournamentId}
-          version={allocationVersion ?? 1}
+          version={allocationVersion}
           group={selectedGroup}
           tieInfo={selectedTieInfo}
           onResolved={handleResolved}
