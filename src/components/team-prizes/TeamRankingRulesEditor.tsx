@@ -137,9 +137,6 @@ export function TeamRankingRulesEditor({ tournamentId, open, value, onChange }: 
     <section className="space-y-3 rounded-lg border p-3" aria-label="Team Ranking and Tie-breaks">
       <div>
         <h3 className="font-semibold text-sm">Ranking &amp; tie-breaks</h3>
-        <p className="text-xs font-medium text-warning">
-          Team Prizes V2 only: these steps decide prizes only on tournaments enabled for Team V2.
-        </p>
         <p className="text-xs text-muted-foreground">
           Total Points is always first. Add, remove and drag the steps below to match the published event rules.
           Only listed steps can decide a prize. You can set this before importing the Excel.

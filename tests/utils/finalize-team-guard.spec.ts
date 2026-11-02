@@ -79,28 +79,22 @@ describe('finalize v2 server-authoritative pre-write ranking gate', () => {
   });
 
 
-  it('fences only Team V2 tournaments; the check runs before any allocation write', () => {
+  it('does not call isTeamV2Tournament; allocateInstitutionPrizes runs before any allocation write', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const ownerGate = source.indexOf('tournamentAccess.owner_id !== user.id && !isMaster');
-    const check = source.indexOf('await isTeamV2Tournament(supabaseClient');
-    const fence = source.indexOf('if (teamV2 !== false)');
-    const denied = source.indexOf("'team_v2_save_required'");
+    const allocate = source.indexOf("functions.invoke('allocateInstitutionPrizes'");
     const write = source.indexOf(".from('allocations')\n      .insert(allocationsToInsert)");
+    expect(source).not.toContain('isTeamV2Tournament');
     expect(ownerGate).toBeGreaterThan(-1);
-    expect(check).toBeGreaterThan(ownerGate);
-    expect(fence).toBeGreaterThan(check);
-    expect(denied).toBeGreaterThan(fence);
-    expect(write).toBeGreaterThan(denied);
-    // A failed check (null) is refused too, never treated as "standard".
-    expect(source).toContain("teamV2 === null ? 'team_v2_check_unavailable'");
+    expect(allocate).toBeGreaterThan(ownerGate);
+    expect(write).toBeGreaterThan(allocate);
     expect(source).not.toContain(".rpc('commit_team_v2_adjudicated_version'");
   });
 
-  it('a standard (non-V2) tournament writes team rows without a V2 ranking snapshot', () => {
+  it("finalize stores the scorer's ranking snapshot on every team row", () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     const rows = source.slice(source.indexOf('const rows = teamGroups.flatMap'), source.indexOf(".from('team_allocations')\n          .insert(rows)"));
     expect(rows.length).toBeGreaterThan(0);
-    // A snapshot would mark the tournament as V2 and the database would reject the write.
-    expect(rows).not.toContain('ranking_snapshot:');
+    expect(rows).toContain('ranking_snapshot: prize.winner_institution!.ranking_snapshot ?? null');
   });
 });

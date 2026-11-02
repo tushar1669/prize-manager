@@ -129,9 +129,10 @@ describe('versioned team-ranking audit saved per award', () => {
     }), 1).ok).toBe(false);
   });
 
-  it('the standard Finalize route never writes a V2 audit (V2 awards come only from Team V2 Save)', () => {
+  it('Finalize writes the scorer\'s ranking_snapshot and no longer refuses with team_v2_save_required', () => {
     const source = readFileSync('supabase/functions/finalize/index.ts', 'utf8');
     expect(source).not.toContain('ranking_snapshot: {');
-    expect(source).toContain("'team_v2_save_required'");
+    expect(source).toContain('ranking_snapshot: prize.winner_institution!.ranking_snapshot ?? null');
+    expect(source).not.toContain('team_v2_save_required');
   });
 });

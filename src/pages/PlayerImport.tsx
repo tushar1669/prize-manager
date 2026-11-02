@@ -2988,8 +2988,7 @@ export default function PlayerImport() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Team V2 is Master-operated; organizers would see a notice they cannot act on. */}
-            {isMaster && previewTieBreakColumns.length > 0 && (
+            {previewTieBreakColumns.length > 0 && (
               <div className="rounded-md border px-4 py-3 text-sm" role="status">
                 <p className="font-medium">
                   Individual Excel tie-breaks detected: {previewTieBreakColumns.map(col =>
@@ -2998,7 +2997,7 @@ export default function PlayerImport() {
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Each player&apos;s values are saved with the import for Team Prize tie-breaks only; individual prizes
-                  do not use them. Team Prizes V2 compares them in the “Imported individual tie-breaks” step (TB1
+                  do not use them. Team prizes compare them in the “Imported individual tie-breaks” step (TB1
                   first, then TB2, …). Counts here are a preview of the first 20 rows.
                 </p>
                 {previewTieBreakColumns.some(col => col.duplicateOrdinal || col.sampleInvalid > 0) && (

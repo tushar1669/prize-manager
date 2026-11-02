@@ -1,8 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { CORS_HEADERS, hasPingQueryParam, isPingBody, pingResponse } from "../_shared/health.ts";
-import { isTeamV2Tournament } from "../_shared/teamV2Tournament.ts";
 
-const BUILD_VERSION = "2026-11-01-team-v2-fence-canary-only";
+const BUILD_VERSION = "2026-11-02-team-v2-ranking-for-all";
 const FUNCTION_NAME = "finalize";
 const corsHeaders = CORS_HEADERS;
 
@@ -185,26 +184,10 @@ Deno.serve(async (req) => {
 
     type StandardTeamGroup = { group_id: string; prizes: Array<{ id: string; place: number;
       winner_institution: { key: string; total_points: number;
-        players: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }> } | null }> };
+        players: Array<{ player_id: string; name: string; rank: number; points: number; gender: string | null }>;
+        ranking_snapshot?: unknown } | null }> };
     let teamGroups: StandardTeamGroup[] = [];
     if ((teamGroupCount ?? 0) > 0) {
-      // Team Prizes V2 tournaments are saved only by the master-only atomic
-      // Team V2 Save (the database also rejects legacy writes for them).
-      // Every other tournament keeps this standard route, as before V2.
-      // If the check fails, refuse before any write.
-      const teamV2 = await isTeamV2Tournament(supabaseClient as never, tournamentId);
-      if (teamV2 !== false) {
-        return new Response(
-          JSON.stringify({
-            error: teamV2 === null ? 'team_v2_check_unavailable' : 'team_v2_save_required',
-            hint: teamV2 === null
-              ? 'Team prize settings could not be checked. Nothing was saved; please try again.'
-              : 'This tournament uses Team Prizes V2. Save its prizes from Admin → Team V2 instead of Finalize. Nothing was saved here.',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
       const { data: teamData, error: teamError } = await supabaseClient.functions.invoke('allocateInstitutionPrizes', {
         body: { tournament_id: tournamentId },
         headers: { Authorization: `Bearer ${authHeader.replace('Bearer ', '')}` },
@@ -254,7 +237,7 @@ Deno.serve(async (req) => {
             total_points: prize.winner_institution!.total_points,
             player_ids: prize.winner_institution!.players.map((p) => p.player_id),
             player_snapshot: prize.winner_institution!.players,
-            // Standard route: no ranking_snapshot. A snapshot marks a V2 award.
+            ranking_snapshot: prize.winner_institution!.ranking_snapshot ?? null,
           }))
       );
 
