@@ -65,6 +65,7 @@ export interface TeamPrizeResults {
 const GROUP_BY_LABELS: Record<string, string> = {
   // TC1.6: names the FIELD grouped on, never a claim about the prize itself —
   // the group's own name (e.g. "Best State") already says what it's for.
+  team: 'Team',
   club: 'Club / institution field',
   city: 'City',
   state: 'State',

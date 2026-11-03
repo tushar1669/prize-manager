@@ -59,6 +59,7 @@ interface TeamPrizeResultsPanelProps {
 }
 
 const GROUP_BY_LABELS: Record<string, string> = {
+  team: 'Team',
   club: 'Club / institution field',
   city: 'City',
   state: 'State',

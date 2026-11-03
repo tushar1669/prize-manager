@@ -83,7 +83,7 @@ Every rule below is **numbered** and includes a summary + exact code pointers (p
 - **Where in code:** supabase/functions/allocatePrizes/index.ts → `Deno.serve` response, lines ~1068–1124; supabase/functions/finalize/index.ts → `Deno.serve`, lines ~150–214.
 
 ## R13. Team (institution) prize allocation is separate from individual prizes
-- **Summary:** Team prizes group players by a configured field, score top‑K players, apply gender slots, and rank institutions by points → rank sum → best rank → name.
+- **Summary:** Team prizes group players by a configured field, select top‑K players by rank (gender minimums first), and rank institutions by total points, then the group's saved tie-break steps (`_shared/teamRankingV2.ts` → `rankTeamCandidatesV2`). Undecided places are returned as `ranking_ties` and settled by the organizer on Finalize.
 - **Where in code:** supabase/functions/_shared/teamPrizes.ts → `getRankPoints`, `buildTeam`, `compareInstitutions`; supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132; allocation loop in `Deno.serve`, lines ~214–568.
 
 ## R14. Public team prizes are recomputed for published tournaments

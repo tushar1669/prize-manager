@@ -94,9 +94,9 @@
 
 ### Edge function: allocateInstitutionPrizes
 - **File:** `supabase/functions/allocateInstitutionPrizes/index.ts`
-- **Scoring:** Rank points = `(max_rank + 1 - player_rank)`. Team total is sum of best `team_size` players.
+- **Scoring:** Team total is the sum of the raw `players.points` of the best `team_size` players by rank.
 - **Gender slots:** Fills `female_slots` with gender=F players first, then `male_slots` with not-F, then remaining boards.
-- **Tie-breaks:** `total_points` DESC → `rank_sum` ASC → `best_individual_rank` ASC → institution name ASC.
+- **Ranking:** `total_points` DESC, then the group's `ranking_rules` steps (`score_vector`, `best_rank`, `imported_tbs`; default in that order). Places the steps cannot decide are left empty and listed in `ranking_ties`; `finalize` stores each decided place with its `ranking_snapshot`, and the organizer settles ties via `resolve_team_tie`.
 - **Ineligibility:** Teams failing gender/size requirements are tracked with counts and sample reasons.
 
 ### UI components

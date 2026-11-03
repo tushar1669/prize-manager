@@ -97,7 +97,7 @@ Team prizes (Best School, Best Academy, Best City, etc.) are configured separate
 
 ### How team allocation works
 - **Isolation**: Team prizes are completely separate from individual prizes. Players can win both.
-- **Scoring**: Teams are ranked by total rank points (higher is better). Tie-breaks: total points → rank sum → best individual rank → institution name.
+- **Scoring**: Team total = sum of the counted players' points. Teams are ranked by **total points**, then by the group's tie-break steps (Edit Rules → Ranking & tie-breaks). Default steps: highest individual scores → best individual rank → imported individual tie-breaks (TB1, TB2, … from the Excel; DE is skipped). Rank Sum is not used. Places the steps cannot decide stay empty until the organizer picks the order in the tie dialog on the Finalize page (`resolve_team_tie`, reason required).
 - **Gender slots**: `female_slots` require gender = F; `male_slots` accept not-F (male or unknown).
 
 ### Where team results appear

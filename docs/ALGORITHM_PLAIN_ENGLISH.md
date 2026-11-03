@@ -49,9 +49,9 @@ Manual assignments are applied **before** auto‑allocation. If the forced playe
 
 ## Team prizes (institution awards) in plain English
 Team prizes are a separate allocator; players can win both individual and team prizes.
-- Players are grouped by **club/city/state/group/type** and scored by **rank points**: `(max_rank + 1 - player_rank)`. (supabase/functions/allocateInstitutionPrizes/index.ts → `GROUP_BY_COLUMN_MAP`, lines ~125–132; `getRankPoints`, lines ~152–158)
+- Players are grouped by **school/club/city/state/group/type**; a team's score is the sum of its counted players' **points**.
 - Teams must satisfy required female/male slots; remaining slots are filled by best remaining players. (supabase/functions/allocateInstitutionPrizes/index.ts → `buildTeam`, lines ~195–259)
-- Institutions are ranked by **total points**, then **rank sum**, then **best individual rank**, then name. (supabase/functions/allocateInstitutionPrizes/index.ts → `compareInstitutions`, lines ~171–189)
+- Institutions are ranked by **total points**, then the group's tie-break steps (default: highest individual scores, best individual rank, imported tie-breaks). Rank Sum is not used. If the steps cannot separate teams, those places stay empty and the organizer chooses the order on the Finalize page, with a reason.
 
 ## Short, complete pseudocode (individual allocator)
 ```text

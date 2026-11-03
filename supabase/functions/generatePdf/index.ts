@@ -4,7 +4,7 @@ import { exportUpgradeHint, resolveFreePlayerThreshold } from '../_shared/tourna
 import { buildVersionedTeamPdfResults, type PinnedTeamGroup, type PinnedTeamPrize, type PinnedTeamAllocation } from '../_shared/teamPdfSnapshot.ts';
 import { generateHtmlReport, type TeamPrizeResults } from '../_shared/prizePrintableHtml.ts';
 
-const BUILD_VERSION = "2026-10-29-version-pinned-A4-printable-report";
+const BUILD_VERSION = "2026-11-03-team-group-label";
 const FUNCTION_NAME = "generatePdf";
 const MISSING_ACCESS_RPC_MESSAGE = 'Database migrations not deployed (missing get_tournament_access_state)';
 
