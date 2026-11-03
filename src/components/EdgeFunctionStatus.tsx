@@ -19,7 +19,6 @@ const FUNCTIONS_TO_CHECK = [
   'parseWorkbook',
   'allocatePrizes',
   'allocateInstitutionPrizes',
-  'generatePdf',
   'finalize',
   'publicTeamPrizes',
 ];

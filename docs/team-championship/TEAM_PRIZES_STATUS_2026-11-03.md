@@ -58,7 +58,7 @@ Tests: 696 pass; the same 3 known failures (conflict-utils ×2, martech-metrics 
 
 ## Small follow-ups (not blocking)
 
-- The server function `generatePdf` returns an error for every tournament (old demo included). An encoding bug in older code (`btoa` of non-Latin text such as ₹). No screen in the app calls it; the app's PDF is the browser print. Fix or remove later.
+- **Removed 3 Nov:** the server function `generatePdf` (and `_shared/prizePrintableHtml.ts`, `_shared/teamPdfSnapshot.ts`). It failed for every tournament (`btoa` of the ₹ sign), and across the full git history (1,970 commits) no screen ever called it; no cron job or database function did either. The app's PDF is the browser print.
 - On the saved and public views, "N eligible teams" counts the saved winners, not every eligible team. This is older behaviour.
 - `backfillTeamAllocations` (Master repair for old published tournaments) still uses the old Rank Sum order to fill missing rows. Only relevant to tournaments published before team rows were saved.
 - Deploys: a push to `main` does **not** deploy edge functions; the GitHub workflow fails on a function that no longer exists. Deploy with `supabase functions deploy <name> --project-ref nvjjifnzwrueutbirpde`, and publish the frontend with Lovable → Publish → Update.

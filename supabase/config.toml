@@ -18,9 +18,6 @@ verify_jwt = true
 [functions.finalize]
 verify_jwt = true
 
-[functions.generatePdf]
-verify_jwt = true
-
 [functions.parseBrochurePrizes]
 verify_jwt = true
 

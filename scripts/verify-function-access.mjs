@@ -24,11 +24,6 @@ const requests = [
     body: { tournament_id: TOURNAMENT_ID },
   },
   {
-    name: 'generatePdf',
-    path: 'generatePdf',
-    body: { tournamentId: TOURNAMENT_ID, version: 1 },
-  },
-  {
     name: 'finalize',
     path: 'finalize',
     body: {

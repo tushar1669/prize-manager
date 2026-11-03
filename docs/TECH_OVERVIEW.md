@@ -109,4 +109,4 @@
 ### Result surfaces
 - **ConflictReview:** `TeamPrizeResultsPanel` renders after individual preview completes when `hasTeamPrizes=true`.
 - **Finalize:** Fetches and displays team results when active groups exist.
-- **PDF:** `generatePdf` calls `allocateInstitutionPrizes` and adds a team section (with error handling if allocation fails).
+- **PDF:** the browser's Print / Save as PDF on Finalize or Final Prize (`/t/:id/final/:view`), using the A4 print styles. The unused server function `generatePdf` was removed on 3 Nov 2026.

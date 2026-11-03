@@ -25,7 +25,6 @@ Functions in scope (`supabase/functions/*`):
 - `allocatePrizes`
 - `allocateInstitutionPrizes`
 - `finalize`
-- `generatePdf`
 - `parseWorkbook`
 - `pmPing`
 - `publicTeamPrizes`

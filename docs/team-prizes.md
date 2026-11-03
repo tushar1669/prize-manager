@@ -32,7 +32,7 @@
 ## Outputs and callers
 - **Conflict Review:** `useTeamPrizeResults` triggers allocation after preview completes; rendered via `TeamPrizeResultsPanel` alongside coverage/conflicts.
 - **Finalize:** Always fetches team prize results when active groups exist and shows them in the results card.
-- **PDF Export:** `generatePdf` checks for active groups, calls `allocateInstitutionPrizes`, and adds a Team / Institution Prizes section (with errors noted if allocation fails).
+- **PDF / print:** Print on Finalize or Final Prize (Team Prizes tab) prints the saved version on light A4 pages. Excel: Export XLSX adds a Team Prizes sheet. (The server function `generatePdf`, never called by any screen, was removed on 3 Nov 2026.)
 
 ## Limitations / roadmap
 - Only `by_top_k_score` is available (sum of the raw `players.points` column over the best **team_size** players by rank, not a rank-points sum); additional scoring modes are deferred to Phase 2.2.
