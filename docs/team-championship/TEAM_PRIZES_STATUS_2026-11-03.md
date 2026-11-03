@@ -10,8 +10,8 @@ Supersedes `TEAM_V2_STATE_2026-11-01.md` and the 1–2 Nov organizer plan. Team 
 4. **Finalize.** This saves the version, and each decided place carries its `ranking_snapshot` ("Tie-break applied: …"). An open tie shows **Resolve Tie**. The usual dialog opens (with the runner-up included), the organizer orders the teams, and a reason is required. `resolve_team_tie` writes those places and the note at the same version.
 5. **Publish.** This pins the version. The public `/p/<slug>/results` page shows the team winners, "Tie-break applied" and the tie note.
 
-**Caution for organizers:**
-- Resolve ties just before Publish. Reopening Finalize from scratch creates a new version without the choice.
+**Notes for organizers:**
+- Reopening Finalize (Back, reload, a saved link) shows the saved version and keeps the tie choices (fixed 3 Nov, `f486d76`). Only going through Review → Finalize again creates a new version, which starts without the choices.
 - The tie note is shown on the public page.
 
 ## What was removed (2 Nov, `81e20bf`)
@@ -49,9 +49,16 @@ Run through the real screens on a new tournament, **TEAM TB E2E – synthetic te
 
 Tests: 696 pass; the same 3 known failures (conflict-utils ×2, martech-metrics ×1).
 
+## 3 Nov final checks: PASSED
+
+- **Excel export** (Finalize → Export XLSX): real file captured; 4 sheets (Winners, Poster Grid, Arbiter Sheet, Team Prizes); the Team Prizes sheet matches the screen, including "Tie-break applied".
+- **Print / PDF** (Finalize → Print, the app's PDF path): tie notices are marked print-hidden; the group label reads "Team".
+- **Bug found and fixed (`f486d76`)**: reopening Finalize used to create a new version without the tie choices. Verified live: reload stays on the saved version (v2), ties resolved on v2 stay resolved after reload, and no new version appears.
+- Trial tournament ends at v2 (11 team awards, 2 tie notes), unpublished. v2 is a leftover of the bug above.
+
 ## Small follow-ups (not blocking)
 
-- "Grouped by: team" was shown in lower case on panels and the PDF. Fixed to "Team" (needs Lovable Publish and a `generatePdf` deploy).
+- The server function `generatePdf` returns an error for every tournament (old demo included). An encoding bug in older code (`btoa` of non-Latin text such as ₹). No screen in the app calls it; the app's PDF is the browser print. Fix or remove later.
 - On the saved and public views, "N eligible teams" counts the saved winners, not every eligible team. This is older behaviour.
 - `backfillTeamAllocations` (Master repair for old published tournaments) still uses the old Rank Sum order to fill missing rows. Only relevant to tournaments published before team rows were saved.
 - Deploys: a push to `main` does **not** deploy edge functions; the GitHub workflow fails on a function that no longer exists. Deploy with `supabase functions deploy <name> --project-ref nvjjifnzwrueutbirpde`, and publish the frontend with Lovable → Publish → Update.
