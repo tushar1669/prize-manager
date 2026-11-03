@@ -340,9 +340,16 @@ export default function Finalize() {
   useEffect(() => {
     if (!id || winners.length === 0 || finalizeResult || hasAutoFinalizedRef.current) return;
     hasAutoFinalizedRef.current = true;
+    // Winners loaded from an already-saved version (reload, Back, direct link):
+    // show that version. Finalizing again would create a new version without
+    // the organizer's team tie choices.
+    if (dataSource === 'db' && dataVersion) {
+      setFinalizeResult({ version: dataVersion, allocationsCount: winners.length });
+      return;
+    }
     finalizeMutation.mutate(winners);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, winners, finalizeResult]);
+  }, [id, winners, finalizeResult, dataSource, dataVersion]);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
