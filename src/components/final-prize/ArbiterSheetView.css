@@ -253,3 +253,18 @@
   .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(7) { width: 7%; }
   .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(8) { width: 13%; }
 }
+
+
+/* ON-SCREEN THEME (dark). SCREEN ONLY: inside @media screen, so the approved A4 sheet
+   is not affected. Scoped to .pm-print-surface, which only Finalize and Final Prize
+   put around this view; the legacy public page renders it without that wrapper and
+   is unchanged. Place numbers were text-primary (2.2-2.6:1) and amounts text-success
+   (4.2-4.5:1) on the tinted rows; same hues, mixed toward the foreground. */
+@media screen {
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-place {
+    color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--foreground)));
+  }
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-cash {
+    color: color-mix(in srgb, hsl(var(--success)) 75%, hsl(var(--foreground)));
+  }
+}

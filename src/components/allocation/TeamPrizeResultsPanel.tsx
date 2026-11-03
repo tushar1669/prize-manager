@@ -324,7 +324,7 @@ function GroupCard({
                                   <span key={p.player_id}>
                                     {i > 0 && ', '}
                                     {p.name}
-                                    <span className="text-muted-foreground/70"> (#{p.rank})</span>
+                                    <span className="pm-team-player-rank text-muted-foreground/70"> (#{p.rank})</span>
                                   </span>
                                 ))}
                               </div>
@@ -408,7 +408,7 @@ function GroupCard({
 
             {/* Team ties: places the tie-break steps could not decide */}
             {showDiagnostics && tieInfo && !tieInfo.hasNote && (
-              <Alert className="border-destructive/30 bg-destructive/5" data-team-print-hide>
+              <Alert className="pm-team-tie-open border-destructive/30 bg-destructive/5" data-team-print-hide>
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertTitle className="text-destructive">
                   Tie for place{tieInfo.affectedPlaces.length !== 1 ? 's' : ''} {tieInfo.affectedPlaces.join(', ')}
@@ -429,7 +429,7 @@ function GroupCard({
             )}
 
             {showDiagnostics && tieInfo && tieInfo.hasNote && (
-              <Alert className="border-primary/20 bg-primary/5" data-team-print-hide>
+              <Alert className="pm-team-tie-resolved border-primary/20 bg-primary/5" data-team-print-hide>
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 <AlertTitle className="text-primary">Tie resolved</AlertTitle>
                 <AlertDescription className="text-muted-foreground">

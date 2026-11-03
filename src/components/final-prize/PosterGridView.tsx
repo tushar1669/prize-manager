@@ -174,7 +174,7 @@ export function PosterGridView({ winners, tournamentId, publicSlug, hasFullAcces
         ))}
       </div>
       <div className="mt-8 grid gap-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-foreground sm:grid-cols-[minmax(5rem,7rem)_1fr] print:hidden">
-        <div className="flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-card text-xs font-semibold uppercase tracking-wide text-primary">
+        <div className="pm-poster-qr-label flex h-24 items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-card text-xs font-semibold uppercase tracking-wide text-primary">
           QR Code
         </div>
         <div className="flex flex-col justify-center gap-1">

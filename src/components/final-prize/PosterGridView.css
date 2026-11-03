@@ -205,3 +205,15 @@
     background: #fff !important;
   }
 }
+
+
+/* ON-SCREEN THEME (dark). SCREEN ONLY: inside @media screen, so the approved A4 poster
+   is not affected (the QR block is also print:hidden). Scoped to .pm-print-surface,
+   which only Finalize and Final Prize put around this view; the legacy public page
+   renders it without that wrapper and is unchanged. The "QR Code" placeholder was
+   text-primary (2.7:1) on the dark card; same hue, mixed toward the foreground. */
+@media screen {
+  .pm-print-surface .pm-poster-grid .pm-poster-qr-label {
+    color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--foreground)));
+  }
+}
