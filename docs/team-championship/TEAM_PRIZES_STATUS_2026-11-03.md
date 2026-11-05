@@ -56,6 +56,33 @@ Tests: 696 pass; the same 3 known failures (conflict-utils ×2, martech-metrics 
 - **Bug found and fixed (`f486d76`)**: reopening Finalize used to create a new version without the tie choices. Verified live: reload stays on the saved version (v2), ties resolved on v2 stay resolved after reload, and no new version appears.
 - Trial tournament ends at v2 (11 team awards, 2 tie notes), unpublished. v2 is a leftover of the bug above.
 
+## Screen look: Finalize and Final Prize (live 5 Nov 2026, `c9d653b`)
+
+**Status: pushed to `main` and published; live check passed 5 Nov; owner checked the PDFs and Excel and closed it.** This replaces the earlier 3 Nov "Screen theme" attempt (`1c6e9ca`), which was superseded.
+
+**Goal.** On screen, the four views (Category Cards, Poster Grid, Arbiter Sheet, Team Prizes) on `/t/:id/finalize` and `/t/:id/final/:view` look like the 28 Oct design in the permanently dark theme, with very light vertical column lines and centred columns (Team stays left). Print/PDF (the approved 30 Oct A4 designs), Excel, the public results page, Review/RCA and allocations are unchanged.
+
+**How it is built.**
+- Every CSS rule that used to apply in all media became print-only at the same position, so the print cascade is unchanged. Poster and Arbiter also keep a screen copy filtered with `:where(:not(.pm-print-surface *))`, so public pages look as before while organizer screens fall back to the 28 Oct Tailwind classes still in the markup.
+- Category Cards: the 28 Oct `CategoryCardsView.tsx` is restored for screen (`print:hidden`); `CategoryCardsUpdatedView` stays the print design and is hidden on organizer screens by CSS. Public pages keep the updated view.
+- New CSS: `CategoryCardsView.css`, `TeamPrizeResultsPanel.css` (screen only). Organizer-only screen blocks in the Poster, Arbiter and Team Prizes CSS add the column lines and centring.
+- Guard test: `tests/utils/final-views-screen-print-split.spec.ts`. `qa/team-prizes/visual.spec.ts` waits for badge transitions (`settlePrint`) before its print-colour checks.
+- Not touched: Excel code, engines, edge functions, public pages, Review, `index.css`, tailwind config.
+
+**Proof (before push).** Print computed styles identical on 3,940 elements; 20 A4 PDF pages pixel-identical (dev, production build and clean checkout of the exact commit); print rule sequences identical; `qa/team-prizes` 6/6 with 7 pages identical; public screens identical. vitest 694 pass / 3 known failures; tsc 9 known errors; eslint 0 errors.
+
+**Live check, 5 Nov 2026** (bundle `index-BV4vVG8m.js`, tournament `718f71ef-…`): Category Cards 26 texts, min 5.25:1; Poster Grid 59, min 5.70; Arbiter Sheet 78, min 4.98; Team Prizes 256, min 6.06. All: 0 below 4.5:1, 0 on light, 0 under 12px. Before: Team Prizes had 78 below 4.5:1 and 53 on light; Arbiter had 15 below. Finalize and `/p/:slug` were not scanned.
+
+**Choice left open.** Team Prizes on Review and on the public results page do not get the column lines and centring (final-prize views only).
+
+**Rules learned.**
+1. A print-block diff alone is not proof; compare computed styles, real-print-path PDFs and rule sequences.
+2. Never call `emulateMedia('screen')` before `page.pdf()`.
+3. Keep the literal print at-rule text out of comments; use a comment-aware extractor.
+4. shadcn badges have `transition-colors`; wait for animations after switching media.
+
+**Backlog from this work.** Legacy `/t/:id/public` fallback contrast gaps (QR 2.71:1, Arbiter place numbers 2.18–2.59:1); dead first `--pm-team-fill` value; Team Prizes group heading can split at a page break; Excel has no page setup and omits held-tie rows in Team Prizes; `useMartechDrilldown.ts` assigns to a const. The route `/t/:id/final/:view` has no normal UI entry point (see cleanup).
+
 ## Small follow-ups (not blocking)
 
 - **Removed 3 Nov:** the server function `generatePdf` (and `_shared/prizePrintableHtml.ts`, `_shared/teamPdfSnapshot.ts`). It failed for every tournament (`btoa` of the ₹ sign), and across the full git history (1,970 commits) no screen ever called it; no cron job or database function did either. The app's PDF is the browser print.
