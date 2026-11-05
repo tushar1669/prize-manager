@@ -1,4 +1,4 @@
-import type { DedupCandidate, DedupDecision, DedupAction } from './dedup';
+import type { DedupCandidate, DedupAction } from './dedup';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
@@ -79,29 +79,4 @@ export function getActionCounts(decisions: Record<number, DedupAction>): {
   }
   
   return counts;
-}
-
-/**
- * Convert decisions record to array format expected by backend
- */
-export function decisionsToArray(
-  decisions: Record<number, DedupAction>,
-  candidates: DedupCandidate[]
-): DedupDecision[] {
-  return candidates.map(candidate => {
-    const action = decisions[candidate.row] ?? candidate.defaultAction;
-    const decision: DedupDecision = {
-      row: candidate.row,
-      action,
-    };
-
-    if (action === 'update' && candidate.bestMatch) {
-      decision.existingId = candidate.bestMatch.existing.id;
-      decision.payload = candidate.bestMatch.merge.changes;
-    } else if (action === 'skip' && candidate.bestMatch) {
-      decision.existingId = candidate.bestMatch.existing.id;
-    }
-
-    return decision;
-  });
 }

@@ -53,12 +53,3 @@ export const GROUP_BY_OPTIONS: Array<{
   { value: 'group_label', label: 'Swiss Group (Gr column)', column: 'group_label', description: 'Uses the Gr column from Swiss-Manager export' },
   { value: 'type_label', label: 'Swiss Type (Type column)', column: 'type_label', description: 'Uses the Type column from Swiss-Manager export' },
 ];
-
-export const SCORING_MODE_OPTIONS: Array<{
-  value: string;
-  label: string;
-  description: string;
-}> = [
-  { value: 'by_top_k_score', label: 'Sum of Top-K Scores', description: 'Sum the scores of the best K players per team' },
-  // Future modes can be added here
-];

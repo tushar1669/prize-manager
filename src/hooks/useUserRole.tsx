@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { isEmailAllowedMaster } from "@/lib/masterAllowlist";
 
 type UserRole = 'master' | 'organizer' | 'user';
 type AuthzStatus = 'loading' | 'ready' | 'error';
@@ -58,11 +57,9 @@ export function useUserRole() {
   const role: UserRole | null = user ? (roleQuery.data?.role ?? null) : null;
   const isVerified = roleQuery.data?.is_verified ?? false;
 
-  // CRITICAL: Master access requires BOTH:
-  // 1. role === 'master' in DB
-  // 2. email in allowlist (client-side check, backed by server-side RLS)
-  // Server-side is_master() function provides the real protection
-  const isMaster = role === 'master' && isEmailAllowedMaster(user?.email);
+  // UX hint only: the real protection is the server-side is_master() function
+  // (master_allowlist + user_roles) and the RLS policies built on it.
+  const isMaster = role === 'master';
 
   return {
     authzStatus,

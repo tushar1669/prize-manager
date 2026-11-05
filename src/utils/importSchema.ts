@@ -294,19 +294,6 @@ export function normalizeName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-// Generate unique key for duplicate detection
-export function generatePlayerKey(player: { 
-  name: string; 
-  dob?: string | null; 
-  fide_id?: string | null 
-}): string {
-  if (player.fide_id) return `fide:${player.fide_id}`;
-  if (player.name && player.dob) {
-    return `name-dob:${normalizeName(player.name)}|${player.dob}`;
-  }
-  return `name:${normalizeName(player.name)}`;
-}
-
 const isValidIsoDate = (isoDate: string): boolean => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return false;
   const [yearText, monthText, dayText] = isoDate.split('-');
@@ -404,25 +391,6 @@ export function sanitizeDobForImport(input?: string | null): DobSanitizeResult {
     dob: null,
     wasImputedFromYear: false,
     inferred: false
-  };
-}
-
-/**
- * Normalize DOB for API/import
- * Returns: { dob_raw, dob, inferred, inferredReason }
- */
-export function normalizeDobForImport(input?: string | null): {
-  dob_raw: string | null;
-  dob: string | null;
-  inferred: boolean;
-  inferredReason?: string;
-} {
-  const result = sanitizeDobForImport(input);
-  return {
-    dob_raw: result.dob_original,
-    dob: result.dob,
-    inferred: result.inferred,
-    inferredReason: result.inferredReason
   };
 }
 
