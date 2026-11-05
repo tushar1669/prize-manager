@@ -1,0 +1,30 @@
+# Final Prize print designs — three-view owner signoff (24 October 2026)
+
+**Decision:** The owner reviewed the revised synthetic A4 PDFs and replied: **“This looks perfect, update, sync and document the same, everywhere applicable ... for these 3 finalized updated designs.”** Earlier in the same Project conversation, the owner said **“Perfect!”** of the corrected Arbiter Sheet. This is explicit **visual-design approval only** for the exact three draft refs below, **NOT** a merge, deployment, publication, or production signoff.
+
+## Approved surfaces, exact source refs and evidence
+
+| Output | Owner-approved visual contract | Draft source | Synthetic fixture evidence |
+| --- | --- | --- | --- |
+| **Category Cards — Updated v6** | Opt-in v6 only; preserve legacy v1. White A4 page; charcoal/gold branding and print-contrast logo, large category headings; **pale gold / teal / navy fill across all prize-table cells** by category, restrained row/column rules, correct rank, gift and award fields. | [#461](https://github.com/tushar1669/prize-manager/pull/461) — `9e09acf8a2db3bb28af714b59f781a36afb3ab48` | [run 40111901060](https://github.com/tushar1669/prize-manager/actions/runs/40111901060), **5/5 Chromium tests PASS**, build PASS; three-category no-gift **1 A4 page** and 90-winner long **7 A4 pages**; category whole-cell colors checked in browser. |
+| **Poster Grid** | White-paper A4 cards with **very subtle full-card** gold / teal / navy fills; prominent winner, amount and award glyphs, white interior gift/amount chips, matching top rails. **Do not** imitate Arbiter's dense table grid or increase fill strength. Retain compact and one-category-per-page modes. | [#467](https://github.com/tushar1669/prize-manager/pull/467) — `15101131fa8319fcaf44dbac5c320e5c1262e60b` | [run 40111905967](https://github.com/tushar1669/prize-manager/actions/runs/40111905967), **9/9 Chromium tests PASS**, build PASS; 12 winners compact **2 A4 pages**, category-per-page **3**, 32-winner long **4**; actual printed card fills checked. |
+| **Arbiter Sheet / allocation signature register** | White A4, aligned title/header and column headers, **entire gold / teal / navy category table sections**, visible vertical and horizontal rules, enlarged Place and Rank, legible signatures, award/gift data unmodified. | [#471](https://github.com/tushar1669/prize-manager/pull/471) — `dd36d946cca073d07bbc26e27103ab0209c85cd8` | [run 40088011470](https://github.com/tushar1669/prize-manager/actions/runs/40088011470), **3/3 Vitest + 4/4 Chromium QA PASS**, targeted lint/build PASS; 12 winners **1 A4 page**, 42 winners **3**, all synthetic winners once, repeated headings. |
+
+**Post-signoff documentation sync:** Category Cards #461 advanced to documentation-only head `853ce378645863445bd0c8b208373b4febd768ea` after its QA status page was updated. Its approved CSS blob remains `a8669ff2eda7536d4a233e33dc82b069255bc368`, unchanged from the tested design. The source ref in the table is the **visual code ref**, not a claim that it is the latest PR commit.
+
+**Quality-of-evidence boundary:** All three checks used source-equivalent real React/Chromium synthetic fixtures and/or isolated QA branches; main-branch CI remains separately blocked. These tests do **not** prove deployed behavior, production access/session behavior, all operating-system print dialogs, or every possible input. The temporary fixture PRs [#472](https://github.com/tushar1669/prize-manager/pull/472), [#473](https://github.com/tushar1669/prize-manager/pull/473) and [#474](https://github.com/tushar1669/prize-manager/pull/474) were closed **unmerged**.
+
+## Shared palette and why treatments differ
+
+- **Main prize section:** brand **gold** (often perceived as yellow).
+- **First subsequent category:** **teal/green**; **second:** **navy/blue**. **Teal and navy repeat** for further categories, following the existing category ordering; not one new hue per category. Category names/places remain the explicit identity: do not rely on color alone.
+- On **category data tables**, color lightly fills every cell and thin separators maintain scanability. On **Poster Grid**, a much softer whole-card tint preserves the poster's generous whitespace and recipient-first hierarchy.
+- Existing scoped component CSS selects the palette; do **not** change global UI tokens or `.pm-print-surface`. On paper, printed pastel fills require a browser that includes background graphics. Existing category rails and labels preserve differentiation if background painting is disabled.
+
+## Scope and remaining release gates
+
+- **Locked:** no changes to allocation/winner logic, amounts, gift data, authorization or entitlements, versions/publication, import/export formats, pagination modes, legacy v1, server PDF function, Team Prizes, or shared extraction API.
+- **Now complete:** design implementation, bounded synthetic print verification and **owner visual signoff** for all three exact refs.
+- **Still pending:** `AGENTS.md` mandatory full lint, unit and relevant end-to-end/release checks (independent unresolved draft CI prerequisites [#462](https://github.com/tushar1669/prize-manager/pull/462), [#463](https://github.com/tushar1669/prize-manager/pull/463), [#466](https://github.com/tushar1669/prize-manager/pull/466)), and any required authenticated print/permission checks. Passing isolated fixture suites is **not** overall green CI.
+- **Release boundary:** #461, #467, #471 and this documentation [#468](https://github.com/tushar1669/prize-manager/pull/468) remain **draft, unmerged and undeployed**. The owner did **not** authorize merge, deployment, publication, production changes, or draft-to-ready transitions. Scope approval is NOT the next-release approval.
+- **Tracking:** canonical `SOURCE_OF_TRUTH.md`, `BACKLOG.md`, `DOCUMENT_INDEX.md`, `QA_STATUS.md` and `EVIDENCE_REGISTER.md` are absent on `main` as of the verified source ref `943326ed529a205ffb5260035d1c0cb3ef00d35c`. Don't invent backlog IDs or priorities; evidence is linked here and on the actual design PRs. Existing B8b IN_PROGRESS and D2 outstanding are unaffected.
