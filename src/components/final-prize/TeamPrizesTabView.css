@@ -1,3 +1,7 @@
+/* Screen look on Finalize and Final Prize is the 28 Oct design: every rule below is
+   print-only, except the last block, which is organizer-screen only.
+   .pm-team-prizes-print is rendered only inside .pm-print-surface. */
+@media print {
 /* Team Prizes handout only. No shared table or public page styling is changed. */
 .pm-team-prizes-print {
   --pm-team-gold: #b38a32;
@@ -11,6 +15,8 @@
   background: hsl(var(--card));
   font-weight: 800;
 }
+}
+
 @media print {
   .pm-team-prizes-print { color: #182c43; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .pm-team-prizes-print .pm-team-prize-group {
@@ -86,7 +92,7 @@
   .pm-team-prizes-print .pm-team-prize-group [data-state="closed"] { display: block !important; height: auto !important; overflow: visible !important; }
 }
 
-
+@media print {
 /* Owner-requested refinement: centered headings and group-matched metadata.
    Deliberately scoped to the final Team Prizes view, not the allocation/public panels. */
 .pm-team-prizes-print .pm-team-prize-group {
@@ -142,6 +148,8 @@
   text-align: center !important;
   vertical-align: middle;
 }
+}
+
 @media print {
   .pm-team-prizes-print .pm-team-prizes-overview {
     flex-direction: column;
@@ -185,7 +193,7 @@
   }
 }
 
-
+@media print {
 /* Final review correction ONLY: distinct rupee glyph/numerals, centered numeric
    prize columns and visible separation between cash and trophy/medal icons. */
 .pm-team-prizes-print .pm-team-cash {
@@ -216,6 +224,8 @@
   justify-content: center;
   column-gap: 5px;
 }
+}
+
 @media print {
   .pm-team-prizes-print .pm-team-cash { column-gap: .9mm; }
   .pm-team-prizes-print .pm-team-prize-value {
@@ -226,50 +236,15 @@
   .pm-team-prizes-print .pm-team-prize-awards { column-gap: 1.2mm; }
 }
 
-
-/* ==========================================================================
-   ON-SCREEN THEME. The app is permanently dark (docs/design/UI_CONVENTIONS.md).
-   SCREEN ONLY: every rule below is inside a screen media block, so the approved
-   light A4 handout is not affected. Do NOT fold the light values above into this
-   block. The badge fill / ink / accent variables and .pm-team-prizes-overview-badge
-   are declared outside the print blocks, so they also apply when printing, and the
-   print output reads them. Screen overrides them here; print never sees this block.
-   Recipe (same as Category Cards): group colour mixed into hsl(var(--card)) for
-   fills, mixed toward hsl(var(--foreground)) for ink and lines.
-   Scoped to .pm-team-prizes-print, which only TeamPrizesTabView renders (Finalize
-   and Final Prize). Review and the public results page do not use that wrapper.
-   ========================================================================== */
+/* Finalize and Final Prize screens (.pm-print-surface): the 28 Oct Team Prizes table with
+   the newer designs' very light column lines and centred columns (Team stays
+   left-aligned). The empty awards slot is dropped so the cash amount centres exactly.
+   Screen only; Review and public team sections are not inside .pm-print-surface. */
 @media screen {
-  .pm-team-prizes-print .pm-team-prize-group {
-    --pm-team-fill: color-mix(in srgb, hsl(var(--accent)) 14%, hsl(var(--card)));
-    --pm-team-accent: color-mix(in srgb, hsl(var(--accent)) 70%, hsl(var(--foreground)));
-    --pm-team-badge-ink: color-mix(in srgb, hsl(var(--accent)) 35%, hsl(var(--foreground)));
-  }
-  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="teal"] {
-    --pm-team-fill: color-mix(in srgb, hsl(var(--primary)) 14%, hsl(var(--card)));
-    --pm-team-accent: color-mix(in srgb, hsl(var(--primary)) 70%, hsl(var(--foreground)));
-    --pm-team-badge-ink: color-mix(in srgb, hsl(var(--primary)) 35%, hsl(var(--foreground)));
-  }
-  .pm-team-prizes-print .pm-team-prize-group[data-team-tone="navy"] {
-    --pm-team-fill: color-mix(in srgb, hsl(var(--secondary)) 14%, hsl(var(--card)));
-    --pm-team-accent: color-mix(in srgb, hsl(var(--secondary)) 70%, hsl(var(--foreground)));
-    --pm-team-badge-ink: color-mix(in srgb, hsl(var(--secondary)) 35%, hsl(var(--foreground)));
-  }
-  /* "N groups" / "N winners" badges above the list (gold). */
-  .pm-team-prizes-print .pm-team-prizes-overview-badge {
-    background: color-mix(in srgb, hsl(var(--accent)) 14%, hsl(var(--card))) !important;
-    border: 1px solid color-mix(in srgb, hsl(var(--accent)) 70%, hsl(var(--foreground))) !important;
-    color: color-mix(in srgb, hsl(var(--accent)) 35%, hsl(var(--foreground))) !important;
-  }
-  /* "Tie resolved" heading and icon: text-primary is 2.6:1 on the dark card. */
-  .pm-team-prizes-print .pm-team-tie-resolved :is(h5, svg) {
-    color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--foreground)));
-  }
-  /* Unresolved tie alert (organizer only): destructive red is 3.6:1 and its /80
-     description 2.7:1 on the dark card. Heading, icon and description share one tint. */
-  .pm-team-prizes-print .pm-team-tie-open > :is(h5, svg, div) {
-    color: color-mix(in srgb, hsl(var(--destructive)) 55%, hsl(var(--foreground)));
-  }
-  /* "(#rank)" after each player name: muted-foreground at 70% opacity is 3.6:1. */
-  .pm-team-prizes-print .pm-team-player-rank { color: hsl(var(--muted-foreground)); }
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group :is(th, td) { border-right: 1px solid hsl(var(--border)); }
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group :is(th, td):last-child { border-right: 0; }
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group :is(th, td):not(:nth-child(2)) { text-align: center; }
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group td:first-child > div,
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group .pm-team-prize-value { justify-content: center; }
+  .pm-print-surface .pm-team-prizes-print .pm-team-prize-group .pm-team-prize-awards:empty { display: none; }
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import './TeamPrizeResultsPanel.css';
 import { Users, Trophy, Medal, Award, AlertCircle, Info, AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -252,7 +253,7 @@ function GroupCard({
               {group.eligible_institutions} eligible team{group.eligible_institutions !== 1 ? 's' : ''}
             </Badge>
             {filledPrizes.length > 0 && (
-              <Badge className="pm-team-prize-meta-badge bg-primary/10 text-primary border-primary/20">
+              <Badge className="pm-team-prize-meta-badge pm-team-winners-badge bg-primary/10 text-primary border-primary/20">
                 {filledPrizes.length} winner{filledPrizes.length !== 1 ? 's' : ''} • <CashAmount amount={totalCash} />
               </Badge>
             )}
@@ -517,7 +518,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
   );
 
   return (
-    <div className="space-y-4">
+    <div className="pm-team-results space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Users className="h-5 w-5" />
@@ -526,7 +527,7 @@ export function TeamPrizeResultsPanel({ data, isLoading, error, onTieResolutionR
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="pm-team-prizes-overview-badge">{data.groups.length} group{data.groups.length !== 1 ? 's' : ''}</Badge>
           {totalWinners > 0 && (
-            <Badge className="pm-team-prizes-overview-badge bg-primary/10 text-primary border-primary/20">
+            <Badge className="pm-team-prizes-overview-badge pm-team-winners-badge bg-primary/10 text-primary border-primary/20">
               {totalWinners} winner{totalWinners !== 1 ? 's' : ''} • <CashAmount amount={totalCash} />
             </Badge>
           )}

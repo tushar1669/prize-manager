@@ -1,3 +1,8 @@
+/* Screen look on Finalize and Final Prize (.pm-print-surface) is the 28 Oct design: the
+   rules below apply in print everywhere, and on screen only outside .pm-print-surface
+   (public pages). Each block therefore exists twice: a print copy, and a screen copy
+   filtered with :where(:not(.pm-print-surface *)), which adds no specificity. */
+@media print {
 /* Arbiter Sheet only — complements approved Category Cards / Poster Grid print family.
    Data, signature fields, access checks and the shared print surface are unchanged. */
 .pm-arbiter-sheet {
@@ -6,7 +11,6 @@
   --pm-arbiter-navy: #0b3d91;
   --pm-arbiter-ink: #182c43;
 }
-
 .pm-arbiter-titleband {
   display: flex;
   align-items: baseline;
@@ -47,13 +51,68 @@
 .pm-arbiter-row .pm-arbiter-category { font-weight: 650; }
 .pm-arbiter-cash { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pm-arbiter-sign-box { min-width: 58px; }
+}
 
-@media (max-width: 640px) {
-  .pm-arbiter-titleband { align-items: flex-start; flex-direction: column; gap: 4px; }
+@media screen {
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) {
+  --pm-arbiter-gold: #b38a32;
+  --pm-arbiter-teal: #1f6e5b;
+  --pm-arbiter-navy: #0b3d91;
+  --pm-arbiter-ink: #182c43;
+}
+.pm-arbiter-titleband:where(:not(.pm-print-surface *)) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  border: 1px solid hsl(var(--border));
+  border-left: 4px solid var(--pm-arbiter-gold);
+  border-radius: 8px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+.pm-arbiter-title:where(:not(.pm-print-surface *)) { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.pm-arbiter-subtitle:where(:not(.pm-print-surface *)) { font-size: 11px; letter-spacing: .06em; color: hsl(var(--muted-foreground)); }
+.pm-arbiter-frame:where(:not(.pm-print-surface *)) { border-top: 3px solid var(--pm-arbiter-gold); }
+.pm-arbiter-table:where(:not(.pm-print-surface *)) { border-collapse: collapse; }
+.pm-arbiter-table:where(:not(.pm-print-surface *)) th, .pm-arbiter-table:where(:not(.pm-print-surface *)) td { vertical-align: middle; }
+.pm-arbiter-thead:where(:not(.pm-print-surface *)) { color: hsl(var(--foreground)); }
+.pm-arbiter-thead:where(:not(.pm-print-surface *)) th {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.pm-arbiter-row:where(:not(.pm-print-surface *)) td { padding-top: 13px; padding-bottom: 13px; }
+.pm-arbiter-player:where(:not(.pm-print-surface *)) { overflow-wrap: anywhere; line-height: 1.4; }
+.pm-arbiter-category:where(:not(.pm-print-surface *)), .pm-arbiter-gift:where(:not(.pm-print-surface *)) { overflow-wrap: anywhere; }
+.pm-arbiter-row--main:where(:not(.pm-print-surface *)) { --pm-arbiter-category-color: var(--pm-arbiter-gold); }
+.pm-arbiter-row--teal:where(:not(.pm-print-surface *)) { --pm-arbiter-category-color: var(--pm-arbiter-teal); }
+.pm-arbiter-row--navy:where(:not(.pm-print-surface *)) { --pm-arbiter-category-color: var(--pm-arbiter-navy); }
+.pm-arbiter-row:where(:not(.pm-print-surface *)) .pm-arbiter-place {
+  border-left: 3px solid var(--pm-arbiter-category-color);
+  font-variant-numeric: tabular-nums;
+}
+.pm-arbiter-row:where(:not(.pm-print-surface *)) .pm-arbiter-category { font-weight: 650; }
+.pm-arbiter-cash:where(:not(.pm-print-surface *)) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pm-arbiter-sign-box:where(:not(.pm-print-surface *)) { min-width: 58px; }
+}
+
+@media print and (max-width: 640px) {
+.pm-arbiter-titleband { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
+
+@media screen and (max-width: 640px) {
+.pm-arbiter-titleband:where(:not(.pm-print-surface *)) { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
 
 /* Clean white A4 table with repeatable navy headers, thin brand rails and
    signature boxes sized for handwriting. No page-break changes outside this view. */
+
 @media print {
   .pm-arbiter-sheet {
     --pm-arbiter-gold: #b38a32;
@@ -179,6 +238,7 @@
   .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-sign { break-inside: avoid; }
 }
 
+@media print {
 /* Review revision: label sits under the heading; category is a whole-row band,
    not just colored text; vertical and horizontal rules remain legible. */
 .pm-arbiter-sheet .pm-arbiter-titleband { align-items: center; justify-content: flex-start; }
@@ -199,6 +259,29 @@
   text-align: center;
   font-size: 1.18em;
 }
+}
+
+@media screen {
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-titleband { align-items: center; justify-content: flex-start; }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-titlegroup { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-title { line-height: 1.1; }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-table th,
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-table td { border-right: 1px solid hsl(var(--border)); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row--main { --pm-arbiter-section-fill: rgba(179,138,50,.12); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row--teal { --pm-arbiter-section-fill: rgba(31,110,91,.12); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row--navy { --pm-arbiter-section-fill: rgba(11,61,145,.12); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row td { background: var(--pm-arbiter-section-fill); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row--section-start td { border-top: 2px solid var(--pm-arbiter-category-color); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-row--section-end td { border-bottom: 2px solid var(--pm-arbiter-category-color); }
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-place,
+.pm-arbiter-sheet:where(:not(.pm-print-surface *)) .pm-arbiter-rank {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+  font-size: 1.18em;
+}
+}
+
 @media print {
   .pm-arbiter-sheet .pm-arbiter-titleband { padding: 3mm 3.5mm; }
   .pm-arbiter-sheet .pm-arbiter-table { table-layout: fixed; border-collapse: collapse; }
@@ -254,17 +337,18 @@
   .pm-arbiter-sheet .pm-arbiter-table[data-has-gift="no"] th:nth-child(8) { width: 13%; }
 }
 
-
-/* ON-SCREEN THEME (dark). SCREEN ONLY: inside @media screen, so the approved A4 sheet
-   is not affected. Scoped to .pm-print-surface, which only Finalize and Final Prize
-   put around this view; the legacy public page renders it without that wrapper and
-   is unchanged. Place numbers were text-primary (2.2-2.6:1) and amounts text-success
-   (4.2-4.5:1) on the tinted rows; same hues, mixed toward the foreground. */
+/* Finalize and Final Prize screens (.pm-print-surface): the 28 Oct Arbiter Sheet. The
+   paper title band is hidden, the dark-green place numbers are lightened to at least
+   4.5:1, and the table gets light column lines and centred columns. Screen only; print
+   and public pages unaffected. */
 @media screen {
-  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-place {
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-titleband { display: none; }
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-place {
     color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--foreground)));
   }
-  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-row .pm-arbiter-cash {
-    color: color-mix(in srgb, hsl(var(--success)) 75%, hsl(var(--foreground)));
-  }
+  /* The newer designs' very light column lines and centred columns; Category and
+     Player stay left-aligned. */
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-table :is(th, td) { border-right: 1px solid hsl(var(--border)); }
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-table :is(th, td):last-child { border-right: 0; }
+  .pm-print-surface .pm-arbiter-sheet .pm-arbiter-table :is(th, td):not(:nth-child(2)):not(:nth-child(3)) { text-align: center; }
 }

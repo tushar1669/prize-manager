@@ -1,0 +1,12 @@
+/* 28 Oct Category Cards (screen only; this view never prints): the newer designs' very
+   light column lines (same colour as this table's row lines) and centred columns.
+   The player name stays left-aligned. */
+@media screen {
+  .pm-cc-table :is(th, td) {
+    border-right: 1px solid hsl(var(--border) / 0.6);
+    padding-left: .75rem;
+    padding-right: .75rem;
+  }
+  .pm-cc-table :is(th, td):last-child { border-right: 0; }
+  .pm-cc-table :is(th, td):not(:nth-child(2)) { text-align: center; }
+}

@@ -11,6 +11,7 @@ import { useFinalPrizeData } from '@/hooks/useFinalPrizeData';
 import { useTournamentAccess } from '@/hooks/useTournamentAccess';
 import { FinalPrizeSummaryHeader } from '@/components/final-prize/FinalPrizeSummaryHeader';
 import { CategoryCardsUpdatedView } from '@/components/final-prize/CategoryCardsUpdatedView';
+import { CategoryCardsView } from '@/components/final-prize/CategoryCardsView';
 import { PosterGridView } from '@/components/final-prize/PosterGridView';
 import { ArbiterSheetView } from '@/components/final-prize/ArbiterSheetView';
 import { TeamPrizesTabView } from '@/components/final-prize/TeamPrizesTabView';
@@ -115,6 +116,8 @@ export default function FinalPrizeView() {
               <div className="pm-print-surface">
                 <TabsContent value="v6" className={`m-0 ${normalized !== 'v6' ? 'print:hidden' : ''}`}>
                   <CategoryCardsUpdatedView groups={grouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
+                  {/* Screen: the 28 Oct cards. The view above is hidden on screen here and is the print design. */}
+                  <CategoryCardsView groups={grouped.groups} hasFullAccess={hasFullAccess} previewMainLimit={previewMainLimit} />
                 </TabsContent>
                 <TabsContent value="v3" className={`m-0 ${normalized !== 'v3' ? 'print:hidden' : ''}`}>
                   <PosterGridView winners={data.winners} tournamentId={id as string} hasFullAccess={hasFullAccess} freePlayerThreshold={freePlayerThreshold} />

@@ -1,0 +1,13 @@
+/* Readable text on the dark screen wherever this panel appears (Review, Finalize, Final
+   Prize, public results): the dark-green badge and tie texts, the red open-tie alert and
+   the grey (#rank) numbers reach at least 4.5:1. Screen only; print keeps its colours. */
+@media screen {
+  .pm-team-results .pm-team-winners-badge,
+  .pm-team-results .pm-team-tie-resolved :is(h5, svg) {
+    color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--foreground)));
+  }
+  .pm-team-results .pm-team-tie-open > :is(h5, svg, div) {
+    color: color-mix(in srgb, hsl(var(--destructive)) 55%, hsl(var(--foreground)));
+  }
+  .pm-team-results .pm-team-player-rank { color: hsl(var(--muted-foreground)); }
+}

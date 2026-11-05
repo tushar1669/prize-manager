@@ -140,3 +140,10 @@
   .pm-category-cards-updated .pmv6-category .pmv6-table-head th { border-right: 1px solid #cbd6df !important; }
   .pm-category-cards-updated .pmv6-category .pmv6-table-head th:last-child { border-right: 0 !important; }
 }
+
+/* Finalize and Final Prize screens (.pm-print-surface) show the 28 Oct Category Cards
+   (CategoryCardsView.tsx); this view is their print design. Public pages are not inside
+   .pm-print-surface and keep this design on screen. */
+@media screen {
+  .pm-print-surface .pm-category-cards-updated { display: none; }
+}

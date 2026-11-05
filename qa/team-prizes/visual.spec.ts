@@ -1,6 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 mkdirSync('artifacts/team-prizes-a4', { recursive: true });
+
+// Switching media on a live page starts CSS transitions (the shadcn Badge has
+// transition-colors), so colours read right away can be mid-way between the screen and
+// print values. Real printing renders the final print styles; wait for them first.
+const settlePrint = async (page: Page) => {
+  await page.emulateMedia({ media: 'print' });
+  await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished.catch(() => undefined))));
+};
 
 for (const size of ['short', 'long'] as const) {
   test(`Team Prizes ${size} A4 PDF retains full winner rows and colored award groups`, async ({ page }) => {
@@ -9,7 +17,7 @@ for (const size of ['short', 'long'] as const) {
     const count = size === 'long' ? 42 : 12;
     await expect(page.locator('.pm-team-prize-group tbody tr')).toHaveCount(count);
     await expect(page.getByText('EXCLUDED_NEVER_PRINT')).toHaveCount(0);
-    await page.emulateMedia({ media: 'print' });
+    await settlePrint(page);
     await expect(page.locator('.pm-team-prize-group thead')).toHaveCount(3);
     const fills = await page.locator('.pm-team-prize-group').evaluateAll(groups => groups.map(group => {
       const cell = group.querySelector('tbody td');
@@ -37,14 +45,14 @@ test('organizer-expanded ineligible teams are never present on printed handout',
   const button = page.getByRole('button', { name: /1 ineligible team/ }).first();
   await button.click();
   await expect(page.getByText('EXCLUDED_NEVER_PRINT').first()).toBeVisible();
-  await page.emulateMedia({ media: 'print' });
+  await settlePrint(page);
   await expect(page.getByText('EXCLUDED_NEVER_PRINT').first()).toBeHidden();
   await expect(page.locator('.pm-team-prize-group tbody tr')).toHaveCount(12);
 });
 
 test('printed Team Prizes headings and all metadata blocks use centered, group-specific styling', async ({ page }) => {
   await page.goto('/qa/team-prizes/');
-  await page.emulateMedia({ media: 'print' });
+  await settlePrint(page);
   const groups = page.locator('.pm-team-prize-group');
   await expect(groups).toHaveCount(3);
   const expectedColors = [
@@ -94,7 +102,7 @@ test('printed Team Prizes headings and all metadata blocks use centered, group-s
 
 test('printed rupee and numerals do not collide; centered prize stats and awards have breathing room', async ({ page }) => {
   await page.goto('/qa/team-prizes/');
-  await page.emulateMedia({ media: 'print' });
+  await settlePrint(page);
   const group = page.locator('.pm-team-prize-group').first();
   const firstRow = group.locator('tbody tr').first();
   const centers = await firstRow.locator('td.pm-team-prize-stat, td.pm-team-prize-amount')
