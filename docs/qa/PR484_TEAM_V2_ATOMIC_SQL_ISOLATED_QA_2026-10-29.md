@@ -1,5 +1,7 @@
 # PR #484 — Team Ranking v2 atomic SQL isolated Postgres contract evidence
 
+> **Superseded, history only (5 Nov 2026).** The separate Team V2 path, including this SQL writer, was removed on 2 Nov (`fafa161`). Current state: [`docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md`](../team-championship/TEAM_PRIZES_STATUS_2026-11-03.md).
+
 **Date:** 29 October 2026. **Current item:** draft v2 SQL writer **isolated transactional QA implemented and VERIFIED**. **Operational Team v2 Save still NOT IMPLEMENTED / RELEASE BLOCKED.** Do not treat database-only QA as proof that a server has authenticated/re-scored awards.
 
 ## Scope and exact source

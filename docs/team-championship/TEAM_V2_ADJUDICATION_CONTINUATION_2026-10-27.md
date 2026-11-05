@@ -1,5 +1,7 @@
 # Team Ranking v2 Option B — safe manual ruling continuation
 
+> **Superseded, history only (5 Nov 2026).** The separate Team V2 path was removed on 2 Nov (`fafa161`); ties are now resolved in the usual dialog on Finalize. Current state: [`TEAM_PRIZES_STATUS_2026-11-03.md`](TEAM_PRIZES_STATUS_2026-11-03.md).
+
 **Date:** 27 October 2026. **Repo:** `tushar1669/prize-manager`. **Status:** in draft PR [#483](https://github.com/tushar1669/prize-manager/pull/483), not merged, not deployed, not operational. **Canonical priority/ID:** UNKNOWN — `BACKLOG.md` is missing on main. This is a handoff and evidence index, not an owner authorization to deploy.
 
 ## 28 October — future first-version individual award provenance and completeness

@@ -22,15 +22,15 @@ sum ₹11,50,000 exact, clean grounding audit). See `docs/extraction-engine/TEST
 validation record, including the Delhi pdf-mode RECITATION limitation.
 
 Gate 2 (this branch) builds the user path on top of it:
-1. "Import from brochure" on the Dashboard (behind the `brochure_import` platform flag, default off)
+1. "Import from brochure" on the Dashboard (behind the `brochure_import` platform flag; on in production as of 5 Nov 2026)
 2. Upload → `extraction-uploads/{uid}/` → `extraction_documents` row → `/extract` with session JWT
 3. Review screen at `/import/brochure/:extractionId` — side-by-side PDF + editable fields, flags shown
 4. Approve → `/commit-extraction` → `commit_extraction_transaction` RPC writes
    tournaments + categories + prizes in one transaction, idempotent via `linked_tournament_id`
 
 ### Extraction tables (in Supabase, captured in migrations):
-- extraction_schemas — versioned JSON schemas per doc_type; **v3 active** (city criteria,
-  rank_from/rank_to grouped ranks, event_code)
+- extraction_schemas — versioned JSON schemas per doc_type; **chess_brochure v5 active**,
+  payment_screenshot v3 active (checked 5 Nov 2026)
 - extraction_documents — uploaded files with OCR text
 - extractions — extracted payloads with grounding evidence and flags
 - extraction_review_queue — view for human review UI

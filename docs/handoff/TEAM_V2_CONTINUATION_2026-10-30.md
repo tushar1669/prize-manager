@@ -1,5 +1,7 @@
 # Team Prizes V2 — focused next-chat handoff (30 October 2026)
 
+> **Superseded, history only (5 Nov 2026).** The separate Team V2 path was removed on 2 Nov (`fafa161`). Current state: [`docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md`](../team-championship/TEAM_PRIZES_STATUS_2026-11-03.md). Do not act on this handoff.
+
 Repo: https://github.com/tushar1669/prize-manager
 Scope: Team Prizes V2 ONLY. Use latest default-branch facts; this file is a dated handoff, not live runtime proof.
 

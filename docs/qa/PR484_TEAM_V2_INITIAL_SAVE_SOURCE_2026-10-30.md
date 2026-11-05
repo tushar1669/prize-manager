@@ -1,5 +1,7 @@
 # PR #484 — initial uncontested Team Ranking v2 Save source candidate
 
+> **Superseded, history only (5 Nov 2026).** The separate Team V2 path, including this Save path, was removed on 2 Nov (`fafa161`). Current state: [`docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md`](../team-championship/TEAM_PRIZES_STATUS_2026-11-03.md).
+
 **Date:** 30 October 2026. **Exact source commit:** [`1aa7e4fe071ec7cd28335b126d479f18391fe518`](https://github.com/tushar1669/prize-manager/commit/1aa7e4fe071ec7cd28335b126d479f18391fe518). **State:** source **IMPLEMENTED + UNIT VERIFIED**, not authenticated end-to-end verified, not released. Priority/ID **UNKNOWN**: default-branch BACKLOG is absent.
 
 ## Scope (one coherent source item)

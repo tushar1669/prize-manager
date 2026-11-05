@@ -1,6 +1,6 @@
 /**
  * Hook to load finalize data from location state OR DB fallback.
- * Ensures /finalize works after navigation from /final/v1 or hard refresh.
+ * Ensures /finalize works after navigation from /final/:view or a hard refresh.
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

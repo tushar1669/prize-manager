@@ -1,5 +1,7 @@
 # Prize Manager — Excel, PDF and Team Ranking v2 integration and release-gate plan
 
+> **Superseded, history only (5 Nov 2026).** The separate Team V2 path was removed on 2 Nov (`fafa161`), and `generatePdf` on 3 Nov. Current state: [`docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md`](../team-championship/TEAM_PRIZES_STATUS_2026-11-03.md).
+
 **30 Oct source-freshness check:** [QA details](../qa/PR484_TEAM_V2_INITIAL_SAVE_SOURCE_2026-10-30.md) and [source `d6494d840c1a0f4621eda329245109f913b5c790`](https://github.com/tushar1669/prize-manager/commit/d6494d840c1a0f4621eda329245109f913b5c790). The draft initial Team v2 Save now verifies SHA-256 equality of all seven scorer-input tables before and after preview, then checks the same source token under SHARE locks in the atomic transaction. Isolated Postgres 17 source-mutation tests PASS. **This is not consistent-snapshot/authenticated runtime proof**: scorer calls are separate transactions, contention/legacy writers/official rulings and isolated authenticated QA remain unresolved, overall CI RED. Save flag OFF, PR DRAFT, deployment prohibited.
 
 

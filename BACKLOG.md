@@ -1,31 +1,24 @@
 # Prize Manager — Active release pointer
-**Updated:** 30 October 2026. **Canonical item ID/priority:** UNKNOWN (not owner-assigned).
+**Updated:** 5 November 2026. **Canonical item ID/priority:** UNKNOWN (not owner-assigned).
 
-## Current coherent item: Excel/XLSX and A4 printable handouts
-- Status: **RELEASED** to main via [PR #485](https://github.com/tushar1669/prize-manager/pull/485), squash commit `6af6e89bccfe50a39881fd58664d0afc1c71a79e`. Lovable editor matches main; explicit Lovable publish triggered (deployment `43cf3d85-e907-4f7c-880b-b94d5465bf59`, status returned PENDING); `generatePdf` Edge Function v361 ACTIVE. External public URL and authenticated live export not yet independently verified.
-- Scope: branded four-sheet Final Prize workbook (Winners, Poster Grid, Arbiter Sheet, Team Prizes), separate Coverage/RCA report, styled browser A4 printable pages and server HTML printable A4 report.
-- Data: read-only export of saved individual/team awards and version-pinned historical snapshots; no new ranking, allocation logic, schema migration or team prize saving.
-- Gate: existing AGENTS.md build/lint/unit and relevant browser report/public navigation QA; do not misrepresent an unrelated authenticated E2E preflight as a passing workflow.
-- Recovery: revert the reports-only code release if deployed print/export errors occur. No database migration is bundled.
+## Released: Excel/XLSX and A4 printable handouts (30 Oct)
+- Released to main via [PR #485](https://github.com/tushar1669/prize-manager/pull/485) (`6af6e89`): branded four-sheet Final Prize workbook (Winners, Poster Grid, Arbiter Sheet, Team Prizes), separate Coverage/RCA report and styled browser A4 printable pages. The server HTML report (`generatePdf`) was removed on 3 Nov; the app's PDF is the browser print.
+- Owner accepted the printed Category Cards, Arbiter Sheet and Team Prizes layouts on 30 Oct. Print/PDF and Excel stay exactly as approved.
+- [PR #486](https://github.com/tushar1669/prize-manager/pull/486) and [PR #487](https://github.com/tushar1669/prize-manager/pull/487): one print renderer for Category Cards, shown as "Category Cards"; `/final/v1` links redirect to `/final/v6`.
 
-## Owner-accepted reports: one canonical Category Cards renderer
-- Owner confirmed pass of current printed **Category Cards — Updated, Arbiter Sheet and Team Prizes** layouts on 30 Oct. This is print acceptance only, not Team V2 payout correctness or general acceptance of all authenticated exports.
-- Duplicate legacy `Category Cards` tab found in the released UI; [PR #486](https://github.com/tushar1669/prize-manager/pull/486) removes the old renderer from Finalize, stand-alone Final Prize and public winner presentations, keeps updated design as first/default, redirects existing `/final/v1` links to `/final/v6`, and updates the print shortcut. No award, database or ranking changes.
-- Status: merged through PR #486 at 47dc29d30d3b53a32a5a41912ed47c8213f62869. Lovable editor matches; Publish request f4645300-cc0d-45a4-baf0-0463a908507a returned pending. Live public runtime verification remains UNKNOWN. Scoped tests passed; overall CI failed at authenticated Swiss signup flow.
+## Released: organizer screen look (5 Nov, `c9d653b`)
+- Owner decision, 4–5 Nov: on the Finalize and Final Prize screens the four views use the 28 Oct design (the restored `CategoryCardsView.tsx`, screen only) with light column lines and centred columns. Print/PDF, Excel and the public results page keep the 30 Oct designs.
+- This reverses, for screens only, the 30 Oct note not to reintroduce the old Category Cards. Do not remove `CategoryCardsView.tsx`.
+- Guard: `tests/utils/final-views-screen-print-split.spec.ts`.
 
-- Display-name cleanup: [PR #487](https://github.com/tushar1669/prize-manager/pull/487) merged as `1b7a934e0585df04b3190c72a4fecc62bf1eccbc`. The sole approved v6 category-card renderer now **displays just "Category Cards"** (Finalize, standalone Final Prize, public winners, accessibility). Layout, v6 default and v1 redirect are unchanged. Existing format guard, build, lint, unit and public smoke passed; overall CI failed at the separate authenticated Swiss suite. No Team V2 modifications.
-
-## FROZEN, separate: Team Prizes V2
-- Existing [draft PR #484](https://github.com/tushar1669/prize-manager/pull/484) stays DRAFT, unmerged, undeployed.
-- No new Team V2 ranking, new awards, Master canary enablement or SQL rollout in #485.
-- Continue the existing item in this chat or any later chat only after owner requests it; preserve historical allocation versions, publications and server-side authorization.
-- V2 open gates: live database migration/recovery, authenticated Save and official ruling checks, full CI, runtime evidence and owner tournament acceptance.
-- The obsolete team payout rules are not authorization to create NEW V2 allocations.
+## Done: Team prizes (2–5 Nov)
+- The separate Team V2 path (draft PR #484, Master canary, separate SQL writer) was removed on 2 Nov (`fafa161`). Team prizes use the usual setup, import, review, finalize and publish flow, with tie-break steps per group; ties are resolved on Finalize.
+- Current record: [docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md](docs/team-championship/TEAM_PRIZES_STATUS_2026-11-03.md). The 27–30 Oct Team V2 handoff and QA documents are history only.
 
 ## Existing queue preserved
-- [Historical PROJECT_STATE.md](PROJECT_STATE.md) remains authority during incomplete normalization.
-- [Post-template V2 backlog](docs/BACKLOG_POST_TEMPLATE_V2.md) contains five non-blocking UX follow-ups, not prerequisites for Excel/A4 delivery.
+- [PROJECT_STATE.md](PROJECT_STATE.md) here is the 28 Sep copy; the owner keeps the current PROJECT_STATE and its addendum in the Claude Project.
+- [Post-template V2 backlog](docs/BACKLOG_POST_TEMPLATE_V2.md) contains five non-blocking UX follow-ups.
 - Unlisted P0/P1/P2 inventory is **UNKNOWN**, not assumed empty. Do not invent priorities.
 
 ## Next exact action
-Next cycle: reconcile main with draft Team Prizes V2 PR #484 following docs/handoff/TEAM_V2_CONTINUATION_2026-10-30.md. Do not reintroduce the removed legacy Category Cards.
+None recorded here. Ask the owner. Do not act on the superseded Team V2 handoff documents.
