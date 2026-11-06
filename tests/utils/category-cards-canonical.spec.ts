@@ -5,7 +5,8 @@ const read = (file: string) => readFileSync(file, 'utf8');
 
 // Owner decision, 4 Nov 2026: on Finalize and Final Prize the screen shows the 28 Oct
 // Category Cards (CategoryCardsView); CategoryCardsUpdatedView stays their print design.
-// Public pages keep CategoryCardsUpdatedView on screen. One "Category Cards" tab (v6).
+// Public pages (owner decision, 6 Nov 2026) show the same 28 Oct cards on screen and keep
+// CategoryCardsUpdatedView as their print design. One "Category Cards" tab (v6).
 function expectScreenPrintPair(page: string) {
   const updated = page.indexOf('<CategoryCardsUpdatedView');
   const legacy = page.indexOf('<CategoryCardsView');
@@ -16,7 +17,7 @@ function expectScreenPrintPair(page: string) {
   expect(page.match(/<CategoryCardsUpdatedView\b/g)).toHaveLength(1);
 }
 
-describe('Category Cards: one tab; 28 Oct cards on organizer screens, updated design in print and public', () => {
+describe('Category Cards: one tab; 28 Oct cards on organizer and public screens, updated design in print', () => {
   it('Finalize: one Category Cards tab; screen and print renderers paired, no old tab', () => {
     const page = read('src/pages/Finalize.tsx');
     expect(page).toContain("useState<FinalViewTab>('v6')");
@@ -39,11 +40,11 @@ describe('Category Cards: one tab; 28 Oct cards on organizer screens, updated de
     expectScreenPrintPair(page);
   });
 
-  it('the 28 Oct cards never print, and the updated view is hidden only on organizer screens', () => {
+  it('the 28 Oct cards never print, and the updated view is hidden on organizer and public screens only', () => {
     const legacy = read('src/components/final-prize/CategoryCardsView.tsx');
     expect(legacy).toContain('max-w-6xl flex-col gap-6 px-6 pb-12 print:hidden');
     const css = read('src/components/final-prize/CategoryCardsUpdatedView.css');
-    expect(css).toMatch(/@media screen \{\s*\.pm-print-surface \.pm-category-cards-updated \{ display: none; \}\s*\}/);
+    expect(css).toMatch(/@media screen \{\s*\.pm-print-surface \.pm-category-cards-updated,\s*\.pm-public-cards \.pm-category-cards-updated \{ display: none; \}\s*\}/);
   });
 
   it('routes the post-publish print shortcut to the single canonical view', () => {
@@ -52,12 +53,12 @@ describe('Category Cards: one tab; 28 Oct cards on organizer screens, updated de
     expect(page).not.toContain('/final/v1');
   });
 
-  it('uses the updated category layout on screen in published-only public displays', () => {
+  it('public displays: 28 Oct cards on screen, updated layout kept for print, published-only', () => {
     const details = read('src/pages/PublicTournamentDetails.tsx');
     const winners = read('src/pages/PublicWinnersPage.tsx');
     for (const page of [details, winners]) {
-      expect(page).toContain('<CategoryCardsUpdatedView');
-      expect(page).not.toContain('CategoryCardsView');
+      expectScreenPrintPair(page);
+      expect(page).toContain('<div className="pm-public-cards">');
       expect(page).not.toContain('pm-print-surface');
     }
     // Unchanged public access relies on the published-only selector and pinned version.

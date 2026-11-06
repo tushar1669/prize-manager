@@ -13,6 +13,7 @@ import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
 import type { AllocationVersionSelector } from "@/utils/getLatestAllocations";
 import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
+import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { PosterGridView } from "@/components/final-prize/PosterGridView";
 import { ArbiterSheetView } from "@/components/final-prize/ArbiterSheetView";
 import { formatCurrencyINR } from "@/utils/currency";
@@ -149,7 +150,11 @@ export default function PublicWinnersPage() {
                 </TabsList>
 
                 <TabsContent value="cards" className={activeView !== 'cards' ? 'print:hidden' : ''}>
-                  <CategoryCardsUpdatedView groups={categories} />
+                  <div className="pm-public-cards">
+                    <CategoryCardsUpdatedView groups={categories} />
+                    {/* Screen: the 28 Oct cards. The view above is hidden on screen here and is the print design. */}
+                    <CategoryCardsView groups={categories} />
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="table" className={activeView !== 'table' ? 'print:hidden' : ''}>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicBackButton } from "@/components/public/PublicBackButton";
 import { CategoryCardsUpdatedView } from "@/components/final-prize/CategoryCardsUpdatedView";
+import { CategoryCardsView } from "@/components/final-prize/CategoryCardsView";
 import { BrochureLink } from "@/components/public/BrochureLink";
 import { useFinalPrizeData } from "@/hooks/useFinalPrizeData";
 import { usePublishedAllocationVersion } from "@/hooks/usePublishedAllocationVersion";
@@ -315,7 +316,11 @@ export default function PublicTournamentDetails() {
                     No published results yet.
                   </div>
                 ) : (
-                  <CategoryCardsUpdatedView groups={grouped.groups} />
+                  <div className="pm-public-cards">
+                    <CategoryCardsUpdatedView groups={grouped.groups} />
+                    {/* Screen: the 28 Oct cards. The view above is hidden on screen here and is the print design. */}
+                    <CategoryCardsView groups={grouped.groups} />
+                  </div>
                 )}
               </CardContent>
             </Card>

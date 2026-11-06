@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 // Owner decision, 4 Nov 2026: on Finalize and Final Prize (inside .pm-print-surface) the
 // screen shows the 28 Oct design, print keeps the approved 30 Oct A4 design, and public
-// pages keep the 30 Oct design on screen. So no rule in these stylesheets may apply in
+// pages keep the 30 Oct design on screen (Poster Grid / Arbiter Sheet; since 6 Nov 2026 the
+// public Category Cards show the 28 Oct cards on screen, see category-cards-canonical.spec). So no rule in these stylesheets may apply in
 // every medium: each one sits in a print block, and Poster Grid / Arbiter Sheet repeat it
 // in the screen block right after, filtered to stay off .pm-print-surface.
 const FILTER = ':where(:not(.pm-print-surface *))';
